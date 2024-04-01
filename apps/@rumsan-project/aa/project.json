@@ -1,0 +1,24 @@
+{
+  "name": "@rumsan-project/aa",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/@rumsan-project/aa/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "@rumsan-project/aa:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "@rumsan-project/aa:build:development"
+        },
+        "production": {
+          "buildTarget": "@rumsan-project/aa:build:production"
+        }
+      }
+    }
+  }
+}
