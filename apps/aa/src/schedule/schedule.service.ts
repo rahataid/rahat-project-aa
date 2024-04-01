@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { AbstractSource } from './abstract';
 import { BipadSource } from './datasource';
-import { DATA_SOURCES } from './db';
+import { DATA_SOURCES } from '../constants';
 import { AddSchedule } from './dto';
+import { RpcException } from '@nestjs/microservices';
 
 @Injectable()
 export class ScheduleService {
@@ -21,7 +22,10 @@ export class ScheduleService {
         return this.scheduleJob(payload, this.bipadSource);
 
       default:
-        throw new Error('Please provide a valid data source!');
+        // throw new Error('Please provide a valid data source!');
+        throw new RpcException(
+          new BadRequestException('Please provide a valid data source!')
+        );
     }
   }
 

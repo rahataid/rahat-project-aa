@@ -1,3 +1,7 @@
+export const DATA_SOURCES = {
+  BIPAD: 'BIPAD',
+};
+
 export const JOBS = {
   SCHEDULE: {
     ADD: 'aa.jobs.schedule.add',

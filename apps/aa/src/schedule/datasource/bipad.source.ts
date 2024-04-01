@@ -3,8 +3,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../../constants';
 import { AbstractSource } from '../abstract';
-import { DATA_SOURCES_INFO } from '../db';
 import { AddSchedule, BipadDataObject } from '../dto';
+import { ConfigService } from '@nestjs/config';
+
 
 @Injectable()
 export class BipadSource implements AbstractSource {
@@ -12,20 +13,23 @@ export class BipadSource implements AbstractSource {
 
   constructor(
     private readonly httpService: HttpService,
-    private eventEmitter: EventEmitter2
-  ) {}
+    private eventEmitter: EventEmitter2,
+    private readonly configService: ConfigService
+  ) { }
 
   async criteriaCheck(payload: AddSchedule) {
+    
     const dataSource = payload.dataSource;
-    const dataSourceInfo = DATA_SOURCES_INFO[dataSource];
-
-    const dataSourceURL = dataSourceInfo.url;
+    const dataSourceURL = this.configService.get(dataSource);
     const waterLevelResponse = await this.getData(dataSourceURL);
+
     const waterLevelData = waterLevelResponse.data.results as BipadDataObject[];
+    
     if (waterLevelData.length === 0) {
       this.logger.log(`${dataSource}: Water level data is not available.`);
       return;
     }
+    
     const recentWaterLevel = this.getRecentData(waterLevelData);
 
     const currentLevel = recentWaterLevel.waterLevel;
