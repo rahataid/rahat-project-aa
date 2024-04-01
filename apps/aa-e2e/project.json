@@ -1,14 +1,14 @@
 {
-  "name": "@rumsan-project/aa-e2e",
-  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "aa-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "implicitDependencies": ["aa"],
   "projectType": "application",
-  "implicitDependencies": ["@rumsan-project/aa"],
   "targets": {
     "e2e": {
       "executor": "@nx/jest:jest",
       "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
       "options": {
-        "jestConfig": "apps/@rumsan-project/aa-e2e/jest.config.ts",
+        "jestConfig": "apps/aa-e2e/jest.config.ts",
         "passWithNoTests": true
       }
     }

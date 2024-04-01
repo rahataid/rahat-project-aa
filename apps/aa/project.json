@@ -1,0 +1,31 @@
+{
+  "name": "aa",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/aa/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "aa:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "aa:build:development"
+        },
+        "production": {
+          "buildTarget": "aa:build:production"
+        }
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "apps/aa/jest.config.ts"
+      }
+    }
+  },
+  "tags": []
+}
