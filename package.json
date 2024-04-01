@@ -3,7 +3,16 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "serve:aa": "npx nx serve aa"
+    "serve:aa": "nx serve aa",
+    "migrate:dev": "prisma migrate dev --preview-feature",
+    "migrate:dev:create": "prisma migrate dev --create-only --preview-feature",
+    "migrate:reset": "prisma migrate reset --preview-feature",
+    "migrate:deploy": "prisma migrate deploy --preview-feature",
+    "migrate:status": "prisma migrate status --preview-feature",
+    "migrate:resolve": "prisma migrate resolve --preview-feature",
+    "prisma:studio": "prisma studio",
+    "prisma:generate": "prisma generate",
+    "prisma:generate:watch": "prisma generate --watch"
   },
   "private": true,
   "dependencies": {
@@ -14,6 +23,9 @@
     "@nestjs/microservices": "^10.3.7",
     "@nestjs/platform-express": "^10.0.2",
     "@nestjs/schedule": "^4.0.1",
+    "@prisma/client": "5.10.2",
+    "@rumsan/prisma": "^1.0.126",
+    "prisma": "5.10.2",
     "axios": "^1.6.0",
     "cron": "^3.1.6",
     "ioredis": "^5.3.2",
