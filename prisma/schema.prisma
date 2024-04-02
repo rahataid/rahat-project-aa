@@ -7,3 +7,21 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Schedule {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique
+
+  dataSource      String
+  repeatEvery     Int
+  dangerLevel     Int
+  warningLevel    Int
+  triggerActivity String
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_schedule")
+}

@@ -6,10 +6,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
+import { ProcessorsModule } from '../processors/processors.module';
+import { DataSourceModule } from '../datasource/datasource.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot({ maxListeners: 10, ignoreErrors: false }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -22,8 +25,9 @@ import { BullModule } from '@nestjs/bull';
       inject: [ConfigService],
     }),
     ScheduleModule,
-    EventEmitterModule.forRoot({ maxListeners: 10, ignoreErrors: false }),
     ListenersModule,
+    DataSourceModule,
+    ProcessorsModule
   ],
   controllers: [AppController],
   providers: [AppService],
