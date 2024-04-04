@@ -19,8 +19,11 @@ export class BipadService implements AbstractSource {
   ) { }
 
   async criteriaCheck(payload: AddSchedule) {
-
+    
     const dataSource = payload.dataSource;
+    
+    this.logger.log(`${dataSource}: monitoring`)
+    
     const dataSourceURL = this.configService.get(dataSource);
     const waterLevelResponse = await this.getData(dataSourceURL);
 

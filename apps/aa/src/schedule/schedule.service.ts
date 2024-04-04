@@ -26,12 +26,10 @@ export class ScheduleService {
   }
 
   async create(payload: AddSchedule) {
-    switch (payload.dataSource) {
-      case DATA_SOURCES.BIPAD:
-        return this.scheduleJob(payload);
-      default:
-        throw new RpcException('Please provide a valid data source!');
+    if (!this.isValidDataSource(payload.dataSource)) {
+      throw new RpcException('Please provide a valid data source!');
     }
+    return this.scheduleJob(payload);
   }
 
   async remove(payload: RemoveSchedule) {
@@ -83,5 +81,9 @@ export class ScheduleService {
     })
 
     return createData
+  }
+
+  isValidDataSource(value: string) {
+    return Object.values(DATA_SOURCES).includes(value);
   }
 }

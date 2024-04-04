@@ -1,5 +1,6 @@
 export const DATA_SOURCES = {
   BIPAD: 'BIPAD',
+  GLOFAS: 'GLOFAS'
 };
 
 export const TRIGGER_ACTIVITY = {
