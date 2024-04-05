@@ -5,11 +5,13 @@ import { ScheduleService } from './schedule.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE } from '../constants';
 import { PrismaModule } from '@rumsan/prisma';
+import { DataSourceModule } from '../datasource/datasource.module';
 
 @Module({
   imports: [
     PrismaModule,
     HttpModule,
+    DataSourceModule,
     BullModule.registerQueue({
       name: BQUEUE.SCHEDULE,
     })

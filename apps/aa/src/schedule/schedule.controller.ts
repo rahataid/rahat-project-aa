@@ -6,7 +6,7 @@ import { AddSchedule, RemoveSchedule } from '../dto';
 
 @Controller()
 export class ScheduleController {
-  constructor(private readonly scheduleService: ScheduleService) {}
+  constructor(private readonly scheduleService: ScheduleService) { }
 
   @MessagePattern({
     cmd: JOBS.SCHEDULE.GET_ALL,
@@ -15,6 +15,18 @@ export class ScheduleController {
   async getAll(): Promise<any> {
     return this.scheduleService.getAll();
   }
+
+  /***********************
+  * Development Only
+  *************************/
+  @MessagePattern({
+    cmd: JOBS.SCHEDULE.DEV_ONLY,
+    uuid: process.env.PROJECT_ID,
+  })
+  async devOnly(data: AddSchedule): Promise<any> {
+    return this.scheduleService.dev(data);
+  }
+  /********************************* */
 
   @MessagePattern({
     cmd: JOBS.SCHEDULE.ADD,

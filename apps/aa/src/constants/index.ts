@@ -1,6 +1,6 @@
 export const DATA_SOURCES = {
   BIPAD: 'BIPAD',
-  GLOFAS: 'GLOFAS'
+  // GLOFAS: 'GLOFAS'
 };
 
 export const TRIGGER_ACTIVITY = {
@@ -9,6 +9,7 @@ export const TRIGGER_ACTIVITY = {
 
 export const JOBS = {
   SCHEDULE: {
+    DEV_ONLY: 'aa.jobs.schedule.devOnly',
     GET_ALL: 'aa.jobs.schedule.getAll',
     ADD: 'aa.jobs.schedule.add',
     REMOVE: 'aa.jobs.schedule.remove'

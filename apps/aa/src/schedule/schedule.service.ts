@@ -6,6 +6,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { AddSchedule, RemoveSchedule } from '../dto';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '@rumsan/prisma';
+// import { GlofasService } from '../datasource/glofas.service';
 
 @Injectable()
 export class ScheduleService {
@@ -13,8 +14,19 @@ export class ScheduleService {
 
   constructor(
     private prisma: PrismaService,
+    // private readonly glofasService: GlofasService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
   ) { }
+
+  /***********************
+* Development Only
+*************************/
+  async dev(payload: AddSchedule) {
+    return await this.scheduleQueue.getRepeatableJobs()
+  }
+  /***********************
+* Development Only
+*************************/
 
   async getAll() {
     const schedules = await this.prisma.schedule.findMany({

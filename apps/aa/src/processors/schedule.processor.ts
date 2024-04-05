@@ -23,9 +23,9 @@ export class ScheduleProcessor {
       case DATA_SOURCES.BIPAD:
         await this.bipadService.criteriaCheck(job.data);
         break;
-      case DATA_SOURCES.GLOFAS:
-        await this.glofasService.criteriaCheck(job.data);
-        break;
+      // case DATA_SOURCES.GLOFAS:
+      //   await this.glofasService.criteriaCheck(job.data);
+      //   break;
       default:
         // do nothing
     }
