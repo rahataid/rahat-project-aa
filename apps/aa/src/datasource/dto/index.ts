@@ -1,4 +1,4 @@
-export interface BipadDataObject {
+export interface DhmDataObject {
   id: number;
   createdOn: string;
   title: string;

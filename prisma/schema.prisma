@@ -12,6 +12,7 @@ model Schedule {
   id   Int    @id @default(autoincrement())
   uuid String @unique
 
+  location        String
   dataSource      String
   repeatEvery     Int
   dangerLevel     Int

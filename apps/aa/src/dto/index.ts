@@ -1,4 +1,5 @@
 export interface AddSchedule {
+  location: string;
   dataSource: string;
   dangerLevel: number;
   warningLevel: number;

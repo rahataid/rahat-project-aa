@@ -3,14 +3,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS, TRIGGER_ACTIVITY } from '../constants';
 import { AbstractSource } from './datasource.abstract';
-import { BipadDataObject } from './dto';
+import { DhmDataObject } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { AddSchedule } from '../dto';
+import { DateTime } from 'luxon'
 
 
 @Injectable()
-export class BipadService implements AbstractSource {
-  private readonly logger = new Logger(BipadService.name);
+export class DhmService implements AbstractSource {
+  private readonly logger = new Logger(DhmService.name);
 
   constructor(
     private readonly httpService: HttpService,
@@ -19,22 +20,23 @@ export class BipadService implements AbstractSource {
   ) { }
 
   async criteriaCheck(payload: AddSchedule) {
-    
-    const dataSource = payload.dataSource;
-    
-    this.logger.log(`${dataSource}: monitoring`)
-    
-    const dataSourceURL = this.configService.get(dataSource);
-    const waterLevelResponse = await this.getData(dataSourceURL);
 
-    const waterLevelData = waterLevelResponse.data.results as BipadDataObject[];
+    const dataSource = payload.dataSource;
+
+    this.logger.log(`${dataSource}: monitoring`)
+
+    const dataSourceURL = this.configService.get('DHM');
+    const waterLevelResponse = await this.getRiverStationData(dataSourceURL, payload);
+
+    const waterLevelData = this.sortByDate(waterLevelResponse.data.results as DhmDataObject[])
 
     if (waterLevelData.length === 0) {
       this.logger.log(`${dataSource}: Water level data is not available.`);
       return;
     }
 
-    const recentWaterLevel = this.getRecentData(waterLevelData);
+    // const recentWaterLevel = this.getRecentData(waterLevelData);
+    const recentWaterLevel = waterLevelData[0]
 
     const currentLevel = recentWaterLevel.waterLevel;
 
@@ -98,7 +100,7 @@ export class BipadService implements AbstractSource {
     return;
   }
 
-  getRecentData(data: BipadDataObject[]): BipadDataObject {
+  getRecentData(data: DhmDataObject[]): DhmDataObject {
     // reduce to find the latest object based on createdOn timestamp
     return data.reduce((latestObject, currentObject) => {
       const currentTimestamp = new Date(currentObject.createdOn);
@@ -116,7 +118,50 @@ export class BipadService implements AbstractSource {
     return false;
   }
 
+  async getRiverStations() {
+    const dataSourceURL = this.configService.get('DHM');
+    const riverStationsURL = `${dataSourceURL}/river-stations/?latest=true`
+    const stations = await this.getData(riverStationsURL)
+    return stations.data;
+  }
+
+  async getRiverStationData(url: string, payload: AddSchedule) {
+    const riverURL = new URL(`${url}/river`);
+    const title = payload.location;
+    const intervals = this.getIntervals()
+    const waterLevelOnGt = intervals.timeGT
+    const waterLevelOnLt = intervals.timeLT
+
+    riverURL.searchParams.append('title', title)
+    riverURL.searchParams.append('historical', 'true')
+    riverURL.searchParams.append('format', 'json')
+    riverURL.searchParams.append('water_level_on__gt', waterLevelOnGt)
+    riverURL.searchParams.append('water_level_on__lt', waterLevelOnLt)
+    riverURL.searchParams.append('fields', 'id,created_on,title,basin,point,image,water_level,danger_level,warning_level,water_level_on,status,steady,description,station')
+    riverURL.searchParams.append('limit', '-1')
+
+    return this.httpService.axiosRef.get(riverURL.href);
+
+  }
+
   async getData(url: string) {
     return this.httpService.axiosRef.get(url);
+  }
+
+  getIntervals() {
+    const now = DateTime.now().setZone('Asia/Kathmandu')
+    const pastThree = now.minus({ days: 1 })
+
+    const midnightToday = now.set({ hour: 23, minute: 59, second: 59 }).toISO()
+    const startPastThree = pastThree.set({ hour: 0, minute: 0, second: 0 }).toISO()
+
+    return {
+      timeGT: startPastThree,
+      timeLT: midnightToday
+    }
+  }
+
+  sortByDate(data: DhmDataObject[]){
+    return data.sort((a, b) => new Date(b.waterLevelOn).valueOf() - new Date(a.waterLevelOn).valueOf());
   }
 }

@@ -1,5 +1,5 @@
 export const DATA_SOURCES = {
-  BIPAD: 'BIPAD',
+  DHM: 'DHM',
   // GLOFAS: 'GLOFAS'
 };
 
@@ -8,6 +8,9 @@ export const TRIGGER_ACTIVITY = {
 }
 
 export const JOBS = {
+  RIVER_STATIONS: {
+    GET_DHM: 'aa.jobs.riverStations.getDhm'
+  },
   SCHEDULE: {
     DEV_ONLY: 'aa.jobs.schedule.devOnly',
     GET_ALL: 'aa.jobs.schedule.getAll',

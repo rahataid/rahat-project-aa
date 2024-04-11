@@ -1,11 +1,13 @@
 import { HttpModule } from "@nestjs/axios";
 import { Module } from "@nestjs/common";
-import { BipadService } from "./bipad.service";
+import { DhmService } from "./dhm.service";
 import { GlofasService } from "./glofas.service";
+import { DataSourceController } from "./datasource.controller";
 
 @Module({
     imports: [HttpModule],
-    providers: [BipadService, GlofasService],
-    exports: [BipadService, GlofasService]
+    controllers: [DataSourceController],
+    providers: [DhmService, GlofasService],
+    exports: [DhmService, GlofasService]
 })
 export class DataSourceModule { }

@@ -22,7 +22,14 @@ export class ScheduleService {
 * Development Only
 *************************/
   async dev(payload: AddSchedule) {
-    return await this.scheduleQueue.getRepeatableJobs()
+    const all = await this.scheduleQueue.getRepeatableJobs()
+    console.log(all)
+    await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
+    // console.log(all)
+    // for(const job of all){
+    //   await this.scheduleQueue.removeRepeatableByKey(job.key)
+    // }
+    return all
   }
   /***********************
 * Development Only
@@ -41,7 +48,17 @@ export class ScheduleService {
     if (!this.isValidDataSource(payload.dataSource)) {
       throw new RpcException('Please provide a valid data source!');
     }
-    return this.scheduleJob(payload);
+
+    const sanitizedPayload: AddSchedule = {
+      dataSource: payload.dataSource,
+      location: payload.location,
+      dangerLevel: Number(payload.dangerLevel),
+      warningLevel: Number(payload.warningLevel),
+      repeatEvery: Number(payload.repeatEvery),
+      triggerActivity: payload.triggerActivity
+    }
+
+    return this.scheduleJob(sanitizedPayload);
   }
 
   async remove(payload: RemoveSchedule) {
