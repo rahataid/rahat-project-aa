@@ -1,11 +1,3 @@
-export class AddSchedule {
-  dataSource: string;
-  dangerLevel: number;
-  warningLevel: number;
-  timeExpression: string;
-  triggerActivity: string;
-}
-
 export interface BipadDataObject {
   id: number;
   createdOn: string;

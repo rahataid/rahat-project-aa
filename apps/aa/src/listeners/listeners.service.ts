@@ -9,9 +9,7 @@ export class ListenersService {
   constructor(private emailService: EmailService) {}
 
   @OnEvent(EVENTS.WATER_LEVEL_NOTIFICATION)
-  async onProjectCreated(payload: WaterLevelNotification) {
-    console.log('water level notification');
-    console.log(payload);
+  async sendEmailNotification(payload: WaterLevelNotification) {
     await this.emailService.sendEmail(
       'avash700@gmail.com',
       `${payload.dataSource}: ${payload.status}`,

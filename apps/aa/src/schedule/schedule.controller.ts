@@ -1,12 +1,32 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { AddSchedule } from './dto';
 import { ScheduleService } from './schedule.service';
+import { AddSchedule, RemoveSchedule } from '../dto';
 
 @Controller()
 export class ScheduleController {
-  constructor(private readonly scheduleService: ScheduleService) {}
+  constructor(private readonly scheduleService: ScheduleService) { }
+
+  @MessagePattern({
+    cmd: JOBS.SCHEDULE.GET_ALL,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getAll(): Promise<any> {
+    return this.scheduleService.getAll();
+  }
+
+  /***********************
+  * Development Only
+  *************************/
+  @MessagePattern({
+    cmd: JOBS.SCHEDULE.DEV_ONLY,
+    uuid: process.env.PROJECT_ID,
+  })
+  async devOnly(data: AddSchedule): Promise<any> {
+    return this.scheduleService.dev(data);
+  }
+  /********************************* */
 
   @MessagePattern({
     cmd: JOBS.SCHEDULE.ADD,
@@ -14,5 +34,13 @@ export class ScheduleController {
   })
   async create(data: AddSchedule): Promise<any> {
     return this.scheduleService.create(data);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.SCHEDULE.REMOVE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async remove(data: RemoveSchedule): Promise<any> {
+    return this.scheduleService.remove(data);
   }
 }

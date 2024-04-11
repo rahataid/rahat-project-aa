@@ -8,7 +8,6 @@ export class EmailService {
 
   initialize() {
     if (!this.transporter) {
-      console.log('Initializing email service');
       const smtpHost = process.env.EMAIL_HOST;
       const smtpPort = process.env.SMTP_PORT;
       const email = process.env.EMAIL_ADDRESS;
