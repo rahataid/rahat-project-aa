@@ -26,6 +26,7 @@ export class DhmService implements AbstractSource {
     this.logger.log(`${dataSource}: monitoring`)
 
     const dataSourceURL = this.configService.get('DHM');
+    const location = payload.location
     const waterLevelResponse = await this.getRiverStationData(dataSourceURL, payload);
 
     const waterLevelData = this.sortByDate(waterLevelResponse.data.results as DhmDataObject[])
@@ -66,12 +67,13 @@ export class DhmService implements AbstractSource {
     );
 
     if (dangerLevelReached) {
-      const dangerMessage = `${dataSource}: Water level has reached danger level.`;
+      const dangerMessage = `${dataSource}:${location}: Water level has reached danger level.`;
       this.logger.log(dangerMessage);
       if (payload.triggerActivity === TRIGGER_ACTIVITY.EMAIL) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: dangerMessage,
           status: 'DANGER',
+          location,
           dataSource,
           currentLevel,
           warningLevel,
@@ -82,11 +84,12 @@ export class DhmService implements AbstractSource {
     }
 
     if (warningLevelReached) {
-      const warningMessage = `${dataSource}: Water level has reached warning level.`;
+      const warningMessage = `${dataSource}:${location} :Water level has reached warning level.`;
       this.logger.log(warningMessage);
       if (payload.triggerActivity === TRIGGER_ACTIVITY.EMAIL) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: warningMessage,
+          location,
           status: 'WARNING',
           dataSource,
           currentLevel,

@@ -23,12 +23,12 @@ export class ScheduleService {
 *************************/
   async dev(payload: AddSchedule) {
     const all = await this.scheduleQueue.getRepeatableJobs()
-    console.log(all)
-    await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
     // console.log(all)
-    // for(const job of all){
-    //   await this.scheduleQueue.removeRepeatableByKey(job.key)
-    // }
+    // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
+    // console.log(all)
+    for(const job of all){
+      await this.scheduleQueue.removeRepeatableByKey(job.key)
+    }
     return all
   }
   /***********************
