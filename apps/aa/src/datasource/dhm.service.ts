@@ -3,10 +3,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS, TRIGGER_ACTIVITY } from '../constants';
 import { AbstractSource } from './datasource.abstract';
-import { DhmDataObject } from './dto';
+import { DhmDataObject, WaterLevelRecord } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { AddSchedule } from '../dto';
 import { DateTime } from 'luxon'
+import { PrismaService } from '@rumsan/prisma';
+import { Prisma, WaterLevels } from '@prisma/client';
 
 
 @Injectable()
@@ -16,7 +18,8 @@ export class DhmService implements AbstractSource {
   constructor(
     private readonly httpService: HttpService,
     private eventEmitter: EventEmitter2,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private prisma: PrismaService,
   ) { }
 
   async criteriaCheck(payload: AddSchedule) {
@@ -100,19 +103,26 @@ export class DhmService implements AbstractSource {
       return;
     }
     this.logger.log(`${dataSource}: Water is in a safe level.`);
+
+    // save to db
+    await this.saveWaterLevelsData({
+      dataSource: payload.dataSource,
+      location: payload.location,
+      data: recentWaterLevel
+    })
     return;
   }
 
-  getRecentData(data: DhmDataObject[]): DhmDataObject {
-    // reduce to find the latest object based on createdOn timestamp
-    return data.reduce((latestObject, currentObject) => {
-      const currentTimestamp = new Date(currentObject.createdOn);
-      const latestTimestamp = new Date(latestObject.createdOn);
+  // getRecentData(data: DhmDataObject[]): DhmDataObject {
+  //   // reduce to find the latest object based on createdOn timestamp
+  //   return data.reduce((latestObject, currentObject) => {
+  //     const currentTimestamp = new Date(currentObject.createdOn);
+  //     const latestTimestamp = new Date(latestObject.createdOn);
 
-      // timestamps comparison to find the latest one
-      return currentTimestamp > latestTimestamp ? currentObject : latestObject;
-    });
-  }
+  //     // timestamps comparison to find the latest one
+  //     return currentTimestamp > latestTimestamp ? currentObject : latestObject;
+  //   });
+  // }
 
   compareWaterLevels(currentLevel: number, threshold: number) {
     if (currentLevel >= threshold) {
@@ -126,6 +136,14 @@ export class DhmService implements AbstractSource {
     const riverStationsURL = `${dataSourceURL}/river-stations/?latest=true`
     const stations = await this.getData(riverStationsURL)
     return stations.data;
+  }
+
+  async getWaterLevels() {
+    return this.prisma.waterLevels.findMany({
+      where: {
+        dataSource: 'DHM'
+      }
+    })
   }
 
   async getRiverStationData(url: string, payload: AddSchedule) {
@@ -166,5 +184,36 @@ export class DhmService implements AbstractSource {
 
   sortByDate(data: DhmDataObject[]){
     return data.sort((a, b) => new Date(b.waterLevelOn).valueOf() - new Date(a.waterLevelOn).valueOf());
+  }
+
+  async saveWaterLevelsData(payload: WaterLevelRecord) {
+    const recordExists =  await this.prisma.waterLevels.findFirst(({
+      where: {
+        data: {
+          path: ["waterLevelOn"],
+          equals: payload.data.waterLevelOn
+        }
+      }
+    }))
+    if(!recordExists){
+      await this.prisma.waterLevels.create({
+        data: {
+          data: payload.data,
+          dataSource: payload.dataSource,
+          location: payload.location
+        }
+      })
+    }
+    // console.log(recordExists)
+    // return await this.prisma.waterLevels.upsert(({
+    //   where: {
+    //     data: {
+    //       path: ["waterLevelOn"],
+    //       equals: payload.waterLevelOn
+    //     }
+    //   },
+    //   create: payload,
+    //   update: payload
+    // }))
   }
 }

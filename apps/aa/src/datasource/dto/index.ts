@@ -1,3 +1,9 @@
+export interface WaterLevelRecord {
+  location: string;
+  dataSource: string,
+  data: Record<string,any>
+}
+
 export interface DhmDataObject {
   id: number;
   createdOn: string;

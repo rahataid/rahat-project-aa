@@ -16,4 +16,12 @@ export class DataSourceController {
     return this.dhmService.getRiverStations()
   }
 
+  @MessagePattern({
+    cmd: JOBS.WATER_LEVELS.GET_DHM,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getDhmWaterLevels(): Promise<any> {
+    return this.dhmService.getWaterLevels()
+  }
+
 }

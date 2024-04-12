@@ -2,6 +2,7 @@
 CREATE TABLE "tbl_schedule" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
     "dataSource" TEXT NOT NULL,
     "repeatEvery" INTEGER NOT NULL,
     "dangerLevel" INTEGER NOT NULL,
@@ -14,5 +15,21 @@ CREATE TABLE "tbl_schedule" (
     CONSTRAINT "tbl_schedule_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "tbl_waterlevels" (
+    "id" SERIAL NOT NULL,
+    "uuid" TEXT NOT NULL,
+    "dataSource" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
+    "data" JSONB NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_waterlevels_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_schedule_uuid_key" ON "tbl_schedule"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_waterlevels_uuid_key" ON "tbl_waterlevels"("uuid");
