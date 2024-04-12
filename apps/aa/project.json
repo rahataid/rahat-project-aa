@@ -4,26 +4,46 @@
   "sourceRoot": "apps/aa/src",
   "projectType": "application",
   "targets": {
+    "build": {
+      "dependsOn": ["mainBuild"],
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cp -r prisma/ dist/apps/aa/prisma && node apps/aa/src/modify-package.js"
+        ]
+      }
+    },
+    "mainBuild": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "target": "node",
+        "compiler": "tsc",
+        "generatePackageJson": true,
+        "outputPath": "dist/apps/aa",
+        "main": "apps/aa/src/main.ts",
+        "tsConfig": "apps/aa/tsconfig.app.json",
+        "assets": [],
+        "webpackConfig": "apps/aa/webpack.config.js"
+      },
+      "configurations": {
+        "devaaopment": {},
+        "production": {}
+      }
+    },
     "serve": {
       "executor": "@nx/js:node",
-      "defaultConfiguration": "development",
+      "defaultConfiguration": "devaaopment",
       "options": {
         "buildTarget": "aa:build"
       },
       "configurations": {
-        "development": {
-          "buildTarget": "aa:build:development"
+        "devaaopment": {
+          "buildTarget": "aa:build:devaaopment"
         },
         "production": {
           "buildTarget": "aa:build:production"
         }
-      }
-    },
-    "test": {
-      "executor": "@nx/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
-      "options": {
-        "jestConfig": "apps/aa/jest.config.ts"
       }
     }
   },
