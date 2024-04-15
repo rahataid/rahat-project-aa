@@ -1,4 +1,5 @@
 export interface AddSchedule {
+  uuid?: string;
   location: string;
   dataSource: string;
   dangerLevel: number;
@@ -8,6 +9,6 @@ export interface AddSchedule {
 }
 
 export interface RemoveSchedule {
-  uuid: string;
+  repeatKey: string;
 }
 

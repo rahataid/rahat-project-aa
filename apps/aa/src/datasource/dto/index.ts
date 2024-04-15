@@ -1,6 +1,5 @@
 export interface WaterLevelRecord {
-  location: string;
-  dataSource: string,
+  scheduleId: string;
   data: Record<string,any>
 }
 

@@ -58,6 +58,11 @@ export class DhmService implements AbstractSource {
     this.logger.log(`danger level: ${dangerLevel}`);
     this.logger.log("###############################")
 
+    // save to db
+    await this.saveWaterLevelsData({
+      scheduleId: payload.uuid,
+      data: recentWaterLevel
+    })
 
     const warningLevelReached = this.compareWaterLevels(
       currentLevel,
@@ -103,13 +108,6 @@ export class DhmService implements AbstractSource {
       return;
     }
     this.logger.log(`${dataSource}: Water is in a safe level.`);
-
-    // save to db
-    await this.saveWaterLevelsData({
-      dataSource: payload.dataSource,
-      location: payload.location,
-      data: recentWaterLevel
-    })
     return;
   }
 
@@ -141,8 +139,25 @@ export class DhmService implements AbstractSource {
   async getWaterLevels() {
     return this.prisma.waterLevels.findMany({
       where: {
-        dataSource: 'DHM'
+        Schedule: {
+          dataSource: 'DHM',
+          isActive: true
+        }
+      },
+      include: {
+        Schedule: {
+          select: {
+            dangerLevel: true,
+            warningLevel: true,
+            dataSource: true,
+            location: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt:'desc'
       }
+    
     })
   }
 
@@ -182,38 +197,31 @@ export class DhmService implements AbstractSource {
     }
   }
 
-  sortByDate(data: DhmDataObject[]){
+  sortByDate(data: DhmDataObject[]) {
     return data.sort((a, b) => new Date(b.waterLevelOn).valueOf() - new Date(a.waterLevelOn).valueOf());
   }
 
   async saveWaterLevelsData(payload: WaterLevelRecord) {
-    const recordExists =  await this.prisma.waterLevels.findFirst(({
-      where: {
-        data: {
-          path: ["waterLevelOn"],
-          equals: payload.data.waterLevelOn
+    try {
+      const recordExists = await this.prisma.waterLevels.findFirst(({
+        where: {
+          scheduleId: payload.scheduleId,
+          data: {
+            path: ["waterLevelOn"],
+            equals: payload.data.waterLevelOn
+          }
         }
+      }))
+      if (!recordExists) {
+        const x = await this.prisma.waterLevels.create({
+          data: {
+            data: payload.data,
+            scheduleId: payload.scheduleId
+          }
+        })
       }
-    }))
-    if(!recordExists){
-      await this.prisma.waterLevels.create({
-        data: {
-          data: payload.data,
-          dataSource: payload.dataSource,
-          location: payload.location
-        }
-      })
+    } catch (err) {
+      console.log(err)
     }
-    // console.log(recordExists)
-    // return await this.prisma.waterLevels.upsert(({
-    //   where: {
-    //     data: {
-    //       path: ["waterLevelOn"],
-    //       equals: payload.waterLevelOn
-    //     }
-    //   },
-    //   create: payload,
-    //   update: payload
-    // }))
   }
 }

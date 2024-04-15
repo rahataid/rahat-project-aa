@@ -26,7 +26,7 @@ export class ScheduleService {
     // console.log(all)
     // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
     // console.log(all)
-    for(const job of all){
+    for (const job of all) {
       await this.scheduleQueue.removeRepeatableByKey(job.key)
     }
     return all
@@ -62,18 +62,18 @@ export class ScheduleService {
   }
 
   async remove(payload: RemoveSchedule) {
-    const { uuid } = payload
+    const { repeatKey } = payload
     const schedule = await this.prisma.schedule.findUnique({
       where: {
-        uuid: uuid,
+        repeatKey: repeatKey,
         isActive: true
       }
     })
-    if (!schedule) throw new RpcException(`Active schedule with id: ${uuid} not found.`)
-    await this.scheduleQueue.removeRepeatableByKey(uuid)
+    if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
+    await this.scheduleQueue.removeRepeatableByKey(repeatKey)
     const updated = await this.prisma.schedule.update({
       where: {
-        uuid: uuid
+        repeatKey: repeatKey
       },
       data: {
         isActive: false
@@ -85,7 +85,12 @@ export class ScheduleService {
   async scheduleJob(payload: AddSchedule) {
     const uuid = randomUUID()
 
-    const repeatable = await this.scheduleQueue.add(JOBS.SCHEDULE.ADD, payload, {
+    const jobPayload = {
+      ...payload,
+      uuid
+    }
+
+    const repeatable = await this.scheduleQueue.add(JOBS.SCHEDULE.ADD, jobPayload, {
       jobId: uuid,
       attempts: 3,
       removeOnComplete: false,
@@ -101,7 +106,8 @@ export class ScheduleService {
     const repeatableKey = repeatable.opts.repeat.key;
 
     const createData = {
-      uuid: repeatableKey,
+      repeatKey: repeatableKey,
+      uuid: uuid,
       isActive: true,
       ...payload
     }

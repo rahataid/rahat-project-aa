@@ -2,6 +2,7 @@
 CREATE TABLE "tbl_schedule" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
+    "repeatKey" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "dataSource" TEXT NOT NULL,
     "repeatEvery" INTEGER NOT NULL,
@@ -19,11 +20,10 @@ CREATE TABLE "tbl_schedule" (
 CREATE TABLE "tbl_waterlevels" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "dataSource" TEXT NOT NULL,
-    "location" TEXT NOT NULL,
     "data" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
+    "scheduleId" TEXT NOT NULL,
 
     CONSTRAINT "tbl_waterlevels_pkey" PRIMARY KEY ("id")
 );
@@ -32,4 +32,10 @@ CREATE TABLE "tbl_waterlevels" (
 CREATE UNIQUE INDEX "tbl_schedule_uuid_key" ON "tbl_schedule"("uuid");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "tbl_schedule_repeatKey_key" ON "tbl_schedule"("repeatKey");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tbl_waterlevels_uuid_key" ON "tbl_waterlevels"("uuid");
+
+-- AddForeignKey
+ALTER TABLE "tbl_waterlevels" ADD CONSTRAINT "tbl_waterlevels_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "tbl_schedule"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
