@@ -10,6 +10,7 @@
     "migrate:deploy": "prisma migrate deploy --preview-feature",
     "migrate:status": "prisma migrate status --preview-feature",
     "migrate:resolve": "prisma migrate resolve --preview-feature",
+    "seed:all": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "prisma:generate:watch": "prisma generate --watch"
@@ -67,5 +68,8 @@
     "ts-node": "10.9.1",
     "typescript": "~5.4.2",
     "webpack-cli": "^5.1.4"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

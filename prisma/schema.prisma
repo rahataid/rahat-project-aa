@@ -8,40 +8,97 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Schedule {
+enum Phase {
+  PREPAREDNESS
+  READINESS
+  ACTION
+}
+
+enum DataSource {
+  DHM
+  GLOFAS
+}
+
+model Phases {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       Phase        @unique
+  activities Activities[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_phases")
+}
+
+model ActivityCategories {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       String
+  activities Activities[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activity_categories")
+}
+
+model Activities {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  title          String
+  phase          Phases?             @relation(fields: [phaseId], references: [uuid])
+  phaseId        String
+  categories     ActivityCategories? @relation(fields: [categoryId], references: [uuid])
+  categoryId     String
+  responsibility String
+  source         String
+  description    String
+  isComplete     Boolean             @default(false)
+  isApproved     Boolean             @default(false)
+  isDeleted      Boolean             @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activities")
+}
+
+model DataSources {
   id        Int    @id @default(autoincrement())
   uuid      String @unique
   repeatKey String @unique
 
-  location        String
-  dataSource      String
-  repeatEvery     Int
-  dangerLevel     Int
-  warningLevel    Int
-  triggerActivity String
+  location         String
+  dataSource       DataSource
+  repeatEvery      Int
+  triggerStatement Json       @db.JsonB()
 
-  datas WaterLevels[]
+  triggerActivity String[]
+
+  datas SourceData[]
 
   isActive Boolean @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
-  @@map("tbl_schedule")
+  @@map("tbl_data_sources")
 }
 
-model WaterLevels {
+model SourceData {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  // dataSource String
-  // location   String
   data Json @db.JsonB()
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime? @updatedAt()
-  Schedule   Schedule? @relation(fields: [scheduleId], references: [uuid])
-  scheduleId String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime?    @updatedAt()
+  schedule     DataSources? @relation(fields: [dataSourceId], references: [uuid])
+  dataSourceId String
 
-  @@map("tbl_waterlevels")
+  @@map("tbl_source_data")
 }
