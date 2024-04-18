@@ -19,6 +19,20 @@ enum DataSource {
   GLOFAS
 }
 
+model HazardTypes {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name        String        @unique
+  activities  Activities[]
+  dataSources DataSources[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_hazard_types")
+}
+
 model Phases {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
@@ -54,6 +68,8 @@ model Activities {
   phaseId        String
   categories     ActivityCategories? @relation(fields: [categoryId], references: [uuid])
   categoryId     String
+  hazardTypes    HazardTypes?        @relation(fields: [hazardTypesId], references: [uuid])
+  hazardTypesId  String?
   responsibility String
   source         String
   description    String
@@ -81,6 +97,9 @@ model DataSources {
 
   datas SourceData[]
 
+  hazardTypes   HazardTypes? @relation(fields: [hazardTypesId], references: [uuid])
+  hazardTypesId String?
+
   isActive Boolean @default(true)
 
   createdAt DateTime  @default(now())
@@ -97,7 +116,7 @@ model SourceData {
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime?    @updatedAt()
-  schedule     DataSources? @relation(fields: [dataSourceId], references: [uuid])
+  dataSource   DataSources? @relation(fields: [dataSourceId], references: [uuid])
   dataSourceId String
 
   @@map("tbl_source_data")
