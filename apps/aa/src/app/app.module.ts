@@ -9,6 +9,8 @@ import { BullModule } from '@nestjs/bull';
 import { ProcessorsModule } from '../processors/processors.module';
 import { DataSourceModule } from '../datasource/datasource.module';
 import { ActivitiesModule } from '../activities/activites.module';
+import { HazardTypesModule } from '../hazard-types/hazard-types.module';
+import { PhasesModule } from '../phases/phases.module';
 
 @Module({
   imports: [
@@ -29,7 +31,9 @@ import { ActivitiesModule } from '../activities/activites.module';
     ListenersModule,
     DataSourceModule,
     ProcessorsModule,
-    ActivitiesModule
+    ActivitiesModule,
+    HazardTypesModule,
+    PhasesModule
   ],
   controllers: [AppController],
   providers: [AppService],

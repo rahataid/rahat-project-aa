@@ -31,6 +31,7 @@ CREATE TABLE "tbl_activity_categories" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
@@ -44,7 +45,7 @@ CREATE TABLE "tbl_activities" (
     "title" TEXT NOT NULL,
     "phaseId" TEXT NOT NULL,
     "categoryId" TEXT NOT NULL,
-    "hazardTypesId" TEXT NOT NULL,
+    "hazardTypeId" TEXT NOT NULL,
     "responsibility" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -121,7 +122,7 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIG
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "tbl_activity_categories"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypesId_fkey" FOREIGN KEY ("hazardTypesId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_data_sources" ADD CONSTRAINT "tbl_data_sources_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;

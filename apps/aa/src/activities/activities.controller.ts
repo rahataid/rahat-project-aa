@@ -2,24 +2,33 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ActivitiesService } from './activities.service';
+import { AddActivityData, GetActivitiesDto, RemoveActivityData } from './dto';
 
 @Controller()
 export class ActivitiesController {
     constructor(private readonly activitiesService: ActivitiesService) { }
 
     @MessagePattern({
+        cmd: JOBS.ACTIVITIES.ADD,
+        uuid: process.env.PROJECT_ID,
+    })
+    async add(payload: AddActivityData) {
+        return this.activitiesService.add(payload)
+    }
+
+    @MessagePattern({
         cmd: JOBS.ACTIVITIES.GET_ALL,
         uuid: process.env.PROJECT_ID,
     })
-    async getAll() {
-        return this.activitiesService.getAll()
+    async getAll(payload: GetActivitiesDto) {
+        return this.activitiesService.getAll(payload)
     }
 
     @MessagePattern({
         cmd: JOBS.ACTIVITIES.REMOVE,
         uuid: process.env.PROJECT_ID,
     })
-    async remove(data: { uuid: string }) {
-        return this.activitiesService.remove(data)
+    async remove(payload: RemoveActivityData) {
+        return this.activitiesService.remove(payload)
     }
 }

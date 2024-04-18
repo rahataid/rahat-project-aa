@@ -25,6 +25,9 @@ export const JOBS = {
     ADD: 'aa.jobs.activities.add',
     REMOVE: 'aa.jobs.activities.remove'
   },
+  HAZARD_TYPES: {
+    GET_ALL: 'aa.jobs.hazardTypes.getAll',
+  },
 };
 
 export const EVENTS = {

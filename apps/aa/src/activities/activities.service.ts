@@ -1,6 +1,9 @@
 import { ConfigService } from "@nestjs/config";
 import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@rumsan/prisma";
+import { PaginatorTypes, PrismaService, paginator } from "@rumsan/prisma";
+import { AddActivityData, GetActivitiesDto, RemoveActivityData } from "./dto";
+
+const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class ActivitiesService {
@@ -11,14 +14,62 @@ export class ActivitiesService {
         private readonly configService: ConfigService
     ) { }
 
-    async getAll() {
-        return await this.prisma.activities.findMany();
+    async add(payload: AddActivityData) {
+        return await this.prisma.activities.create({
+            data: payload
+        })
     }
 
-    async remove(data: { uuid: string }) {
+    async getAll(payload: GetActivitiesDto) {
+        const { page, perPage, title, category, hazardType, phase } = payload
+
+        const query = {
+            where: {
+                isDeleted: false,
+                ...(title && { title: { contains: title } }),
+                ...(category && { categoryId: category }),
+                ...(hazardType && { hazardTypeId: hazardType }),
+                ...(phase && { phaseId: phase }),
+            },
+            include: {
+                category: true,
+                hazardType: true,
+                phase: true
+            }
+        }
+
+        // if (title) {
+        //     query.where['title'] = {
+        //         contains: title
+        //     }
+        // }
+
+        // if (category) {
+        //     query.where['categoryId'] = category
+        // }
+
+        // if (hazardType) {
+        //     query.where['hazardTypeId'] = hazardType
+        // }
+
+        // if (phase) {
+        //     query.where['phaseId'] = phase
+        // }
+
+        return paginate(
+            this.prisma.activities,
+            query,
+            {
+                page,
+                perPage
+            }
+        )
+    }
+
+    async remove(payload: RemoveActivityData) {
         return await this.prisma.activities.update({
             where: {
-                uuid: data.uuid
+                uuid: payload.uuid
             },
             data: {
                 isDeleted: true

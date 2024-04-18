@@ -52,7 +52,7 @@ const activities: Array<{
     phaseId: string,
     categoryId: string,
     responsibility: string,
-    hazardTypesId: string,
+    hazardTypeId: string,
     source: string,
     description: string
 }> = [
@@ -64,7 +64,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'd8717555-3a71-4d5a-8a0d-fec1be26ce3b',
             categoryId: '33c6ce0f-b6ef-4d07-9e08-1081c7906a58',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         },
         {
             title: 'Preparedness activity two.',
@@ -73,7 +73,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'd8717555-3a71-4d5a-8a0d-fec1be26ce3b',
             categoryId: '81081d98-ad52-4dff-b324-2aa597142488',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         },
         {
             title: 'Readiness activity one.',
@@ -82,7 +82,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'ecce09ad-2364-4e21-a59a-09b0f3a3fde5',
             categoryId: '7cf2aed6-cfe9-45bb-a12f-4b138e7911bf',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         },
         {
             title: 'Readiness activity two.',
@@ -91,7 +91,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'ecce09ad-2364-4e21-a59a-09b0f3a3fde5',
             categoryId: '0a824dad-360f-4c43-af86-c110f81a019a',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         },
         {
             title: 'Action activity one.',
@@ -100,7 +100,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'c7e69410-f71c-40c0-bd06-6bb95494fd82',
             categoryId: '7cf2aed6-cfe9-45bb-a12f-4b138e7911bf',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         },
         {
             title: 'Action activity two.',
@@ -109,7 +109,7 @@ const activities: Array<{
             source: 'Municipality',
             phaseId: 'c7e69410-f71c-40c0-bd06-6bb95494fd82',
             categoryId: '6a680e6e-1f45-4619-a398-0ca127dec00e',
-            hazardTypesId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
+            hazardTypeId: '70387f36-8ff1-4ffd-8290-26320d8bfc21'
         }
     ]
 

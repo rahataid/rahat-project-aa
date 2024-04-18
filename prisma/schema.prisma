@@ -53,6 +53,8 @@ model ActivityCategories {
   name       String
   activities Activities[]
 
+  isDeleted Boolean @default(false)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -66,10 +68,10 @@ model Activities {
   title          String
   phase          Phases?             @relation(fields: [phaseId], references: [uuid])
   phaseId        String
-  categories     ActivityCategories? @relation(fields: [categoryId], references: [uuid])
+  category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
   categoryId     String
-  hazardTypes    HazardTypes?        @relation(fields: [hazardTypesId], references: [uuid])
-  hazardTypesId  String
+  hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId   String
   responsibility String
   source         String
   description    String
