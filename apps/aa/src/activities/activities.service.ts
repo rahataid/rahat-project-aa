@@ -26,7 +26,7 @@ export class ActivitiesService {
         const query = {
             where: {
                 isDeleted: false,
-                ...(title && { title: { contains: title } }),
+                ...(title && { title: { contains: title, mode: 'insensitive' } }),
                 ...(category && { categoryId: category }),
                 ...(hazardType && { hazardTypeId: hazardType }),
                 ...(phase && { phaseId: phase }),

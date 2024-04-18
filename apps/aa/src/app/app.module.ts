@@ -11,6 +11,7 @@ import { DataSourceModule } from '../datasource/datasource.module';
 import { ActivitiesModule } from '../activities/activites.module';
 import { HazardTypesModule } from '../hazard-types/hazard-types.module';
 import { PhasesModule } from '../phases/phases.module';
+import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { PhasesModule } from '../phases/phases.module';
     ProcessorsModule,
     ActivitiesModule,
     HazardTypesModule,
-    PhasesModule
+    PhasesModule,
+    ActivityCategoriesModule
   ],
   controllers: [AppController],
   providers: [AppService],

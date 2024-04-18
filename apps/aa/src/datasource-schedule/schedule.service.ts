@@ -5,8 +5,11 @@ import { Queue } from 'bull'
 import { InjectQueue } from '@nestjs/bull';
 import { AddDataSource, RemoveDataSource } from '../dto';
 import { randomUUID } from 'crypto';
-import { PrismaService } from '@rumsan/prisma';
+import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { GetSchedule } from './dto';
 // import { GlofasService } from '../datasource/glofas.service';
+
+const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class ScheduleService {
@@ -35,13 +38,20 @@ export class ScheduleService {
 * Development Only
 *************************/
 
-  async getAll() {
-    const schedules = await this.prisma.dataSources.findMany({
-      where: {
-        isActive: true
+  async getAll(payload: GetSchedule) {
+    const { page, perPage } = payload
+    return paginate(
+      this.prisma.dataSources,
+      {
+        where: {
+          isActive: true
+        }
+      },
+      {
+        page,
+        perPage
       }
-    })
-    return schedules
+    )
   }
 
   async create(payload: AddDataSource) {

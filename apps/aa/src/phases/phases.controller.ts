@@ -8,7 +8,7 @@ export class PhasesController {
     constructor(private readonly phasesService: PhasesService) { }
 
     @MessagePattern({
-        cmd: JOBS.HAZARD_TYPES.GET_ALL,
+        cmd: JOBS.PHASES.GET_ALL,
         uuid: process.env.PROJECT_ID,
     })
     async getAll() {

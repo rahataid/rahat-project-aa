@@ -3,6 +3,7 @@ import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ScheduleService } from './schedule.service';
 import { AddDataSource, RemoveDataSource } from '../dto';
+import { GetSchedule } from './dto';
 
 @Controller()
 export class ScheduleController {
@@ -12,8 +13,8 @@ export class ScheduleController {
     cmd: JOBS.SCHEDULE.GET_ALL,
     uuid: process.env.PROJECT_ID,
   })
-  async getAll(): Promise<any> {
-    return this.scheduleService.getAll();
+  async getAll(payload: GetSchedule): Promise<any> {
+    return this.scheduleService.getAll(payload);
   }
 
   /***********************
