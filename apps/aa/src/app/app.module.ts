@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ListenersModule } from '../listeners/listeners.module';
-import { ScheduleModule } from '../schedule/schedule.module';
+import { ScheduleModule } from '../datasource-schedule/schedule.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { ProcessorsModule } from '../processors/processors.module';
 import { DataSourceModule } from '../datasource/datasource.module';
+import { ActivitiesModule } from '../activities/activites.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { DataSourceModule } from '../datasource/datasource.module';
     ScheduleModule,
     ListenersModule,
     DataSourceModule,
-    ProcessorsModule
+    ProcessorsModule,
+    ActivitiesModule
   ],
   controllers: [AppController],
   providers: [AppService],

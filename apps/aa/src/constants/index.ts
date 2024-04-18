@@ -20,6 +20,11 @@ export const JOBS = {
     ADD: 'aa.jobs.schedule.add',
     REMOVE: 'aa.jobs.schedule.remove'
   },
+  ACTIVITIES: {
+    GET_ALL: 'aa.jobs.activities.getAll',
+    ADD: 'aa.jobs.activities.add',
+    REMOVE: 'aa.jobs.activities.remove'
+  },
 };
 
 export const EVENTS = {

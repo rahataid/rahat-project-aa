@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ScheduleService } from './schedule.service';
-import { AddSchedule, RemoveSchedule } from '../dto';
+import { AddDataSource, RemoveDataSource } from '../dto';
 
 @Controller()
 export class ScheduleController {
@@ -23,7 +23,7 @@ export class ScheduleController {
     cmd: JOBS.SCHEDULE.DEV_ONLY,
     uuid: process.env.PROJECT_ID,
   })
-  async devOnly(data: AddSchedule): Promise<any> {
+  async devOnly(data: AddDataSource): Promise<any> {
     return this.scheduleService.dev(data);
   }
   /********************************* */
@@ -32,7 +32,7 @@ export class ScheduleController {
     cmd: JOBS.SCHEDULE.ADD,
     uuid: process.env.PROJECT_ID,
   })
-  async create(data: AddSchedule): Promise<any> {
+  async create(data: AddDataSource): Promise<any> {
     return this.scheduleService.create(data);
   }
 
@@ -40,7 +40,7 @@ export class ScheduleController {
     cmd: JOBS.SCHEDULE.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
-  async remove(data: RemoveSchedule): Promise<any> {
+  async remove(data: RemoveDataSource): Promise<any> {
     return this.scheduleService.remove(data);
   }
 }

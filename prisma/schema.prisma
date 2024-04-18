@@ -69,7 +69,7 @@ model Activities {
   categories     ActivityCategories? @relation(fields: [categoryId], references: [uuid])
   categoryId     String
   hazardTypes    HazardTypes?        @relation(fields: [hazardTypesId], references: [uuid])
-  hazardTypesId  String?
+  hazardTypesId  String
   responsibility String
   source         String
   description    String
@@ -97,8 +97,8 @@ model DataSources {
 
   datas SourceData[]
 
-  hazardTypes   HazardTypes? @relation(fields: [hazardTypesId], references: [uuid])
-  hazardTypesId String?
+  hazardType   HazardTypes @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId String
 
   isActive Boolean @default(true)
 

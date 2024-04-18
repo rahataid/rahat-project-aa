@@ -3,7 +3,7 @@ import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
 import { RpcException } from '@nestjs/microservices';
 import { Queue } from 'bull'
 import { InjectQueue } from '@nestjs/bull';
-import { AddSchedule, RemoveSchedule } from '../dto';
+import { AddDataSource, RemoveDataSource } from '../dto';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '@rumsan/prisma';
 // import { GlofasService } from '../datasource/glofas.service';
@@ -21,7 +21,7 @@ export class ScheduleService {
   /***********************
 * Development Only
 *************************/
-  async dev(payload: AddSchedule) {
+  async dev(payload: AddDataSource) {
     const all = await this.scheduleQueue.getRepeatableJobs()
     // console.log(all)
     // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
@@ -36,7 +36,7 @@ export class ScheduleService {
 *************************/
 
   async getAll() {
-    const schedules = await this.prisma.schedule.findMany({
+    const schedules = await this.prisma.dataSources.findMany({
       where: {
         isActive: true
       }
@@ -44,16 +44,16 @@ export class ScheduleService {
     return schedules
   }
 
-  async create(payload: AddSchedule) {
+  async create(payload: AddDataSource) {
     if (!this.isValidDataSource(payload.dataSource)) {
       throw new RpcException('Please provide a valid data source!');
     }
 
-    const sanitizedPayload: AddSchedule = {
+    const sanitizedPayload: AddDataSource = {
       dataSource: payload.dataSource,
       location: payload.location,
-      dangerLevel: Number(payload.dangerLevel),
-      warningLevel: Number(payload.warningLevel),
+      hazardTypeId: payload.hazardTypeId,
+      triggerStatement: payload.triggerStatement,
       repeatEvery: Number(payload.repeatEvery),
       triggerActivity: payload.triggerActivity
     }
@@ -61,9 +61,9 @@ export class ScheduleService {
     return this.scheduleJob(sanitizedPayload);
   }
 
-  async remove(payload: RemoveSchedule) {
+  async remove(payload: RemoveDataSource) {
     const { repeatKey } = payload
-    const schedule = await this.prisma.schedule.findUnique({
+    const schedule = await this.prisma.dataSources.findUnique({
       where: {
         repeatKey: repeatKey,
         isActive: true
@@ -71,7 +71,7 @@ export class ScheduleService {
     })
     if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
     await this.scheduleQueue.removeRepeatableByKey(repeatKey)
-    const updated = await this.prisma.schedule.update({
+    const updated = await this.prisma.dataSources.update({
       where: {
         repeatKey: repeatKey
       },
@@ -82,7 +82,7 @@ export class ScheduleService {
     return updated
   }
 
-  async scheduleJob(payload: AddSchedule) {
+  async scheduleJob(payload: AddDataSource) {
     const uuid = randomUUID()
 
     const jobPayload = {
@@ -111,7 +111,8 @@ export class ScheduleService {
       isActive: true,
       ...payload
     }
-    await this.prisma.schedule.create({
+
+    await this.prisma.dataSources.create({
       data: createData
     })
 

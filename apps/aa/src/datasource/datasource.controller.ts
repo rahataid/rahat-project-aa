@@ -2,7 +2,6 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { DhmService } from './dhm.service';
-import { AddSchedule, RemoveSchedule } from '../dto';
 
 @Controller()
 export class DataSourceController {

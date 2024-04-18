@@ -5,10 +5,9 @@ import { EVENTS, TRIGGER_ACTIVITY } from '../constants';
 import { AbstractSource } from './datasource.abstract';
 import { DhmDataObject, WaterLevelRecord } from './dto';
 import { ConfigService } from '@nestjs/config';
-import { AddSchedule } from '../dto';
+import { AddDataSource } from '../dto';
 import { DateTime } from 'luxon'
 import { PrismaService } from '@rumsan/prisma';
-import { Prisma, WaterLevels } from '@prisma/client';
 
 
 @Injectable()
@@ -22,7 +21,7 @@ export class DhmService implements AbstractSource {
     private prisma: PrismaService,
   ) { }
 
-  async criteriaCheck(payload: AddSchedule) {
+  async criteriaCheck(payload: AddDataSource) {
 
     const dataSource = payload.dataSource;
 
@@ -44,12 +43,12 @@ export class DhmService implements AbstractSource {
 
     const currentLevel = recentWaterLevel.waterLevel;
 
-    const warningLevel = payload.warningLevel
-      ? payload.warningLevel
+    const warningLevel = payload.triggerStatement.warningLevel
+      ? payload.triggerStatement.warningLevel
       : recentWaterLevel.warningLevel;
 
-    const dangerLevel = payload.dangerLevel
-      ? payload.dangerLevel
+    const dangerLevel = payload.triggerStatement.dangerLevel
+      ? payload.triggerStatement.dangerLevel
       : recentWaterLevel.dangerLevel;
 
     this.logger.log("##### WATER LEVEL INFO ########")
@@ -60,7 +59,7 @@ export class DhmService implements AbstractSource {
 
     // save to db
     await this.saveWaterLevelsData({
-      scheduleId: payload.uuid,
+      dataSourceId: payload.uuid,
       data: recentWaterLevel
     })
 
@@ -77,7 +76,7 @@ export class DhmService implements AbstractSource {
     if (dangerLevelReached) {
       const dangerMessage = `${dataSource}:${location}: Water level has reached danger level.`;
       this.logger.log(dangerMessage);
-      if (payload.triggerActivity === TRIGGER_ACTIVITY.EMAIL) {
+      if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: dangerMessage,
           status: 'DANGER',
@@ -94,7 +93,7 @@ export class DhmService implements AbstractSource {
     if (warningLevelReached) {
       const warningMessage = `${dataSource}:${location} :Water level has reached warning level.`;
       this.logger.log(warningMessage);
-      if (payload.triggerActivity === TRIGGER_ACTIVITY.EMAIL) {
+      if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: warningMessage,
           location,
@@ -137,18 +136,17 @@ export class DhmService implements AbstractSource {
   }
 
   async getWaterLevels() {
-    return this.prisma.waterLevels.findMany({
+    return this.prisma.sourceData.findMany({
       where: {
-        Schedule: {
+        dataSource: {
           dataSource: 'DHM',
           isActive: true
         }
       },
       include: {
-        Schedule: {
+        dataSource: {
           select: {
-            dangerLevel: true,
-            warningLevel: true,
+            triggerStatement: true,
             dataSource: true,
             location: true,
           }
@@ -161,7 +159,7 @@ export class DhmService implements AbstractSource {
     })
   }
 
-  async getRiverStationData(url: string, payload: AddSchedule) {
+  async getRiverStationData(url: string, payload: AddDataSource) {
     const riverURL = new URL(`${url}/river`);
     const title = payload.location;
     const intervals = this.getIntervals()
@@ -203,9 +201,9 @@ export class DhmService implements AbstractSource {
 
   async saveWaterLevelsData(payload: WaterLevelRecord) {
     try {
-      const recordExists = await this.prisma.waterLevels.findFirst(({
+      const recordExists = await this.prisma.sourceData.findFirst(({
         where: {
-          scheduleId: payload.scheduleId,
+          dataSourceId: payload.dataSourceId,
           data: {
             path: ["waterLevelOn"],
             equals: payload.data.waterLevelOn
@@ -213,10 +211,10 @@ export class DhmService implements AbstractSource {
         }
       }))
       if (!recordExists) {
-        const x = await this.prisma.waterLevels.create({
+        const x = await this.prisma.sourceData.create({
           data: {
             data: payload.data,
-            scheduleId: payload.scheduleId
+            dataSourceId: payload.dataSourceId
           }
         })
       }
