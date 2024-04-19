@@ -14,4 +14,12 @@ export class PhasesController {
     async getAll() {
         return this.phasesService.getAll()
     }
+
+    @MessagePattern({
+        cmd: JOBS.PHASES.GET_STATS,
+        uuid: process.env.PROJECT_ID,
+    })
+    async getStats() {
+        return this.phasesService.getStats()
+    }
 }

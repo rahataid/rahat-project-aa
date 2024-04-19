@@ -21,7 +21,7 @@ export class ActivitiesService {
     }
 
     async getAll(payload: GetActivitiesDto) {
-        const { page, perPage, title, category, hazardType, phase } = payload
+        const { page, perPage, title, category, hazardType, phase, isComplete, isApproved } = payload
 
         const query = {
             where: {
@@ -30,6 +30,8 @@ export class ActivitiesService {
                 ...(category && { categoryId: category }),
                 ...(hazardType && { hazardTypeId: hazardType }),
                 ...(phase && { phaseId: phase }),
+                ...(isComplete && { isComplete: isComplete }),
+                ...(isApproved && { isApproved: isApproved })
             },
             include: {
                 category: true,
@@ -37,24 +39,6 @@ export class ActivitiesService {
                 phase: true
             }
         }
-
-        // if (title) {
-        //     query.where['title'] = {
-        //         contains: title
-        //     }
-        // }
-
-        // if (category) {
-        //     query.where['categoryId'] = category
-        // }
-
-        // if (hazardType) {
-        //     query.where['hazardTypeId'] = hazardType
-        // }
-
-        // if (phase) {
-        //     query.where['phaseId'] = phase
-        // }
 
         return paginate(
             this.prisma.activities,

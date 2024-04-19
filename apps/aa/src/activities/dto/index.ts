@@ -14,6 +14,8 @@ export interface RemoveActivityData {
 
 export interface GetActivitiesDto {
     title: string;
+    isComplete: boolean;
+    isApproved: boolean;
     phase: string;
     category: string;
     hazardType: string;
