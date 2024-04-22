@@ -8,20 +8,118 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Schedule {
-  id   Int    @id @default(autoincrement())
-  uuid String @unique
+enum Phase {
+  PREPAREDNESS
+  READINESS
+  ACTION
+}
 
-  dataSource      String
-  repeatEvery     Int
-  dangerLevel     Int
-  warningLevel    Int
-  triggerActivity String
+enum DataSource {
+  DHM
+  GLOFAS
+}
+
+model HazardTypes {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name        String        @unique
+  activities  Activities[]
+  dataSources DataSources[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_hazard_types")
+}
+
+model Phases {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       Phase        @unique
+  activities Activities[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_phases")
+}
+
+model ActivityCategories {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       String
+  activities Activities[]
+
+  isDeleted Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activity_categories")
+}
+
+model Activities {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  title          String
+  phase          Phases?             @relation(fields: [phaseId], references: [uuid])
+  phaseId        String
+  category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
+  categoryId     String
+  hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId   String
+  responsibility String
+  source         String
+  description    String
+  isComplete     Boolean             @default(false)
+  isApproved     Boolean             @default(false)
+  isDeleted      Boolean             @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activities")
+}
+
+model DataSources {
+  id        Int    @id @default(autoincrement())
+  uuid      String @unique
+  repeatKey String @unique
+
+  location         String
+  dataSource       DataSource
+  repeatEvery      Int
+  triggerStatement Json       @db.JsonB()
+
+  triggerActivity String[]
+
+  datas SourceData[]
+
+  hazardType   HazardTypes @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId String
 
   isActive Boolean @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
-  @@map("tbl_schedule")
+  @@map("tbl_data_sources")
+}
+
+model SourceData {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  data Json @db.JsonB()
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime?    @updatedAt()
+  dataSource   DataSources? @relation(fields: [dataSourceId], references: [uuid])
+  dataSourceId String
+
+  @@map("tbl_source_data")
 }

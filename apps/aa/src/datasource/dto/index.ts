@@ -1,4 +1,9 @@
-export interface BipadDataObject {
+export interface WaterLevelRecord {
+  dataSourceId: string;
+  data: Record<string,any>
+}
+
+export interface DhmDataObject {
   id: number;
   createdOn: string;
   title: string;
