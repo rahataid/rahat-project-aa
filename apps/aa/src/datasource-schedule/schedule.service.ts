@@ -40,11 +40,15 @@ export class ScheduleService {
 
   async getAll(payload: GetSchedule) {
     const { page, perPage } = payload
+
     return paginate(
       this.prisma.dataSources,
       {
         where: {
           isActive: true
+        },
+        include: {
+          hazardType: true
         }
       },
       {
