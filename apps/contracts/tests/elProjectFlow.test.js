@@ -24,7 +24,7 @@ async function getHash(otp) {
 
 }
 
-describe('------ ElProjectFlow Tests ------', function () {
+describe.only('------ ElProjectFlow Tests ------', function () {
     let deployer
     let ben1;
     let ben2;
@@ -33,12 +33,11 @@ describe('------ ElProjectFlow Tests ------', function () {
     let notApprovedVen;
     let eyeTokenContract;
     let referredTokenContract;
-    let elProjectContract;
+    let aaProjectContract;
     let rahatDonorContract;
     let accessManagerContract;
-    let rahatClaimContract;
     let forwarderContract;
-    let address0 = '0x0000000000000000000000000000000000000000';
+    let rahatTokenContract
 
     before(async function () {
         const [addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
@@ -53,18 +52,18 @@ describe('------ ElProjectFlow Tests ------', function () {
 
     describe('Deployment', function () {
         it('Should deploy all required contracts', async function () {
-            console.log("deplouing access manager")
             accessManagerContract = await ethers.deployContract('AccessManager', [[deployer.address]]);
-            console.log("deploying access manager", accessManagerContract)
             rahatDonorContract = await ethers.deployContract('RahatDonor', [deployer.address, await accessManagerContract.getAddress()]);
-            rahatClaimContract = await ethers.deployContract('RahatClaim');
             forwarderContract = await ethers.deployContract("ERC2771Forwarder", ["Rumsan Forwarder"]);
-            eyeTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'EyeToken', 'EYE', await rahatDonorContract.getAddress(), 1]);
-            referredTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'ReferredToken', 'REF', await rahatDonorContract.getAddress(), 1]);
-            elProjectContract = await ethers.deployContract('ELProject', ["ELProject", await eyeTokenContract.getAddress(), await referredTokenContract.getAddress(), await rahatClaimContract.getAddress(), deployer.address, await forwarderContract.getAddress(), 1, await accessManagerContract.getAddress()]);
+            rahatTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'RahatToken', 'RHT', await rahatDonorContract.getAddress(), 1]);
+            aaProjectContract = await ethers.deployContract('AAProject', ["AAProject",
+                await rahatTokenContract.getAddress(),
+                await forwarderContract.getAddress(),
+                await accessManagerContract.getAddress()]);
+
             await accessManagerContract.updateAdmin(await rahatDonorContract.getAddress(), true);
-            // await elProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
-            rahatDonorContract.registerProject(await elProjectContract.getAddress(), true);
+            // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
+            rahatDonorContract.registerProject(await aaProjectContract.getAddress(), true);
 
         })
     })

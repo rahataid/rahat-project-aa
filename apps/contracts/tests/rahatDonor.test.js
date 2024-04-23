@@ -50,26 +50,13 @@ describe('RahatDonor', function () {
     });
 
     it('Should deploy all required contracts', async function () {
-      let rahatClaimContract = await ethers.deployContract('RahatClaim');
       let forwarderContract = await ethers.deployContract('ERC2771Forwarder', ['Rumsan Forwarder']);
-      eyeTokenContract = await ethers.deployContract('RahatToken', [
-        await forwarderContract.getAddress(),
-        'EyeToken',
-        'EYE',
-        await rahatDonorContract.getAddress(),
-        1,
-      ]);
-      elProjectContract = await ethers.deployContract('ELProject', [
-        'ELProject',
-        await eyeTokenContract.getAddress(),
+      elProjectContract = await ethers.deployContract('AAProject', [
+        'AAProject',
         await rahatTokenContract.getAddress(),
-        await rahatClaimContract.getAddress(),
-        deployer.address,
         await forwarderContract.getAddress(),
-        10,
         await accessManagerContract.getAddress()
       ]);
-      await elProjectContract.connect(admin).updateAdmin(await rahatDonorContract.getAddress(), true);
     });
   });
 

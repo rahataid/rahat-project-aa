@@ -8,10 +8,10 @@ import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
 import '../interfaces/IAccessManager.sol';
 
-/// @title ELProject - Implementation of IELProject interface
+/// @title AAProject - Implementation of IELProject interface
 /// @notice This contract implements the IELProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
 /// @dev This contract uses the ERC2771Context for meta-transactions and extends AbstractProject for basic project functionality.
-contract ELProject is AbstractProject, IAAProject, ERC2771Context {
+contract AAProject is AbstractProject, IAAProject, ERC2771Context {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   event ClaimAssigned(
@@ -43,7 +43,7 @@ contract ELProject is AbstractProject, IAAProject, ERC2771Context {
     address _defaultToken,
     address _forwarder,
     address _accessManager
-  ) AbstractProject(_name, msg.sender) ERC2771Context(_forwarder) {
+  ) AbstractProject(_name) ERC2771Context(_forwarder) {
     defaultToken = _defaultToken;
     AccessManager = IAccessManager(_accessManager);
   }
@@ -70,13 +70,14 @@ contract ELProject is AbstractProject, IAAProject, ERC2771Context {
 
   ///@notice function to increase the tokenBudget
   ///@param _amount amount to increase the budget
-  ///@param _tokenAddress address of the voucher to increase budget
+  ///@param _tokenAddress address of the token to increase budget
   ///@dev can only be called by admin.Mainly called during minting of vouchers
   function increaseTokenBudget(
     address _tokenAddress,
     uint256 _amount
   ) public onlyAdmin {
     uint256 budget = tokenBudget(_tokenAddress);
+    //TODO might not be needed
     require(
       IERC20(_tokenAddress).totalSupply() >= budget + _amount,
       'Greater than total supply'
@@ -97,14 +98,6 @@ contract ELProject is AbstractProject, IAAProject, ERC2771Context {
   ///@dev can only be called by project admin when project is open
   function removeBeneficiary(address _address) public onlyAdmin {
     _removeBeneficiary(_address);
-  }
-
-  ///@notice function to add status of  admin role
-  ///@param _admin address of the admin
-  ///@param _status boolean value for admin role
-  ///@dev can only be called by project admin when project is open
-  function updateAdmin(address _admin, bool _status) public onlyAdmin {
-    _updateAdmin(_admin, _status);
   }
 
   ///@notice internal function to assign  voucher/claims to beneficiaries

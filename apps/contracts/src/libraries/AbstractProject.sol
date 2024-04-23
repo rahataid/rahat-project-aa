@@ -15,9 +15,6 @@ abstract contract AbstractProject is Multicall {
   // #region ***** Events *********//
   event BeneficiaryAdded(address indexed);
   event BeneficiaryRemoved(address indexed);
-  // event ProjectLocked();
-  // event ProjectUnlocked();
-
   event TokenRegistered(address indexed tokenAddress);
   event TokenBudgetIncrease(address indexed tokenAddress, uint amount);
   event TokenBudgetDecrease(address indexed tokenAddress, uint amount);
@@ -31,7 +28,6 @@ abstract contract AbstractProject is Multicall {
   mapping(address => uint) private _tokenBudget;
   mapping(address => bool) private _registeredTokens;
   mapping(address => bool) private _vendor;
-  mapping(address => bool) private _admin;
 
   string public name;
   // bool public override isLocked;
@@ -41,22 +37,10 @@ abstract contract AbstractProject is Multicall {
 
   // #endregion
 
-  constructor(string memory _name, address _adminAddress) {
+  constructor(string memory _name) {
     name = _name;
-    _admin[_adminAddress] = true;
     // RahatCommunity = IRahatCommunity(_community);
   }
-
-  // // #region ***** Modifiers *********//
-  // modifier onlyUnlocked() {
-  //   require(!isLocked, 'project locked');
-  //   _;
-  // }
-
-  // modifier onlyLocked() {
-  //   require(isLocked, 'project unlocked');
-  //   _;
-  // }
 
   modifier onlyOpen() {
     require(!_closed, 'Project closed');
@@ -67,23 +51,6 @@ abstract contract AbstractProject is Multicall {
     require(_registeredTokens[_tokenAddress], 'Token not registered');
     _;
   }
-
-  // #endregion
-
-  // // #region ***** Project Functions *********//
-  // function _lockProject() internal {
-  //   require(_beneficiaries.length() > 0, 'no beneficiary');
-  //   isLocked = true;
-  //   emit ProjectLocked();
-  // }
-
-  // function _unlockProject() internal {
-  //   require(!_permaLock, 'locked permanently');
-  //   isLocked = false;
-  //   emit ProjectUnlocked();
-  // }
-
-  // #endregion
 
   // #region ***** Beneficiary Functions *********//
   function isBeneficiary(address _address) public view virtual returns (bool) {
@@ -104,10 +71,6 @@ abstract contract AbstractProject is Multicall {
     _beneficiaries.add(_address);
   }
 
-  function _updateAdmin(address _address, bool _status) internal {
-    _admin[_address] = _status;
-  }
-
   function _removeBeneficiary(address _address) internal {
     if (_beneficiaries.contains(_address)) emit BeneficiaryRemoved(_address);
     _beneficiaries.remove(_address);
@@ -122,12 +85,6 @@ abstract contract AbstractProject is Multicall {
     address _address
   ) public view virtual returns (bool _vendorStatus) {
     return _vendor[_address];
-  }
-
-  function checkAdminStatus(
-    address _address
-  ) public view virtual returns (bool _status) {
-    return _admin[_address];
   }
 
   // #endregion
@@ -166,11 +123,14 @@ abstract contract AbstractProject is Multicall {
     emit TokenReceived(_tokenAddress, _from, _amount);
   }
 
-  function _withdrawToken(address _tokenAddress, uint _amount) internal {
-    // IERC20(_tokenAddress).transfer(address(RahatCommunity), _amount);
+  function _withdrawToken(
+    address _tokenAddress,
+    uint _amount,
+    address _to
+  ) internal {
+    IERC20(_tokenAddress).transfer(_to, _amount);
     _tokenBudgetDecrease(_tokenAddress, _amount);
-
-    // emit TokenTransfer(_tokenAddress, address(RahatCommunity), _amount);
+    emit TokenTransfer(_tokenAddress, _to, _amount);
   }
 
   function close() internal {
