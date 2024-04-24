@@ -38,6 +38,7 @@ describe.only('------ ElProjectFlow Tests ------', function () {
     let accessManagerContract;
     let forwarderContract;
     let rahatTokenContract
+    let requiredTrigger = 2;
 
     before(async function () {
         const [addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
@@ -53,18 +54,34 @@ describe.only('------ ElProjectFlow Tests ------', function () {
     describe('Deployment', function () {
         it('Should deploy all required contracts', async function () {
             accessManagerContract = await ethers.deployContract('AccessManager', [[deployer.address]]);
+            triggerManagerContract = await ethers.deployContract('TriggerManager', [requiredTrigger]);
             rahatDonorContract = await ethers.deployContract('RahatDonor', [deployer.address, await accessManagerContract.getAddress()]);
             forwarderContract = await ethers.deployContract("ERC2771Forwarder", ["Rumsan Forwarder"]);
             rahatTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'RahatToken', 'RHT', await rahatDonorContract.getAddress(), 1]);
             aaProjectContract = await ethers.deployContract('AAProject', ["AAProject",
-                await rahatTokenContract.getAddress(),
-                await forwarderContract.getAddress(),
-                await accessManagerContract.getAddress()]);
+                rahatTokenContract.target,
+                forwarderContract.target,
+                accessManagerContract.target,
+                triggerManagerContract.target
+            ]);
 
             await accessManagerContract.updateAdmin(await rahatDonorContract.getAddress(), true);
             // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
             rahatDonorContract.registerProject(await aaProjectContract.getAddress(), true);
 
+        })
+
+        it('should send funds to the contract', async function () {
+            await rahatTokenContract.connect(deployer).mint(deployer.address, 1000000);
+            await rahatTokenContract.connect(deployer).transfer(aaProjectContract.address, 100000);
+        })
+
+        it('should trigger the project', async function () {
+            await aaProjectContract.connect(deployer).triggerProject();
+        })
+
+        it('should be able to assign tokens once triggeres', async function () {
+            await aaProjectContract.connect(deployer).assignTokens([ben1.address, ben2.address], [100, 200]);
         })
     })
 })
