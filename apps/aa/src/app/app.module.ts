@@ -12,6 +12,7 @@ import { ActivitiesModule } from '../activities/activites.module';
 import { HazardTypesModule } from '../hazard-types/hazard-types.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { ActivityCategoriesModule } from '../activity-categories/activity-catego
     ActivitiesModule,
     HazardTypesModule,
     PhasesModule,
-    ActivityCategoriesModule
+    ActivityCategoriesModule,
+    BeneficiaryModule
   ],
   controllers: [AppController],
   providers: [AppService],

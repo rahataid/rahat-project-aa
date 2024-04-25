@@ -1,3 +1,5 @@
+export const NAMESPACE = 'rahat.projects';
+
 export const DATA_SOURCES = {
   DHM: 'DHM',
   // GLOFAS: 'GLOFAS'
@@ -7,7 +9,33 @@ export const TRIGGER_ACTIVITY = {
   EMAIL: 'EMAIL'
 }
 
+export const CONTROLLERS = {
+  VENDOR: {
+    CREATE: NAMESPACE + '.vendor.create',
+    LIST: NAMESPACE + '.vendor.list',
+    LISTONE: NAMESPACE + '.vendor.listone',
+    UPDATE: NAMESPACE + '.vendor.update',
+    BLOCKCHAIN: NAMESPACE + '.vendor.blockchain',
+  },
+  BENEFICIARY: {
+    CREATE: NAMESPACE + '.beneficiary.create',
+    LIST: NAMESPACE + '.beneficiary.list',
+    LISTONE: NAMESPACE + '.beneficiary.listone',
+    UPDATE: NAMESPACE + '.beneficiary.update',
+  }
+}
+
 export const JOBS = {
+  BENEFICIARY: {
+    CREATE: 'rahat.jobs.beneficiary.create',
+    LIST: 'rahat.jobs.beneficiary.list',
+    GET: 'rahat.jobs.beneficiary.get',
+    UPDATE: 'rahat.jobs.beneficiary.update',
+    REFER: 'rahat.jobs.beneficiary.get_referred',
+    ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
+    BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
+    REMOVE: 'rahat.jobs.beneficiary.remove'
+  },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm'
   },

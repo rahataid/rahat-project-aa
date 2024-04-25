@@ -5,6 +5,20 @@ CREATE TYPE "Phase" AS ENUM ('PREPAREDNESS', 'READINESS', 'ACTION');
 CREATE TYPE "DataSource" AS ENUM ('DHM', 'GLOFAS');
 
 -- CreateTable
+CREATE TABLE "tbl_beneficiaries" (
+    "id" SERIAL NOT NULL,
+    "uuid" UUID NOT NULL,
+    "walletAddress" TEXT,
+    "extras" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "phoneNumber" TEXT,
+    "email" TEXT,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_beneficiaries_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "tbl_hazard_types" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
@@ -87,6 +101,9 @@ CREATE TABLE "tbl_source_data" (
 
     CONSTRAINT "tbl_source_data_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_hazard_types_uuid_key" ON "tbl_hazard_types"("uuid");

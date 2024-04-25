@@ -4,8 +4,8 @@
   "license": "MIT",
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
-    "serve:aa": "nx serve aa",
-    "clean": "rm -rf dist node_modules tmp",
+    "start": "nx serve aa",
+    "clean": "rm -rf prisma/migrations && pnpm migrate:dev",
     "migrate:dev": "prisma migrate dev --preview-feature",
     "migrate:dev:create": "prisma migrate dev --create-only --preview-feature",
     "migrate:reset": "prisma migrate reset --preview-feature",
@@ -13,7 +13,6 @@
     "migrate:status": "prisma migrate status --preview-feature",
     "migrate:resolve": "prisma migrate resolve --preview-feature",
     "seed:all": "ts-node prisma/seed.ts",
-    "clean": "rm -rf prisma/migrations && pnpm migrate:dev",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "prisma:generate:watch": "prisma generate --watch"
@@ -26,6 +25,7 @@
     "@nestjs/config": "^3.2.1",
     "@nestjs/core": "^10.0.2",
     "@nestjs/event-emitter": "^2.0.4",
+    "@nestjs/mapped-types": "^2.0.5",
     "@nestjs/microservices": "^10.3.7",
     "@nestjs/platform-express": "^10.0.2",
     "@prisma/client": "5.10.2",
