@@ -19,6 +19,25 @@ enum DataSource {
   GLOFAS
 }
 
+// ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
+
+model Beneficiary {
+  id            Int     @id @default(autoincrement()) @db.Integer()
+  uuid          String  @unique @db.Uuid()
+  walletAddress String?
+
+  extras Json?
+
+  createdAt   DateTime  @default(now())
+  phoneNumber String?
+  email       String?
+  deletedAt   DateTime?
+
+  @@map("tbl_beneficiaries")
+}
+
+// ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
+
 model HazardTypes {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
