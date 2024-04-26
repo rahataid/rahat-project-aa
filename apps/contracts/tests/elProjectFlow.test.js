@@ -2,6 +2,7 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
 const { signMetaTxRequest } = require("../utils/signer")
+const triggerSources = require("./triggerSources.json")
 const { getRandomEthAddress } = require("./common.js")
 const { generateMultiCallData } = require("../utils/signer.js")
 
@@ -30,32 +31,34 @@ describe.only('------ ElProjectFlow Tests ------', function () {
     let ben2;
     let notRegisteredBen;
     let ven1;
-    let notApprovedVen;
-    let eyeTokenContract;
-    let referredTokenContract;
     let aaProjectContract;
     let rahatDonorContract;
     let accessManagerContract;
     let forwarderContract;
     let rahatTokenContract
     let requiredTrigger = 2;
+    let triggerAddress1;
+    let triggerAddress2;
+    let triggerAddress3;
+    const [triggerSource1, triggerSource2, triggerSource3] = triggerSources;
+
 
     before(async function () {
-        const [addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
-        deployer = addr1;
+        const [addr0, addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
+        deployer = addr0;
+        admin = addr1;
         ben1 = addr2;
         ben2 = addr3;
-        ben3 = addr7;
-        ven1 = addr4;
-        notRegisteredBen = addr5;
-        notApprovedVen = addr6;
+        triggerAddress1 = addr7;
+        triggerAddress2 = addr4;
+        triggerAddress3 = addr5;
     });
 
     describe('Deployment', function () {
         it('Should deploy all required contracts', async function () {
-            accessManagerContract = await ethers.deployContract('AccessManager', [[deployer.address]]);
+            accessManagerContract = await ethers.deployContract('AccessManager', [[admin.address]]);
             triggerManagerContract = await ethers.deployContract('TriggerManager', [requiredTrigger]);
-            rahatDonorContract = await ethers.deployContract('RahatDonor', [deployer.address, await accessManagerContract.getAddress()]);
+            rahatDonorContract = await ethers.deployContract('RahatDonor', [admin.address, await accessManagerContract.getAddress()]);
             forwarderContract = await ethers.deployContract("ERC2771Forwarder", ["Rumsan Forwarder"]);
             rahatTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'RahatToken', 'RHT', await rahatDonorContract.getAddress(), 1]);
             aaProjectContract = await ethers.deployContract('AAProject', ["AAProject",
@@ -65,23 +68,76 @@ describe.only('------ ElProjectFlow Tests ------', function () {
                 triggerManagerContract.target
             ]);
 
-            await accessManagerContract.updateAdmin(await rahatDonorContract.getAddress(), true);
+            await accessManagerContract.connect(admin).updateAdmin(await rahatDonorContract.getAddress(), true);
             // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
-            rahatDonorContract.registerProject(await aaProjectContract.getAddress(), true);
+            rahatDonorContract.connect(admin).registerProject(await aaProjectContract.getAddress(), true);
 
         })
 
-        it('should send funds to the contract', async function () {
-            await rahatTokenContract.connect(deployer).mint(deployer.address, 1000000);
-            await rahatTokenContract.connect(deployer).transfer(aaProjectContract.address, 100000);
+        it('should update trigger sources', async function () {
+            console.log(triggerSource1.id,
+                triggerSource1.name,
+                triggerSource1.details,
+                triggerAddress1.address,)
+            await triggerManagerContract.connect(admin)
+                .updateTriggerSource(
+                    ethers.id(triggerSource1.id),
+                    triggerSource1.name,
+                    triggerSource1.details,
+                    triggerAddress1.address,
+                );
+
+            await triggerManagerContract.connect(admin)
+                .updateTriggerSource(
+                    ethers.id(triggerSource2.id),
+                    triggerSource2.name,
+                    triggerSource2.details,
+                    triggerAddress2.address,
+                );
+
+            await triggerManagerContract.connect(admin)
+                .updateTriggerSource(
+                    ethers.id(triggerSource3.id),
+                    triggerSource3.name,
+                    triggerSource3.details,
+                    triggerAddress3.address,
+                );
+
+            const contractTriggerData1 = await triggerManagerContract.triggerSources(ethers.id(triggerSource1.id));
+            const contractTriggerData2 = await triggerManagerContract.triggerSources(ethers.id(triggerSource2.id));
+            const contractTriggerData3 = await triggerManagerContract.triggerSources(ethers.id(triggerSource3.id));
+            expect(contractTriggerData1[0]).to.equal(triggerSource1.name);
+            expect(contractTriggerData2[0]).to.equal(triggerSource2.name);
+            expect(contractTriggerData3[0]).to.equal(triggerSource3.name);
+
+        }
+        )
+
+        it('should send funds to the aa contract', async function () {
+            await rahatDonorContract.connect(admin).mintTokens(rahatTokenContract.target, aaProjectContract.target, 1000000);
+            expect(await rahatTokenContract.balanceOf(aaProjectContract.target)).to.equal(1000000);
         })
 
-        it('should trigger the project', async function () {
-            await aaProjectContract.connect(deployer).triggerProject();
+        it('should not be able to assign tokens to beneficiaries if contract is not triggered', async function () {
+            expect(aaProjectContract.connect(admin).assignClaims(ben1.address, rahatTokenContract.target, 100)).to.be.revertedWith("distribution not triggered");
         })
 
-        it('should be able to assign tokens once triggeres', async function () {
-            await aaProjectContract.connect(deployer).assignTokens([ben1.address, ben2.address], [100, 200]);
+        it('should trigger the project via source1', async function () {
+            await triggerManagerContract.connect(triggerAddress1).trigger(ethers.id(triggerSource1.id));
+            expect(await triggerManagerContract.connect(triggerAddress1).getTriggerCount()).to.equal(1);
         })
+
+        it('should trigger the project via source2', async function () {
+            await triggerManagerContract.connect(triggerAddress2).trigger(ethers.id(triggerSource2.id));
+            expect(await triggerManagerContract.connect(triggerAddress1).getTriggerCount()).to.equal(2);
+
+        })
+
+        it('should  be able to assign tokens to beneficiaries ', async function () {
+            await aaProjectContract.connect(admin).assignClaims(ben1.address, rahatTokenContract.target, 100);
+            expect(await rahatTokenContract.balanceOf(ben1.address)).to.equal(100);
+        })
+
+
     })
 })

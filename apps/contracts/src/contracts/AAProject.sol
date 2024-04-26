@@ -4,6 +4,7 @@ pragma solidity 0.8.23;
 import '../libraries/AbstractProject.sol';
 import '../interfaces/IAAProject.sol';
 import '@openzeppelin/contracts/metatx/ERC2771Context.sol';
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
 import '../interfaces/IAccessManager.sol';
@@ -120,6 +121,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
   ) private {
     uint256 remainingBudget = tokenBudget(_tokenAddress);
     require(remainingBudget > _tokenAssigned, 'token budget exceed');
+    IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
     emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
   }
 
@@ -128,7 +130,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
     address _tokenAddress,
     uint256 _tokenAssigned
   ) public onlyAdmin {
-    require(TriggerManager.hasTriggered(), 'Triggers not completed');
+    require(TriggerManager.hasTriggered(), 'distribution not triggered');
     _assignClaims(_beneficiary, _tokenAddress, _tokenAssigned, _msgSender());
   }
 

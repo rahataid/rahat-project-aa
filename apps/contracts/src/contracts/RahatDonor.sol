@@ -65,37 +65,11 @@ contract RahatDonor is AbstractTokenActions, ERC165 {
     _;
   }
 
-  function mintTokenAndApprove(
-    address _tokenFree,
-    address _tokenReferral,
-    address _projectAddress,
-    uint256 _amountFree,
-    uint256 _referralLimit
-  )
-    public
-    onlyDonor
-    onlyValidAddress(_tokenFree)
-    onlyValidAddress(_tokenReferral)
-    onlyValidAddress(_projectAddress)
-  {
-    require(_registeredProject[_projectAddress], 'project not registered');
-    require(_amountFree > 0, 'amount cannot be zero');
-    require(
-      mintTokens(_tokenFree, _projectAddress, _amountFree),
-      'Free token not minted'
-    );
-    uint256 _tokenReferralAmount = _amountFree * _referralLimit;
-    require(
-      mintTokens(_tokenReferral, _projectAddress, _tokenReferralAmount),
-      'Referred token not minted'
-    );
-  }
-
   function mintTokens(
     address _token,
     address _projectAddress,
     uint256 _amount
-  ) private returns (bool) {
+  ) public returns (bool) {
     RahatToken token = RahatToken(_token);
     token.mint(_projectAddress, _amount);
 
