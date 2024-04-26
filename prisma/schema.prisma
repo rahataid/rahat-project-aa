@@ -111,8 +111,14 @@ model DataSources {
 
   location         String
   dataSource       DataSource
-  repeatEvery      Int
+  repeatEvery      String
   triggerStatement Json       @db.JsonB()
+
+  readinessActivated Boolean @default(false)
+  activationActivated Boolean @default(false)
+
+  readinessActivatedOn DateTime? 
+  activationActivatedOn DateTime? 
 
   triggerActivity String[]
 
