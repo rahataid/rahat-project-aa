@@ -1,8 +1,8 @@
 export interface WaterLevelNotification {
   message: string;
-  status: 'WARNING' | 'DANGER';
+  status: 'READINESS_LEVEL' | 'ACTIVATION_LEVEL';
   dataSource: string;
   currentLevel: number;
-  warningLevel: number;
-  dangerLevel: number;
+  readinessLevel: number;
+  activationLevel: number;
 }

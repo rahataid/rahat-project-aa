@@ -110,7 +110,7 @@ model DataSources {
   repeatKey String @unique
 
   location         String
-  dataSource       DataSource
+  dataSource       DataSource @unique
   repeatEvery      Int
   triggerStatement Json       @db.JsonB()
 

@@ -43,18 +43,18 @@ export class DhmService implements AbstractSource {
 
     const currentLevel = recentWaterLevel.waterLevel;
 
-    const warningLevel = payload.triggerStatement.warningLevel
-      ? payload.triggerStatement.warningLevel
+    const readinessLevel = payload.triggerStatement.readinessLevel
+      ? payload.triggerStatement.readinessLevel
       : recentWaterLevel.warningLevel;
 
-    const dangerLevel = payload.triggerStatement.dangerLevel
-      ? payload.triggerStatement.dangerLevel
+    const activationLevel = payload.triggerStatement.activationLevel
+      ? payload.triggerStatement.activationLevel
       : recentWaterLevel.dangerLevel;
 
     this.logger.log("##### WATER LEVEL INFO ########")
     this.logger.log(recentWaterLevel);
-    this.logger.log(`warning level: ${warningLevel}`);
-    this.logger.log(`danger level: ${dangerLevel}`);
+    this.logger.log(`readiness level: ${readinessLevel}`);
+    this.logger.log(`activation level: ${activationLevel}`);
     this.logger.log("###############################")
 
     // save to db
@@ -63,45 +63,45 @@ export class DhmService implements AbstractSource {
       data: recentWaterLevel
     })
 
-    const warningLevelReached = this.compareWaterLevels(
+    const readinessLevelReached = this.compareWaterLevels(
       currentLevel,
-      warningLevel
+      readinessLevel
     );
 
-    const dangerLevelReached = this.compareWaterLevels(
+    const activationLevelReached = this.compareWaterLevels(
       currentLevel,
-      dangerLevel
+      activationLevel
     );
 
-    if (dangerLevelReached) {
-      const dangerMessage = `${dataSource}:${location}: Water level has reached danger level.`;
+    if (activationLevelReached) {
+      const dangerMessage = `${dataSource}:${location}: Water level has reached activation level.`;
       this.logger.log(dangerMessage);
       if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: dangerMessage,
-          status: 'DANGER',
+          status: 'READINESS_LEVEL',
           location,
           dataSource,
           currentLevel,
-          warningLevel,
-          dangerLevel,
+          readinessLevel,
+          activationLevel,
         });
       }
       return;
     }
 
-    if (warningLevelReached) {
-      const warningMessage = `${dataSource}:${location} :Water level has reached warning level.`;
+    if (readinessLevelReached) {
+      const warningMessage = `${dataSource}:${location} :Water level has reached readiness level.`;
       this.logger.log(warningMessage);
       if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
         this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
           message: warningMessage,
           location,
-          status: 'WARNING',
+          status: 'ACTIVATION_LEVEL',
           dataSource,
           currentLevel,
-          warningLevel,
-          dangerLevel,
+          readinessLevel,
+          activationLevel,
         });
       }
       return;
@@ -153,9 +153,9 @@ export class DhmService implements AbstractSource {
         }
       },
       orderBy: {
-        createdAt:'desc'
+        createdAt: 'desc'
       }
-    
+
     })
   }
 
@@ -211,7 +211,7 @@ export class DhmService implements AbstractSource {
         }
       }))
       if (!recordExists) {
-        const x = await this.prisma.sourceData.create({
+        await this.prisma.sourceData.create({
           data: {
             data: payload.data,
             dataSourceId: payload.dataSourceId
@@ -219,7 +219,7 @@ export class DhmService implements AbstractSource {
         })
       }
     } catch (err) {
-      console.log(err)
+      this.logger.error(err);
     }
   }
 }
