@@ -3,12 +3,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS, TRIGGER_ACTIVITY } from '../constants';
 import { AbstractSource } from './datasource.abstract';
-import { DhmDataObject, WaterLevelRecord } from './dto';
+import { DhmDataObject, GetWaterLevel, WaterLevelRecord } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { AddDataSource } from '../dto';
 import { DateTime } from 'luxon'
-import { PrismaService } from '@rumsan/prisma';
+import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { UUID } from 'crypto';
 
+const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class DhmService implements AbstractSource {
@@ -73,6 +75,8 @@ export class DhmService implements AbstractSource {
       activationLevel
     );
 
+    await this.processTriggerStatus(payload.uuid, readinessLevelReached, activationLevelReached);
+
     if (activationLevelReached) {
       const dangerMessage = `${dataSource}:${location}: Water level has reached activation level.`;
       this.logger.log(dangerMessage);
@@ -135,28 +139,36 @@ export class DhmService implements AbstractSource {
     return stations.data;
   }
 
-  async getWaterLevels() {
-    return this.prisma.sourceData.findMany({
-      where: {
-        dataSource: {
-          dataSource: 'DHM',
-          isActive: true
-        }
-      },
-      include: {
-        dataSource: {
-          select: {
-            triggerStatement: true,
-            dataSource: true,
-            location: true,
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+  async getWaterLevels(payload: GetWaterLevel) {
+    const { page, perPage } = payload
 
-    })
+    return paginate(
+      this.prisma.sourceData,
+      {
+        where: {
+          dataSource: {
+            dataSource: 'DHM',
+            isActive: true
+          }
+        },
+        include: {
+          dataSource: {
+            select: {
+              triggerStatement: true,
+              dataSource: true,
+              location: true,
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      },
+      {
+        page,
+        perPage
+      }
+    )
   }
 
   async getRiverStationData(url: string, payload: AddDataSource) {
@@ -222,4 +234,56 @@ export class DhmService implements AbstractSource {
       this.logger.error(err);
     }
   }
+
+  async processTriggerStatus(uuid: string, readinessLevelReached: boolean, activationLevelReached: boolean) {
+    try {
+      const dataSource = await this.prisma.dataSources.findUnique({
+        where: {
+          uuid: uuid
+        }
+      })
+
+      const date = new Date().toISOString()
+
+      if (readinessLevelReached && !dataSource.readinessActivated) {
+        await this.prisma.dataSources.update({
+          where: {
+            uuid: uuid
+          },
+          data: {
+            readinessActivated: true,
+            readinessActivatedOn: date
+          }
+        })
+      }
+
+
+      if (activationLevelReached && !dataSource.activationActivated) {
+        if (!dataSource.readinessActivated) {
+          await this.prisma.dataSources.update({
+            where: {
+              uuid: uuid
+            },
+            data: {
+              readinessActivated: true,
+              readinessActivatedOn: date
+            }
+          })
+        }
+        await this.prisma.dataSources.update({
+          where: {
+            uuid: uuid
+          },
+          data: {
+            activationActivated: true,
+            activationActivatedOn: date
+          }
+        })
+      }
+
+    } catch (err) {
+      console.log(err)
+    }
+  }
+
 }

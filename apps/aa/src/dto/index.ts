@@ -4,7 +4,7 @@ export interface AddDataSource {
   uuid?: string;
   location: string;
   dataSource: DataSource;
-  repeatEvery: number;
+  repeatEvery: number | string;
   triggerActivity: string[];
   triggerStatement: Record<string,any>;
   hazardTypeId: string;

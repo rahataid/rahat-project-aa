@@ -63,13 +63,25 @@ export class ScheduleService {
       throw new RpcException('Please provide a valid data source!');
     }
 
+    const dataSource = await this.prisma.dataSources.findFirst({
+      where: {
+        dataSource: payload.dataSource,
+        isActive: true
+      }
+    })
+
+    if(dataSource){
+      throw new RpcException(`${payload.dataSource} has already been configued!`);
+    }
+  
     const sanitizedPayload: AddDataSource = {
       dataSource: payload.dataSource,
       location: payload.location,
       hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
-      repeatEvery: Number(payload.repeatEvery),
-      triggerActivity: payload.triggerActivity
+      // repeatEvery: "* * * * *", //every minute
+      repeatEvery: "30000",
+      triggerActivity: []
     }
 
     return this.scheduleJob(sanitizedPayload);
@@ -96,7 +108,7 @@ export class ScheduleService {
     return updated
   }
 
-  async scheduleJob(payload: AddDataSource) {
+  async scheduleJob(payload) {
     const uuid = randomUUID()
 
     const jobPayload = {
@@ -113,8 +125,8 @@ export class ScheduleService {
         delay: 1000,
       },
       repeat: {
-        every: payload.repeatEvery, //in ms, 5s
-      }
+        every: Number(payload.repeatEvery)
+      } 
     });
 
     const repeatableKey = repeatable.opts.repeat.key;
