@@ -81,7 +81,7 @@ export class ScheduleService {
       triggerStatement: payload.triggerStatement,
       // repeatEvery: "* * * * *", //every minute
       repeatEvery: "30000",
-      triggerActivity: []
+      triggerActivity: ['EMAIL']
     }
 
     return this.scheduleJob(sanitizedPayload);
