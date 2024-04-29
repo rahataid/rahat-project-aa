@@ -1,0 +1,200 @@
+[
+    {
+        "id": 12226077,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T13:15:25.239726+05:45",
+        "waterLevel": 2.76099967957,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:00:00+05:45"
+    },
+    {
+        "id": 12226140,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T13:25:25.239726+05:45",
+        "waterLevel": 2.98699996941,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:10:00+05:45"
+    },
+    {
+        "id": 12226207,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T13:35:25.239726+05:45",
+        "waterLevel": 3.00009967957,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:20:00+05:45"
+    },
+    {
+        "id": 12226274,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T13:45:29.404454+05:45",
+        "waterLevel": 3.76000022888,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:30:00+05:45"
+    },
+    {
+        "id": 12226339,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T13:55:23.562402+05:45",
+        "waterLevel": 4.75699996948,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:50:00+05:45"
+    },
+    {
+        "id": 12226339,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T14:05:23.562402+05:45",
+        "waterLevel": 5.10000996948,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:50:00+05:45"
+    },
+    {
+        "id": 12226339,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T14:15:23.562402+05:45",
+        "waterLevel": 5.32300996948,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:50:00+05:45"
+    },
+    {
+        "id": 12226339,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T14:25:23.562402+05:45",
+        "waterLevel": 5.82300996948,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:50:00+05:45"
+    },
+    {
+        "id": 12226339,
+        "basin": "Karnali",
+        "image": "http://daq.hydrology.gov.np/images/946676b9b5462e49d1cfa425087921f6",
+        "point": {
+            "type": "Point",
+            "coordinates": [
+                81.28694444,
+                28.65305556
+            ]
+        },
+        "title": "Karnali at Chisapani",
+        "status": "BELOW WARNING LEVEL",
+        "steady": "STEADY",
+        "station": 104,
+        "createdOn": "2024-04-29T14:35:23.562402+05:45",
+        "waterLevel": 6.22300996948,
+        "dangerLevel": 10.8,
+        "description": "Automatic Water Level Station at Chisapani",
+        "warningLevel": 10,
+        "waterLevelOn": "2024-04-29T13:50:00+05:45"
+    }
+]

@@ -5,6 +5,7 @@
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
     "start": "nx serve aa",
+    "trigger": "ts-node tools/scripts/trigger-dhm.ts",
     "clean": "rm -rf prisma/migrations && pnpm migrate:dev",
     "migrate:dev": "prisma migrate dev --preview-feature",
     "migrate:dev:create": "prisma migrate dev --create-only --preview-feature",
@@ -59,8 +60,10 @@
     "@types/jest": "^29.4.0",
     "@types/luxon": "^3.4.2",
     "@types/node": "~18.16.9",
+    "@types/nodemailer": "^6.4.14",
     "@typescript-eslint/eslint-plugin": "^7.3.0",
     "@typescript-eslint/parser": "^7.3.0",
+    "dotenv": "^16.4.5",
     "eslint": "~8.57.0",
     "eslint-config-prettier": "^9.0.0",
     "jest": "^29.4.1",
