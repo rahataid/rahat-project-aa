@@ -47,8 +47,11 @@ export class PhasesService {
       }
     })
 
-    let readinessStatus = null;
-    let activationStatus = null;
+    let readinessStatus, activationStatus = {
+      activated: false,
+      activatedOn: null
+    };
+    
     if (dhmStatus) {
       if (dhmStatus.readinessActivated) {
         readinessStatus = {
