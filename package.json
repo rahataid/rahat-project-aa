@@ -5,7 +5,8 @@
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
     "start": "nx serve aa",
-    "trigger": "ts-node tools/scripts/trigger-dhm.ts",
+    "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
+    "trigger-readiness": "ts-node tools/scripts/trigger-readiness.ts",
     "clean": "rm -rf prisma/migrations && pnpm migrate:dev",
     "migrate:dev": "prisma migrate dev --preview-feature",
     "migrate:dev:create": "prisma migrate dev --create-only --preview-feature",

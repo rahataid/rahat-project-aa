@@ -1,9 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import { sendEmail } from '../email'
+import * as dotenv from 'dotenv'
+dotenv.config()
 
 const prisma = new PrismaClient();
-const d = './dhm-data.json'
+const d = './dhm-readiness-data.json'
 
 const main = async () => {
     const dhmSource = await prisma.dataSources.findFirst({
@@ -37,7 +39,7 @@ const main = async () => {
         }
     })
 
-    await sendEmail('avash700@gmail.com', "WARNING", "Water level has reached warning level.", "<p>Water level has reached warning level.<p>")
+    await sendEmail(process.env.EMAIL_TO as string, "WARNING", "Water level has reached warning level.", "<p>Water level has reached warning level.<p>")
     
     console.log("Trigger data updated")
 }
