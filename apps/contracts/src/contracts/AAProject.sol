@@ -113,6 +113,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
   ///@param _tokenAddress address of the token to assign
   ///@param _tokenAssigned amount of token assigned till date
   ///@dev internal function to assign claims
+  // TODO Replace ClaimAssigned by using etherisc Insurance Framework
   function _assignClaims(
     address _beneficiary,
     address _tokenAddress,
