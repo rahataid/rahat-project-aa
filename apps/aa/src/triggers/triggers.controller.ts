@@ -10,7 +10,7 @@ export class TriggersController {
   constructor(private readonly triggersService: TriggersService) { }
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.GET_ALL,
+    cmd: JOBS.TRIGGERS.GET_ALL,
     uuid: process.env.PROJECT_ID,
   })
   async getAll(payload: GetTriggers): Promise<any> {
@@ -21,7 +21,7 @@ export class TriggersController {
   * Development Only
   *************************/
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.DEV_ONLY,
+    cmd: JOBS.TRIGGERS.DEV_ONLY,
     uuid: process.env.PROJECT_ID,
   })
   async devOnly(data: AddDataSource): Promise<any> {
@@ -30,7 +30,7 @@ export class TriggersController {
   /********************************* */
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.ADD,
+    cmd: JOBS.TRIGGERS.ADD,
     uuid: process.env.PROJECT_ID,
   })
   async create(data: AddDataSource): Promise<any> {
@@ -38,7 +38,7 @@ export class TriggersController {
   }
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.REMOVE,
+    cmd: JOBS.TRIGGERS.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
   async remove(data: RemoveDataSource): Promise<any> {

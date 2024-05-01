@@ -146,13 +146,13 @@ export class DhmService implements AbstractSource {
       this.prisma.triggersData,
       {
         where: {
-          dataSource: {
+          trigger: {
             dataSource: 'DHM',
             isActive: true
           }
         },
         include: {
-          dataSource: {
+          trigger: {
             select: {
               triggerStatement: true,
               dataSource: true,
