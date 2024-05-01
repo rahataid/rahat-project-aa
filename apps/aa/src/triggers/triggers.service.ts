@@ -6,14 +6,14 @@ import { InjectQueue } from '@nestjs/bull';
 import { AddDataSource, RemoveDataSource } from '../dto';
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { GetSchedule } from './dto';
+import { GetTriggers } from './dto';
 // import { GlofasService } from '../datasource/glofas.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
-export class ScheduleService {
-  private readonly logger = new Logger(ScheduleService.name);
+export class TriggersService {
+  private readonly logger = new Logger(TriggersService.name);
 
   constructor(
     private prisma: PrismaService,
@@ -38,11 +38,11 @@ export class ScheduleService {
 * Development Only
 *************************/
 
-  async getAll(payload: GetSchedule) {
+  async getAll(payload: GetTriggers) {
     const { page, perPage } = payload
 
     return paginate(
-      this.prisma.dataSources,
+      this.prisma.triggers,
       {
         where: {
           isActive: true
@@ -63,7 +63,7 @@ export class ScheduleService {
       throw new RpcException('Please provide a valid data source!');
     }
 
-    const dataSource = await this.prisma.dataSources.findFirst({
+    const dataSource = await this.prisma.triggers.findFirst({
       where: {
         dataSource: payload.dataSource,
         isActive: true
@@ -89,7 +89,7 @@ export class ScheduleService {
 
   async remove(payload: RemoveDataSource) {
     const { repeatKey } = payload
-    const schedule = await this.prisma.dataSources.findUnique({
+    const schedule = await this.prisma.triggers.findUnique({
       where: {
         repeatKey: repeatKey,
         isActive: true
@@ -97,7 +97,7 @@ export class ScheduleService {
     })
     if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
     await this.scheduleQueue.removeRepeatableByKey(repeatKey)
-    const updated = await this.prisma.dataSources.update({
+    const updated = await this.prisma.triggers.update({
       where: {
         repeatKey: repeatKey
       },
@@ -138,7 +138,7 @@ export class ScheduleService {
       ...payload
     }
 
-    await this.prisma.dataSources.create({
+    await this.prisma.triggers.create({
       data: createData
     })
 

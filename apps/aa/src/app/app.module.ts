@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ListenersModule } from '../listeners/listeners.module';
-import { ScheduleModule } from '../datasource-schedule/schedule.module';
+import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -29,7 +29,7 @@ import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
       }),
       inject: [ConfigService],
     }),
-    ScheduleModule,
+    TriggersModule,
     ListenersModule,
     DataSourceModule,
     ProcessorsModule,

@@ -4,6 +4,9 @@ CREATE TYPE "Phase" AS ENUM ('PREPAREDNESS', 'READINESS', 'ACTION');
 -- CreateEnum
 CREATE TYPE "DataSource" AS ENUM ('DHM', 'GLOFAS');
 
+-- CreateEnum
+CREATE TYPE "ActivitiesStatus" AS ENUM ('NOT_STARTED', 'WORK_IN_PROGRESS', 'COMPLETED');
+
 -- CreateTable
 CREATE TABLE "tbl_beneficiaries" (
     "id" SERIAL NOT NULL,
@@ -63,8 +66,7 @@ CREATE TABLE "tbl_activities" (
     "responsibility" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "isComplete" BOOLEAN NOT NULL DEFAULT false,
-    "isApproved" BOOLEAN NOT NULL DEFAULT false,
+    "status" "ActivitiesStatus" NOT NULL DEFAULT 'NOT_STARTED',
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
@@ -73,7 +75,7 @@ CREATE TABLE "tbl_activities" (
 );
 
 -- CreateTable
-CREATE TABLE "tbl_data_sources" (
+CREATE TABLE "tbl_triggers" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "repeatKey" TEXT NOT NULL,
@@ -91,19 +93,19 @@ CREATE TABLE "tbl_data_sources" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
-    CONSTRAINT "tbl_data_sources_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "tbl_triggers_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "tbl_source_data" (
+CREATE TABLE "tbl_triggers_data" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "data" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
-    "dataSourceId" TEXT NOT NULL,
+    "triggerId" TEXT NOT NULL,
 
-    CONSTRAINT "tbl_source_data_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "tbl_triggers_data_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -128,13 +130,13 @@ CREATE UNIQUE INDEX "tbl_activity_categories_uuid_key" ON "tbl_activity_categori
 CREATE UNIQUE INDEX "tbl_activities_uuid_key" ON "tbl_activities"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_data_sources_uuid_key" ON "tbl_data_sources"("uuid");
+CREATE UNIQUE INDEX "tbl_triggers_uuid_key" ON "tbl_triggers"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_data_sources_repeatKey_key" ON "tbl_data_sources"("repeatKey");
+CREATE UNIQUE INDEX "tbl_triggers_repeatKey_key" ON "tbl_triggers"("repeatKey");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_source_data_uuid_key" ON "tbl_source_data"("uuid");
+CREATE UNIQUE INDEX "tbl_triggers_data_uuid_key" ON "tbl_triggers_data"("uuid");
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -146,7 +148,7 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOR
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_data_sources" ADD CONSTRAINT "tbl_data_sources_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_source_data" ADD CONSTRAINT "tbl_source_data_dataSourceId_fkey" FOREIGN KEY ("dataSourceId") REFERENCES "tbl_data_sources"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_triggers_data" ADD CONSTRAINT "tbl_triggers_data_triggerId_fkey" FOREIGN KEY ("triggerId") REFERENCES "tbl_triggers"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;

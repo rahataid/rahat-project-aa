@@ -19,6 +19,12 @@ enum DataSource {
   GLOFAS
 }
 
+enum ActivitiesStatus {
+  NOT_STARTED
+  WORK_IN_PROGRESS
+  COMPLETED
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -44,7 +50,7 @@ model HazardTypes {
 
   name        String        @unique
   activities  Activities[]
-  dataSources DataSources[]
+  triggers Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -94,9 +100,10 @@ model Activities {
   responsibility String
   source         String
   description    String
-  isComplete     Boolean             @default(false)
-  isApproved     Boolean             @default(false)
-  isDeleted      Boolean             @default(false)
+
+  status ActivitiesStatus @default(NOT_STARTED)
+
+  isDeleted Boolean @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -104,7 +111,7 @@ model Activities {
   @@map("tbl_activities")
 }
 
-model DataSources {
+model Triggers {
   id        Int    @id @default(autoincrement())
   uuid      String @unique
   repeatKey String @unique
@@ -114,15 +121,15 @@ model DataSources {
   repeatEvery      String
   triggerStatement Json       @db.JsonB()
 
-  readinessActivated Boolean @default(false)
+  readinessActivated  Boolean @default(false)
   activationActivated Boolean @default(false)
 
-  readinessActivatedOn DateTime? 
-  activationActivatedOn DateTime? 
+  readinessActivatedOn  DateTime?
+  activationActivatedOn DateTime?
 
   triggerActivity String[]
 
-  datas SourceData[]
+  datas TriggersData[]
 
   hazardType   HazardTypes @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String
@@ -132,10 +139,10 @@ model DataSources {
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
-  @@map("tbl_data_sources")
+  @@map("tbl_triggers")
 }
 
-model SourceData {
+model TriggersData {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
@@ -143,8 +150,8 @@ model SourceData {
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime?    @updatedAt()
-  dataSource   DataSources? @relation(fields: [dataSourceId], references: [uuid])
-  dataSourceId String
+  trigger   Triggers? @relation(fields: [triggerId], references: [uuid])
+  triggerId String
 
-  @@map("tbl_source_data")
+  @@map("tbl_triggers_data")
 }

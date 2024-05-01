@@ -61,7 +61,7 @@ export class DhmService implements AbstractSource {
 
     // save to db
     await this.saveWaterLevelsData({
-      dataSourceId: payload.uuid,
+      triggerId: payload.uuid,
       data: recentWaterLevel
     })
 
@@ -143,7 +143,7 @@ export class DhmService implements AbstractSource {
     const { page, perPage } = payload
 
     return paginate(
-      this.prisma.sourceData,
+      this.prisma.triggersData,
       {
         where: {
           dataSource: {
@@ -213,9 +213,9 @@ export class DhmService implements AbstractSource {
 
   async saveWaterLevelsData(payload: WaterLevelRecord) {
     try {
-      const recordExists = await this.prisma.sourceData.findFirst(({
+      const recordExists = await this.prisma.triggersData.findFirst(({
         where: {
-          dataSourceId: payload.dataSourceId,
+          triggerId: payload.triggerId,
           data: {
             path: ["waterLevelOn"],
             equals: payload.data.waterLevelOn
@@ -223,10 +223,10 @@ export class DhmService implements AbstractSource {
         }
       }))
       if (!recordExists) {
-        await this.prisma.sourceData.create({
+        await this.prisma.triggersData.create({
           data: {
             data: payload.data,
-            dataSourceId: payload.dataSourceId
+            triggerId: payload.triggerId
           }
         })
       }
@@ -237,7 +237,7 @@ export class DhmService implements AbstractSource {
 
   async processTriggerStatus(uuid: string, readinessLevelReached: boolean, activationLevelReached: boolean) {
     try {
-      const dataSource = await this.prisma.dataSources.findUnique({
+      const dataSource = await this.prisma.triggers.findUnique({
         where: {
           uuid: uuid
         }
@@ -246,7 +246,7 @@ export class DhmService implements AbstractSource {
       const date = new Date().toISOString()
 
       if (readinessLevelReached && !dataSource.readinessActivated) {
-        await this.prisma.dataSources.update({
+        await this.prisma.triggers.update({
           where: {
             uuid: uuid
           },
@@ -260,7 +260,7 @@ export class DhmService implements AbstractSource {
 
       if (activationLevelReached && !dataSource.activationActivated) {
         if (!dataSource.readinessActivated) {
-          await this.prisma.dataSources.update({
+          await this.prisma.triggers.update({
             where: {
               uuid: uuid
             },
@@ -270,7 +270,7 @@ export class DhmService implements AbstractSource {
             }
           })
         }
-        await this.prisma.dataSources.update({
+        await this.prisma.triggers.update({
           where: {
             uuid: uuid
           },
