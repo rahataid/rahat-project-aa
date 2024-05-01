@@ -44,13 +44,50 @@ model Beneficiary {
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
 
+model Stakeholders {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name         String
+  email        String?
+  phone        String?
+  designation  String
+  organization String
+  district     String
+  municipality String
+
+  stakeholdersGroups StakeholdersGroups[]
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt()
+
+
+  @@map("tbl_stakeholders")
+}
+
+model StakeholdersGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  stakeholders Stakeholders[]
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders_groups")
+}
+
 model HazardTypes {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  name        String        @unique
-  activities  Activities[]
-  triggers Triggers[]
+  name       String       @unique
+  activities Activities[]
+  triggers   Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -148,8 +185,8 @@ model TriggersData {
 
   data Json @db.JsonB()
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime?    @updatedAt()
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
   trigger   Triggers? @relation(fields: [triggerId], references: [uuid])
   triggerId String
 
