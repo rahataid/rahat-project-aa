@@ -2,6 +2,7 @@ export const NAMESPACE = 'rahat.projects';
 
 export const DATA_SOURCES = {
   DHM: 'DHM',
+  MANUAL: 'MANUAL'
   // GLOFAS: 'GLOFAS'
 };
 

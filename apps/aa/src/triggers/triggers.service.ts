@@ -63,6 +63,10 @@ export class TriggersService {
       throw new RpcException('Please provide a valid data source!');
     }
 
+    if (payload.dataSource === DATA_SOURCES.MANUAL) {
+      return this.createManualTrigger(payload)
+    }
+
     const dataSource = await this.prisma.triggers.findFirst({
       where: {
         dataSource: payload.dataSource,
@@ -70,11 +74,12 @@ export class TriggersService {
       }
     })
 
-    if(dataSource){
+    if (dataSource) {
       throw new RpcException(`${payload.dataSource} has already been configued!`);
     }
-  
+
     const sanitizedPayload: AddDataSource = {
+      title: payload.title,
       dataSource: payload.dataSource,
       location: payload.location,
       hazardTypeId: payload.hazardTypeId,
@@ -126,7 +131,7 @@ export class TriggersService {
       },
       repeat: {
         every: Number(payload.repeatEvery)
-      } 
+      }
     });
 
     const repeatableKey = repeatable.opts.repeat.key;
@@ -143,6 +148,22 @@ export class TriggersService {
     })
 
     return createData
+  }
+
+  async createManualTrigger(payload) {
+    const uuid = randomUUID()
+    const repeatKey = randomUUID()
+
+    const createData = {
+      repeatKey: repeatKey,
+      uuid: uuid,
+      isActive: true,
+      ...payload
+    }
+
+    return this.prisma.triggers.create({
+      data: createData
+    })
   }
 
   isValidDataSource(value: string) {

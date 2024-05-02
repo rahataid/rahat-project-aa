@@ -17,6 +17,7 @@ enum Phase {
 enum DataSource {
   DHM
   GLOFAS
+  MANUAL
 }
 
 enum ActivitiesStatus {
@@ -58,10 +59,9 @@ model Stakeholders {
 
   stakeholdersGroups StakeholdersGroups[]
 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
-
 
   @@map("tbl_stakeholders")
 }
@@ -74,8 +74,8 @@ model StakeholdersGroups {
 
   stakeholders Stakeholders[]
 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
   @@map("tbl_stakeholders_groups")
@@ -153,13 +153,15 @@ model Triggers {
   uuid      String @unique
   repeatKey String @unique
 
-  location         String
   dataSource       DataSource
-  repeatEvery      String
-  triggerStatement Json       @db.JsonB()
+  location         String?
+  repeatEvery      String?
+  triggerStatement Json?      @db.JsonB()
+  title            String?
+  notes            String?
 
-  readinessActivated  Boolean @default(false)
-  activationActivated Boolean @default(false)
+  readinessActivated  Boolean? @default(false)
+  activationActivated Boolean? @default(false)
 
   readinessActivatedOn  DateTime?
   activationActivatedOn DateTime?
@@ -168,8 +170,8 @@ model Triggers {
 
   datas TriggersData[]
 
-  hazardType   HazardTypes @relation(fields: [hazardTypeId], references: [uuid])
-  hazardTypeId String
+  hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId String?
 
   isActive Boolean @default(true)
 
