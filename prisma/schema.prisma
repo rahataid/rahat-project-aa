@@ -26,6 +26,12 @@ enum ActivitiesStatus {
   COMPLETED
 }
 
+enum ActivityTypes {
+  COMMUNICATION
+  PAYOUT
+  GENERAL
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -72,7 +78,8 @@ model StakeholdersGroups {
 
   name String
 
-  stakeholders Stakeholders[]
+  stakeholders  Stakeholders[]
+  activityComms ActivityComms[]
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
@@ -138,7 +145,10 @@ model Activities {
   source         String
   description    String
 
-  status ActivitiesStatus @default(NOT_STARTED)
+  activityType ActivityTypes    @default(GENERAL)
+  status       ActivitiesStatus @default(NOT_STARTED)
+
+  activityComm ActivityComms?
 
   isDeleted Boolean @default(false)
 
@@ -193,4 +203,22 @@ model TriggersData {
   triggerId String
 
   @@map("tbl_triggers_data")
+}
+
+model ActivityComms {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  campaignId String
+
+  stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
+  stakeholdersGropuId String             @unique
+
+  activity   Activities @relation(fields: [activityId], references: [uuid])
+  activityId String     @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activity_comms")
 }

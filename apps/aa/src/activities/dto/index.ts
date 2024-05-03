@@ -1,3 +1,5 @@
+import { ActivityTypes } from "@prisma/client";
+
 export interface AddActivityData {
     title: string;
     phaseId: string;
@@ -6,6 +8,7 @@ export interface AddActivityData {
     responsibility: string;
     source: string;
     description: string;
+    activityType: ActivityTypes;
 }
 
 export interface RemoveActivityData {

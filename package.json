@@ -8,7 +8,7 @@
     "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
     "trigger-readiness": "ts-node tools/scripts/trigger-readiness.ts",
     "clean": "rm -rf dist node_modules",
-    "clean-migrations": "rm -rf prisma/migrations && pnpm migrate:dev",
+    "migrate:clean": "rm -rf prisma/migrations && pnpm migrate:dev",
     "migrate:dev": "prisma migrate dev --preview-feature",
     "migrate:dev:create": "prisma migrate dev --create-only --preview-feature",
     "migrate:reset": "prisma migrate reset --preview-feature",
