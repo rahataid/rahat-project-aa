@@ -36,7 +36,14 @@ export class ActivitiesController {
     uuid: process.env.PROJECT_ID,
   })
   async addCommunication(payload) {
-    console.log(payload);
     return this.activitiesService.addCommunication(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.COMMUNICATION.TRIGGER,
+    uuid: process.env.PROJECT_ID,
+  })
+  async triggerCommunication(payload) {
+    return this.activitiesService.triggerCommunication(payload.campaignId);
   }
 }

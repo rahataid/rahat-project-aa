@@ -36,6 +36,20 @@ export class ActivitiesService {
       });
       const audienceIds = [];
       for (const stakeholder of groups?.stakeholders) {
+        const audiences =
+          await communicationService.communication.listAudience();
+        const checkExistingAudience = audiences.data.filter((audience) => {
+          if (
+            audience?.details?.email === stakeholder?.email ||
+            audience?.details?.phone === stakeholder?.phone
+          ) {
+            audienceIds.push(audience.id);
+            return audience;
+          }
+        });
+
+        if (checkExistingAudience.length > 0) continue;
+
         const response =
           await communicationService.communication.createAudience({
             details: {
@@ -85,8 +99,25 @@ export class ActivitiesService {
     }
   }
 
+  //trigger communication
+  async triggerCommunication(payload) {
+    const communicationService = new CommunicationService({
+      baseURL: process.env.COMMUNICATION_URL,
+      headers: {
+        appId: process.env.COMMUNICATION_APP_ID,
+      },
+    });
+    const response = await communicationService.communication.triggerCampaign(
+      Number(payload)
+    );
+
+    if (response) return 'Success';
+    else {
+      throw new Error('Campaign Already Completed');
+    }
+  }
+
   async add(payload: AddActivityData) {
-    //create campaign
     return await this.prisma.activities.create({
       data: payload,
     });
@@ -118,6 +149,7 @@ export class ActivitiesService {
         category: true,
         hazardType: true,
         phase: true,
+        activityComm: true,
       },
     };
 

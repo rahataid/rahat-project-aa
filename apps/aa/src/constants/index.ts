@@ -59,6 +59,7 @@ export const JOBS = {
   },
   COMMUNICATION: {
     ADD: 'aa.jobs.activity.communication.add',
+    TRIGGER: 'aa.jobs.activity.communication.trigger',
   },
   ACTIVITY_CATEGORIES: {
     GET_ALL: 'aa.jobs.activityCategories.getAll',
