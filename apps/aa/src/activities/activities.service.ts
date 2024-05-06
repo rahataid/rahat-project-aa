@@ -28,7 +28,7 @@ export class ActivitiesService {
       const communicationService = new CommunicationService({
         baseURL: process.env.COMMUNICATION_URL,
         headers: {
-          appId: process.env.APP_ID,
+          appId: process.env.COMMUNICATION_APP_ID,
         },
       });
       const groups: any = await this.stakeholdersService.findGroup({
@@ -57,9 +57,7 @@ export class ActivitiesService {
           transportId = tdata.id;
         }
       });
-
-      //create campaign
-      const campaign = await communicationService.communication.createCampaign({
+      const campaignPayload = {
         audienceIds: audienceIds,
         name: 'AA',
         status: 'ONGOING',
@@ -67,16 +65,23 @@ export class ActivitiesService {
         type: payload?.communicationType.toUpperCase(),
         details: { message: payload?.message },
         startTime: new Date(),
-      });
+      };
 
-      if (campaign)
-        this.createActivityComms({
+      //create campaign
+      const campaign = await communicationService.communication.createCampaign(
+        campaignPayload
+      );
+
+      if (campaign) {
+        const activityComms = await this.createActivityComms({
           campaignId: String(campaign.data.id),
           stakeholdersGropuId: payload?.group,
           activityId: payload.activityId,
         });
+        return activityComms;
+      }
     } catch (e) {
-      throw Error('Something went wrong');
+      throw Error(`Something went wrong: ${e}`);
     }
   }
 
