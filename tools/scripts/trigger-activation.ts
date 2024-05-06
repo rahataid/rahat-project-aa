@@ -10,9 +10,9 @@ const commsURL = process.env.COMMS
 
 const main = async () => {
 
-    await sendRequest(`${commsURL}/campaigns/trigger-all`)
+    // await sendRequest(`${commsURL}/campaigns/trigger-all`)
 
-    const dhmSource = await prisma.dataSources.findFirst({
+    const dhmSource = await prisma.triggers.findFirst({
         where: {
             dataSource: 'DHM',
             isActive: true
@@ -24,16 +24,16 @@ const main = async () => {
 
 
     for (const td of triggerData) {
-        await prisma.sourceData.create({
+        await prisma.triggersData.create({
             data: {
                 data: td,
-                dataSourceId: dhmId,
+                triggerId: dhmId,
                 createdAt: td.createdOn
             }
         })
     }
 
-    await prisma.dataSources.update({
+    await prisma.triggers.update({
         where: {
            uuid: dhmId
         },
