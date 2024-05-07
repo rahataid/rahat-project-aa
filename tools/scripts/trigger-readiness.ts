@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 const d = './dhm-readiness-data.json'
 
 const main = async () => {
-    const dhmSource = await prisma.dataSources.findFirst({
+    const dhmSource = await prisma.triggers.findFirst({
         where: {
             dataSource: 'DHM',
             isActive: true
@@ -20,16 +20,16 @@ const main = async () => {
 
 
     for (const td of triggerData) {
-        await prisma.sourceData.create({
+        await prisma.triggersData.create({
             data: {
                 data: td,
-                dataSourceId: dhmId,
+                triggerId: dhmId,
                 createdAt: td.createdOn
             }
         })
     }
 
-    await prisma.dataSources.update({
+    await prisma.triggers.update({
         where: {
            uuid: dhmId
         },
@@ -39,7 +39,7 @@ const main = async () => {
         }
     })
 
-    await sendEmail(process.env.EMAIL_TO as string, "WARNING", "Water level has reached warning level.", "<p>Water level has reached warning level.<p>")
+    // await sendEmail(process.env.EMAIL_TO as string, "WARNING", "Water level has reached warning level.", "<p>Water level has reached warning level.<p>")
     
     console.log("Trigger data updated")
 }

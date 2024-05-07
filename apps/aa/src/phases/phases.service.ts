@@ -18,29 +18,29 @@ export class PhasesService {
   }
 
   async calculateActivitiesStats() {
-    const completedPreparednessActivity = await this.prisma.activities.count({
-      where: {
-        isComplete: true,
-        phase: {
-          name: Phase.PREPAREDNESS
-        }
-      },
-    })
-    const completedReadinessActivity = await this.prisma.activities.count({
-      where: {
-        isComplete: true,
-        phase: {
-          name: Phase.READINESS
-        }
-      },
-    })
+    // const completedPreparednessActivity = await this.prisma.activities.count({
+    //   where: {
+    //     isComplete: true,
+    //     phase: {
+    //       name: Phase.PREPAREDNESS
+    //     }
+    //   },
+    // })
+    // const completedReadinessActivity = await this.prisma.activities.count({
+    //   where: {
+    //     isComplete: true,
+    //     phase: {
+    //       name: Phase.READINESS
+    //     }
+    //   },
+    // })
 
     // const data = 
 
   }
 
   async getPhaseStatus() {
-    const dhmStatus = await this.prisma.dataSources.findFirst({
+    const dhmStatus = await this.prisma.triggers.findFirst({
       where: {
         dataSource: DataSource.DHM,
         isActive: true

@@ -1,47 +1,47 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { ScheduleService } from './schedule.service';
+import { TriggersService } from './triggers.service';
 import { AddDataSource, RemoveDataSource } from '../dto';
-import { GetSchedule } from './dto';
+import { GetTriggers } from './dto';
 
 @Controller()
-export class ScheduleController {
-  constructor(private readonly scheduleService: ScheduleService) { }
+export class TriggersController {
+  constructor(private readonly triggersService: TriggersService) { }
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.GET_ALL,
+    cmd: JOBS.TRIGGERS.GET_ALL,
     uuid: process.env.PROJECT_ID,
   })
-  async getAll(payload: GetSchedule): Promise<any> {
-    return this.scheduleService.getAll(payload);
+  async getAll(payload: GetTriggers): Promise<any> {
+    return this.triggersService.getAll(payload);
   }
 
   /***********************
   * Development Only
   *************************/
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.DEV_ONLY,
+    cmd: JOBS.TRIGGERS.DEV_ONLY,
     uuid: process.env.PROJECT_ID,
   })
   async devOnly(data: AddDataSource): Promise<any> {
-    return this.scheduleService.dev(data);
+    return this.triggersService.dev(data);
   }
   /********************************* */
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.ADD,
+    cmd: JOBS.TRIGGERS.ADD,
     uuid: process.env.PROJECT_ID,
   })
   async create(data: AddDataSource): Promise<any> {
-    return this.scheduleService.create(data);
+    return this.triggersService.create(data);
   }
 
   @MessagePattern({
-    cmd: JOBS.SCHEDULE.REMOVE,
+    cmd: JOBS.TRIGGERS.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
   async remove(data: RemoveDataSource): Promise<any> {
-    return this.scheduleService.remove(data);
+    return this.triggersService.remove(data);
   }
 }
