@@ -11,6 +11,13 @@ export interface AddActivityData {
   activityType: ActivityTypes;
 }
 
+export interface AddCommunication {
+  group: string;
+  communicationType: string;
+  message: string;
+  activityId: string;
+}
+
 export interface AddActivityComms {
   campaignId: string;
   stakeholdersGropuId: string;

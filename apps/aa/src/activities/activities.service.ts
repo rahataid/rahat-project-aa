@@ -1,13 +1,11 @@
-import axios from 'axios';
-import { ConfigService } from '@nestjs/config';
 import { Injectable, Logger } from '@nestjs/common';
-import {} from '@rumsan/communication';
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddActivityComms,
   AddActivityData,
+  AddCommunication,
   GetActivitiesDto,
   RemoveActivityData,
 } from './dto';
@@ -18,59 +16,33 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
 export class ActivitiesService {
   private readonly logger = new Logger(ActivitiesService.name);
+  private readonly communicationService: CommunicationService;
+
   constructor(
     private prisma: PrismaService,
     private readonly stakeholdersService: StakeholdersService
-  ) {}
+  ) {
+    this.communicationService = new CommunicationService({
+      baseURL: process.env.COMMUNICATION_URL,
+      headers: {
+        appId: process.env.COMMUNICATION_APP_ID,
+      },
+    });
+  }
 
-  async addCommunication(payload) {
+  async addCommunication(payload: AddCommunication) {
     try {
-      const communicationService = new CommunicationService({
-        baseURL: process.env.COMMUNICATION_URL,
-        headers: {
-          appId: process.env.COMMUNICATION_APP_ID,
-        },
-      });
       const groups: any = await this.stakeholdersService.findGroup({
         uuid: payload?.group,
       });
-      const audienceIds = [];
-      for (const stakeholder of groups?.stakeholders) {
-        const audiences =
-          await communicationService.communication.listAudience();
-        const checkExistingAudience = audiences.data.filter((audience) => {
-          if (
-            audience?.details?.email === stakeholder?.email ||
-            audience?.details?.phone === stakeholder?.phone
-          ) {
-            audienceIds.push(audience.id);
-            return audience;
-          }
-        });
+      const audienceIds = await this.getOrCreateAudienceIds(
+        groups?.stakeholders
+      );
 
-        if (checkExistingAudience.length > 0) continue;
-
-        const response =
-          await communicationService.communication.createAudience({
-            details: {
-              name: stakeholder.name,
-              phone: stakeholder.phone,
-              // @ts-ignore: Unreachable code error
-              email: stakeholder.email,
-            },
-          });
-        audienceIds.push(response.data.id);
-      }
       const transport =
-        await communicationService.communication.listTransport();
-      let transportId;
-      transport?.data.map((tdata) => {
-        if (
-          tdata.name.toLowerCase() === payload?.communicationType.toLowerCase()
-        ) {
-          transportId = tdata.id;
-        }
-      });
+        await this.communicationService.communication.listTransport();
+      let transportId = await this.getTransportId(payload?.communicationType);
+
       const campaignPayload = {
         audienceIds: audienceIds,
         name: 'AA',
@@ -82,9 +54,10 @@ export class ActivitiesService {
       };
 
       //create campaign
-      const campaign = await communicationService.communication.createCampaign(
-        campaignPayload
-      );
+      const campaign =
+        await this.communicationService.communication.createCampaign(
+          campaignPayload
+        );
 
       if (campaign) {
         const activityComms = await this.createActivityComms({
@@ -99,17 +72,60 @@ export class ActivitiesService {
     }
   }
 
+  private async getOrCreateAudienceIds(stakeholders) {
+    const audienceIds = [];
+
+    for (const stakeholder of stakeholders) {
+      const audiences =
+        await this.communicationService.communication.listAudience();
+
+      const existingAudience = audiences.data.find((audience) =>
+        this.isSameStakeholder(audience.details, stakeholder)
+      );
+
+      if (existingAudience) {
+        audienceIds.push(existingAudience.id);
+      } else {
+        const response =
+          await this.communicationService.communication.createAudience({
+            details: {
+              name: stakeholder.name,
+              phone: stakeholder.phone,
+              // @ts-ignore: Unreachable code error
+              email: stakeholder.email,
+            },
+          });
+        audienceIds.push(response.data.id);
+      }
+    }
+
+    return audienceIds;
+  }
+
+  private isSameStakeholder(audienceDetails, stakeholder) {
+    return (
+      audienceDetails?.email === stakeholder.email ||
+      audienceDetails?.phone === stakeholder.phone
+    );
+  }
+
+  private async getTransportId(communicationType) {
+    const transport =
+      await this.communicationService.communication.listTransport();
+
+    const transportId = transport.data.find(
+      (tdata) => tdata.name.toLowerCase() === communicationType.toLowerCase()
+    )?.id;
+
+    return transportId;
+  }
+
   //trigger communication
   async triggerCommunication(payload) {
-    const communicationService = new CommunicationService({
-      baseURL: process.env.COMMUNICATION_URL,
-      headers: {
-        appId: process.env.COMMUNICATION_APP_ID,
-      },
-    });
-    const response = await communicationService.communication.triggerCampaign(
-      Number(payload)
-    );
+    const response =
+      await this.communicationService.communication.triggerCampaign(
+        Number(payload)
+      );
 
     if (response) return 'Success';
     else {
