@@ -212,7 +212,7 @@ model ActivityComms {
   campaignId String
 
   stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
-  stakeholdersGropuId String             @unique
+  stakeholdersGropuId String
 
   activity   Activities @relation(fields: [activityId], references: [uuid])
   activityId String     @unique

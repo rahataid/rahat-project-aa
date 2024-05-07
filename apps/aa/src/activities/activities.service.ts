@@ -1,7 +1,6 @@
-import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { Injectable, Logger } from '@nestjs/common';
-import {} from '@rumsan/communication';
+import { } from '@rumsan/communication';
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
@@ -21,82 +20,94 @@ export class ActivitiesService {
   constructor(
     private prisma: PrismaService,
     private readonly stakeholdersService: StakeholdersService
-  ) {}
+  ) { }
 
   async addCommunication(payload) {
-    try {
-      const communicationService = new CommunicationService({
-        baseURL: process.env.COMMUNICATION_URL,
-        headers: {
-          appId: process.env.COMMUNICATION_APP_ID,
+
+    const communicationService = new CommunicationService({
+      baseURL: process.env.COMMUNICATION_URL,
+      headers: {
+        appId: process.env.COMMUNICATION_APP_ID,
+      },
+    });
+
+    const activity = await this.prisma.activities.findUnique({
+      where: {
+        uuid: payload.activityId
+      }
+    })
+
+    const groups: any = await this.stakeholdersService.findGroup({
+      uuid: payload?.group,
+    });
+    const audienceIds = [];
+
+    const audiences = await communicationService.communication.listAudience();
+
+    // emails and phones from stakeholders
+    const stakeholderEmails = groups.stakeholders.map(stakeholder => stakeholder.email);
+    const stakeholderPhones = groups.stakeholders.map(stakeholder => stakeholder.phone);
+
+    const audienceEmails = audiences.data.map(audience => audience.details.email);
+    const audiencePhones = audiences.data.map(audience => audience.details.phone);
+
+    // get stakeholders not in audience
+    const stakeholdersNotInAudience = groups.stakeholders.filter(stakeholder => {
+      return !audienceEmails.includes(stakeholder.email) || !audiencePhones.includes(stakeholder.phone);
+    });
+
+    // get audience which already has stakeholders
+    const stakeholdersInAudience = audiences.data.filter(audience => {
+      return stakeholderEmails.includes(audience.details.email) || stakeholderPhones.includes(audience.details.phone);
+    });
+
+    for (const stakeholder of stakeholdersNotInAudience) {
+      const response = await communicationService.communication.createAudience({
+        details: {
+          name: stakeholder.name,
+          phone: stakeholder.phone,
+          // @ts-ignore: Unreachable code error
+          email: stakeholder.email,
         },
       });
-      const groups: any = await this.stakeholdersService.findGroup({
-        uuid: payload?.group,
-      });
-      const audienceIds = [];
-      for (const stakeholder of groups?.stakeholders) {
-        const audiences =
-          await communicationService.communication.listAudience();
-        const checkExistingAudience = audiences.data.filter((audience) => {
-          if (
-            audience?.details?.email === stakeholder?.email ||
-            audience?.details?.phone === stakeholder?.phone
-          ) {
-            audienceIds.push(audience.id);
-            return audience;
-          }
-        });
-
-        if (checkExistingAudience.length > 0) continue;
-
-        const response =
-          await communicationService.communication.createAudience({
-            details: {
-              name: stakeholder.name,
-              phone: stakeholder.phone,
-              // @ts-ignore: Unreachable code error
-              email: stakeholder.email,
-            },
-          });
-        audienceIds.push(response.data.id);
-      }
-      const transport =
-        await communicationService.communication.listTransport();
-      let transportId;
-      transport?.data.map((tdata) => {
-        if (
-          tdata.name.toLowerCase() === payload?.communicationType.toLowerCase()
-        ) {
-          transportId = tdata.id;
-        }
-      });
-      const campaignPayload = {
-        audienceIds: audienceIds,
-        name: 'AA',
-        status: 'ONGOING',
-        transportId: transportId,
-        type: payload?.communicationType.toUpperCase(),
-        details: { message: payload?.message },
-        startTime: new Date(),
-      };
-
-      //create campaign
-      const campaign = await communicationService.communication.createCampaign(
-        campaignPayload
-      );
-
-      if (campaign) {
-        const activityComms = await this.createActivityComms({
-          campaignId: String(campaign.data.id),
-          stakeholdersGropuId: payload?.group,
-          activityId: payload.activityId,
-        });
-        return activityComms;
-      }
-    } catch (e) {
-      throw Error(`Something went wrong: ${e}`);
+      audienceIds.push(response.data.id);
     }
+
+    for (const audience of stakeholdersInAudience) {
+      audienceIds.push(audience.id)
+    }
+
+    const transport = await communicationService.communication.listTransport();
+    let transportId;
+
+    transport?.data.map((tdata) => {
+      if (
+        tdata.name.toLowerCase() === payload?.communicationType.toLowerCase()
+      ) {
+        transportId = tdata.id;
+      }
+    });
+    const campaignPayload = {
+      audienceIds: audienceIds,
+      name: activity.title,
+      status: 'ONGOING',
+      transportId: transportId,
+      type: payload?.communicationType.toUpperCase(),
+      details: { message: payload?.message },
+      startTime: new Date(),
+    };
+
+    //create campaign
+    const campaign = await communicationService.communication.createCampaign(
+      campaignPayload
+    );
+
+    const activityComms = await this.createActivityComms({
+      campaignId: String(campaign.data.id),
+      stakeholdersGropuId: payload?.group,
+      activityId: payload.activityId,
+    });
+    return activityComms;
   }
 
   //trigger communication
@@ -149,9 +160,23 @@ export class ActivitiesService {
         category: true,
         hazardType: true,
         phase: true,
-        activityComm: true,
+        activityComm: {
+          include: {
+            stakeholdersGroup: true
+          }
+        },
       },
     };
+
+    // this.prisma.activities.findMany({
+    //   include: {
+    //     activityComm: {
+    //       include: {
+    //         stakeholdersGroup: true
+    //       }
+    //     }
+    //   }
+    // })
 
     return paginate(this.prisma.activities, query, {
       page,
