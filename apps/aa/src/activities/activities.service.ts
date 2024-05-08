@@ -107,6 +107,17 @@ export class ActivitiesService {
       stakeholdersGropuId: payload?.group,
       activityId: payload.activityId,
     });
+
+    // update status to wip
+    await this.prisma.activities.update({
+      where: {
+        uuid: activity.uuid
+      },
+      data: {
+        status: 'WORK_IN_PROGRESS'
+      }
+    })
+
     return activityComms;
   }
 
@@ -122,10 +133,7 @@ export class ActivitiesService {
       Number(payload)
     );
 
-    if (response) return 'Success';
-    else {
-      throw new Error('Campaign Already Completed');
-    }
+    return response
   }
 
   async add(payload: AddActivityData) {
