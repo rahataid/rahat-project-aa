@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "cp -r prisma/ dist/apps/aa/prisma && cp -r tools dist/apps/aa/tools && node apps/aa/src/modify-package.js"
+          "cp -r prisma/ dist/apps/aa/prisma && cp -r tools dist/apps/aa/tools && cp dhm-*.json dist/apps/aa && node apps/aa/src/modify-package.js"
         ]
       }
     },
