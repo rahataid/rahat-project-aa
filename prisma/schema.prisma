@@ -106,8 +106,10 @@ model Phases {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  name       Phase        @unique
+  name Phase @unique
+
   activities Activities[]
+  triggers   Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -150,6 +152,8 @@ model Activities {
 
   activityComm ActivityComms?
 
+  triggers Triggers[]
+
   isDeleted Boolean @default(false)
 
   createdAt DateTime  @default(now())
@@ -170,21 +174,19 @@ model Triggers {
   title            String?
   notes            String?
 
-  readinessActivated  Boolean? @default(false)
-  activationActivated Boolean? @default(false)
-
-  readinessActivatedOn  DateTime?
-  activationActivatedOn DateTime?
-
-  triggerActivity String[]
-
-  datas TriggersData[]
+  phase   Phases? @relation(fields: [phaseId], references: [uuid])
+  phaseId String
 
   hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String?
 
-  isActive Boolean @default(true)
+  datas TriggersData[]
 
+  activities Activities[]
+
+  isTriggered Boolean @default(false)
+
+  isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -205,6 +207,7 @@ model TriggersData {
   @@map("tbl_triggers_data")
 }
 
+// refactor this to make it generic activity 
 model ActivityComms {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())

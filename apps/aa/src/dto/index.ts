@@ -5,9 +5,12 @@ export interface AddDataSource {
   location?: string;
   dataSource: DataSource;
   repeatEvery?: number | string;
-  triggerActivity?: string[];
-  triggerStatement?: Record<string,any>;
+  activities?: Array<{
+    uuid: string;
+  }>;
+  triggerStatement?: Record<string, any>;
   hazardTypeId?: string;
+  phaseId: string;
   title?: string;
   notes?: string;
 }
