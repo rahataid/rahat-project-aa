@@ -136,7 +136,7 @@ export class TriggersService {
         repeatKey: repeatKey
       },
       data: {
-        isDeleted: false
+        isDeleted: true
       }
     })
     return updated

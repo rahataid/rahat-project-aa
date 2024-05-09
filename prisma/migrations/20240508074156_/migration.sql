@@ -119,13 +119,10 @@ CREATE TABLE "tbl_triggers" (
     "triggerStatement" JSONB,
     "title" TEXT,
     "notes" TEXT,
-    "readinessActivated" BOOLEAN DEFAULT false,
-    "activationActivated" BOOLEAN DEFAULT false,
-    "readinessActivatedOn" TIMESTAMP(3),
-    "activationActivatedOn" TIMESTAMP(3),
-    "triggerActivity" TEXT[],
+    "phaseId" TEXT NOT NULL,
     "hazardTypeId" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isTriggered" BOOLEAN NOT NULL DEFAULT false,
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
@@ -159,6 +156,12 @@ CREATE TABLE "tbl_activity_comms" (
 
 -- CreateTable
 CREATE TABLE "_StakeholdersToStakeholdersGroups" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "_ActivitiesToTriggers" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL
 );
@@ -203,9 +206,6 @@ CREATE UNIQUE INDEX "tbl_triggers_data_uuid_key" ON "tbl_triggers_data"("uuid");
 CREATE UNIQUE INDEX "tbl_activity_comms_uuid_key" ON "tbl_activity_comms"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_activity_comms_stakeholdersGropuId_key" ON "tbl_activity_comms"("stakeholdersGropuId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "tbl_activity_comms_activityId_key" ON "tbl_activity_comms"("activityId");
 
 -- CreateIndex
@@ -213,6 +213,12 @@ CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_Stakehold
 
 -- CreateIndex
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "_ActivitiesToTriggers_AB_unique" ON "_ActivitiesToTriggers"("A", "B");
+
+-- CreateIndex
+CREATE INDEX "_ActivitiesToTriggers_B_index" ON "_ActivitiesToTriggers"("B");
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -222,6 +228,9 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOR
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -240,3 +249,9 @@ ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToS
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_stakeholders_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_activities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_triggers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
