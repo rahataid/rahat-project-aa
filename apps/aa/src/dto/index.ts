@@ -19,6 +19,10 @@ export interface RemoveDataSource {
   repeatKey: string;
 }
 
+export interface RemoveDataSource {
+  repeatKey: string;
+}
+
 // await this.prisma.dataSources.create({
 //   data: {
 //     repeatKey: repeatableKey,
