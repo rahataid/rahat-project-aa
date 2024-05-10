@@ -54,6 +54,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.triggers.remove',
   },
   ACTIVITIES: {
+    GET_ONE: 'aa.jobs.activities.getOne',
     GET_ALL: 'aa.jobs.activities.getAll',
     ADD: 'aa.jobs.activities.add',
     REMOVE: 'aa.jobs.activities.remove',

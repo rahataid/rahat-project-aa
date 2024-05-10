@@ -25,9 +25,13 @@ export interface AddActivityComms {
   stakeholdersGropuId: string;
   activityId: string;
 }
-export interface RemoveActivityData {
-  uuid: string;
+
+interface ActivityUUID {
+  uuid: string
 }
+export type RemoveActivityData = ActivityUUID
+
+export type GetOneActivity = ActivityUUID
 
 export interface GetActivitiesDto {
   title: string;

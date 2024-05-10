@@ -70,11 +70,7 @@ export class TriggersService {
         },
         include: {
           hazardType: true,
-          activities: {
-            include: {
-              activityComm: true
-            }
-          },
+          activities: true,
           phase: true
         }
       },
