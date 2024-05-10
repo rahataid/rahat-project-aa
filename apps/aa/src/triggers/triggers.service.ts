@@ -6,7 +6,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { AddDataSource, RemoveDataSource } from '../dto';
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { GetTriggers } from './dto';
+import { GetOneTrigger, GetTriggers } from './dto';
 // import { GlofasService } from '../datasource/glofas.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -38,17 +38,40 @@ export class TriggersService {
 * Development Only
 *************************/
 
+  async getOne(payload: GetOneTrigger) {
+    // console.log(payload)
+    const { repeatKey } = payload
+    return this.prisma.triggers.findUnique({
+      where: {
+        repeatKey: repeatKey
+      },
+      include: {
+        activities: true,
+        hazardType: true,
+        phase: true
+      }
+    })
+  }
+
   async getAll(payload: GetTriggers) {
     const { page, perPage } = payload
+
+    // this.prisma.triggers.findMany({
+    //   where: {
+    //     isDeleted:false
+    //   }
+    // })
 
     return paginate(
       this.prisma.triggers,
       {
         where: {
-          isActive: true
+          isDeleted: false
         },
         include: {
-          hazardType: true
+          hazardType: true,
+          activities: true,
+          phase: true
         }
       },
       {
@@ -70,7 +93,7 @@ export class TriggersService {
     const dataSource = await this.prisma.triggers.findFirst({
       where: {
         dataSource: payload.dataSource,
-        isActive: true
+        isDeleted: false
       }
     })
 
@@ -84,9 +107,11 @@ export class TriggersService {
       location: payload.location,
       hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
+      phaseId: payload.phaseId,
+      activities: payload.activities,
       // repeatEvery: "* * * * *", //every minute
       repeatEvery: "30000",
-      triggerActivity: ['EMAIL']
+      // triggerActivity: ['EMAIL']
     }
 
     return this.scheduleJob(sanitizedPayload);
@@ -97,7 +122,7 @@ export class TriggersService {
     const schedule = await this.prisma.triggers.findUnique({
       where: {
         repeatKey: repeatKey,
-        isActive: true
+        isDeleted: false
       }
     })
     if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
@@ -107,7 +132,7 @@ export class TriggersService {
         repeatKey: repeatKey
       },
       data: {
-        isActive: false
+        isDeleted: true
       }
     })
     return updated
@@ -116,8 +141,10 @@ export class TriggersService {
   async scheduleJob(payload) {
     const uuid = randomUUID()
 
+    const { activities, ...restOfPayload } = payload
+
     const jobPayload = {
-      ...payload,
+      ...restOfPayload,
       uuid
     }
 
@@ -139,12 +166,17 @@ export class TriggersService {
     const createData = {
       repeatKey: repeatableKey,
       uuid: uuid,
-      isActive: true,
-      ...payload
+      isDeleted: false,
+      ...restOfPayload
     }
 
     await this.prisma.triggers.create({
-      data: createData
+      data: {
+        ...createData,
+        activities: {
+          connect: activities
+        }
+      }
     })
 
     return createData
@@ -157,14 +189,13 @@ export class TriggersService {
     const createData = {
       repeatKey: repeatKey,
       uuid: uuid,
-      isActive: true,
       ...payload
     }
 
     return this.prisma.triggers.create({
       data: createData
     })
-  }
+  } ƒ
 
   isValidDataSource(value: string) {
     return Object.values(DATA_SOURCES).includes(value);

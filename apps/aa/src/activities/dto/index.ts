@@ -1,14 +1,23 @@
-import { ActivityTypes } from '@prisma/client';
+// import { ActivityTypes } from '@prisma/client';
+
+export interface ActivityCommunicationData {
+  groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
+  groupId: string;
+  communicationType: string;
+  message: string;
+}
 
 export interface AddActivityData {
   title: string;
+  leadTime: string;
   phaseId: string;
   categoryId: string;
   hazardTypeId: string;
   responsibility: string;
   source: string;
   description: string;
-  activityType: ActivityTypes;
+  activityCommunication: Array<ActivityCommunicationData>
+  activityPayout: Array<Record<string, any>>;
 }
 
 export interface AddActivityComms {
@@ -16,9 +25,13 @@ export interface AddActivityComms {
   stakeholdersGropuId: string;
   activityId: string;
 }
-export interface RemoveActivityData {
-  uuid: string;
+
+interface ActivityUUID {
+  uuid: string
 }
+export type RemoveActivityData = ActivityUUID
+
+export type GetOneActivity = ActivityUUID
 
 export interface GetActivitiesDto {
   title: string;

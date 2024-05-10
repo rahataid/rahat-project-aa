@@ -8,7 +8,7 @@ CREATE TYPE "DataSource" AS ENUM ('DHM', 'GLOFAS', 'MANUAL');
 CREATE TYPE "ActivitiesStatus" AS ENUM ('NOT_STARTED', 'WORK_IN_PROGRESS', 'COMPLETED');
 
 -- CreateEnum
-CREATE TYPE "ActivityTypes" AS ENUM ('COMMUNICATION', 'PAYOUT', 'GENERAL');
+CREATE TYPE "SettingDataType" AS ENUM ('STRING', 'NUMBER', 'BOOLEAN', 'OBJECT');
 
 -- CreateTable
 CREATE TABLE "tbl_beneficiaries" (
@@ -22,6 +22,18 @@ CREATE TABLE "tbl_beneficiaries" (
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "tbl_beneficiaries_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_settings" (
+    "name" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+    "dataType" "SettingDataType" NOT NULL,
+    "requiredFields" TEXT[],
+    "isReadOnly" BOOLEAN NOT NULL DEFAULT false,
+    "isPrivate" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "tbl_settings_pkey" PRIMARY KEY ("name")
 );
 
 -- CreateTable
@@ -96,11 +108,13 @@ CREATE TABLE "tbl_activities" (
     "phaseId" TEXT NOT NULL,
     "categoryId" TEXT NOT NULL,
     "hazardTypeId" TEXT NOT NULL,
+    "leadTime" TEXT NOT NULL,
     "responsibility" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "activityType" "ActivityTypes" NOT NULL DEFAULT 'GENERAL',
     "status" "ActivitiesStatus" NOT NULL DEFAULT 'NOT_STARTED',
+    "activityCommunication" JSONB,
+    "activityPayout" JSONB,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
@@ -119,13 +133,10 @@ CREATE TABLE "tbl_triggers" (
     "triggerStatement" JSONB,
     "title" TEXT,
     "notes" TEXT,
-    "readinessActivated" BOOLEAN DEFAULT false,
-    "activationActivated" BOOLEAN DEFAULT false,
-    "readinessActivatedOn" TIMESTAMP(3),
-    "activationActivatedOn" TIMESTAMP(3),
-    "triggerActivity" TEXT[],
+    "phaseId" TEXT NOT NULL,
     "hazardTypeId" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isTriggered" BOOLEAN NOT NULL DEFAULT false,
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
@@ -145,26 +156,22 @@ CREATE TABLE "tbl_triggers_data" (
 );
 
 -- CreateTable
-CREATE TABLE "tbl_activity_comms" (
-    "id" SERIAL NOT NULL,
-    "uuid" TEXT NOT NULL,
-    "campaignId" TEXT NOT NULL,
-    "stakeholdersGropuId" TEXT NOT NULL,
-    "activityId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3),
-
-    CONSTRAINT "tbl_activity_comms_pkey" PRIMARY KEY ("id")
+CREATE TABLE "_StakeholdersToStakeholdersGroups" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL
 );
 
 -- CreateTable
-CREATE TABLE "_StakeholdersToStakeholdersGroups" (
+CREATE TABLE "_ActivitiesToTriggers" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL
 );
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_settings_name_key" ON "tbl_settings"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_stakeholders_uuid_key" ON "tbl_stakeholders"("uuid");
@@ -200,19 +207,16 @@ CREATE UNIQUE INDEX "tbl_triggers_repeatKey_key" ON "tbl_triggers"("repeatKey");
 CREATE UNIQUE INDEX "tbl_triggers_data_uuid_key" ON "tbl_triggers_data"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_activity_comms_uuid_key" ON "tbl_activity_comms"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_activity_comms_stakeholdersGropuId_key" ON "tbl_activity_comms"("stakeholdersGropuId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_activity_comms_activityId_key" ON "tbl_activity_comms"("activityId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_StakeholdersToStakeholdersGroups"("A", "B");
 
 -- CreateIndex
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "_ActivitiesToTriggers_AB_unique" ON "_ActivitiesToTriggers"("A", "B");
+
+-- CreateIndex
+CREATE INDEX "_ActivitiesToTriggers_B_index" ON "_ActivitiesToTriggers"("B");
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -224,19 +228,22 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOR
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_triggers_data" ADD CONSTRAINT "tbl_triggers_data_triggerId_fkey" FOREIGN KEY ("triggerId") REFERENCES "tbl_triggers"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_activity_comms" ADD CONSTRAINT "tbl_activity_comms_stakeholdersGropuId_fkey" FOREIGN KEY ("stakeholdersGropuId") REFERENCES "tbl_stakeholders_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tbl_activity_comms" ADD CONSTRAINT "tbl_activity_comms_activityId_fkey" FOREIGN KEY ("activityId") REFERENCES "tbl_activities"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_stakeholders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_stakeholders_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_activities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_triggers"("id") ON DELETE CASCADE ON UPDATE CASCADE;

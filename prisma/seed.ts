@@ -1,6 +1,10 @@
+import { PrismaService } from "@rumsan/prisma"
 import { PrismaClient, Phase } from '@prisma/client';
+import { SettingsService } from "@rumsan/settings"
 
 const prisma = new PrismaClient();
+const prismaService = new PrismaService();
+const settings = new SettingsService(prismaService);
 
 const hazardTypesData = [
     {
@@ -49,6 +53,7 @@ const activityCategoriesData = [
 
 const activities: Array<{
     title: string,
+    leadTime: string,
     phaseId: string,
     categoryId: string,
     responsibility: string,
@@ -59,6 +64,7 @@ const activities: Array<{
         // preparedness action activities, general action
         {
             title: 'Preparedness activity one.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -68,6 +74,7 @@ const activities: Array<{
         },
         {
             title: 'Preparedness activity two.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -77,6 +84,7 @@ const activities: Array<{
         },
         {
             title: 'Readiness activity one.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -86,6 +94,7 @@ const activities: Array<{
         },
         {
             title: 'Readiness activity two.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -95,6 +104,7 @@ const activities: Array<{
         },
         {
             title: 'Action activity one.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -104,6 +114,7 @@ const activities: Array<{
         },
         {
             title: 'Action activity two.',
+            leadTime: 'test lead time',
             description: 'this is description of activity',
             responsibility: 'Member Secretary - Local DMC',
             source: 'Municipality',
@@ -146,6 +157,16 @@ const main = async () => {
         })
     }
     // ***** seed activities complete ***
+
+    // ***** seed settings start ***
+    await settings.create({
+        name: 'APP',
+        value: {
+            'LOCATION': 'Karnali at Chisapani'
+        }
+    })
+    // ***** seed settings complete ***
+
 
 }
 

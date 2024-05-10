@@ -75,41 +75,43 @@ export class DhmService implements AbstractSource {
       activationLevel
     );
 
-    await this.processTriggerStatus(payload.uuid, readinessLevelReached, activationLevelReached);
+    // TODO: refactor this
 
-    if (activationLevelReached) {
-      const dangerMessage = `${dataSource}:${location}: Water level has reached activation level.`;
-      this.logger.log(dangerMessage);
-      if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
-        this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
-          message: dangerMessage,
-          status: 'READINESS_LEVEL',
-          location,
-          dataSource,
-          currentLevel,
-          readinessLevel,
-          activationLevel,
-        });
-      }
-      return;
-    }
+    // await this.processTriggerStatus(payload.uuid, readinessLevelReached, activationLevelReached);
 
-    if (readinessLevelReached) {
-      const warningMessage = `${dataSource}:${location} :Water level has reached readiness level.`;
-      this.logger.log(warningMessage);
-      if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
-        this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
-          message: warningMessage,
-          location,
-          status: 'ACTIVATION_LEVEL',
-          dataSource,
-          currentLevel,
-          readinessLevel,
-          activationLevel,
-        });
-      }
-      return;
-    }
+    // if (activationLevelReached) {
+    //   const dangerMessage = `${dataSource}:${location}: Water level has reached activation level.`;
+    //   this.logger.log(dangerMessage);
+    //   if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
+    //     this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
+    //       message: dangerMessage,
+    //       status: 'READINESS_LEVEL',
+    //       location,
+    //       dataSource,
+    //       currentLevel,
+    //       readinessLevel,
+    //       activationLevel,
+    //     });
+    //   }
+    //   return;
+    // }
+
+    // if (readinessLevelReached) {
+    //   const warningMessage = `${dataSource}:${location} :Water level has reached readiness level.`;
+    //   this.logger.log(warningMessage);
+    //   if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
+    //     this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
+    //       message: warningMessage,
+    //       location,
+    //       status: 'ACTIVATION_LEVEL',
+    //       dataSource,
+    //       currentLevel,
+    //       readinessLevel,
+    //       activationLevel,
+    //     });
+    //   }
+    //   return;
+    // }
     this.logger.log(`${dataSource}: Water is in a safe level.`);
     return;
   }
@@ -235,55 +237,56 @@ export class DhmService implements AbstractSource {
     }
   }
 
-  async processTriggerStatus(uuid: string, readinessLevelReached: boolean, activationLevelReached: boolean) {
-    try {
-      const dataSource = await this.prisma.triggers.findUnique({
-        where: {
-          uuid: uuid
-        }
-      })
+  // TODO: refactor this
+  // async processTriggerStatus(uuid: string, readinessLevelReached: boolean, activationLevelReached: boolean) {
+  //   try {
+  //     const dataSource = await this.prisma.triggers.findUnique({
+  //       where: {
+  //         uuid: uuid
+  //       }
+  //     })
 
-      const date = new Date().toISOString()
+  //     const date = new Date().toISOString()
 
-      if (readinessLevelReached && !dataSource.readinessActivated) {
-        await this.prisma.triggers.update({
-          where: {
-            uuid: uuid
-          },
-          data: {
-            readinessActivated: true,
-            readinessActivatedOn: date
-          }
-        })
-      }
+  //     if (readinessLevelReached && !dataSource.readinessActivated) {
+  //       await this.prisma.triggers.update({
+  //         where: {
+  //           uuid: uuid
+  //         },
+  //         data: {
+  //           readinessActivated: true,
+  //           readinessActivatedOn: date
+  //         }
+  //       })
+  //     }
 
 
-      if (activationLevelReached && !dataSource.activationActivated) {
-        if (!dataSource.readinessActivated) {
-          await this.prisma.triggers.update({
-            where: {
-              uuid: uuid
-            },
-            data: {
-              readinessActivated: true,
-              readinessActivatedOn: date
-            }
-          })
-        }
-        await this.prisma.triggers.update({
-          where: {
-            uuid: uuid
-          },
-          data: {
-            activationActivated: true,
-            activationActivatedOn: date
-          }
-        })
-      }
+  //     if (activationLevelReached && !dataSource.activationActivated) {
+  //       if (!dataSource.readinessActivated) {
+  //         await this.prisma.triggers.update({
+  //           where: {
+  //             uuid: uuid
+  //           },
+  //           data: {
+  //             readinessActivated: true,
+  //             readinessActivatedOn: date
+  //           }
+  //         })
+  //       }
+  //       await this.prisma.triggers.update({
+  //         where: {
+  //           uuid: uuid
+  //         },
+  //         data: {
+  //           activationActivated: true,
+  //           activationActivatedOn: date
+  //         }
+  //       })
+  //     }
 
-    } catch (err) {
-      console.log(err)
-    }
-  }
+  //   } catch (err) {
+  //     console.log(err)
+  //   }
+  // }
 
 }

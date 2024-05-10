@@ -14,6 +14,7 @@ import { PhasesModule } from '../phases/phases.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { SettingsModule } from "@rumsan/settings"
 
 @Module({
   imports: [
@@ -39,9 +40,10 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     PhasesModule,
     ActivityCategoriesModule,
     BeneficiaryModule,
-    StakeholdersModule
+    StakeholdersModule,
+    SettingsModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

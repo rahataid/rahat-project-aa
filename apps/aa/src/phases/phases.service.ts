@@ -43,7 +43,7 @@ export class PhasesService {
     const dhmStatus = await this.prisma.triggers.findFirst({
       where: {
         dataSource: DataSource.DHM,
-        isActive: true
+        isDeleted: false
       }
     })
 
@@ -57,21 +57,22 @@ export class PhasesService {
       activatedOn: null
     }
 
-    if (dhmStatus) {
-      if (dhmStatus.readinessActivated) {
-        readinessStatus = {
-          activated: true,
-          activatedOn: dhmStatus.readinessActivatedOn
-        }
-      }
-      if (dhmStatus.activationActivated) {
-        activationStatus = {
-          activated: true,
-          activatedOn: dhmStatus.activationActivatedOn
-        }
-      }
-    }
-    
+    // TODO: refactor this
+    // if (dhmStatus) {
+    //   if (dhmStatus.readinessActivated) {
+    //     readinessStatus = {
+    //       activated: true,
+    //       activatedOn: dhmStatus.readinessActivatedOn
+    //     }
+    //   }
+    //   if (dhmStatus.activationActivated) {
+    //     activationStatus = {
+    //       activated: true,
+    //       activatedOn: dhmStatus.activationActivatedOn
+    //     }
+    //   }
+    // }
+
     return {
       readinessStatus,
       activationStatus
