@@ -26,10 +26,17 @@ enum ActivitiesStatus {
   COMPLETED
 }
 
-enum ActivityTypes {
-  COMMUNICATION
-  PAYOUT
-  GENERAL
+// enum ActivityTypes {
+//   COMMUNICATION
+//   PAYOUT
+//   GENERAL
+// }
+
+enum SettingDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  OBJECT
 }
 
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
@@ -50,6 +57,20 @@ model Beneficiary {
 }
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
+
+// ++++++++++++++++++ START: @rumsan/settings +++++++++++++++++++++++++++
+model Setting {
+  name           String          @id @unique
+  value          Json
+  dataType       SettingDataType
+  requiredFields String[]
+  isReadOnly     Boolean         @default(false)
+  isPrivate      Boolean         @default(true)
+
+  @@map("tbl_settings")
+}
+
+// ++++++++++++++++++ END: @rumsan/settings +++++++++++++++++++++++++++
 
 model Stakeholders {
   id   Int    @id @default(autoincrement()) @db.Integer()
@@ -78,8 +99,8 @@ model StakeholdersGroups {
 
   name String
 
-  stakeholders  Stakeholders[]
-  activityComms ActivityComms[]
+  stakeholders Stakeholders[]
+  // activityComms ActivityComms[]
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
@@ -143,14 +164,16 @@ model Activities {
   categoryId     String
   hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId   String
+  leadTime       String
   responsibility String
   source         String
   description    String
 
-  activityType ActivityTypes    @default(GENERAL)
-  status       ActivitiesStatus @default(NOT_STARTED)
+  // activityType ActivityTypes    @default(GENERAL)
+  status ActivitiesStatus @default(NOT_STARTED)
 
-  activityComm ActivityComms?
+  activityCommunication Json? @db.JsonB()
+  activityPayout        Json? @db.JsonB()
 
   triggers Triggers[]
 
@@ -207,21 +230,21 @@ model TriggersData {
   @@map("tbl_triggers_data")
 }
 
-// refactor this to make it generic activity 
-model ActivityComms {
-  id   Int    @id @default(autoincrement())
-  uuid String @unique @default(uuid())
+// // refactor this to make it generic activity 
+// model ActivityComms {
+//   id   Int    @id @default(autoincrement())
+//   uuid String @unique @default(uuid())
 
-  campaignId String
+//   campaignId String
 
-  stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
-  stakeholdersGropuId String
+//   stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
+//   stakeholdersGropuId String
 
-  activity   Activities @relation(fields: [activityId], references: [uuid])
-  activityId String     @unique
+//   activity   Activities @relation(fields: [activityId], references: [uuid])
+//   activityId String     @unique
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
+//   createdAt DateTime  @default(now())
+//   updatedAt DateTime? @updatedAt()
 
-  @@map("tbl_activity_comms")
-}
+//   @@map("tbl_activity_comms")
+// }

@@ -23,7 +23,7 @@ export class StakeholdersService {
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService
-  ) {}
+  ) { }
 
   // ***** stakeholders start ********** //
   async add(payload: AddStakeholdersData) {
@@ -167,7 +167,7 @@ export class StakeholdersService {
       },
     });
   }
-  async findGroup(payload: FindStakeholdersGroup) {
+  async findOneGroup(payload: FindStakeholdersGroup) {
     const { uuid } = payload;
     return await this.prisma.stakeholdersGroups.findUnique({
       where: {

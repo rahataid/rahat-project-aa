@@ -6,7 +6,7 @@ import { AddActivityData, GetActivitiesDto, RemoveActivityData } from './dto';
 
 @Controller()
 export class ActivitiesController {
-  constructor(private readonly activitiesService: ActivitiesService) {}
+  constructor(private readonly activitiesService: ActivitiesService) { }
 
   @MessagePattern({
     cmd: JOBS.ACTIVITIES.ADD,
@@ -31,19 +31,19 @@ export class ActivitiesController {
   async remove(payload: RemoveActivityData) {
     return this.activitiesService.remove(payload);
   }
-  @MessagePattern({
-    cmd: JOBS.COMMUNICATION.ADD,
-    uuid: process.env.PROJECT_ID,
-  })
-  async addCommunication(payload) {
-    return this.activitiesService.addCommunication(payload);
-  }
+  // @MessagePattern({
+  //   cmd: JOBS.COMMUNICATION.ADD,
+  //   uuid: process.env.PROJECT_ID,
+  // })
+  // async addCommunication(payload) {
+  //   return this.activitiesService.addCommunication(payload);
+  // }
 
-  @MessagePattern({
-    cmd: JOBS.COMMUNICATION.TRIGGER,
-    uuid: process.env.PROJECT_ID,
-  })
-  async triggerCommunication(payload) {
-    return this.activitiesService.triggerCommunication(payload.campaignId);
-  }
+  // @MessagePattern({
+  //   cmd: JOBS.COMMUNICATION.TRIGGER,
+  //   uuid: process.env.PROJECT_ID,
+  // })
+  // async triggerCommunication(payload) {
+  //   return this.activitiesService.triggerCommunication(payload.campaignId);
+  // }
 }
