@@ -143,14 +143,13 @@ export class DhmService implements AbstractSource {
 
   async getWaterLevels(payload: GetWaterLevel) {
     const { page, perPage } = payload
-
     return paginate(
       this.prisma.triggersData,
       {
         where: {
           trigger: {
             dataSource: 'DHM',
-            isActive: true
+            isDeleted: true
           }
         },
         include: {
@@ -172,6 +171,7 @@ export class DhmService implements AbstractSource {
       }
     )
   }
+
 
   async getRiverStationData(url: string, payload: AddDataSource) {
     const riverURL = new URL(`${url}/river`);
