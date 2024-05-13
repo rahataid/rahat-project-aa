@@ -2,12 +2,21 @@ import { DataSource } from "@prisma/client";
 
 export interface AddDataSource {
   uuid?: string;
-  location: string;
+  location?: string;
   dataSource: DataSource;
-  repeatEvery: number;
-  triggerActivity: string[];
-  triggerStatement: Record<string,any>;
-  hazardTypeId: string;
+  repeatEvery?: number | string;
+  activities?: Array<{
+    uuid: string;
+  }>;
+  triggerStatement?: Record<string, any>;
+  hazardTypeId?: string;
+  phaseId: string;
+  title?: string;
+  notes?: string;
+}
+
+export interface RemoveDataSource {
+  repeatKey: string;
 }
 
 export interface RemoveDataSource {

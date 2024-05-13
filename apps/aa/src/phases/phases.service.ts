@@ -1,7 +1,8 @@
 import { ConfigService } from "@nestjs/config";
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
-import { Phase } from "@prisma/client";
+import { DataSource, Phase } from "@prisma/client";
+import { RpcException } from "@nestjs/microservices";
 
 @Injectable()
 export class PhasesService {
@@ -16,15 +17,79 @@ export class PhasesService {
     return this.prisma.phases.findMany()
   }
 
-  async getStats() {
-    const data = await this.prisma.activities.count({
+  async calculateActivitiesStats() {
+    // const completedPreparednessActivity = await this.prisma.activities.count({
+    //   where: {
+    //     isComplete: true,
+    //     phase: {
+    //       name: Phase.PREPAREDNESS
+    //     }
+    //   },
+    // })
+    // const completedReadinessActivity = await this.prisma.activities.count({
+    //   where: {
+    //     isComplete: true,
+    //     phase: {
+    //       name: Phase.READINESS
+    //     }
+    //   },
+    // })
+
+    // const data = 
+
+  }
+
+  async getPhaseStatus() {
+    const dhmStatus = await this.prisma.triggers.findFirst({
       where: {
-        isComplete: true
-      },
-            
+        dataSource: DataSource.DHM,
+        isDeleted: false
+      }
     })
-    return data
-    // return this.prisma.phases.findMany()
+
+    let readinessStatus = {
+      activated: false,
+      activatedOn: null
+    };
+
+    let activationStatus = {
+      activated: false,
+      activatedOn: null
+    }
+
+    // TODO: refactor this
+    // if (dhmStatus) {
+    //   if (dhmStatus.readinessActivated) {
+    //     readinessStatus = {
+    //       activated: true,
+    //       activatedOn: dhmStatus.readinessActivatedOn
+    //     }
+    //   }
+    //   if (dhmStatus.activationActivated) {
+    //     activationStatus = {
+    //       activated: true,
+    //       activatedOn: dhmStatus.activationActivatedOn
+    //     }
+    //   }
+    // }
+
+    return {
+      readinessStatus,
+      activationStatus
+    }
+  }
+
+
+  async getStats() {
+    const [phaseStatus] =
+      await Promise.all([
+        this.getPhaseStatus()
+      ]);
+
+
+    return {
+      phaseStatus
+    }
   }
 }
 

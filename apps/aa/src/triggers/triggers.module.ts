@@ -1,7 +1,7 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
-import { ScheduleController } from './schedule.controller';
-import { ScheduleService } from './schedule.service';
+import { TriggersController } from './triggers.controller';
+import { TriggersService } from './triggers.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE } from '../constants';
 import { PrismaModule } from '@rumsan/prisma';
@@ -16,7 +16,7 @@ import { DataSourceModule } from '../datasource/datasource.module';
       name: BQUEUE.SCHEDULE,
     })
   ],
-  providers: [ScheduleService],
-  controllers: [ScheduleController],
+  providers: [TriggersService],
+  controllers: [TriggersController],
 })
-export class ScheduleModule {}
+export class TriggersModule {}

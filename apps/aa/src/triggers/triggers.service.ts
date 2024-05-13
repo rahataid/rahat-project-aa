@@ -6,14 +6,14 @@ import { InjectQueue } from '@nestjs/bull';
 import { AddDataSource, RemoveDataSource } from '../dto';
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { GetSchedule } from './dto';
+import { GetOneTrigger, GetTriggers } from './dto';
 // import { GlofasService } from '../datasource/glofas.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
-export class ScheduleService {
-  private readonly logger = new Logger(ScheduleService.name);
+export class TriggersService {
+  private readonly logger = new Logger(TriggersService.name);
 
   constructor(
     private prisma: PrismaService,
@@ -38,17 +38,40 @@ export class ScheduleService {
 * Development Only
 *************************/
 
-  async getAll(payload: GetSchedule) {
+  async getOne(payload: GetOneTrigger) {
+    // console.log(payload)
+    const { repeatKey } = payload
+    return this.prisma.triggers.findUnique({
+      where: {
+        repeatKey: repeatKey
+      },
+      include: {
+        activities: true,
+        hazardType: true,
+        phase: true
+      }
+    })
+  }
+
+  async getAll(payload: GetTriggers) {
     const { page, perPage } = payload
 
+    // this.prisma.triggers.findMany({
+    //   where: {
+    //     isDeleted:false
+    //   }
+    // })
+
     return paginate(
-      this.prisma.dataSources,
+      this.prisma.triggers,
       {
         where: {
-          isActive: true
+          isDeleted: false
         },
         include: {
-          hazardType: true
+          hazardType: true,
+          activities: true,
+          phase: true
         }
       },
       {
@@ -63,13 +86,32 @@ export class ScheduleService {
       throw new RpcException('Please provide a valid data source!');
     }
 
+    if (payload.dataSource === DATA_SOURCES.MANUAL) {
+      return this.createManualTrigger(payload)
+    }
+
+    const dataSource = await this.prisma.triggers.findFirst({
+      where: {
+        dataSource: payload.dataSource,
+        isDeleted: false
+      }
+    })
+
+    if (dataSource) {
+      throw new RpcException(`${payload.dataSource} has already been configued!`);
+    }
+
     const sanitizedPayload: AddDataSource = {
+      title: payload.title,
       dataSource: payload.dataSource,
       location: payload.location,
       hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
-      repeatEvery: Number(payload.repeatEvery),
-      triggerActivity: payload.triggerActivity
+      phaseId: payload.phaseId,
+      activities: payload.activities,
+      // repeatEvery: "* * * * *", //every minute
+      repeatEvery: "30000",
+      // triggerActivity: ['EMAIL']
     }
 
     return this.scheduleJob(sanitizedPayload);
@@ -77,30 +119,32 @@ export class ScheduleService {
 
   async remove(payload: RemoveDataSource) {
     const { repeatKey } = payload
-    const schedule = await this.prisma.dataSources.findUnique({
+    const schedule = await this.prisma.triggers.findUnique({
       where: {
         repeatKey: repeatKey,
-        isActive: true
+        isDeleted: false
       }
     })
     if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
     await this.scheduleQueue.removeRepeatableByKey(repeatKey)
-    const updated = await this.prisma.dataSources.update({
+    const updated = await this.prisma.triggers.update({
       where: {
         repeatKey: repeatKey
       },
       data: {
-        isActive: false
+        isDeleted: true
       }
     })
     return updated
   }
 
-  async scheduleJob(payload: AddDataSource) {
+  async scheduleJob(payload) {
     const uuid = randomUUID()
 
+    const { activities, ...restOfPayload } = payload
+
     const jobPayload = {
-      ...payload,
+      ...restOfPayload,
       uuid
     }
 
@@ -113,7 +157,7 @@ export class ScheduleService {
         delay: 1000,
       },
       repeat: {
-        every: payload.repeatEvery, //in ms, 5s
+        every: Number(payload.repeatEvery)
       }
     });
 
@@ -122,16 +166,36 @@ export class ScheduleService {
     const createData = {
       repeatKey: repeatableKey,
       uuid: uuid,
-      isActive: true,
-      ...payload
+      isDeleted: false,
+      ...restOfPayload
     }
 
-    await this.prisma.dataSources.create({
-      data: createData
+    await this.prisma.triggers.create({
+      data: {
+        ...createData,
+        activities: {
+          connect: activities
+        }
+      }
     })
 
     return createData
   }
+
+  async createManualTrigger(payload) {
+    const uuid = randomUUID()
+    const repeatKey = randomUUID()
+
+    const createData = {
+      repeatKey: repeatKey,
+      uuid: uuid,
+      ...payload
+    }
+
+    return this.prisma.triggers.create({
+      data: createData
+    })
+  } ƒ
 
   isValidDataSource(value: string) {
     return Object.values(DATA_SOURCES).includes(value);

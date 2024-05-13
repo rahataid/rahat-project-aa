@@ -17,15 +17,105 @@ enum Phase {
 enum DataSource {
   DHM
   GLOFAS
+  MANUAL
+}
+
+enum ActivitiesStatus {
+  NOT_STARTED
+  WORK_IN_PROGRESS
+  COMPLETED
+}
+
+// enum ActivityTypes {
+//   COMMUNICATION
+//   PAYOUT
+//   GENERAL
+// }
+
+enum SettingDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  OBJECT
+}
+
+// ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
+
+model Beneficiary {
+  id            Int     @id @default(autoincrement()) @db.Integer()
+  uuid          String  @unique @db.Uuid()
+  walletAddress String?
+
+  extras Json?
+
+  createdAt   DateTime  @default(now())
+  phoneNumber String?
+  email       String?
+  deletedAt   DateTime?
+
+  @@map("tbl_beneficiaries")
+}
+
+// ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
+
+// ++++++++++++++++++ START: @rumsan/settings +++++++++++++++++++++++++++
+model Setting {
+  name           String          @id @unique
+  value          Json
+  dataType       SettingDataType
+  requiredFields String[]
+  isReadOnly     Boolean         @default(false)
+  isPrivate      Boolean         @default(true)
+
+  @@map("tbl_settings")
+}
+
+// ++++++++++++++++++ END: @rumsan/settings +++++++++++++++++++++++++++
+
+model Stakeholders {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name         String
+  email        String?
+  phone        String?
+  designation  String
+  organization String
+  district     String
+  municipality String
+
+  stakeholdersGroups StakeholdersGroups[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders")
+}
+
+model StakeholdersGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  stakeholders Stakeholders[]
+  // activityComms ActivityComms[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders_groups")
 }
 
 model HazardTypes {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  name        String        @unique
-  activities  Activities[]
-  dataSources DataSources[]
+  name       String       @unique
+  activities Activities[]
+  triggers   Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -37,8 +127,10 @@ model Phases {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  name       Phase        @unique
+  name Phase @unique
+
   activities Activities[]
+  triggers   Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -72,12 +164,20 @@ model Activities {
   categoryId     String
   hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId   String
+  leadTime       String
   responsibility String
   source         String
   description    String
-  isComplete     Boolean             @default(false)
-  isApproved     Boolean             @default(false)
-  isDeleted      Boolean             @default(false)
+
+  // activityType ActivityTypes    @default(GENERAL)
+  status ActivitiesStatus @default(NOT_STARTED)
+
+  activityCommunication Json? @db.JsonB()
+  activityPayout        Json? @db.JsonB()
+
+  triggers Triggers[]
+
+  isDeleted Boolean @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -85,41 +185,66 @@ model Activities {
   @@map("tbl_activities")
 }
 
-model DataSources {
+model Triggers {
   id        Int    @id @default(autoincrement())
   uuid      String @unique
   repeatKey String @unique
 
-  location         String
   dataSource       DataSource
-  repeatEvery      Int
-  triggerStatement Json       @db.JsonB()
+  location         String?
+  repeatEvery      String?
+  triggerStatement Json?      @db.JsonB()
+  title            String?
+  notes            String?
 
-  triggerActivity String[]
+  phase   Phases? @relation(fields: [phaseId], references: [uuid])
+  phaseId String
 
-  datas SourceData[]
+  hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
+  hazardTypeId String?
 
-  hazardType   HazardTypes @relation(fields: [hazardTypeId], references: [uuid])
-  hazardTypeId String
+  datas TriggersData[]
 
-  isActive Boolean @default(true)
+  activities Activities[]
 
+  isTriggered Boolean @default(false)
+
+  isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
-  @@map("tbl_data_sources")
+  @@map("tbl_triggers")
 }
 
-model SourceData {
+model TriggersData {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
   data Json @db.JsonB()
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime?    @updatedAt()
-  dataSource   DataSources? @relation(fields: [dataSourceId], references: [uuid])
-  dataSourceId String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  trigger   Triggers? @relation(fields: [triggerId], references: [uuid])
+  triggerId String
 
-  @@map("tbl_source_data")
+  @@map("tbl_triggers_data")
 }
+
+// // refactor this to make it generic activity 
+// model ActivityComms {
+//   id   Int    @id @default(autoincrement())
+//   uuid String @unique @default(uuid())
+
+//   campaignId String
+
+//   stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
+//   stakeholdersGropuId String
+
+//   activity   Activities @relation(fields: [activityId], references: [uuid])
+//   activityId String     @unique
+
+//   createdAt DateTime  @default(now())
+//   updatedAt DateTime? @updatedAt()
+
+//   @@map("tbl_activity_comms")
+// }

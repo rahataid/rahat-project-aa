@@ -1,5 +1,9 @@
+export interface GetWaterLevel {
+  page: number;
+  perPage: number;
+}
 export interface WaterLevelRecord {
-  dataSourceId: string;
+  triggerId: string;
   data: Record<string,any>
 }
 

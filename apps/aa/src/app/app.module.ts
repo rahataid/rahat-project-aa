@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ListenersModule } from '../listeners/listeners.module';
-import { ScheduleModule } from '../datasource-schedule/schedule.module';
+import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -12,6 +12,9 @@ import { ActivitiesModule } from '../activities/activites.module';
 import { HazardTypesModule } from '../hazard-types/hazard-types.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { SettingsModule } from "@rumsan/settings"
 
 @Module({
   imports: [
@@ -28,16 +31,19 @@ import { ActivityCategoriesModule } from '../activity-categories/activity-catego
       }),
       inject: [ConfigService],
     }),
-    ScheduleModule,
+    TriggersModule,
     ListenersModule,
     DataSourceModule,
     ProcessorsModule,
     ActivitiesModule,
     HazardTypesModule,
     PhasesModule,
-    ActivityCategoriesModule
+    ActivityCategoriesModule,
+    BeneficiaryModule,
+    StakeholdersModule,
+    SettingsModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

@@ -19,6 +19,11 @@ export class ScheduleProcessor {
 
   @Process(JOBS.SCHEDULE.ADD)
   async processAddSchedule(job: Job<AddDataSource>) {
+    if(process.env.START_POLL === 'false'){
+      console.log("Polling not enabled!")
+      return
+    }
+    
     switch (job.data.dataSource) {
       case DATA_SOURCES.DHM:
         await this.bipadService.criteriaCheck(job.data);
