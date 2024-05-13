@@ -162,8 +162,28 @@ export class ActivitiesService {
       for (const comm of aComm) {
         const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
         const { data: campaignData } = await this.communicationService.communication.getCampaign(communication.campaignId)
+
+        let groupName: string;
+
+        switch (communication.groupType) {
+          case 'STAKEHOLDERS':
+            const group = await this.prisma.stakeholdersGroups.findUnique({
+              where: {
+                uuid: communication.groupId
+              }
+            })
+            groupName = group.name
+            break;
+          case 'BENEFICIARY':
+            console.log('Benificary logic here.')
+            break;
+          default:
+            break;
+        }
+
         activityCommunication.push({
           ...communication,
+          groupName: groupName,
           campaignData: campaignData
         })
       }
