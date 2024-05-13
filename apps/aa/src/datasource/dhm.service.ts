@@ -149,7 +149,7 @@ export class DhmService implements AbstractSource {
         where: {
           trigger: {
             dataSource: 'DHM',
-            isDeleted: true
+            isDeleted: false
           }
         },
         include: {
