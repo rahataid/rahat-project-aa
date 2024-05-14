@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { TriggersService } from './triggers.service';
-import { AddDataSource, RemoveDataSource } from '../dto';
+import { AddTriggerStatement, RemoveTriggerStatement, UpdateTriggerStatement } from '../dto';
 import { GetOneTrigger, GetTriggers } from './dto';
 
 @Controller()
@@ -16,7 +16,7 @@ export class TriggersController {
     cmd: JOBS.TRIGGERS.DEV_ONLY,
     uuid: process.env.PROJECT_ID,
   })
-  async devOnly(data: AddDataSource): Promise<any> {
+  async devOnly(data: AddTriggerStatement): Promise<any> {
     return this.triggersService.dev(data);
   }
   /********************************* */
@@ -42,7 +42,7 @@ export class TriggersController {
     cmd: JOBS.TRIGGERS.ADD,
     uuid: process.env.PROJECT_ID,
   })
-  async create(data: AddDataSource): Promise<any> {
+  async create(data: AddTriggerStatement): Promise<any> {
     return this.triggersService.create(data);
   }
 
@@ -50,7 +50,15 @@ export class TriggersController {
     cmd: JOBS.TRIGGERS.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
-  async remove(data: RemoveDataSource): Promise<any> {
+  async remove(data: RemoveTriggerStatement): Promise<any> {
     return this.triggersService.remove(data);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.TRIGGERS.ACTIVATE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async activate(payload: UpdateTriggerStatement) {
+    return this.triggersService.activateTrigger(payload);
   }
 }

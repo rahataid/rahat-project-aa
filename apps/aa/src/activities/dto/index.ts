@@ -7,6 +7,11 @@ export interface ActivityCommunicationData {
   message: string;
 }
 
+export interface ActivityDocs {
+  mediaURL: string;
+  fileName: string;
+}
+
 export interface AddActivityData {
   title: string;
   leadTime: string;
@@ -18,6 +23,7 @@ export interface AddActivityData {
   description: string;
   activityCommunication: Array<ActivityCommunicationData>
   activityPayout: Array<Record<string, any>>;
+  activityDocuments?: Array<ActivityDocs>
 }
 
 export interface AddActivityComms {

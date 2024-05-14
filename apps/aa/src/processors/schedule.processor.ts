@@ -1,10 +1,9 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Inject, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { ClientProxy } from '@nestjs/microservices';
+import { Logger } from '@nestjs/common';
+
 import { Job } from 'bull';
 import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
-import { AddDataSource } from '../dto';
+import { AddTriggerStatement } from '../dto';
 import { DhmService } from '../datasource/dhm.service';
 import { GlofasService } from '../datasource/glofas.service';
 
@@ -18,12 +17,12 @@ export class ScheduleProcessor {
   ) { }
 
   @Process(JOBS.SCHEDULE.ADD)
-  async processAddSchedule(job: Job<AddDataSource>) {
-    if(process.env.START_POLL === 'false'){
+  async processAddSchedule(job: Job<AddTriggerStatement>) {
+    if (process.env.START_POLL === 'false') {
       console.log("Polling not enabled!")
       return
     }
-    
+
     switch (job.data.dataSource) {
       case DATA_SOURCES.DHM:
         await this.bipadService.criteriaCheck(job.data);
@@ -32,7 +31,7 @@ export class ScheduleProcessor {
       //   await this.glofasService.criteriaCheck(job.data);
       //   break;
       default:
-        // do nothing
+      // do nothing
     }
   }
 }

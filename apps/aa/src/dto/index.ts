@@ -1,6 +1,11 @@
 import { DataSource } from "@prisma/client";
 
-export interface AddDataSource {
+export interface TriggerDocs {
+  mediaURL: string;
+  fileName: string;
+}
+
+export interface AddTriggerStatement {
   uuid?: string;
   location?: string;
   dataSource: DataSource;
@@ -12,26 +17,27 @@ export interface AddDataSource {
   hazardTypeId?: string;
   phaseId: string;
   title?: string;
+  triggerDocuments?: Array<TriggerDocs>
   notes?: string;
 }
 
-export interface RemoveDataSource {
-  repeatKey: string;
+export interface UpdateTriggerStatement {
+  uuid?: string;
+  repeatKey?: string;
+  location?: string;
+  dataSource: DataSource;
+  repeatEvery?: number | string;
+  activities?: Array<{
+    uuid: string;
+  }>;
+  triggerStatement?: Record<string, any>;
+  triggerDocuments?: Array<TriggerDocs>
+  hazardTypeId?: string;
+  phaseId: string;
+  title?: string;
+  notes?: string;
 }
 
-export interface RemoveDataSource {
+export interface RemoveTriggerStatement {
   repeatKey: string;
 }
-
-// await this.prisma.dataSources.create({
-//   data: {
-//     repeatKey: repeatableKey,
-//     uuid: uuid,
-//     isActive: true,
-//     location: payload.location,
-//     dataSource: payload.dataSource,
-//     repeatEvery: payload.repeatEvery,
-//     triggerStatement: payload.triggerStatement,
-//     hazardTypeId: payload.hazardTypeId
-//   }
-// })

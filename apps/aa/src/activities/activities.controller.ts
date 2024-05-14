@@ -3,6 +3,7 @@ import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ActivitiesService } from './activities.service';
 import { AddActivityData, GetActivitiesDto, GetOneActivity, RemoveActivityData } from './dto';
+import { ActivitiesStatus } from '@prisma/client';
 
 @Controller()
 export class ActivitiesController {
@@ -32,7 +33,6 @@ export class ActivitiesController {
     return await this.activitiesService.getOne(payload);
   }
 
-
   @MessagePattern({
     cmd: JOBS.ACTIVITIES.REMOVE,
     uuid: process.env.PROJECT_ID,
@@ -47,5 +47,13 @@ export class ActivitiesController {
   })
   async triggerCommunication(payload: { campaignId: string }) {
     return this.activitiesService.triggerCommunication(payload.campaignId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.ACTIVITIES.UPDATE_STATUS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
+    return this.activitiesService.updateStatus(payload);
   }
 }

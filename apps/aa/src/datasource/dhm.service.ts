@@ -1,14 +1,12 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EVENTS, TRIGGER_ACTIVITY } from '../constants';
 import { AbstractSource } from './datasource.abstract';
 import { DhmDataObject, GetWaterLevel, WaterLevelRecord } from './dto';
 import { ConfigService } from '@nestjs/config';
-import { AddDataSource } from '../dto';
+import { AddTriggerStatement } from '../dto';
 import { DateTime } from 'luxon'
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { UUID } from 'crypto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -23,7 +21,7 @@ export class DhmService implements AbstractSource {
     private prisma: PrismaService,
   ) { }
 
-  async criteriaCheck(payload: AddDataSource) {
+  async criteriaCheck(payload: AddTriggerStatement) {
 
     const dataSource = payload.dataSource;
 
@@ -173,7 +171,7 @@ export class DhmService implements AbstractSource {
   }
 
 
-  async getRiverStationData(url: string, payload: AddDataSource) {
+  async getRiverStationData(url: string, payload: AddTriggerStatement) {
     const riverURL = new URL(`${url}/river`);
     const title = payload.location;
     const intervals = this.getIntervals()

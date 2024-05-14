@@ -24,6 +24,7 @@ enum ActivitiesStatus {
   NOT_STARTED
   WORK_IN_PROGRESS
   COMPLETED
+  DELAYED
 }
 
 // enum ActivityTypes {
@@ -169,9 +170,9 @@ model Activities {
   source         String
   description    String
 
-  // activityType ActivityTypes    @default(GENERAL)
   status ActivitiesStatus @default(NOT_STARTED)
 
+  activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
   activityPayout        Json? @db.JsonB()
 
@@ -190,11 +191,13 @@ model Triggers {
   uuid      String @unique
   repeatKey String @unique
 
+  title            String?
   dataSource       DataSource
   location         String?
   repeatEvery      String?
   triggerStatement Json?      @db.JsonB()
-  title            String?
+
+  triggerDocuments Json?   @db.JsonB()
   notes            String?
 
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
@@ -203,8 +206,7 @@ model Triggers {
   hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String?
 
-  datas TriggersData[]
-
+  datas      TriggersData[]
   activities Activities[]
 
   isTriggered Boolean @default(false)
@@ -229,22 +231,3 @@ model TriggersData {
 
   @@map("tbl_triggers_data")
 }
-
-// // refactor this to make it generic activity 
-// model ActivityComms {
-//   id   Int    @id @default(autoincrement())
-//   uuid String @unique @default(uuid())
-
-//   campaignId String
-
-//   stakeholdersGroup   StakeholdersGroups @relation(fields: [stakeholdersGropuId], references: [uuid])
-//   stakeholdersGropuId String
-
-//   activity   Activities @relation(fields: [activityId], references: [uuid])
-//   activityId String     @unique
-
-//   createdAt DateTime  @default(now())
-//   updatedAt DateTime? @updatedAt()
-
-//   @@map("tbl_activity_comms")
-// }
