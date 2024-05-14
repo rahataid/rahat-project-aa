@@ -3,7 +3,7 @@ import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
 import { RpcException } from '@nestjs/microservices';
 import { Queue } from 'bull'
 import { InjectQueue } from '@nestjs/bull';
-import { AddDataSource, RemoveDataSource } from '../dto';
+import { AddTriggerStatement, RemoveTriggerStatement, UpdateTriggerStatement } from '../dto';
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { GetOneTrigger, GetTriggers } from './dto';
@@ -24,7 +24,7 @@ export class TriggersService {
   /***********************
 * Development Only
 *************************/
-  async dev(payload: AddDataSource) {
+  async dev(payload: AddTriggerStatement) {
     const all = await this.scheduleQueue.getRepeatableJobs()
     // console.log(all)
     // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
@@ -81,7 +81,7 @@ export class TriggersService {
     )
   }
 
-  async create(payload: AddDataSource) {
+  async create(payload: AddTriggerStatement) {
     if (!this.isValidDataSource(payload.dataSource)) {
       throw new RpcException('Please provide a valid data source!');
     }
@@ -101,7 +101,7 @@ export class TriggersService {
       throw new RpcException(`${payload.dataSource} has already been configued!`);
     }
 
-    const sanitizedPayload: AddDataSource = {
+    const sanitizedPayload: AddTriggerStatement = {
       title: payload.title,
       dataSource: payload.dataSource,
       location: payload.location,
@@ -111,13 +111,14 @@ export class TriggersService {
       activities: payload.activities,
       // repeatEvery: "* * * * *", //every minute
       repeatEvery: "30000",
+
       // triggerActivity: ['EMAIL']
     }
 
     return this.scheduleJob(sanitizedPayload);
   }
 
-  async remove(payload: RemoveDataSource) {
+  async remove(payload: RemoveTriggerStatement) {
     const { repeatKey } = payload
     const schedule = await this.prisma.triggers.findUnique({
       where: {
@@ -195,7 +196,32 @@ export class TriggersService {
     return this.prisma.triggers.create({
       data: createData
     })
-  } ƒ
+  }
+
+  async activateTrigger(payload: UpdateTriggerStatement) {
+    const trigger = await this.prisma.triggers.findUnique({
+      where: {
+        repeatKey: payload?.repeatKey
+      }
+    })
+
+    if (!trigger) throw new RpcException('Trigger not found.')
+    if (trigger.isTriggered) throw new RpcException('Trigger has already been activated.')
+    if (trigger.dataSource !== 'MANUAL') throw new RpcException('Cannot activate an automated trigger.')
+
+    const triggerDocs = JSON.parse(JSON.stringify(payload.triggerDocuments)) || []
+
+    return await this.prisma.triggers.update({
+      where: {
+        uuid: trigger.uuid
+      },
+      data: {
+        isTriggered: true,
+        triggerDocuments: triggerDocs,
+        notes: payload.notes
+      }
+    })
+  }
 
   isValidDataSource(value: string) {
     return Object.values(DATA_SOURCES).includes(value);

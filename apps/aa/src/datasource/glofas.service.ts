@@ -2,7 +2,7 @@ import { HttpService } from "@nestjs/axios";
 import { AbstractSource } from "./datasource.abstract";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { ConfigService } from "@nestjs/config";
-import { AddDataSource } from "../dto";
+import { AddTriggerStatement } from "../dto";
 import { Logger } from "@nestjs/common";
 import { fetchWeatherApi } from "openmeteo";
 
@@ -15,7 +15,7 @@ export class GlofasService implements AbstractSource {
         private readonly configService: ConfigService
     ) { }
 
-    async criteriaCheck(payload: AddDataSource) {
+    async criteriaCheck(payload: AddTriggerStatement) {
         const dataSource = payload.dataSource;
 
         this.logger.log(`${dataSource}: monitoring`)

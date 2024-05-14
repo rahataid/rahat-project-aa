@@ -197,8 +197,8 @@ model Triggers {
   repeatEvery      String?
   triggerStatement Json?      @db.JsonB()
 
-  activityNotes Json?   @db.JsonB()
-  notes         String?
+  triggerDocuments Json?   @db.JsonB()
+  notes            String?
 
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
   phaseId String
