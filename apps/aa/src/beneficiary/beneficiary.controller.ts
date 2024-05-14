@@ -7,13 +7,18 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 
 @Controller()
 export class BeneficiaryController {
-  constructor(
-    private readonly beneficiaryService: BeneficiaryService
-  ) { }
+  constructor(private readonly beneficiaryService: BeneficiaryService) {}
 
-
-  @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID, })
+  @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   findAll(data) {
+    return this.beneficiaryService.findAll(data);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
+    uuid: process.env.PROJECT_ID,
+  })
+  findAllPii(data) {
     return this.beneficiaryService.findAll(data);
   }
 
@@ -33,7 +38,6 @@ export class BeneficiaryController {
     return this.beneficiaryService.createMany(data);
   }
 
-
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {
     return this.beneficiaryService.findOne(payload);
@@ -51,5 +55,4 @@ export class BeneficiaryController {
       updateBeneficiaryDto
     );
   }
-
 }
