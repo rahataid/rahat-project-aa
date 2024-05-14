@@ -11,6 +11,7 @@ import {
   RemoveActivityData,
 } from './dto';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { ActivitiesStatus } from '@prisma/client';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -33,27 +34,32 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    const { activityCommunication, title, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source } = payload
+    const { activityCommunication, title, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
 
     const createActivityCommunicationPayload = []
     const createActivityPayoutPayload = []
+    const docs = activityDocuments || []
 
-    for (const comms of activityCommunication) {
-      switch (comms.groupType) {
-        case 'STAKEHOLDERS':
-          const campaignId = await this.processStakeholdersCommunication(comms, title);
-          createActivityCommunicationPayload.push({
-            ...comms,
-            campaignId
-          })
-          break;
-        case 'BENEFICIARY':
-          await this.processBeneficiaryCommunication(comms)
-          break;
-        default:
-          break;
+    if (activityCommunication?.length) {
+      for (const comms of activityCommunication) {
+        switch (comms.groupType) {
+          case 'STAKEHOLDERS':
+            const campaignId = await this.processStakeholdersCommunication(comms, title);
+            createActivityCommunicationPayload.push({
+              ...comms,
+              campaignId
+            })
+            break;
+          case 'BENEFICIARY':
+            await this.processBeneficiaryCommunication(comms)
+            break;
+          default:
+            break;
+        }
       }
     }
+
+
 
     return await this.prisma.activities.create({
       data: {
@@ -72,7 +78,8 @@ export class ActivitiesService {
           connect: { uuid: phaseId }
         },
         activityCommunication: createActivityCommunicationPayload,
-        activityPayout: createActivityPayoutPayload
+        activityPayout: createActivityPayoutPayload,
+        activityDocuments: JSON.parse(JSON.stringify(docs))
       },
     });
   }
@@ -246,5 +253,17 @@ export class ActivitiesService {
     const cId = Number(campaignId)
     const triggerResponse = await this.communicationService.communication.triggerCampaign(cId)
     return triggerResponse.data;
+  }
+
+  async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
+    const { status, uuid } = payload
+    return this.prisma.activities.update({
+      where: {
+        uuid: uuid
+      },
+      data: {
+        status: status
+      }
+    })
   }
 }

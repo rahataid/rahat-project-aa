@@ -58,6 +58,8 @@ export const JOBS = {
     GET_ALL: 'aa.jobs.activities.getAll',
     ADD: 'aa.jobs.activities.add',
     REMOVE: 'aa.jobs.activities.remove',
+    UPDATE: 'aa.jobs.activities.update',
+    UPDATE_STATUS: 'aa.jobs.activities.updateStatus',
   },
   COMMUNICATION: {
     ADD: 'aa.jobs.activity.communication.add',
