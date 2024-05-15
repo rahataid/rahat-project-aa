@@ -90,16 +90,42 @@ export class TriggersService {
       return this.createManualTrigger(payload)
     }
 
-    const dataSource = await this.prisma.triggers.findFirst({
-      where: {
-        dataSource: payload.dataSource,
-        isDeleted: false
-      }
-    })
+    const readinessLevelInput = payload.triggerStatement && 'readinessLevel' in payload.triggerStatement;
+    const activationLevelInput = payload.triggerStatement && 'activationLevel' in payload.triggerStatement;
 
-    if (dataSource) {
-      throw new RpcException(`${payload.dataSource} has already been configued!`);
+    if (readinessLevelInput && payload.dataSource === 'DHM') {
+      const readinessExists = await this.prisma.triggers.findFirst({
+        where: {
+          dataSource: payload.dataSource,
+          location: payload.location,
+          triggerStatement: {
+            path: ['readinessLevel'],
+            not: null
+          },
+          isDeleted: false
+        }
+      })
+      if (readinessExists) throw new RpcException(`${payload.dataSource} already configured for readiness level.`)
     }
+
+    if (activationLevelInput && payload.dataSource === 'DHM') {
+      const activationExists = await this.prisma.triggers.findFirst({
+        where: {
+          dataSource: payload.dataSource,
+          location: payload.location,
+          triggerStatement: {
+            path: ['activationLevel'],
+            not: null
+          },
+          isDeleted: false
+        }
+      })
+      if (activationExists) throw new RpcException(`${payload.dataSource} already configured for activation level.`)
+    }
+
+    // if (dataSource) {
+    //   throw new RpcException(`${payload.dataSource} has already been configued!`);
+    // }
 
     const sanitizedPayload: AddTriggerStatement = {
       title: payload.title,
@@ -184,14 +210,21 @@ export class TriggersService {
     const uuid = randomUUID()
     const repeatKey = randomUUID()
 
+    const { activities, ...restData } = payload
+
     const createData = {
       repeatKey: repeatKey,
       uuid: uuid,
-      ...payload
+      ...restData
     }
 
     return this.prisma.triggers.create({
-      data: createData
+      data: {
+        ...createData,
+        activities: {
+          connect: payload.activities
+        }
+      }
     })
   }
 

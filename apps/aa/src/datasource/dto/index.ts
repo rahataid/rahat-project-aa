@@ -1,4 +1,5 @@
 export interface GetWaterLevel {
+  location: string;
   page: number;
   perPage: number;
 }

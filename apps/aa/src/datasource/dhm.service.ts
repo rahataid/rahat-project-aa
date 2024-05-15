@@ -126,35 +126,23 @@ export class DhmService implements AbstractSource {
   }
 
   async getWaterLevels(payload: GetWaterLevel) {
-    return "ok"
-    // const { page, perPage } = payload
-    // return paginate(
-    //   this.prisma.triggersData,
-    //   {
-    //     where: {
-    //       trigger: {
-    //         dataSource: 'DHM',
-    //         isDeleted: false
-    //       }
-    //     },
-    //     include: {
-    //       trigger: {
-    //         select: {
-    //           triggerStatement: true,
-    //           dataSource: true,
-    //           location: true,
-    //         }
-    //       }
-    //     },
-    //     orderBy: {
-    //       createdAt: 'desc'
-    //     }
-    //   },
-    //   {
-    //     page,
-    //     perPage
-    //   }
-    // )
+    const { page, perPage } = payload
+    return paginate(
+      this.prisma.sourcesData,
+      {
+        where: {
+          source: 'DHM',
+          location: 'Karnali at Chisapani'
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      },
+      {
+        page,
+        perPage
+      }
+    )
   }
 
   async getRiverStationData(url: string, location: string) {
