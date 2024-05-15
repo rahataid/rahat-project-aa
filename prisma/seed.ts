@@ -160,14 +160,16 @@ const main = async () => {
 
     // ***** seed settings start ***
     await settings.create({
-        name: 'APP',
+        name: 'DATASOURCE',
         value: {
-            'LOCATION': 'Karnali at Chisapani'
-        }
+            DHM: {
+                location: 'Karnali at Chisapani',
+                url: 'https://bipadportal.gov.np/api/v1'
+            }
+        },
+        isPrivate: false
     })
     // ***** seed settings complete ***
-
-
 }
 
 main()
