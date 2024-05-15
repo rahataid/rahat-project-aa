@@ -109,10 +109,7 @@ export class TriggersService {
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
       activities: payload.activities,
-      // repeatEvery: "* * * * *", //every minute
       repeatEvery: "30000",
-
-      // triggerActivity: ['EMAIL']
     }
 
     return this.scheduleJob(sanitizedPayload);

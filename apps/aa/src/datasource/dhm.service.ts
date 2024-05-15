@@ -1,8 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AbstractSource } from './datasource.abstract';
-import { DhmDataObject, GetWaterLevel, WaterLevelRecord } from './dto';
+import { DhmDataObject, GetWaterLevel } from './dto';
 import { ConfigService } from '@nestjs/config';
 import { AddTriggerStatement } from '../dto';
 import { DateTime } from 'luxon'
@@ -16,114 +15,76 @@ export class DhmService implements AbstractSource {
 
   constructor(
     private readonly httpService: HttpService,
-    private eventEmitter: EventEmitter2,
     private readonly configService: ConfigService,
     private prisma: PrismaService,
   ) { }
 
   async criteriaCheck(payload: AddTriggerStatement) {
 
+    const triggerData = await this.prisma.triggers.findUnique({
+      where: {
+        uuid: payload.uuid
+      }
+    })
+
+    // do not process if it is already triggered
+    if (triggerData.isTriggered) return
+
     const dataSource = payload.dataSource;
+    const location = payload.location;
 
     this.logger.log(`${dataSource}: monitoring`)
 
-    const dataSourceURL = this.configService.get('DHM');
-    const location = payload.location
-    const waterLevelResponse = await this.getRiverStationData(dataSourceURL, payload);
-
-    const waterLevelData = this.sortByDate(waterLevelResponse.data.results as DhmDataObject[])
-
-    if (waterLevelData.length === 0) {
-      this.logger.log(`${dataSource}: Water level data is not available.`);
-      return;
-    }
-
-    // const recentWaterLevel = this.getRecentData(waterLevelData);
-    const recentWaterLevel = waterLevelData[0]
-
-    const currentLevel = recentWaterLevel.waterLevel;
-
-    const readinessLevel = payload.triggerStatement.readinessLevel
-      ? payload.triggerStatement.readinessLevel
-      : recentWaterLevel.warningLevel;
-
-    const activationLevel = payload.triggerStatement.activationLevel
-      ? payload.triggerStatement.activationLevel
-      : recentWaterLevel.dangerLevel;
-
-    this.logger.log("##### WATER LEVEL INFO ########")
-    this.logger.log(recentWaterLevel);
-    this.logger.log(`readiness level: ${readinessLevel}`);
-    this.logger.log(`activation level: ${activationLevel}`);
-    this.logger.log("###############################")
-
-    // save to db
-    await this.saveWaterLevelsData({
-      triggerId: payload.uuid,
-      data: recentWaterLevel
+    const recentData = await this.prisma.sourcesData.findFirst({
+      where: {
+        location,
+        source: dataSource,
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
     })
 
-    const readinessLevelReached = this.compareWaterLevels(
-      currentLevel,
-      readinessLevel
-    );
+    if (!recentData) {
+      this.logger.error(`${dataSource}:${location} : data not available`)
+      return
+    }
 
-    const activationLevelReached = this.compareWaterLevels(
-      currentLevel,
-      activationLevel
-    );
+    const recentWaterLevel = JSON.parse(JSON.stringify(recentData.data)) as DhmDataObject
+    const currentLevel = recentWaterLevel.waterLevel;
 
-    // TODO: refactor this
 
-    // await this.processTriggerStatus(payload.uuid, readinessLevelReached, activationLevelReached);
+    this.logger.log("##### WATER LEVEL INFO ########")
+    this.logger.log('Latest water level: ', recentWaterLevel);
+    this.logger.log("##############################")
 
-    // if (activationLevelReached) {
-    //   const dangerMessage = `${dataSource}:${location}: Water level has reached activation level.`;
-    //   this.logger.log(dangerMessage);
-    //   if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
-    //     this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
-    //       message: dangerMessage,
-    //       status: 'READINESS_LEVEL',
-    //       location,
-    //       dataSource,
-    //       currentLevel,
-    //       readinessLevel,
-    //       activationLevel,
-    //     });
-    //   }
-    //   return;
-    // }
+    if (payload.triggerStatement?.readinessLevel) {
+      const readinessLevelReached = this.compareWaterLevels(
+        currentLevel,
+        payload.triggerStatement?.readinessLevel
+      );
+      if (readinessLevelReached) {
+        // send emails here
 
-    // if (readinessLevelReached) {
-    //   const warningMessage = `${dataSource}:${location} :Water level has reached readiness level.`;
-    //   this.logger.log(warningMessage);
-    //   if (payload.triggerActivity.includes(TRIGGER_ACTIVITY.EMAIL)) {
-    //     this.eventEmitter.emit(EVENTS.WATER_LEVEL_NOTIFICATION, {
-    //       message: warningMessage,
-    //       location,
-    //       status: 'ACTIVATION_LEVEL',
-    //       dataSource,
-    //       currentLevel,
-    //       readinessLevel,
-    //       activationLevel,
-    //     });
-    //   }
-    //   return;
-    // }
+        this.logger.log('Readiness level reached.');
+        return
+      }
+    }
+
+    if (payload.triggerStatement?.activationLevel) {
+      const activationLevelReached = this.compareWaterLevels(
+        currentLevel,
+        payload.triggerStatement?.activationLevel
+      );
+      if (activationLevelReached) {
+        // send emails here
+        this.logger.log('Activation level reached.');
+        return
+      }
+    }
     this.logger.log(`${dataSource}: Water is in a safe level.`);
     return;
   }
-
-  // getRecentData(data: DhmDataObject[]): DhmDataObject {
-  //   // reduce to find the latest object based on createdOn timestamp
-  //   return data.reduce((latestObject, currentObject) => {
-  //     const currentTimestamp = new Date(currentObject.createdOn);
-  //     const latestTimestamp = new Date(latestObject.createdOn);
-
-  //     // timestamps comparison to find the latest one
-  //     return currentTimestamp > latestTimestamp ? currentObject : latestObject;
-  //   });
-  // }
 
   compareWaterLevels(currentLevel: number, threshold: number) {
     if (currentLevel >= threshold) {
@@ -140,40 +101,40 @@ export class DhmService implements AbstractSource {
   }
 
   async getWaterLevels(payload: GetWaterLevel) {
-    const { page, perPage } = payload
-    return paginate(
-      this.prisma.triggersData,
-      {
-        where: {
-          trigger: {
-            dataSource: 'DHM',
-            isDeleted: false
-          }
-        },
-        include: {
-          trigger: {
-            select: {
-              triggerStatement: true,
-              dataSource: true,
-              location: true,
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      },
-      {
-        page,
-        perPage
-      }
-    )
+    return "ok"
+    // const { page, perPage } = payload
+    // return paginate(
+    //   this.prisma.triggersData,
+    //   {
+    //     where: {
+    //       trigger: {
+    //         dataSource: 'DHM',
+    //         isDeleted: false
+    //       }
+    //     },
+    //     include: {
+    //       trigger: {
+    //         select: {
+    //           triggerStatement: true,
+    //           dataSource: true,
+    //           location: true,
+    //         }
+    //       }
+    //     },
+    //     orderBy: {
+    //       createdAt: 'desc'
+    //     }
+    //   },
+    //   {
+    //     page,
+    //     perPage
+    //   }
+    // )
   }
 
-
-  async getRiverStationData(url: string, payload: AddTriggerStatement) {
+  async getRiverStationData(url: string, location: string) {
     const riverURL = new URL(`${url}/river`);
-    const title = payload.location;
+    const title = location;
     const intervals = this.getIntervals()
     const waterLevelOnGt = intervals.timeGT
     const waterLevelOnLt = intervals.timeLT
@@ -210,23 +171,24 @@ export class DhmService implements AbstractSource {
   sortByDate(data: DhmDataObject[]) {
     return data.sort((a, b) => new Date(b.waterLevelOn).valueOf() - new Date(a.waterLevelOn).valueOf());
   }
-
-  async saveWaterLevelsData(payload: WaterLevelRecord) {
+  async saveWaterLevelsData(location: string, payload: DhmDataObject) {
     try {
-      const recordExists = await this.prisma.triggersData.findFirst(({
+      const recordExists = await this.prisma.sourcesData.findFirst(({
         where: {
-          triggerId: payload.triggerId,
+          source: 'DHM',
+          location: location,
           data: {
             path: ["waterLevelOn"],
-            equals: payload.data.waterLevelOn
+            equals: payload.waterLevelOn
           }
         }
       }))
       if (!recordExists) {
-        await this.prisma.triggersData.create({
+        await this.prisma.sourcesData.create({
           data: {
-            data: payload.data,
-            triggerId: payload.triggerId
+            source: 'DHM',
+            location: location,
+            data: JSON.parse(JSON.stringify(payload)),
           }
         })
       }
@@ -234,57 +196,4 @@ export class DhmService implements AbstractSource {
       this.logger.error(err);
     }
   }
-
-  // TODO: refactor this
-  // async processTriggerStatus(uuid: string, readinessLevelReached: boolean, activationLevelReached: boolean) {
-  //   try {
-  //     const dataSource = await this.prisma.triggers.findUnique({
-  //       where: {
-  //         uuid: uuid
-  //       }
-  //     })
-
-  //     const date = new Date().toISOString()
-
-  //     if (readinessLevelReached && !dataSource.readinessActivated) {
-  //       await this.prisma.triggers.update({
-  //         where: {
-  //           uuid: uuid
-  //         },
-  //         data: {
-  //           readinessActivated: true,
-  //           readinessActivatedOn: date
-  //         }
-  //       })
-  //     }
-
-
-  //     if (activationLevelReached && !dataSource.activationActivated) {
-  //       if (!dataSource.readinessActivated) {
-  //         await this.prisma.triggers.update({
-  //           where: {
-  //             uuid: uuid
-  //           },
-  //           data: {
-  //             readinessActivated: true,
-  //             readinessActivatedOn: date
-  //           }
-  //         })
-  //       }
-  //       await this.prisma.triggers.update({
-  //         where: {
-  //           uuid: uuid
-  //         },
-  //         data: {
-  //           activationActivated: true,
-  //           activationActivatedOn: date
-  //         }
-  //       })
-  //     }
-
-  //   } catch (err) {
-  //     console.log(err)
-  //   }
-  // }
-
 }
