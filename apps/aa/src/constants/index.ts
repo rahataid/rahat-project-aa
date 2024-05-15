@@ -55,6 +55,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.triggers.remove',
     UPDATE: 'aa.jobs.triggers.update',
     ACTIVATE: 'aa.jobs.triggers.activate',
+    REACHED_THRESHOLD: 'aa.jobs.triggers.activate'
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -90,6 +91,13 @@ export const JOBS = {
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
   },
+  SETTINGS: {
+    CREATE: 'rahat.jobs.settings.create',
+    LIST: 'rahat.jobs.settings.list',
+    GET: 'rahat.jobs.settings.get',
+    UPDATE: 'rahat.jobs.settings.update',
+    REMOVE: 'rahat.jobs.settings.remove',
+  }
 };
 
 export const EVENTS = {
@@ -98,4 +106,5 @@ export const EVENTS = {
 
 export const BQUEUE = {
   SCHEDULE: 'SCHEDULE',
+  TRIGGER: 'TRIGGER'
 };
