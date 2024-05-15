@@ -1,30 +1,15 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
-
-import { Job } from 'bull';
-import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
-import { AddTriggerStatement } from '../dto';
+import { BQUEUE, JOBS } from '../constants';
 import { DhmService } from '../datasource/dhm.service';
 
-@Processor(BQUEUE.SCHEDULE)
-export class ScheduleProcessor {
-  private readonly logger = new Logger(ScheduleProcessor.name);
+@Processor(BQUEUE.TRIGGER)
+export class TriggerProcessor {
+  private readonly logger = new Logger(TriggerProcessor.name);
 
-  constructor(
-    private readonly dhmService: DhmService,
-  ) { }
-
-  @Process(JOBS.SCHEDULE.ADD)
-  async processAddSchedule(job: Job<AddTriggerStatement>) {
-    switch (job.data.dataSource) {
-      case DATA_SOURCES.DHM:
-        await this.dhmService.criteriaCheck(job.data);
-        break;
-      // case DATA_SOURCES.GLOFAS:
-      //   await this.glofasService.criteriaCheck(job.data);
-      //   break;
-      default:
-      // do nothing
-    }
+  @Process(JOBS.TRIGGERS.REACHED_THRESHOLD)
+  async processReachedThreshold(job: any) {
+    console.log(job)
+    console.log("Processing after reaching threshold.")
   }
 }

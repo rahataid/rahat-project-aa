@@ -6,6 +6,9 @@ import { ConfigService } from '@nestjs/config';
 import { AddTriggerStatement } from '../dto';
 import { DateTime } from 'luxon'
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { InjectQueue } from '@nestjs/bull';
+import { BQUEUE, JOBS } from '../constants';
+import { Queue } from 'bull';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -17,6 +20,7 @@ export class DhmService implements AbstractSource {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private prisma: PrismaService,
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
   ) { }
 
   async criteriaCheck(payload: AddTriggerStatement) {
@@ -64,9 +68,23 @@ export class DhmService implements AbstractSource {
         payload.triggerStatement?.readinessLevel
       );
       if (readinessLevelReached) {
-        // send emails here
-
         this.logger.log('Readiness level reached.');
+        await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
+        await this.prisma.triggers.update({
+          where: {
+            uuid: payload.uuid
+          },
+          data: {
+            isTriggered: true
+          }
+        })
         return
       }
     }
@@ -77,12 +95,19 @@ export class DhmService implements AbstractSource {
         payload.triggerStatement?.activationLevel
       );
       if (activationLevelReached) {
-        // send emails here
+        await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
         this.logger.log('Activation level reached.');
         return
       }
     }
-    this.logger.log(`${dataSource}: Water is in a safe level.`);
+    this.logger.log(`${dataSource}: ${location}: Water is in a safe level.`);
     return;
   }
 

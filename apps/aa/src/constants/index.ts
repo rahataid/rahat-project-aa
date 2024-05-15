@@ -55,7 +55,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.triggers.remove',
     UPDATE: 'aa.jobs.triggers.update',
     ACTIVATE: 'aa.jobs.triggers.activate',
-    REACHED_THRESHOLD: 'aa.jobs.triggers.activate'
+    REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold'
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
