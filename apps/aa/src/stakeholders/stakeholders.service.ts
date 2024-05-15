@@ -33,11 +33,24 @@ export class StakeholdersService {
   }
 
   async getAll(payload: GetStakeholdersData) {
-    const { page, perPage } = payload;
+    const {
+      name,
+      designation,
+      district,
+      municipality,
+      organization,
+      page,
+      perPage
+    } = payload;
 
     const query = {
       where: {
         isDeleted: false,
+        ...(name && { name: { contains: name, mode: 'insensitive' } }),
+        ...(designation && { designation: { contains: designation, mode: 'insensitive' } }),
+        ...(district && { district: { contains: district, mode: 'insensitive' } }),
+        ...(municipality && { municipality: { contains: municipality, mode: 'insensitive' } }),
+        ...(organization && { organization: { contains: organization, mode: 'insensitive' } }),
       },
       include: {
         stakeholdersGroups: true,

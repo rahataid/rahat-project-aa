@@ -24,6 +24,11 @@ export interface RemoveStakeholdersData {
 }
 
 export interface GetStakeholdersData {
+  name: string;
+  designation: string;
+  organization: string;
+  district: string;
+  municipality: string;
   page: number;
   perPage: number;
 }
