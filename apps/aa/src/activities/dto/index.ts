@@ -21,8 +21,23 @@ export interface AddActivityData {
   responsibility: string;
   source: string;
   description: string;
-  activityCommunication: Array<ActivityCommunicationData>
-  activityPayout: Array<Record<string, any>>;
+  activityCommunication?: Array<ActivityCommunicationData>
+  activityPayout?: Array<Record<string, any>>;
+  activityDocuments?: Array<ActivityDocs>
+}
+
+export interface UpdateActivityData {
+  uuid: string;
+  title?: string;
+  leadTime?: string;
+  phaseId?: string;
+  categoryId?: string;
+  hazardTypeId?: string;
+  responsibility?: string;
+  source?: string;
+  description?: string;
+  activityCommunication?: Array<ActivityCommunicationData & { campaignId: string }>
+  activityPayout?: Array<Record<string, any>>;
   activityDocuments?: Array<ActivityDocs>
 }
 
