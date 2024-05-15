@@ -9,9 +9,11 @@ import {
   GetActivitiesDto,
   GetOneActivity,
   RemoveActivityData,
+  UpdateActivityData,
 } from './dto';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { ActivitiesStatus } from '@prisma/client';
+import { RpcException } from '@nestjs/microservices';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -263,6 +265,75 @@ export class ActivitiesService {
       },
       data: {
         status: status
+      }
+    })
+  }
+
+  async update(payload: UpdateActivityData) {
+    const { uuid, activityCommunication, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
+    const activity = await this.prisma.activities.findUnique({
+      where: {
+        uuid: uuid
+      }
+    })
+    if (!activity) throw new RpcException('Activity not found.')
+
+    const updateActivityCommunicationPayload = []
+    const updateActivityDocuments = activityDocuments?.length ? JSON.parse(JSON.stringify(activityDocuments)) : []
+
+    if (activityCommunication?.length) {
+      for (const comms of activityCommunication) {
+        switch (comms.groupType) {
+          case 'STAKEHOLDERS':
+            if (comms.campaignId) {
+              updateActivityCommunicationPayload.push(comms)
+              break;
+            }
+            const campaignId = await this.processStakeholdersCommunication(comms, title || activity.title);
+
+            updateActivityCommunicationPayload.push({
+              ...comms,
+              campaignId
+            })
+            break;
+          case 'BENEFICIARY':
+            await this.processBeneficiaryCommunication(comms)
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+
+    return await this.prisma.activities.update({
+      where: {
+        uuid: uuid
+      },
+      data: {
+        title: title || activity.title,
+        description: description || activity.description,
+        source: source || activity.source,
+        responsibility: responsibility || activity.responsibility,
+        leadTime: leadTime || activity.leadTime,
+        phase: {
+          connect: {
+            uuid: phaseId || activity.phaseId
+          }
+        },
+        category: {
+          connect: {
+            uuid: categoryId || activity.categoryId
+          }
+        },
+        hazardType: {
+          connect: {
+            uuid: hazardTypeId || activity.hazardTypeId
+          }
+        },
+        activityCommunication: updateActivityCommunicationPayload,
+        activityDocuments: updateActivityDocuments || activity.activityDocuments,
+        updatedAt: new Date()
       }
     })
   }
