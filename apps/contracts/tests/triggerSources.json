@@ -1,0 +1,17 @@
+[
+    {
+        "id": "1",
+        "name": "DHM",
+        "details": "River water levels"
+    },
+    {
+        "id": "2",
+        "name": "GLOFAS",
+        "details": "Weather forecast"
+    },
+    {
+        "id": "3",
+        "name": "NCMRWF",
+        "details": "Road conditions"
+    }
+]
