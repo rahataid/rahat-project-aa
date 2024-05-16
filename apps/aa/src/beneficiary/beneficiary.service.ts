@@ -30,12 +30,25 @@ export class BeneficiaryService {
     return this.rsprisma.beneficiary.createMany({ data: dto })
   }
 
-  async findAll(data) {
-    const localData = await this.rsprisma.beneficiary.findMany({ where: { type: data?.status, deletedAt: null } });
+  async findAll(dto) {
+    const { page, perPage, sort, order } = dto;
 
-    const projectData = {
-      data: localData
-    }
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
+    const projectData = await paginate(
+      this.rsprisma.beneficiary,
+      {
+        where: {
+          deletedAt: null
+        },
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
 
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_by_project' },
