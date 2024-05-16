@@ -206,7 +206,7 @@ model Triggers {
   hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String?
 
-  datas      TriggersData[]
+  // datas      TriggersData[]
   activities Activities[]
 
   isTriggered Boolean @default(false)
@@ -218,16 +218,16 @@ model Triggers {
   @@map("tbl_triggers")
 }
 
-model TriggersData {
+model SourcesData {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  data Json @db.JsonB()
+  source   String?
+  location String?
+  data     Json    @db.JsonB()
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
-  trigger   Triggers? @relation(fields: [triggerId], references: [uuid])
-  triggerId String
 
-  @@map("tbl_triggers_data")
+  @@map("tbl_sources_data")
 }

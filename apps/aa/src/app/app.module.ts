@@ -15,6 +15,7 @@ import { ActivityCategoriesModule } from '../activity-categories/activity-catego
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { SettingsModule } from "@rumsan/settings"
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -41,7 +42,8 @@ import { SettingsModule } from "@rumsan/settings"
     ActivityCategoriesModule,
     BeneficiaryModule,
     StakeholdersModule,
-    SettingsModule
+    SettingsModule,
+    ScheduleModule.forRoot()
   ],
   controllers: [AppController],
   providers: [AppService],
