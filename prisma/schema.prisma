@@ -11,7 +11,7 @@ datasource db {
 enum Phase {
   PREPAREDNESS
   READINESS
-  ACTION
+  ACTIVATION
 }
 
 enum DataSource {
@@ -49,10 +49,8 @@ model Beneficiary {
 
   extras Json?
 
-  createdAt   DateTime  @default(now())
-  phoneNumber String?
-  email       String?
-  deletedAt   DateTime?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
 
   @@map("tbl_beneficiaries")
 }

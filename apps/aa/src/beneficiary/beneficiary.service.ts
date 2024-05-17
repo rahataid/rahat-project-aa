@@ -1,16 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
+import { ProjectContants } from "@rahataid/sdk"
+import { ClientProxy } from '@nestjs/microservices';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
-  constructor(protected prisma: PrismaService,
+  constructor(
+    protected prisma: PrismaService,
+    @Inject(ProjectContants.ELClient) private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
@@ -26,23 +30,30 @@ export class BeneficiaryService {
     return this.rsprisma.beneficiary.createMany({ data: dto })
   }
 
-  async findAll(data) {
-    const projectdata = await this.rsprisma.beneficiary.findMany({ where: { type: data?.status, deletedAt: null } });
+  async findAll(dto) {
+    const { page, perPage, sort, order } = dto;
 
-    const combinedData = data.data.filter(item => projectdata.some(ben => ben.uuid === item.beneficiaryId))
-      .map(item => {
-        const matchedBeneficiary = projectdata.find(ben => ben.uuid === item.beneficiaryId);
-        return {
-          ...item,
-          Beneficiary: {
-            ...matchedBeneficiary,
-            ...item.Beneficiary,
-          },
-        };
-      });
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
 
-    return { data: combinedData, meta: data.meta };
+    const projectData = await paginate(
+      this.rsprisma.beneficiary,
+      {
+        where: {
+          deletedAt: null
+        },
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
 
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.list_by_project' },
+      projectData
+    );
   }
 
   async findByUUID(uuid: UUID) {
