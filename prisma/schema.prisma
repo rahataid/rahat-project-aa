@@ -131,6 +131,14 @@ model Phases {
   activities Activities[]
   triggers   Triggers[]
 
+  requiredMandatoryTriggers Int?
+  requiredOptionalTriggers  Int?
+
+  receivedMandatoryTriggers Int?
+  receivedOptionalTriggers  Int?
+
+  isActive Boolean @default(false)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -199,7 +207,7 @@ model Triggers {
   notes            String?
 
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
-  phaseId String
+  phaseId String?
 
   hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String?
@@ -207,6 +215,7 @@ model Triggers {
   // datas      TriggersData[]
   activities Activities[]
 
+  isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
 
   isDeleted Boolean   @default(false)

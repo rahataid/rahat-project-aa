@@ -19,7 +19,8 @@ export class PhasesController {
         cmd: JOBS.PHASES.GET_STATS,
         uuid: process.env.PROJECT_ID,
     })
-    async getStats() {
-        return this.phasesService.getStats()
+    async getStats(payload) {
+        // return this.phasesService.addTriggersToPhases(payload)
+        return this.phasesService.getOne(payload)
     }
 }
