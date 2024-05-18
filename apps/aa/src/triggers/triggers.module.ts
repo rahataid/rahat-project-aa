@@ -12,11 +12,16 @@ import { DataSourceModule } from '../datasource/datasource.module';
     PrismaModule,
     HttpModule,
     DataSourceModule,
-    BullModule.registerQueue({
-      name: BQUEUE.SCHEDULE,
-    })
+    BullModule.registerQueue(
+      {
+        name: BQUEUE.SCHEDULE,
+      },
+      {
+        name: BQUEUE.TRIGGER
+      }
+    )
   ],
   providers: [TriggersService],
   controllers: [TriggersController],
 })
-export class TriggersModule {}
+export class TriggersModule { }

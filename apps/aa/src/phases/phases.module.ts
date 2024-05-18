@@ -7,5 +7,6 @@ import { PrismaModule } from "@rumsan/prisma";
     imports: [PrismaModule],
     controllers: [PhasesController],
     providers: [PhasesService],
+    exports: [PhasesService]
 })
 export class PhasesModule { }

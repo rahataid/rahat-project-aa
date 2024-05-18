@@ -131,11 +131,11 @@ model Phases {
   activities Activities[]
   triggers   Triggers[]
 
-  requiredMandatoryTriggers Int?
-  requiredOptionalTriggers  Int?
+  requiredMandatoryTriggers Int? @default(0)
+  requiredOptionalTriggers  Int? @default(0)
 
-  receivedMandatoryTriggers Int?
-  receivedOptionalTriggers  Int?
+  receivedMandatoryTriggers Int? @default(0)
+  receivedOptionalTriggers  Int? @default(0)
 
   isActive Boolean @default(false)
 

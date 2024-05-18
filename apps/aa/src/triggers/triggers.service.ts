@@ -19,6 +19,7 @@ export class TriggersService {
     private prisma: PrismaService,
     // private readonly glofasService: GlofasService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
   ) { }
 
   /***********************
@@ -241,7 +242,13 @@ export class TriggersService {
 
     const triggerDocs = JSON.parse(JSON.stringify(payload.triggerDocuments)) || []
 
-    return await this.prisma.triggers.update({
+    const triggerPhase = await this.prisma.phases.findUnique({
+      where: {
+        uuid: trigger.phaseId
+      }
+    })
+
+    const updatedTrigger = await this.prisma.triggers.update({
       where: {
         uuid: trigger.uuid
       },
@@ -251,6 +258,32 @@ export class TriggersService {
         notes: payload.notes
       }
     })
+
+    if (trigger.isMandatory) {
+      await this.prisma.phases.update({
+        where: {
+          uuid: trigger.phaseId
+        },
+        data: {
+          receivedMandatoryTriggers: {
+            increment: 1
+          }
+        }
+      })
+    }
+
+    console.log(triggerPhase);
+
+    // await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
+    //   attempts: 3,
+    //   removeOnComplete: true,
+    //   backoff: {
+    //     type: 'exponential',
+    //     delay: 1000,
+    //   },
+    // });
+
+    return updatedTrigger
   }
 
   isValidDataSource(value: string) {
