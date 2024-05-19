@@ -32,8 +32,19 @@ export class TriggerProcessor {
       uuid: payload.phaseId
     })
 
-    console.log(phaseData);
+    const conditionsMet = this.checkTriggerConditions(phaseData.triggerRequirements)
+    if (conditionsMet) {
+      this.phaseService.activatePhase(phaseData.uuid)
+    }
+    return
+  }
 
-    console.log(payload);
+  checkTriggerConditions(triggerRequirements) {
+    const { mandatoryTriggers, optionalTriggers } = triggerRequirements;
+
+    const mandatoryMet = mandatoryTriggers.receivedTriggers >= mandatoryTriggers.requiredTriggers;
+    const optionalMet = optionalTriggers.receivedTriggers >= optionalTriggers.requiredTriggers;
+
+    return mandatoryMet && optionalMet;
   }
 }

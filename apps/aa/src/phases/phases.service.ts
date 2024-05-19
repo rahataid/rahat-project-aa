@@ -57,68 +57,16 @@ export class PhasesService {
     return { ...phase, triggerRequirements }
   }
 
-  async calculateActivitiesStats() {
-    // const completedPreparednessActivity = await this.prisma.activities.count({
-    //   where: {
-    //     isComplete: true,
-    //     phase: {
-    //       name: Phase.PREPAREDNESS
-    //     }
-    //   },
-    // })
-    // const completedReadinessActivity = await this.prisma.activities.count({
-    //   where: {
-    //     isComplete: true,
-    //     phase: {
-    //       name: Phase.READINESS
-    //     }
-    //   },
-    // })
-
-    // const data = 
-
+  async activatePhase(uuid: string) {
+    return this.prisma.phases.update({
+      where: {
+        uuid: uuid
+      },
+      data: {
+        isActive: true
+      }
+    })
   }
-
-  // async getPhaseStatus() {
-  // const dhmStatus = await this.prisma.triggers.findFirst({
-  //   where: {
-  //     dataSource: DataSource.DHM,
-  //     isDeleted: false
-  //   }
-  // })
-
-  // let readinessStatus = {
-  //   activated: false,
-  //   activatedOn: null
-  // };
-
-  // let activationStatus = {
-  //   activated: false,
-  //   activatedOn: null
-  // }
-
-  // TODO: refactor this
-  // if (dhmStatus) {
-  //   if (dhmStatus.readinessActivated) {
-  //     readinessStatus = {
-  //       activated: true,
-  //       activatedOn: dhmStatus.readinessActivatedOn
-  //     }
-  //   }
-  //   if (dhmStatus.activationActivated) {
-  //     activationStatus = {
-  //       activated: true,
-  //       activatedOn: dhmStatus.activationActivatedOn
-  //     }
-  //   }
-  // }
-
-  //   return {
-  //     readinessStatus,
-  //     activationStatus
-  //   }
-  // }
-
 
   async addTriggersToPhases(payload) {
     const { uuid, triggers, triggerRequirements } = payload

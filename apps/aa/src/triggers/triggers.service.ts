@@ -238,15 +238,9 @@ export class TriggersService {
 
     if (!trigger) throw new RpcException('Trigger not found.')
     if (trigger.isTriggered) throw new RpcException('Trigger has already been activated.')
-    if (trigger.dataSource !== 'MANUAL') throw new RpcException('Cannot activate an automated trigger.')
+    if (trigger.dataSource !== DATA_SOURCES.MANUAL) throw new RpcException('Cannot activate an automated trigger.')
 
-    const triggerDocs = JSON.parse(JSON.stringify(payload.triggerDocuments)) || []
-
-    const triggerPhase = await this.prisma.phases.findUnique({
-      where: {
-        uuid: trigger.phaseId
-      }
-    })
+    const triggerDocs = payload?.triggerDocuments ? JSON.parse(JSON.stringify(payload.triggerDocuments)) : []
 
     const updatedTrigger = await this.prisma.triggers.update({
       where: {
@@ -255,7 +249,7 @@ export class TriggersService {
       data: {
         isTriggered: true,
         triggerDocuments: triggerDocs,
-        notes: payload.notes
+        notes: payload?.notes || ""
       }
     })
 
@@ -272,16 +266,27 @@ export class TriggersService {
       })
     }
 
-    console.log(triggerPhase);
+    if (!trigger.isMandatory) {
+      await this.prisma.phases.update({
+        where: {
+          uuid: trigger.phaseId
+        },
+        data: {
+          receivedOptionalTriggers: {
+            increment: 1
+          }
+        }
+      })
+    }
 
-    // await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
-    //   attempts: 3,
-    //   removeOnComplete: true,
-    //   backoff: {
-    //     type: 'exponential',
-    //     delay: 1000,
-    //   },
-    // });
+    await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+    });
 
     return updatedTrigger
   }
