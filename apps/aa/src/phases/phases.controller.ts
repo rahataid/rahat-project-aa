@@ -16,11 +16,26 @@ export class PhasesController {
     }
 
     @MessagePattern({
+        cmd: JOBS.PHASES.GET_ONE,
+        uuid: process.env.PROJECT_ID,
+    })
+    async getOne(payload: { uuid: string }) {
+        return this.phasesService.getOne(payload)
+    }
+
+    @MessagePattern({
+        cmd: JOBS.PHASES.ADD_TRIGGERS,
+        uuid: process.env.PROJECT_ID,
+    })
+    async addTriggers(payload) {
+        return this.phasesService.addTriggersToPhases(payload)
+    }
+
+    @MessagePattern({
         cmd: JOBS.PHASES.GET_STATS,
         uuid: process.env.PROJECT_ID,
     })
     async getStats(payload) {
-        // return this.phasesService.addTriggersToPhases(payload)
-        return this.phasesService.getOne(payload)
+        return this.phasesService.getStats()
     }
 }

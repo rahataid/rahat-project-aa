@@ -17,7 +17,7 @@ export class PhasesService {
     return this.prisma.phases.findMany()
   }
 
-  async getOne(payload) {
+  async getOne(payload: { uuid: string }) {
     const { uuid } = payload
     const phase = await this.prisma.phases.findUnique({
       where: {
@@ -104,6 +104,10 @@ export class PhasesService {
     })
 
     return updatedPhase
+  }
+
+  async getStats() {
+    return "ok"
   }
 }
 
