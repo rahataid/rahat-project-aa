@@ -12,3 +12,8 @@ export interface AddBeneficiaryGroups{
     uuid: string;
   }>
 }
+
+export interface AddTokenToGroup{
+  uuid: string;
+  tokens: number;
+}

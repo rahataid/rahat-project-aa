@@ -51,6 +51,8 @@ model Beneficiary {
 
   beneficiaryGroups BeneficiaryGroups[]
 
+  benTokens      Int @default(0)
+
   createdAt   DateTime  @default(now())
   phoneNumber String?
   email       String?
@@ -67,6 +69,8 @@ model BeneficiaryGroups {
   name String
 
   beneficiary Beneficiary[]
+
+  groupTokens      Int @default(0)
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
