@@ -17,79 +17,97 @@ export class PhasesService {
     return this.prisma.phases.findMany()
   }
 
-  async calculateActivitiesStats() {
-    // const completedPreparednessActivity = await this.prisma.activities.count({
-    //   where: {
-    //     isComplete: true,
-    //     phase: {
-    //       name: Phase.PREPAREDNESS
-    //     }
-    //   },
-    // })
-    // const completedReadinessActivity = await this.prisma.activities.count({
-    //   where: {
-    //     isComplete: true,
-    //     phase: {
-    //       name: Phase.READINESS
-    //     }
-    //   },
-    // })
-
-    // const data = 
-
-  }
-
-  async getPhaseStatus() {
-    const dhmStatus = await this.prisma.triggers.findFirst({
+  async getOne(payload: { uuid: string }) {
+    const { uuid } = payload
+    const phase = await this.prisma.phases.findUnique({
       where: {
-        dataSource: DataSource.DHM,
-        isDeleted: false
+        uuid: uuid
+      },
+      include: {
+        triggers: true
       }
     })
 
-    let readinessStatus = {
-      activated: false,
-      activatedOn: null
-    };
+    const totalMandatoryTriggers = await this.prisma.triggers.count({
+      where: {
+        phaseId: phase.uuid,
+        isMandatory: true
+      }
+    })
+    const totalOptionalTriggers = await this.prisma.triggers.count({
+      where: {
+        phaseId: phase.uuid,
+        isMandatory: false
+      }
+    })
 
-    let activationStatus = {
-      activated: false,
-      activatedOn: null
+    const triggerRequirements = {
+      mandatoryTriggers: {
+        totalTriggers: totalMandatoryTriggers,
+        requiredTriggers: phase.requiredMandatoryTriggers,
+        receivedTriggers: phase.receivedMandatoryTriggers
+      },
+      optionalTriggers: {
+        totalTriggers: totalOptionalTriggers,
+        requiredTriggers: phase.requiredOptionalTriggers,
+        receivedTriggers: phase.receivedOptionalTriggers
+      }
     }
 
-    // TODO: refactor this
-    // if (dhmStatus) {
-    //   if (dhmStatus.readinessActivated) {
-    //     readinessStatus = {
-    //       activated: true,
-    //       activatedOn: dhmStatus.readinessActivatedOn
-    //     }
-    //   }
-    //   if (dhmStatus.activationActivated) {
-    //     activationStatus = {
-    //       activated: true,
-    //       activatedOn: dhmStatus.activationActivatedOn
-    //     }
-    //   }
-    // }
-
-    return {
-      readinessStatus,
-      activationStatus
-    }
+    return { ...phase, triggerRequirements }
   }
 
+  async activatePhase(uuid: string) {
+    return this.prisma.phases.update({
+      where: {
+        uuid: uuid
+      },
+      data: {
+        isActive: true
+      }
+    })
+  }
+
+  async addTriggersToPhases(payload) {
+    const { uuid, triggers, triggerRequirements } = payload
+    const phase = await this.prisma.phases.findUnique({
+      where: {
+        uuid: uuid
+      }
+    })
+    if (!phase) throw new RpcException('Phase not found.')
+    if (phase.isActive) throw new RpcException('Cannot add triggers to an active phase.')
+
+    for (const trigger of triggers) {
+      const tg = await this.prisma.triggers.findUnique({ where: { repeatKey: trigger.repeatKey } })
+
+      console.log("tg", tg);
+
+      await this.prisma.triggers.update({
+        where: {
+          uuid: tg.uuid
+        },
+        data: {
+          isMandatory: trigger.isMandatory,
+          phaseId: phase.uuid
+        }
+      })
+    }
+    const updatedPhase = await this.prisma.phases.update({
+      where: {
+        uuid: phase.uuid
+      },
+      data: {
+        requiredMandatoryTriggers: triggerRequirements.mandatoryTriggers.requiredTriggers,
+        requiredOptionalTriggers: triggerRequirements.optionalTriggers.requiredTriggers
+      }
+    })
+
+    return updatedPhase
+  }
 
   async getStats() {
-    const [phaseStatus] =
-      await Promise.all([
-        this.getPhaseStatus()
-      ]);
-
-
-    return {
-      phaseStatus
-    }
+    return "ok"
   }
 }
 

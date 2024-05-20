@@ -19,6 +19,7 @@ export class TriggersService {
     private prisma: PrismaService,
     // private readonly glofasService: GlofasService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
   ) { }
 
   /***********************
@@ -237,20 +238,57 @@ export class TriggersService {
 
     if (!trigger) throw new RpcException('Trigger not found.')
     if (trigger.isTriggered) throw new RpcException('Trigger has already been activated.')
-    if (trigger.dataSource !== 'MANUAL') throw new RpcException('Cannot activate an automated trigger.')
+    if (trigger.dataSource !== DATA_SOURCES.MANUAL) throw new RpcException('Cannot activate an automated trigger.')
 
-    const triggerDocs = JSON.parse(JSON.stringify(payload.triggerDocuments)) || []
+    const triggerDocs = payload?.triggerDocuments ? JSON.parse(JSON.stringify(payload.triggerDocuments)) : []
 
-    return await this.prisma.triggers.update({
+    const updatedTrigger = await this.prisma.triggers.update({
       where: {
         uuid: trigger.uuid
       },
       data: {
         isTriggered: true,
         triggerDocuments: triggerDocs,
-        notes: payload.notes
+        notes: payload?.notes || ""
       }
     })
+
+    if (trigger.isMandatory) {
+      await this.prisma.phases.update({
+        where: {
+          uuid: trigger.phaseId
+        },
+        data: {
+          receivedMandatoryTriggers: {
+            increment: 1
+          }
+        }
+      })
+    }
+
+    if (!trigger.isMandatory) {
+      await this.prisma.phases.update({
+        where: {
+          uuid: trigger.phaseId
+        },
+        data: {
+          receivedOptionalTriggers: {
+            increment: 1
+          }
+        }
+      })
+    }
+
+    await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+    });
+
+    return updatedTrigger
   }
 
   isValidDataSource(value: string) {
