@@ -11,7 +11,7 @@ datasource db {
 enum Phase {
   PREPAREDNESS
   READINESS
-  ACTION
+  ACTIVATION
 }
 
 enum DataSource {
@@ -27,11 +27,10 @@ enum ActivitiesStatus {
   DELAYED
 }
 
-// enum ActivityTypes {
-//   COMMUNICATION
-//   PAYOUT
-//   GENERAL
-// }
+enum ActivityTypes {
+  GENERAL
+  AUTOMATED
+}
 
 enum SettingDataType {
   STRING
@@ -155,6 +154,14 @@ model Phases {
   activities Activities[]
   triggers   Triggers[]
 
+  requiredMandatoryTriggers Int? @default(0)
+  requiredOptionalTriggers  Int? @default(0)
+
+  receivedMandatoryTriggers Int? @default(0)
+  receivedOptionalTriggers  Int? @default(0)
+
+  isActive Boolean @default(false)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -194,6 +201,8 @@ model Activities {
 
   status ActivitiesStatus @default(NOT_STARTED)
 
+  activityType ActivityTypes @default(GENERAL)
+
   activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
   activityPayout        Json? @db.JsonB()
@@ -223,7 +232,7 @@ model Triggers {
   notes            String?
 
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
-  phaseId String
+  phaseId String?
 
   hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
   hazardTypeId String?
@@ -231,6 +240,7 @@ model Triggers {
   // datas      TriggersData[]
   activities Activities[]
 
+  isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
 
   isDeleted Boolean   @default(false)
