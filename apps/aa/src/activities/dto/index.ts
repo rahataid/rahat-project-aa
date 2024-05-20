@@ -1,5 +1,3 @@
-// import { ActivityTypes } from '@prisma/client';
-
 export interface ActivityCommunicationData {
   groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
   groupId: string;
@@ -21,6 +19,7 @@ export interface AddActivityData {
   responsibility: string;
   source: string;
   description: string;
+  isAutomated: boolean;
   activityCommunication?: Array<ActivityCommunicationData>
   activityPayout?: Array<Record<string, any>>;
   activityDocuments?: Array<ActivityDocs>
@@ -36,6 +35,7 @@ export interface UpdateActivityData {
   responsibility?: string;
   source?: string;
   description?: string;
+  isAutomated?: boolean;
   activityCommunication?: Array<ActivityCommunicationData & { campaignId: string }>
   activityPayout?: Array<Record<string, any>>;
   activityDocuments?: Array<ActivityDocs>

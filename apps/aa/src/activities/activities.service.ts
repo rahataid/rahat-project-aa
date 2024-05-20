@@ -36,7 +36,7 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    const { activityCommunication, title, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
+    const { activityCommunication, isAutomated, title, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
 
     const createActivityCommunicationPayload = []
     const createActivityPayoutPayload = []
@@ -79,6 +79,7 @@ export class ActivitiesService {
         phase: {
           connect: { uuid: phaseId }
         },
+        isAutomated: isAutomated,
         activityCommunication: createActivityCommunicationPayload,
         activityPayout: createActivityPayoutPayload,
         activityDocuments: JSON.parse(JSON.stringify(docs))
@@ -270,7 +271,9 @@ export class ActivitiesService {
   }
 
   async update(payload: UpdateActivityData) {
-    const { uuid, activityCommunication, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
+    console.log("update called");
+
+    const { uuid, activityCommunication, isAutomated, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
     const activity = await this.prisma.activities.findUnique({
       where: {
         uuid: uuid
@@ -316,6 +319,7 @@ export class ActivitiesService {
         source: source || activity.source,
         responsibility: responsibility || activity.responsibility,
         leadTime: leadTime || activity.leadTime,
+        isAutomated: isAutomated || activity.isAutomated,
         phase: {
           connect: {
             uuid: phaseId || activity.phaseId

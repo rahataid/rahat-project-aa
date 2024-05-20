@@ -177,7 +177,7 @@ model Activities {
 
   status ActivitiesStatus @default(NOT_STARTED)
 
-  activityType ActivityTypes @default(GENERAL)
+  isAutomated Boolean @default(false)
 
   activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
