@@ -37,6 +37,7 @@ export const JOBS = {
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
     BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
     REMOVE: 'rahat.jobs.beneficiary.remove',
+    ADD_GROUP: 'aa.jobs.beneficiary.addGroup'
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -97,6 +98,9 @@ export const JOBS = {
     GET: 'rahat.jobs.settings.get',
     UPDATE: 'rahat.jobs.settings.update',
     REMOVE: 'rahat.jobs.settings.remove',
+  },
+  CONTRACT: {
+    INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget'
   }
 };
 

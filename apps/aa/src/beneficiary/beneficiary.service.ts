@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -84,5 +84,17 @@ export class BeneficiaryService {
     });
 
     return rdata;
+  }
+
+  // ***** Create beneficiary groups ********** //
+  async addGroup(payload: AddBeneficiaryGroups) {
+    return await this.prisma.beneficiaryGroups.create({
+      data: {
+        name: payload.name,
+        beneficiary: {
+          connect: payload.beneficiaries,
+        },
+      },
+    });
   }
 }
