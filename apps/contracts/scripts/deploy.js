@@ -92,11 +92,7 @@ async function main(){
 
      const contractValues = await getDeployedContractDetails(contractsDetails)
 
-    // ***** seed settings start ***
-    console.log("Deleting previous settings")
-    await settings.delete('CONTRACT')
-    console.log("Deleted previous settings")
-    
+    // ***** seed settings start ***    
     console.log("Saving contract details to settings")
     await settings.create({
         name: 'CONTRACT',
