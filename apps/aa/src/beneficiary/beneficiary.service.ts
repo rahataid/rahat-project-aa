@@ -57,6 +57,83 @@ export class BeneficiaryService {
     );
   }
 
+  async getAllGroups(dto) {
+    const { page, perPage } = dto;
+
+    const query = {
+      where: {
+        isDeleted: false,
+      },
+      include: {
+        beneficiary: true,
+      },
+    };
+
+    // this.prisma.beneficiaryGroups.findFirst({
+    //   include: {
+    //     beneficiary
+    //   }
+    // })
+
+    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
+      page,
+      perPage,
+    });
+
+    const groupsMeta = benfGroups.meta
+    const groups = benfGroups.data as any
+
+    for (const group of groups) {
+      const benfIds = group?.beneficiary?.map((d) => d.uuid)
+      const benfData = this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.list_by_project' },
+        { data: benfIds }
+      ).subscribe({
+        next: (data) => {
+          console.log(data);
+          return data
+        },
+        error: (err) => {
+          throw new RpcException('Error fetching beneficiary data.')
+        }
+      })
+
+      console.log(benfData);
+
+
+      // console.log(benfIds);
+    }
+    // console.log(groups);
+
+    return "ok"
+
+    // const groups = awa
+
+    // const orderBy: Record<string, 'asc' | 'desc'> = {};
+    // orderBy[sort] = order;
+
+
+
+    // const projectData = await paginate(
+    //   this.rsprisma.beneficiary,
+    //   {
+    //     where: {
+    //       deletedAt: null
+    //     },
+    //     // orderBy
+    //   },
+    //   {
+    //     page,
+    //     perPage
+    //   }
+    // )
+
+    // return this.client.send(
+    //   { cmd: 'rahat.jobs.beneficiary.list_by_project' },
+    //   projectData
+    // );
+  }
+
   async findByUUID(uuid: UUID) {
     return await this.rsprisma.beneficiary.findUnique({ where: { uuid } });
   }
@@ -111,21 +188,21 @@ export class BeneficiaryService {
   }
 
   // Check voucher availability
-  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number){
+  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
     const res = await this.prisma.vouchers.findUnique({
-      where: {name}
+      where: { name }
     })
 
     const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
     const vouchersRequested = noOfBen * tokens;
 
-    if(remainingVouchers < vouchersRequested){
+    if (remainingVouchers < vouchersRequested) {
       throw new RpcException("Voucher not enough");
-    }    
+    }
 
     await this.prisma.vouchers.update({
-      where: {name},
-      data: {assignedVouchers: {increment: vouchersRequested}}
+      where: { name },
+      data: { assignedVouchers: { increment: vouchersRequested } }
     })
 
   }
