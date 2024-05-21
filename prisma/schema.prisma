@@ -50,16 +50,14 @@ model Beneficiary {
 
   beneficiaryGroups BeneficiaryGroups[]
 
-  benTokens      Int @default(0)
+  benTokens Int @default(0)
 
-  createdAt   DateTime  @default(now())
-  phoneNumber String?
-  email       String?
-  deletedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
 
   @@map("tbl_beneficiaries")
 }
-
 
 model BeneficiaryGroups {
   id   Int    @id @default(autoincrement()) @db.Integer()
@@ -69,7 +67,7 @@ model BeneficiaryGroups {
 
   beneficiary Beneficiary[]
 
-  groupTokens      Int @default(0)
+  groupTokens Int @default(0)
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())

@@ -127,13 +127,13 @@ export class BeneficiaryService {
         where: { uuid: payload.uuid },
         include: { beneficiary: true },
       });
-  
+
       if (!group || group.beneficiary.length === 0) {
         throw new Error('No beneficiaries found in the specified group.');
       }
-  
+
       const beneficiaryIds = group.beneficiary.map(b => b.id);
- 
+
       // Contract call
       group.beneficiary.map(async (ben) => {
         const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
@@ -145,7 +145,7 @@ export class BeneficiaryService {
         where: { id: { in: beneficiaryIds } },
         data: { benTokens: { increment: payload.tokens } },
       });
-  
+
       const totalTokensToAdd = group.beneficiary.length * payload.tokens;
       const addTokensToGroup = await prisma.beneficiaryGroups.update({
         where: { uuid: payload.uuid },
@@ -154,6 +154,6 @@ export class BeneficiaryService {
 
       return addTokensToGroup;
     })
-        
+
   }
 }

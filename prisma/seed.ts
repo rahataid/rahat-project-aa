@@ -151,11 +151,11 @@ const main = async () => {
     // ***** seed activity categories ***
 
     // ***** seed activities ****
-    // for (const activity of activities) {
-    //     await prisma.activities.create({
-    //         data: activity
-    //     })
-    // }
+    for (const activity of activities) {
+        await prisma.activities.create({
+            data: activity
+        })
+    }
     // ***** seed activities complete ***
 
     // ***** seed settings start ***
