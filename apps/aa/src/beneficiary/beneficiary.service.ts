@@ -6,7 +6,7 @@ import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './d
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -111,12 +111,23 @@ export class BeneficiaryService {
   }
 
   // Check voucher availability
-  async checkVoucherAvailabitliy(tokens: number, name: string){
-    const res = this.prisma.vouchers.findUnique({
+  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number){
+    const res = await this.prisma.vouchers.findUnique({
       where: {name}
     })
 
-    console.log(res)
+    const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
+    const vouchersRequested = noOfBen * tokens;
+
+    if(remainingVouchers < vouchersRequested){
+      throw new RpcException("Voucher not enough");
+    }    
+
+    await this.prisma.vouchers.update({
+      where: {name},
+      data: {assignedVouchers: {increment: vouchersRequested}}
+    })
+
   }
 
 
@@ -128,10 +139,8 @@ export class BeneficiaryService {
       this.prisma.setting
     );
 
-    // this.checkVoucherAvailabitliy(10, 'AaProject');
-
-    // const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
-    // const tokenAddress = tokenContractInfo.ADDRESS;
+    const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
+    const tokenAddress = tokenContractInfo.ADDRESS;
 
     return this.prisma.$transaction(async (prisma) => {
       const group = await prisma.beneficiaryGroups.findUnique({
@@ -140,15 +149,17 @@ export class BeneficiaryService {
       });
 
       if (!group || group.beneficiary.length === 0) {
-        throw new Error('No beneficiaries found in the specified group.');
+        throw new RpcException('No beneficiaries found in the specified group.');
       }
 
       const beneficiaryIds = group.beneficiary.map(b => b.id);
 
+      this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
+
       // Contract call
       group.beneficiary.map(async (ben) => {
-        // const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
-        // console.log("Contract called with txn hash:", txn.hash);
+        const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
+        console.log("Contract called with txn hash:", txn.hash);
         return ben.id;
       })
 
