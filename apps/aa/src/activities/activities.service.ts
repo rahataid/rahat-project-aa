@@ -286,6 +286,15 @@ export class ActivitiesService {
         switch (comms.groupType) {
           case 'STAKEHOLDERS':
             if (comms.campaignId) {
+              const campaginDetails = await this.communicationService.communication.getCampaign(Number(comms.campaignId))
+              const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
+
+              await this.communicationService.communication.updateCampaign(comms.campaignId, {
+                audienceIds: audienceIds,
+                details: JSON.parse(JSON.stringify({ message: comms.message })),
+                name: title || activity.title
+              })
+
               updateActivityCommunicationPayload.push(comms)
               break;
             }
