@@ -13,17 +13,26 @@ import {
   UpdateStakeholdersGroups,
 } from './dto';
 import { RpcException } from '@nestjs/microservices';
+import { CommunicationService } from '@rumsan/communication';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class StakeholdersService {
   private readonly logger = new Logger(StakeholdersService.name);
+  private communicationService: CommunicationService;
 
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService
-  ) { }
+  ) {
+    this.communicationService = new CommunicationService({
+      baseURL: this.configService.get('COMMUNICATION_URL'),
+      headers: {
+        appId: this.configService.get('COMMUNICATION_APP_ID'),
+      },
+    });
+  }
 
   // ***** stakeholders start ********** //
   async add(payload: AddStakeholdersData) {
