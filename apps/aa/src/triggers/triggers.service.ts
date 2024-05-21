@@ -47,7 +47,7 @@ export class TriggersService {
         repeatKey: repeatKey
       },
       include: {
-        activities: true,
+        // activities: true,
         hazardType: true,
         phase: true
       }
@@ -71,7 +71,7 @@ export class TriggersService {
         },
         include: {
           hazardType: true,
-          activities: true,
+          // activities: true,
           phase: true
         }
       },
@@ -135,7 +135,7 @@ export class TriggersService {
       hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
-      activities: payload.activities,
+      // activities: payload.activities,
       repeatEvery: "30000",
     }
 
@@ -166,7 +166,8 @@ export class TriggersService {
   async scheduleJob(payload) {
     const uuid = randomUUID()
 
-    const { activities, ...restOfPayload } = payload
+    // const { activities, ...restOfPayload } = payload
+    const { ...restOfPayload } = payload
 
     const jobPayload = {
       ...restOfPayload,
@@ -198,9 +199,9 @@ export class TriggersService {
     await this.prisma.triggers.create({
       data: {
         ...createData,
-        activities: {
-          connect: activities
-        }
+        // activities: {
+        //   connect: activities
+        // }
       }
     })
 
@@ -211,7 +212,8 @@ export class TriggersService {
     const uuid = randomUUID()
     const repeatKey = randomUUID()
 
-    const { activities, ...restData } = payload
+    // const { activities, ...restData } = payload
+    const { ...restData } = payload
 
     const createData = {
       repeatKey: repeatKey,
@@ -222,9 +224,9 @@ export class TriggersService {
     return this.prisma.triggers.create({
       data: {
         ...createData,
-        activities: {
-          connect: payload.activities
-        }
+        // activities: {
+        //   connect: payload.activities
+        // }
       }
     })
   }

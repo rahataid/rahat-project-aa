@@ -205,7 +205,7 @@ model Activities {
   activityCommunication Json? @db.JsonB()
   activityPayout        Json? @db.JsonB()
 
-  triggers Triggers[]
+  // triggers Triggers[]
 
   isDeleted Boolean @default(false)
 
@@ -236,7 +236,7 @@ model Triggers {
   hazardTypeId String?
 
   // datas      TriggersData[]
-  activities Activities[]
+  // activities Activities[]
 
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
