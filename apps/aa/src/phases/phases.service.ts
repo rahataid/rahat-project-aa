@@ -107,8 +107,45 @@ export class PhasesService {
     return updatedPhase
   }
 
+  async calculatePhaseActivities() {
+    const phases = await this.prisma.phases.findMany()
+
+    let activitiesStats = []
+    for (const phase of phases) {
+      const totalActivities = await this.prisma.activities.count({
+        where: {
+          phaseId: phase.uuid,
+          isDeleted: false
+        },
+      })
+
+      const totalCompletedActivities = await this.prisma.activities.count({
+        where: {
+          phaseId: phase.uuid,
+          status: 'COMPLETED',
+          isDeleted: false,
+        },
+      });
+
+      const completedPercentage = totalCompletedActivities ? ((totalCompletedActivities / totalActivities) * 100).toFixed(2) : 0;
+
+      activitiesStats.push({
+        totalActivities,
+        totalCompletedActivities,
+        completedPercentage,
+        phase
+      })
+    }
+    return activitiesStats
+  }
+
   async getStats() {
-    return "ok"
+    const [phaseActivities] = await Promise.all([
+      this.calculatePhaseActivities()
+    ]);
+    return {
+      phaseActivities
+    }
   }
 }
 
