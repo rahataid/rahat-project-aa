@@ -76,6 +76,15 @@ model BeneficiaryGroups {
   @@map("tbl_beneficiaries_groups")
 }
 
+model Vouchers {
+  uuid String @unique @default(uuid())
+  name String @unique
+  totalVouchers Int @default(0)
+  assignedVouchers Int @default(0)
+
+  @@map("tbl_vouchers")
+}
+
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
 
 // ++++++++++++++++++ START: @rumsan/settings +++++++++++++++++++++++++++

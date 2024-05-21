@@ -6,7 +6,7 @@ import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './d
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -110,13 +110,33 @@ export class BeneficiaryService {
     });
   }
 
+  // Check voucher availability
+  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number){
+    const res = await this.prisma.vouchers.findUnique({
+      where: {name}
+    })
+
+    const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
+    const vouchersRequested = noOfBen * tokens;
+
+    if(remainingVouchers < vouchersRequested){
+      throw new RpcException("Voucher not enough");
+    }    
+
+    await this.prisma.vouchers.update({
+      where: {name},
+      data: {assignedVouchers: {increment: vouchersRequested}}
+    })
+
+  }
+
 
   // Assign token to beneficiary and group
   async assignTokenToGroup(payload: AddTokenToGroup) {
 
     const aaContract = await createContractInstanceSign(
-      await getContractByName('AAPROJECT', this.rsprisma.setting),
-      this.rsprisma.setting
+      await getContractByName('AAPROJECT', this.prisma.setting),
+      this.prisma.setting
     );
 
     const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
@@ -129,10 +149,12 @@ export class BeneficiaryService {
       });
 
       if (!group || group.beneficiary.length === 0) {
-        throw new Error('No beneficiaries found in the specified group.');
+        throw new RpcException('No beneficiaries found in the specified group.');
       }
 
       const beneficiaryIds = group.beneficiary.map(b => b.id);
+
+      this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
 
       // Contract call
       group.beneficiary.map(async (ben) => {
