@@ -110,17 +110,28 @@ export class BeneficiaryService {
     });
   }
 
+  // Check voucher availability
+  async checkVoucherAvailabitliy(tokens: number, name: string){
+    const res = this.prisma.vouchers.findUnique({
+      where: {name}
+    })
+
+    console.log(res)
+  }
+
 
   // Assign token to beneficiary and group
   async assignTokenToGroup(payload: AddTokenToGroup) {
 
     const aaContract = await createContractInstanceSign(
-      await getContractByName('AAPROJECT', this.rsprisma.setting),
-      this.rsprisma.setting
+      await getContractByName('AAPROJECT', this.prisma.setting),
+      this.prisma.setting
     );
 
-    const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
-    const tokenAddress = tokenContractInfo.ADDRESS;
+    // this.checkVoucherAvailabitliy(10, 'AaProject');
+
+    // const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
+    // const tokenAddress = tokenContractInfo.ADDRESS;
 
     return this.prisma.$transaction(async (prisma) => {
       const group = await prisma.beneficiaryGroups.findUnique({
@@ -136,8 +147,8 @@ export class BeneficiaryService {
  
       // Contract call
       group.beneficiary.map(async (ben) => {
-        const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
-        console.log("Contract called with txn hash:", txn.hash);
+        // const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
+        // console.log("Contract called with txn hash:", txn.hash);
         return ben.id;
       })
 

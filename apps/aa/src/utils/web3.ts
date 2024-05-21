@@ -61,6 +61,7 @@ import {
 
   export async function getContractByName(contractName: string, modal: any) {
   
+    console.log(modal) 
     const addresses = await modal.findMany({
       where: { name: 'CONTRACT' },
     });
