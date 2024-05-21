@@ -13,7 +13,7 @@ require("hardhat-gas-reporter");
 require("solidity-docgen");
 require("@nomicfoundation/hardhat-verify")
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PRIVATE_KEY = '0xfd8566ec7822f5eb8b7db0a48b1cdc713d3ef663fb3bff7759e4967ca7367294';
 
 module.exports = {
   solidity: {
@@ -60,7 +60,6 @@ module.exports = {
       url: "https://polygon-mumbai.infura.io/v3/f1758a52ca744a9081a25196d3128ea0",
       accounts: [PRIVATE_KEY],
       timeout: 60000000
-
     },
     arbiGoerli: {
       url: "https://goerli-rollup.arbitrum.io/rpc",

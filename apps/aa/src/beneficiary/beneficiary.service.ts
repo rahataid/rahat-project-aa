@@ -2,8 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
+import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy } from '@nestjs/microservices';
 
@@ -95,5 +96,64 @@ export class BeneficiaryService {
     });
 
     return rdata;
+  }
+
+  // ***** Create beneficiary groups ********** //
+  async addGroup(payload: AddBeneficiaryGroups) {
+    return await this.prisma.beneficiaryGroups.create({
+      data: {
+        name: payload.name,
+        beneficiary: {
+          connect: payload.beneficiaries,
+        },
+      },
+    });
+  }
+
+
+  // Assign token to beneficiary and group
+  async assignTokenToGroup(payload: AddTokenToGroup) {
+
+    const aaContract = await createContractInstanceSign(
+      await getContractByName('AAPROJECT', this.rsprisma.setting),
+      this.rsprisma.setting
+    );
+
+    const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
+    const tokenAddress = tokenContractInfo.ADDRESS;
+
+    return this.prisma.$transaction(async (prisma) => {
+      const group = await prisma.beneficiaryGroups.findUnique({
+        where: { uuid: payload.uuid },
+        include: { beneficiary: true },
+      });
+  
+      if (!group || group.beneficiary.length === 0) {
+        throw new Error('No beneficiaries found in the specified group.');
+      }
+  
+      const beneficiaryIds = group.beneficiary.map(b => b.id);
+ 
+      // Contract call
+      group.beneficiary.map(async (ben) => {
+        const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
+        console.log("Contract called with txn hash:", txn.hash);
+        return ben.id;
+      })
+
+      await prisma.beneficiary.updateMany({
+        where: { id: { in: beneficiaryIds } },
+        data: { benTokens: { increment: payload.tokens } },
+      });
+  
+      const totalTokensToAdd = group.beneficiary.length * payload.tokens;
+      const addTokensToGroup = await prisma.beneficiaryGroups.update({
+        where: { uuid: payload.uuid },
+        data: { groupTokens: { increment: totalTokensToAdd } },
+      });
+
+      return addTokensToGroup;
+    })
+        
   }
 }

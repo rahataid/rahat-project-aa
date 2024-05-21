@@ -48,10 +48,34 @@ model Beneficiary {
 
   extras Json?
 
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
+  beneficiaryGroups BeneficiaryGroups[]
+
+  benTokens      Int @default(0)
+
+  createdAt   DateTime  @default(now())
+  phoneNumber String?
+  email       String?
+  deletedAt   DateTime?
 
   @@map("tbl_beneficiaries")
+}
+
+
+model BeneficiaryGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  beneficiary Beneficiary[]
+
+  groupTokens      Int @default(0)
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups")
 }
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++

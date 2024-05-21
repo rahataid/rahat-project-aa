@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { CONTROLLERS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
-import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 
 @Controller()
@@ -54,5 +54,24 @@ export class BeneficiaryController {
       updateBeneficiaryDto.id,
       updateBeneficiaryDto
     );
+  }
+
+  // ***** stakeholders groups start ********** //
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ADD_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async addGroup(payload: AddBeneficiaryGroups) {
+      return this.beneficiaryService.addGroup(payload)
+  }
+
+  
+  // ***** Assign token to group *****//
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ASSIGN_TOKEN_TO_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async assignTokenToGroup(payload: AddTokenToGroup) {
+      return this.beneficiaryService.assignTokenToGroup(payload)
   }
 }
