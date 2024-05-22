@@ -62,51 +62,76 @@ export class DhmService implements AbstractSource {
     this.logger.log('Latest water level: ', recentWaterLevel);
     this.logger.log("##############################")
 
-    if (payload.triggerStatement?.readinessLevel) {
-      const readinessLevelReached = this.compareWaterLevels(
-        currentLevel,
-        payload.triggerStatement?.readinessLevel
-      );
-      if (readinessLevelReached) {
-        this.logger.log('Readiness level reached.');
-        await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        });
-        await this.prisma.triggers.update({
-          where: {
-            uuid: payload.uuid
-          },
-          data: {
-            isTriggered: true
-          }
-        })
-        return
-      }
+    const waterLevelReached = this.compareWaterLevels(
+      currentLevel,
+      payload.triggerStatement?.waterLevel
+    );
+
+    if (waterLevelReached) {
+      await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      });
+      await this.prisma.triggers.update({
+        where: {
+          uuid: payload.uuid
+        },
+        data: {
+          isTriggered: true
+        }
+      })
+      return
     }
 
-    if (payload.triggerStatement?.activationLevel) {
-      const activationLevelReached = this.compareWaterLevels(
-        currentLevel,
-        payload.triggerStatement?.activationLevel
-      );
-      if (activationLevelReached) {
-        await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        });
-        this.logger.log('Activation level reached.');
-        return
-      }
-    }
+    // if (payload.triggerStatement?.readinessLevel) {
+    //   const readinessLevelReached = this.compareWaterLevels(
+    //     currentLevel,
+    //     payload.triggerStatement?.readinessLevel
+    //   );
+    //   if (readinessLevelReached) {
+    //     this.logger.log('Readiness level reached.');
+    //     await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+    //       attempts: 3,
+    //       removeOnComplete: true,
+    //       backoff: {
+    //         type: 'exponential',
+    //         delay: 1000,
+    //       },
+    //     });
+    //     await this.prisma.triggers.update({
+    //       where: {
+    //         uuid: payload.uuid
+    //       },
+    //       data: {
+    //         isTriggered: true
+    //       }
+    //     })
+    //     return
+    //   }
+    // }
+
+    // if (payload.triggerStatement?.activationLevel) {
+    //   const activationLevelReached = this.compareWaterLevels(
+    //     currentLevel,
+    //     payload.triggerStatement?.activationLevel
+    //   );
+    //   if (activationLevelReached) {
+    //     await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+    //       attempts: 3,
+    //       removeOnComplete: true,
+    //       backoff: {
+    //         type: 'exponential',
+    //         delay: 1000,
+    //       },
+    //     });
+    //     this.logger.log('Activation level reached.');
+    //     return
+    //   }
+    // }
     this.logger.log(`${dataSource}: ${location}: Water is in a safe level.`);
     return;
   }

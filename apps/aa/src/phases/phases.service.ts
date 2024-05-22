@@ -24,8 +24,12 @@ export class PhasesService {
         uuid: uuid
       },
       include: {
-        triggers: true,
-        activities: true
+        triggers: {
+          include: {
+            phase: true
+          }
+        },
+        activities: true,
       }
     })
 

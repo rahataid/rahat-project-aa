@@ -19,6 +19,7 @@ export interface AddTriggerStatement {
   title?: string;
   triggerDocuments?: Array<TriggerDocs>
   notes?: string;
+  isMandatory: boolean;
 }
 
 export interface UpdateTriggerStatement {
