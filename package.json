@@ -24,9 +24,10 @@
     "contracts:test": "cd ./apps/contracts && hardhat test",
     "contracts:prettier": "prettier --write 'src/contracts/**/*.sol'",
     "contracts:deploy:mumbai": "cd ./apps/contracts && hardhat run scripts/deploy.js --network polygonMumbai",
-    "contracts:deploy": "cd ./apps/contracts && hardhat run scripts/deploy.js"
+    "contracts:deploy:arbitrum": "cd ./apps/contracts && hardhat run scripts/deploy.js --network arbiSepolia"
   },
   "private": true,
+  
   "dependencies": {
     "@nestjs/axios": "^3.0.2",
     "@nestjs/bull": "^10.1.1",

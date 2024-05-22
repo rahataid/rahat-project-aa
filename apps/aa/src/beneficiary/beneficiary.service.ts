@@ -127,7 +127,6 @@ export class BeneficiaryService {
       where: {name},
       data: {assignedVouchers: {increment: vouchersRequested}}
     })
-
   }
 
 

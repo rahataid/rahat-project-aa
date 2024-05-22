@@ -13,7 +13,7 @@ require("hardhat-gas-reporter");
 require("solidity-docgen");
 require("@nomicfoundation/hardhat-verify")
 
-const PRIVATE_KEY = '0xfd8566ec7822f5eb8b7db0a48b1cdc713d3ef663fb3bff7759e4967ca7367294';
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 module.exports = {
   solidity: {
