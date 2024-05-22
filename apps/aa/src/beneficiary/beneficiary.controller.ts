@@ -7,7 +7,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 
 @Controller()
 export class BeneficiaryController {
-  constructor(private readonly beneficiaryService: BeneficiaryService) {}
+  constructor(private readonly beneficiaryService: BeneficiaryService) { }
 
   @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   findAll(data) {
@@ -62,16 +62,25 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async addGroup(payload: AddBeneficiaryGroups) {
-      return this.beneficiaryService.addGroup(payload)
+    return this.beneficiaryService.addGroup(payload)
   }
 
-  
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getAllGroups(payload: AddBeneficiaryGroups) {
+    return this.beneficiaryService.getAllGroups(payload)
+  }
+  // ***** stakeholders groups end ********** //
+
+
   // ***** Assign token to group *****//
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ASSIGN_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
   async assignTokenToGroup(payload: AddTokenToGroup) {
-      return this.beneficiaryService.assignTokenToGroup(payload)
+    return this.beneficiaryService.assignTokenToGroup(payload)
   }
 }

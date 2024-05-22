@@ -16,7 +16,8 @@ const hazardTypesData = [
 const phaseData = [
     {
         uuid: "d8717555-3a71-4d5a-8a0d-fec1be26ce3b",
-        name: Phase.PREPAREDNESS
+        name: Phase.PREPAREDNESS,
+        isActive: true
     },
     {
         uuid: "ecce09ad-2364-4e21-a59a-09b0f3a3fde5",
@@ -151,11 +152,11 @@ const main = async () => {
     // ***** seed activity categories ***
 
     // ***** seed activities ****
-    for (const activity of activities) {
-        await prisma.activities.create({
-            data: activity
-        })
-    }
+    // for (const activity of activities) {
+    //     await prisma.activities.create({
+    //         data: activity
+    //     })
+    // }
     // ***** seed activities complete ***
 
     // ***** seed project voucher ****

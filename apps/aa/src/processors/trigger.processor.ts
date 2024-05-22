@@ -18,6 +18,8 @@ export class TriggerProcessor {
     const payload = job.data
 
     switch (payload.dataSource) {
+      case DATA_SOURCES.DHM:
+        await this.processDhmData(payload)
       case DATA_SOURCES.MANUAL:
         await this.processManualTrigger(payload)
         break;
@@ -25,6 +27,18 @@ export class TriggerProcessor {
       default:
         break;
     }
+  }
+
+  async processDhmData(payload) {
+    const phaseData = await this.phaseService.getOne({
+      uuid: payload.phaseId
+    })
+
+    const conditionsMet = this.checkTriggerConditions(phaseData.triggerRequirements)
+    if (conditionsMet) {
+      this.phaseService.activatePhase(phaseData.uuid)
+    }
+    return
   }
 
   async processManualTrigger(payload) {

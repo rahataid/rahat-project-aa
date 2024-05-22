@@ -21,6 +21,7 @@ export interface AddActivityData {
   responsibility: string;
   source: string;
   description: string;
+  isAutomated: boolean;
   activityCommunication?: Array<ActivityCommunicationData>
   activityPayout?: Array<Record<string, any>>;
   activityDocuments?: Array<ActivityDocs>
@@ -34,6 +35,7 @@ export interface UpdateActivityData {
   categoryId?: string;
   hazardTypeId?: string;
   responsibility?: string;
+  isAutomated: boolean;
   source?: string;
   description?: string;
   activityCommunication?: Array<ActivityCommunicationData & { campaignId: string }>

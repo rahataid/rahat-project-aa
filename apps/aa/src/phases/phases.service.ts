@@ -3,15 +3,24 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
 import { DataSource, Phase } from "@prisma/client";
 import { RpcException } from "@nestjs/microservices";
+import { CommunicationService } from '@rumsan/communication/services/communication.client';
 
 @Injectable()
 export class PhasesService {
   private readonly logger = new Logger(PhasesService.name);
+  private communicationService: CommunicationService;
 
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService
-  ) { }
+  ) {
+    this.communicationService = new CommunicationService({
+      baseURL: this.configService.get('COMMUNICATION_URL'),
+      headers: {
+        appId: this.configService.get('COMMUNICATION_APP_ID'),
+      },
+    });
+  }
 
   async getAll() {
     return this.prisma.phases.findMany()
@@ -24,21 +33,30 @@ export class PhasesService {
         uuid: uuid
       },
       include: {
-        triggers: true,
-        activities: true
+        triggers: {
+          where: {
+            isDeleted: false
+          },
+          include: {
+            phase: true
+          }
+        },
+        activities: true,
       }
     })
 
     const totalMandatoryTriggers = await this.prisma.triggers.count({
       where: {
         phaseId: phase.uuid,
-        isMandatory: true
+        isMandatory: true,
+        isDeleted: false
       }
     })
     const totalOptionalTriggers = await this.prisma.triggers.count({
       where: {
         phaseId: phase.uuid,
-        isMandatory: false
+        isMandatory: false,
+        isDeleted: false
       }
     })
 
@@ -59,6 +77,38 @@ export class PhasesService {
   }
 
   async activatePhase(uuid: string) {
+    const phaseDetails = await this.prisma.phases.findUnique({
+      where: {
+        uuid: uuid
+      },
+      include: {
+        activities: {
+          where: {
+            isAutomated: true,
+            status: {
+              not: 'COMPLETED'
+            }
+          }
+        }
+      }
+    })
+
+    const phaseActivities = phaseDetails.activities;
+    for (const activity of phaseActivities) {
+      const activityComms = JSON.parse(JSON.stringify(activity.activityCommunication))
+      for (const comm of activityComms) {
+        await this.communicationService.communication.triggerCampaign(comm?.campaignId)
+      }
+      await this.prisma.activities.update({
+        where: {
+          uuid: activity.uuid
+        },
+        data: {
+          status: 'COMPLETED'
+        }
+      })
+    }
+
     return this.prisma.phases.update({
       where: {
         uuid: uuid
@@ -81,8 +131,6 @@ export class PhasesService {
 
     for (const trigger of triggers) {
       const tg = await this.prisma.triggers.findUnique({ where: { repeatKey: trigger.repeatKey } })
-
-      console.log("tg", tg);
 
       await this.prisma.triggers.update({
         where: {
