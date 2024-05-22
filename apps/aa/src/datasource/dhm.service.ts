@@ -68,14 +68,32 @@ export class DhmService implements AbstractSource {
     );
 
     if (waterLevelReached) {
-      await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
-        attempts: 3,
-        removeOnComplete: true,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      });
+      if (payload.isMandatory) {
+        await this.prisma.phases.update({
+          where: {
+            uuid: payload.phaseId
+          },
+          data: {
+            receivedMandatoryTriggers: {
+              increment: 1
+            }
+          }
+        })
+      }
+
+      if (!payload.isMandatory) {
+        await this.prisma.phases.update({
+          where: {
+            uuid: payload.phaseId
+          },
+          data: {
+            receivedOptionalTriggers: {
+              increment: 1
+            }
+          }
+        })
+      }
+
       await this.prisma.triggers.update({
         where: {
           uuid: payload.uuid
@@ -84,6 +102,16 @@ export class DhmService implements AbstractSource {
           isTriggered: true
         }
       })
+
+      await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      });
+
       return
     }
 

@@ -77,10 +77,10 @@ model BeneficiaryGroups {
 }
 
 model Vouchers {
-  uuid String @unique @default(uuid())
-  name String @unique
-  totalVouchers Int @default(0)
-  assignedVouchers Int @default(0)
+  uuid             String @unique @default(uuid())
+  name             String @unique
+  totalVouchers    Int    @default(0)
+  assignedVouchers Int    @default(0)
 
   @@map("tbl_vouchers")
 }
@@ -208,7 +208,8 @@ model Activities {
 
   status ActivitiesStatus @default(NOT_STARTED)
 
-  activityType ActivityTypes @default(GENERAL)
+  isAutomated Boolean
+  // activityType ActivityTypes @default(GENERAL)
 
   activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
