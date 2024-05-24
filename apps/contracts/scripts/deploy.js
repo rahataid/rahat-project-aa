@@ -39,7 +39,6 @@ const writeToFile = (filePath, newData) => {
 async function main(){
 
     const [deployer] = await ethers.getSigners();
-    console.log(deployer)
 
     // Uncomment next 3 lines to only update admin
 
@@ -104,16 +103,17 @@ async function main(){
     // ***** seed settings complete ***
     
 
-    console.log("Verifying Contracts")
-    console.log("Verifiying Rahat Donor")
-    await verify(donorAddress,[deployer.address, accessManagerAddress]);
-    console.log('veriying forwarder')
-    await verify(forwarderAddress,['ELForwarder'])
-    console.log('verfiying eye voucher')
-    await verify(aaVoucher,[forwarderAddress,'aaVoucher','Eye',donorAddress,1])
-    console.log('verifying el project')
-    await verify(aaProjectAddress,['AAProject', aaVoucherAddress, forwarderAddress, accessManagerAddress, triggerManagerAddress]);
-    console.log("verification completed")
+
+    // console.log("Verifying Contracts")
+    // console.log("Verifiying Rahat Donor")
+    // await verify(donorAddress,[deployer.address, accessManagerAddress]);
+    // console.log('veriying forwarder')
+    // await verify(forwarderAddress,['ELForwarder'])
+    // console.log('verfiying eye voucher')
+    // await verify(aaVoucher,[forwarderAddress,'aaVoucher','Eye',donorAddress,1])
+    // console.log('verifying el project')
+    // await verify(aaProjectAddress,['aaProject',aaVoucherAddress, process.env.OTP_SERVER_ADDRESS,forwarderAddress,3]);
+    // console.log("verification completed")
 
 }
 

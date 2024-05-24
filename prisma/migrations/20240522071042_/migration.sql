@@ -41,6 +41,14 @@ CREATE TABLE "tbl_beneficiaries_groups" (
 );
 
 -- CreateTable
+CREATE TABLE "tbl_vouchers" (
+    "uuid" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "totalVouchers" INTEGER NOT NULL DEFAULT 0,
+    "assignedVouchers" INTEGER NOT NULL DEFAULT 0
+);
+
+-- CreateTable
 CREATE TABLE "tbl_settings" (
     "name" TEXT NOT NULL,
     "value" JSONB NOT NULL,
@@ -204,6 +212,12 @@ CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_vouchers_name_key" ON "tbl_vouchers"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_settings_name_key" ON "tbl_settings"("name");

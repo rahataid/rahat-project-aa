@@ -228,5 +228,47 @@
     "forwarderAddress": "0xDfAc7ec33e08b1a60905ae09b91FD64D8544D237",
     "aaVoucherAddress": "0x89297BC41162735E683fE7F9F70268F171f9018a",
     "aaProjectAddress": "0x329b23338cBfDeC80EE4d24EA23BfB6Bb0A93c53"
+  },
+  {
+    "donorAddress": "0xd3867a927BeCdDacf4B2A582a5dEE18D6D785467",
+    "forwarderAddress": "0x98e7156843eE34fD4eC3ec1A9059D02143Fac955",
+    "aaVoucherAddress": "0x08e06A7E62fDc27719E425A058ef51CFCfE64f4c",
+    "aaProjectAddress": "0xB6Ab306D07147BA0370c7F4f255024aB25257cd5"
+  },
+  {
+    "donorAddress": "0x7B4b8A9093F2D28393E131eBc80907536169Ff84",
+    "forwarderAddress": "0x29A7B2785aEeEF25bc0E5b84778B570E23987F9a",
+    "aaVoucherAddress": "0x21AA9f07498A6fA3151B69B25CA54A4d01A6ab77",
+    "aaProjectAddress": "0x83f0C1EC3803bbaA8C1BcDEa434269d01a192c23"
+  },
+  {
+    "donorAddress": "0x04f9Ae46718FF2928D890545B2711015045a3f92",
+    "forwarderAddress": "0xEd4F4bdA6ea8Ab2653afdDaab88686d0E1b2145E",
+    "aaVoucherAddress": "0xd44f8Bae04Ab2E7d06A45a397DFFE31d43Bfa0a1",
+    "aaProjectAddress": "0xF5FfaAE602E5430f11FF6c1a5860F01B3BF3E608"
+  },
+  {
+    "donorAddress": "0x04f9Ae46718FF2928D890545B2711015045a3f92",
+    "forwarderAddress": "0xEd4F4bdA6ea8Ab2653afdDaab88686d0E1b2145E",
+    "aaVoucherAddress": "0xd44f8Bae04Ab2E7d06A45a397DFFE31d43Bfa0a1",
+    "aaProjectAddress": "0xF5FfaAE602E5430f11FF6c1a5860F01B3BF3E608"
+  },
+  {
+    "donorAddress": "0x04f9Ae46718FF2928D890545B2711015045a3f92",
+    "forwarderAddress": "0xEd4F4bdA6ea8Ab2653afdDaab88686d0E1b2145E",
+    "aaVoucherAddress": "0xd44f8Bae04Ab2E7d06A45a397DFFE31d43Bfa0a1",
+    "aaProjectAddress": "0xF5FfaAE602E5430f11FF6c1a5860F01B3BF3E608"
+  },
+  {
+    "donorAddress": "0x04f9Ae46718FF2928D890545B2711015045a3f92",
+    "forwarderAddress": "0xEd4F4bdA6ea8Ab2653afdDaab88686d0E1b2145E",
+    "aaVoucherAddress": "0xd44f8Bae04Ab2E7d06A45a397DFFE31d43Bfa0a1",
+    "aaProjectAddress": "0xF5FfaAE602E5430f11FF6c1a5860F01B3BF3E608"
+  },
+  {
+    "donorAddress": "0x04f9Ae46718FF2928D890545B2711015045a3f92",
+    "forwarderAddress": "0xEd4F4bdA6ea8Ab2653afdDaab88686d0E1b2145E",
+    "aaVoucherAddress": "0xd44f8Bae04Ab2E7d06A45a397DFFE31d43Bfa0a1",
+    "aaProjectAddress": "0xF5FfaAE602E5430f11FF6c1a5860F01B3BF3E608"
   }
 ]
