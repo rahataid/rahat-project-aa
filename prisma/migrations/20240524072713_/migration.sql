@@ -28,6 +28,17 @@ CREATE TABLE "tbl_beneficiaries" (
 );
 
 -- CreateTable
+CREATE TABLE "tbl_ben_groups" (
+    "id" SERIAL NOT NULL,
+    "uuid" UUID NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_ben_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
@@ -203,6 +214,9 @@ CREATE TABLE "_StakeholdersToStakeholdersGroups" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_ben_groups_uuid_key" ON "tbl_ben_groups"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");

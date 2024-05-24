@@ -59,6 +59,17 @@ model Beneficiary {
   @@map("tbl_beneficiaries")
 }
 
+model BenGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @db.Uuid()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_ben_groups")
+}
+
 model BeneficiaryGroups {
   id   Int    @id @default(autoincrement()) @db.Integer()
   uuid String @unique @default(uuid())

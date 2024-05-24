@@ -39,7 +39,8 @@ export const JOBS = {
     REMOVE: 'rahat.jobs.beneficiary.remove',
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
     ASSIGN_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.assign_token_to_group',
-    GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups'
+    GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project'
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',

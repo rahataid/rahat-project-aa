@@ -66,6 +66,14 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async addGroupToProject(payload) {
+    return this.beneficiaryService.addGroupToProject(payload)
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
   })

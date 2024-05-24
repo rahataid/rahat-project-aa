@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
@@ -186,6 +186,17 @@ export class BeneficiaryService {
       },
     });
   }
+
+  // merge to main group
+  async addGroupToProject(payload: AssignBenfGroupToProject) {
+    const { beneficiaryGroupData } = payload
+    return this.prisma.benGroups.create({
+      data: {
+        uuid: beneficiaryGroupData.uuid
+      }
+    })
+  }
+  // merge to main group
 
   // Check voucher availability
   async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
