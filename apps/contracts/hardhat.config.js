@@ -7,7 +7,7 @@
  */
 require('dotenv').config();
 require('solidity-coverage');
-require('@nomiclabs/hardhat-ethers');
+require('@nomicfoundation/hardhat-ethers');
 require("@nomicfoundation/hardhat-chai-matchers");
 require("hardhat-gas-reporter");
 require("solidity-docgen");
@@ -69,9 +69,9 @@ module.exports = {
       url: "https://billowing-long-ensemble.arbitrum-sepolia.quiknode.pro/e0c76079c7d67ed114812420ba1d4472a30c93fa",
       accounts: [PRIVATE_KEY]
     },
-    amoyPolygon:{
-      url:"https://rpc-amoy.polygon.technology/",
-      accounts:[PRIVATE_KEY]
+    amoyPolygon: {
+      url: "https://rpc-amoy.polygon.technology/",
+      accounts: [PRIVATE_KEY]
     }
   },
   paths: {

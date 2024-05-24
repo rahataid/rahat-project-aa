@@ -233,5 +233,13 @@
     "aaVoucherAddress": "0xE872879842DA906F497fd721410Df859d51B9ced",
     "aaProjectAddress": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
     "accessManagerAddress": "0x5a90D3A4E45a4D6D2a8b5EF28e821aB384B628cb"
+  },
+  {
+    "donorAddress": "0xeE0bE4E9ac32ec9ACE9638A3D52F8E4fBfA2AB11",
+    "forwarderAddress": "0xF9a46958E0FB6575f06713F711B39684d23a92aE",
+    "aaVoucherAddress": "0x40BdA327da6460B106001709ef2F730825c634D8",
+    "aaProjectAddress": "0x3A28d71a89123e8894A1Ac536c0623CA22022AE8",
+    "accessManagerAddress": "0x2DE129727df37e4B7E3A51ba41fe8Bd9422490f8",
+    "triggerManagerAddress": "0x41ee5F392d00e1B5E8b923590bB734B592bccF6f"
   }
 ]
