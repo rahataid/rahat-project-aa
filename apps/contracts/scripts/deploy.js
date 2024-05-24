@@ -69,7 +69,10 @@ async function main(){
     console.log({donorAddress,
         aaVoucherAddress,
         forwarderAddress,
-        aaProjectAddress,})
+        aaProjectAddress,
+        accessManagerAddress,
+        triggerManagerAddress
+    })
 
         console.log('-----register project in donor---')
         await donorContract.registerProject(aaProjectAddress,true);
@@ -79,6 +82,8 @@ async function main(){
         forwarderAddress,
         aaVoucherAddress,
         aaProjectAddress,
+        accessManagerAddress,
+        triggerManagerAddress
     })
     await sleep(200)
 
@@ -104,16 +109,16 @@ async function main(){
     
 
 
-    // console.log("Verifying Contracts")
-    // console.log("Verifiying Rahat Donor")
-    // await verify(donorAddress,[deployer.address, accessManagerAddress]);
-    // console.log('veriying forwarder')
-    // await verify(forwarderAddress,['ELForwarder'])
-    // console.log('verfiying eye voucher')
-    // await verify(aaVoucher,[forwarderAddress,'aaVoucher','Eye',donorAddress,1])
-    // console.log('verifying el project')
-    // await verify(aaProjectAddress,['aaProject',aaVoucherAddress, process.env.OTP_SERVER_ADDRESS,forwarderAddress,3]);
-    // console.log("verification completed")
+    console.log("Verifying Contracts")
+    console.log("Verifiying Rahat Donor")
+    await verify(donorAddress,[deployer.address, accessManagerAddress]);
+    console.log('veriying forwarder')
+    await verify(forwarderAddress,['ELForwarder'])
+    console.log('verfiying eye voucher')
+    await verify(aaVoucherAddress,[forwarderAddress,'aaVoucher','AA',donorAddress,1])
+    console.log('verifying el project')
+    await verify(aaProjectAddress,['AAProject',aaVoucherAddress,forwarderAddress, accessManagerAddress,triggerManagerAddress]);
+    console.log("verification completed")
 
 }
 

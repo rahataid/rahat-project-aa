@@ -204,5 +204,34 @@
     "forwarderAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     "aaVoucherAddress": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     "aaProjectAddress": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+  },
+  {
+    "donorAddress": "0x342328b34825687834d3eB4f604E7271463160a7",
+    "forwarderAddress": "0xAB2D0A27ea960B2c411F203Db1ef6b24f28FB098",
+    "aaVoucherAddress": "0xE872879842DA906F497fd721410Df859d51B9ced",
+    "aaProjectAddress": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
+    "accessManagerAddress": "0x5a90D3A4E45a4D6D2a8b5EF28e821aB384B628cb",
+    "triggerManagerAddress": "0xBA76cfcf4dfe12A75099e282D28bC028baa8F6b4"
+  },
+  {
+    "donorAddress": "0x342328b34825687834d3eB4f604E7271463160a7",
+    "forwarderAddress": "0xAB2D0A27ea960B2c411F203Db1ef6b24f28FB098",
+    "aaVoucherAddress": "0xE872879842DA906F497fd721410Df859d51B9ced",
+    "aaProjectAddress": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
+    "accessManagerAddress": "0x5a90D3A4E45a4D6D2a8b5EF28e821aB384B628cb"
+  },
+  {
+    "donorAddress": "0x342328b34825687834d3eB4f604E7271463160a7",
+    "forwarderAddress": "0xAB2D0A27ea960B2c411F203Db1ef6b24f28FB098",
+    "aaVoucherAddress": "0xE872879842DA906F497fd721410Df859d51B9ced",
+    "aaProjectAddress": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
+    "accessManagerAddress": "0x5a90D3A4E45a4D6D2a8b5EF28e821aB384B628cb"
+  },
+  {
+    "donorAddress": "0x342328b34825687834d3eB4f604E7271463160a7",
+    "forwarderAddress": "0xAB2D0A27ea960B2c411F203Db1ef6b24f28FB098",
+    "aaVoucherAddress": "0xE872879842DA906F497fd721410Df859d51B9ced",
+    "aaProjectAddress": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
+    "accessManagerAddress": "0x5a90D3A4E45a4D6D2a8b5EF28e821aB384B628cb"
   }
 ]
