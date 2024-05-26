@@ -28,44 +28,16 @@ CREATE TABLE "tbl_beneficiaries" (
 );
 
 -- CreateTable
-CREATE TABLE "tbl_ben_groups" (
-    "id" SERIAL NOT NULL,
-    "uuid" UUID NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3),
-    "deletedAt" TIMESTAMP(3),
-
-    CONSTRAINT "tbl_ben_groups_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
     "tokensReserved" INTEGER NOT NULL DEFAULT 0,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
+    "beneficiaryId" INTEGER,
 
     CONSTRAINT "tbl_beneficiaries_groups_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "GroupTokens" (
-    "uuid" TEXT NOT NULL,
-    "groupId" TEXT NOT NULL,
-    "totalTokensReserved" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3)
-);
-
--- CreateTable
-CREATE TABLE "ReserveToken" (
-    "uuid" TEXT NOT NULL,
-    "groupId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "numberOfTokens" INTEGER NOT NULL DEFAULT 0
 );
 
 -- CreateTable
@@ -218,12 +190,6 @@ CREATE TABLE "tbl_sources_data" (
 );
 
 -- CreateTable
-CREATE TABLE "_BeneficiaryToBeneficiaryGroups" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL
-);
-
--- CreateTable
 CREATE TABLE "_StakeholdersToStakeholdersGroups" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL
@@ -233,16 +199,7 @@ CREATE TABLE "_StakeholdersToStakeholdersGroups" (
 CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_ben_groups_uuid_key" ON "tbl_ben_groups"("uuid");
-
--- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "GroupTokens_uuid_key" ON "GroupTokens"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "ReserveToken_uuid_key" ON "ReserveToken"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
@@ -287,22 +244,13 @@ CREATE UNIQUE INDEX "tbl_triggers_repeatKey_key" ON "tbl_triggers"("repeatKey");
 CREATE UNIQUE INDEX "tbl_sources_data_uuid_key" ON "tbl_sources_data"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_BeneficiaryToBeneficiaryGroups_AB_unique" ON "_BeneficiaryToBeneficiaryGroups"("A", "B");
-
--- CreateIndex
-CREATE INDEX "_BeneficiaryToBeneficiaryGroups_B_index" ON "_BeneficiaryToBeneficiaryGroups"("B");
-
--- CreateIndex
 CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_StakeholdersToStakeholdersGroups"("A", "B");
 
 -- CreateIndex
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
 
 -- AddForeignKey
-ALTER TABLE "GroupTokens" ADD CONSTRAINT "GroupTokens_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ReserveToken" ADD CONSTRAINT "ReserveToken_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_beneficiaries_groups" ADD CONSTRAINT "tbl_beneficiaries_groups_beneficiaryId_fkey" FOREIGN KEY ("beneficiaryId") REFERENCES "tbl_beneficiaries"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -318,12 +266,6 @@ ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_BeneficiaryToBeneficiaryGroups" ADD CONSTRAINT "_BeneficiaryToBeneficiaryGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_beneficiaries"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_BeneficiaryToBeneficiaryGroups" ADD CONSTRAINT "_BeneficiaryToBeneficiaryGroups_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_beneficiaries_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_stakeholders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

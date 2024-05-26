@@ -56,15 +56,7 @@ export class BeneficiaryController {
     );
   }
 
-  // ***** stakeholders groups start ********** //
-  @MessagePattern({
-    cmd: JOBS.BENEFICIARY.ADD_GROUP,
-    uuid: process.env.PROJECT_ID,
-  })
-  async addGroup(payload: AddBeneficiaryGroups) {
-    return this.beneficiaryService.addGroup(payload)
-  }
-
+  // ***** groups start ********** //
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
@@ -80,15 +72,15 @@ export class BeneficiaryController {
   async getAllGroups(payload: AddBeneficiaryGroups) {
     return this.beneficiaryService.getAllGroups(payload)
   }
-  // ***** stakeholders groups end ********** //
 
 
-  // ***** Assign token to group *****//
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ASSIGN_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
   async assignTokenToGroup(payload: AddTokenToGroup) {
-    return this.beneficiaryService.reserveTokenToGroup(payload)
+    // return this.beneficiaryService.reserveTokenToGroup(payload)
+    return "ok"
   }
+  // ***** groups end ********** //
 }

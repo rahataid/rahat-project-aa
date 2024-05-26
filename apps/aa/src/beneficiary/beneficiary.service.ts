@@ -8,6 +8,7 @@ import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { title } from 'process';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -59,18 +60,13 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    // const benfGroups = await this.prisma.benGroups.findMany({
-    //   where: {
-    //     deletedAt: null
-    //   }
-    // })
     const { page, perPage, sort, order } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
 
     const benfGroups = await paginate(
-      this.prisma.benGroups,
+      this.prisma.beneficiaryGroups,
       {
         where: {
           deletedAt: null
@@ -130,30 +126,30 @@ export class BeneficiaryService {
     return rdata;
   }
 
-  // ***** Create beneficiary groups ********** //
-  async addGroup(payload: AddBeneficiaryGroups) {
-    return await this.prisma.beneficiaryGroups.create({
-      data: {
-        name: payload.name,
-        beneficiary: {
-          connect: payload.beneficiaries,
-        },
-      },
-    });
+  // *****  beneficiary groups ********** //
+  async getOneGroup(uuid: UUID) {
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: {
+        uuid: uuid
+      }
+    })
+    if (!benfGroup) throw new RpcException('Beneficiary group not found.')
+
+    return lastValueFrom(this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
+      benfGroup.uuid
+    ));
   }
 
-  // merge to main group
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload
-    return this.prisma.benGroups.create({
+    return this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid
       }
     })
   }
-  // merge to main group
 
-  // Check voucher availability
   async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
     const res = await this.prisma.vouchers.findUnique({
       where: { name }
@@ -173,100 +169,100 @@ export class BeneficiaryService {
   }
 
 
-  async reserveTokenToGroup (payload: AddTokenToGroup) {
-    return this.prisma.$transaction(async (prisma) => {
+  // async reserveTokenToGroup(payload: AddTokenToGroup) {
+  //   return this.prisma.$transaction(async (prisma) => {
 
-      // Find group with uuid
-      const group = await prisma.beneficiaryGroups.findUnique({
-        where: { uuid: payload.uuid },
-        include: { beneficiary: true },
-      });
-      if (!group || group.beneficiary.length === 0) {
-        throw new RpcException('No beneficiaries found in the specified group.');
-      }
-      const beneficiaryIds = group.beneficiary.map(b => b.id);
+  //     // Find group with uuid
+  //     const group = await prisma.beneficiaryGroups.findUnique({
+  //       where: { uuid: payload.uuid },
+  //       include: { beneficiary: true },
+  //     });
+  //     if (!group || group.beneficiary.length === 0) {
+  //       throw new RpcException('No beneficiaries found in the specified group.');
+  //     }
+  //     const beneficiaryIds = group.beneficiary.map(b => b.id);
 
-      // Calcualte total tokens required
-      const totalTokensToAdd = group.beneficiary.length * payload.tokens;
+  //     // Calcualte total tokens required
+  //     const totalTokensToAdd = group.beneficiary.length * payload.tokens;
 
-      // Create reserve token 
-      const reservetoken = await prisma.reserveToken.create({
-        data: {
-          groupId: payload.uuid,
-          title: payload.title,
-          numberOfTokens: totalTokensToAdd
-        }
-      })
+  //     // Create reserve token 
+  //     const reservetoken = await prisma.reserveToken.create({
+  //       data: {
+  //         groupId: payload.uuid,
+  //         title: payload.title,
+  //         numberOfTokens: totalTokensToAdd
+  //       }
+  //     })
 
-      // Create group token
-      await prisma.groupTokens.create({
-        data: {
-          groupId: payload.uuid,
-          totalTokensReserved: totalTokensToAdd
-        }
-      })
+  //     // Create group token
+  //     await prisma.groupTokens.create({
+  //       data: {
+  //         groupId: payload.uuid,
+  //         totalTokensReserved: totalTokensToAdd
+  //       }
+  //     })
 
-      // Update beneficiaries token
-      await prisma.beneficiary.updateMany({
-        where: { id: { in: beneficiaryIds } },
-        data: { benTokens: { increment: payload.tokens } },
-      });
+  //     // Update beneficiaries token
+  //     await prisma.beneficiary.updateMany({
+  //       where: { id: { in: beneficiaryIds } },
+  //       data: { benTokens: { increment: payload.tokens } },
+  //     });
 
-      // Update beneficiary group total tokens
-      await prisma.beneficiaryGroups.update({
-        where: { uuid: payload.uuid },
-        data: { tokensReserved: { increment: totalTokensToAdd } },
-      });
+  //     // Update beneficiary group total tokens
+  //     await prisma.beneficiaryGroups.update({
+  //       where: { uuid: payload.uuid },
+  //       data: { tokensReserved: { increment: totalTokensToAdd } },
+  //     });
 
-      return reservetoken;
-    })
-  }
+  //     return reservetoken;
+  //   })
+  // }
 
-  // Unused function (only for reference): using reserveTokenToGroup 
-  async assignTokenToGroup(payload: AddTokenToGroup) {
+  // // Unused function (only for reference): using reserveTokenToGroup 
+  // async assignTokenToGroup(payload: AddTokenToGroup) {
 
-    const aaContract = await createContractInstanceSign(
-      await getContractByName('AAPROJECT', this.prisma.setting),
-      this.prisma.setting
-    );
+  //   const aaContract = await createContractInstanceSign(
+  //     await getContractByName('AAPROJECT', this.prisma.setting),
+  //     this.prisma.setting
+  //   );
 
-    const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
-    const tokenAddress = tokenContractInfo.ADDRESS;
+  //   const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
+  //   const tokenAddress = tokenContractInfo.ADDRESS;
 
-    return this.prisma.$transaction(async (prisma) => {
-      const group = await prisma.beneficiaryGroups.findUnique({
-        where: { uuid: payload.uuid },
-        include: { beneficiary: true },
-      });
+  //   return this.prisma.$transaction(async (prisma) => {
+  //     const group = await prisma.beneficiaryGroups.findUnique({
+  //       where: { uuid: payload.uuid },
+  //       include: { beneficiary: true },
+  //     });
 
-      if (!group || group.beneficiary.length === 0) {
-        throw new RpcException('No beneficiaries found in the specified group.');
-      }
+  //     if (!group || group.beneficiary.length === 0) {
+  //       throw new RpcException('No beneficiaries found in the specified group.');
+  //     }
 
-      const beneficiaryIds = group.beneficiary.map(b => b.id);
+  //     const beneficiaryIds = group.beneficiary.map(b => b.id);
 
-      this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
+  //     this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
 
-      // Contract call
-      group.beneficiary.map(async (ben) => {
-        const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
-        console.log("Contract called with txn hash:", txn.hash);
-        return ben.id;
-      })
+  //     // Contract call
+  //     group.beneficiary.map(async (ben) => {
+  //       const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
+  //       console.log("Contract called with txn hash:", txn.hash);
+  //       return ben.id;
+  //     })
 
-      await prisma.beneficiary.updateMany({
-        where: { id: { in: beneficiaryIds } },
-        data: { benTokens: { increment: payload.tokens } },
-      });
+  //     await prisma.beneficiary.updateMany({
+  //       where: { id: { in: beneficiaryIds } },
+  //       data: { benTokens: { increment: payload.tokens } },
+  //     });
 
-      const totalTokensToAdd = group.beneficiary.length * payload.tokens;
-      const addTokensToGroup = await prisma.beneficiaryGroups.update({
-        where: { uuid: payload.uuid },
-        data: { tokensReserved: { increment: totalTokensToAdd } },
-      });
+  //     const totalTokensToAdd = group.beneficiary.length * payload.tokens;
+  //     const addTokensToGroup = await prisma.beneficiaryGroups.update({
+  //       where: { uuid: payload.uuid },
+  //       data: { tokensReserved: { increment: totalTokensToAdd } },
+  //     });
 
-      return addTokensToGroup;
-    })
+  //     return addTokensToGroup;
+  //   })
 
-  }
+  // }
 }
