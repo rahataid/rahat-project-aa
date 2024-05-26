@@ -79,8 +79,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async assignTokenToGroup(payload: AddTokenToGroup) {
-    // return this.beneficiaryService.reserveTokenToGroup(payload)
-    return "ok"
+    return this.beneficiaryService.reserveTokenToGroup(payload)
   }
   // ***** groups end ********** //
 }

@@ -150,73 +150,67 @@ export class BeneficiaryService {
     })
   }
 
-  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
-    const res = await this.prisma.vouchers.findUnique({
-      where: { name }
-    })
+  // async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
+  //   const res = await this.prisma.vouchers.findUnique({
+  //     where: { name }
+  //   })
 
-    const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
-    const vouchersRequested = noOfBen * tokens;
+  //   const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
+  //   const vouchersRequested = noOfBen * tokens;
 
-    if (remainingVouchers < vouchersRequested) {
-      throw new RpcException("Voucher not enough");
-    }
+  //   if (remainingVouchers < vouchersRequested) {
+  //     throw new RpcException("Voucher not enough");
+  //   }
 
-    await this.prisma.vouchers.update({
-      where: { name },
-      data: { assignedVouchers: { increment: vouchersRequested } }
-    })
-  }
-
-
-  // async reserveTokenToGroup(payload: AddTokenToGroup) {
-  //   return this.prisma.$transaction(async (prisma) => {
-
-  //     // Find group with uuid
-  //     const group = await prisma.beneficiaryGroups.findUnique({
-  //       where: { uuid: payload.uuid },
-  //       include: { beneficiary: true },
-  //     });
-  //     if (!group || group.beneficiary.length === 0) {
-  //       throw new RpcException('No beneficiaries found in the specified group.');
-  //     }
-  //     const beneficiaryIds = group.beneficiary.map(b => b.id);
-
-  //     // Calcualte total tokens required
-  //     const totalTokensToAdd = group.beneficiary.length * payload.tokens;
-
-  //     // Create reserve token 
-  //     const reservetoken = await prisma.reserveToken.create({
-  //       data: {
-  //         groupId: payload.uuid,
-  //         title: payload.title,
-  //         numberOfTokens: totalTokensToAdd
-  //       }
-  //     })
-
-  //     // Create group token
-  //     await prisma.groupTokens.create({
-  //       data: {
-  //         groupId: payload.uuid,
-  //         totalTokensReserved: totalTokensToAdd
-  //       }
-  //     })
-
-  //     // Update beneficiaries token
-  //     await prisma.beneficiary.updateMany({
-  //       where: { id: { in: beneficiaryIds } },
-  //       data: { benTokens: { increment: payload.tokens } },
-  //     });
-
-  //     // Update beneficiary group total tokens
-  //     await prisma.beneficiaryGroups.update({
-  //       where: { uuid: payload.uuid },
-  //       data: { tokensReserved: { increment: totalTokensToAdd } },
-  //     });
-
-  //     return reservetoken;
+  //   await this.prisma.vouchers.update({
+  //     where: { name },
+  //     data: { assignedVouchers: { increment: vouchersRequested } }
   //   })
   // }
+
+
+  async reserveTokenToGroup(payload: AddTokenToGroup) {
+    return this.prisma.$transaction(async (prisma) => {
+
+      const group = await this.getOneGroup(payload.beneficiaryGroupId as UUID);
+
+      if (!group || !group?.groupedBeneficiaries) {
+        throw new RpcException('No beneficiaries found in the specified group.');
+      }
+
+      // // Create reserve token 
+      // const reservetoken = await prisma.reserveToken.create({
+      //   data: {
+      //     groupId: payload.uuid,
+      //     title: payload.title,
+      //     numberOfTokens: totalTokensToAdd
+      //   }
+      // })
+
+      // // Create group token
+      // await prisma.groupTokens.create({
+      //   data: {
+      //     groupId: payload.uuid,
+      //     totalTokensReserved: totalTokensToAdd
+      //   }
+      // })
+
+      // // Update beneficiaries token
+      // await prisma.beneficiary.updateMany({
+      //   where: { id: { in: beneficiaryIds } },
+      //   data: { benTokens: { increment: payload.tokens } },
+      // });
+
+      // // Update beneficiary group total tokens
+      // await prisma.beneficiaryGroups.update({
+      //   where: { uuid: payload.uuid },
+      //   data: { tokensReserved: { increment: totalTokensToAdd } },
+      // });
+
+      // return reservetoken;
+      return "ok"
+    })
+  }
 
   // // Unused function (only for reference): using reserveTokenToGroup 
   // async assignTokenToGroup(payload: AddTokenToGroup) {

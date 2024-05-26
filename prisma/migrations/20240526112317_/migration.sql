@@ -32,20 +32,12 @@ CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "tokensReserved" INTEGER NOT NULL DEFAULT 0,
-    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
     "beneficiaryId" INTEGER,
 
     CONSTRAINT "tbl_beneficiaries_groups_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "tbl_vouchers" (
-    "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "totalVouchers" INTEGER NOT NULL DEFAULT 0,
-    "assignedVouchers" INTEGER NOT NULL DEFAULT 0
 );
 
 -- CreateTable
@@ -200,12 +192,6 @@ CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_vouchers_name_key" ON "tbl_vouchers"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_settings_name_key" ON "tbl_settings"("name");
