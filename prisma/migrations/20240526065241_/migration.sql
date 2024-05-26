@@ -61,6 +61,14 @@ CREATE TABLE "GroupTokens" (
 );
 
 -- CreateTable
+CREATE TABLE "ReserveToken" (
+    "uuid" TEXT NOT NULL,
+    "groupId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "numberOfTokens" INTEGER NOT NULL DEFAULT 0
+);
+
+-- CreateTable
 CREATE TABLE "tbl_vouchers" (
     "uuid" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -234,6 +242,9 @@ CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_gr
 CREATE UNIQUE INDEX "GroupTokens_uuid_key" ON "GroupTokens"("uuid");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ReserveToken_uuid_key" ON "ReserveToken"("uuid");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
 
 -- CreateIndex
@@ -289,6 +300,9 @@ CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStak
 
 -- AddForeignKey
 ALTER TABLE "GroupTokens" ADD CONSTRAINT "GroupTokens_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReserveToken" ADD CONSTRAINT "ReserveToken_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
