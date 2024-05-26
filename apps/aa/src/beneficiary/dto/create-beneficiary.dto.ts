@@ -15,7 +15,7 @@ export interface AddBeneficiaryGroups {
 
 export interface AddTokenToGroup {
   beneficiaryGroupId: string;
-  noOfTokens: number;
+  numberOfTokens: number;
   totalTokensReserved: number;
   title: string;
 }

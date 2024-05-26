@@ -31,13 +31,22 @@ CREATE TABLE "tbl_beneficiaries" (
 CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "tokensReserved" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
     "deletedAt" TIMESTAMP(3),
-    "beneficiaryId" INTEGER,
 
     CONSTRAINT "tbl_beneficiaries_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_beneficiaries_groups_tokens" (
+    "id" SERIAL NOT NULL,
+    "uuid" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "numberOfTokens" INTEGER NOT NULL DEFAULT 0,
+    "groupId" TEXT NOT NULL,
+
+    CONSTRAINT "tbl_beneficiaries_groups_tokens_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -194,6 +203,12 @@ CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "tbl_beneficiaries_groups_tokens_uuid_key" ON "tbl_beneficiaries_groups_tokens"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_beneficiaries_groups_tokens_groupId_key" ON "tbl_beneficiaries_groups_tokens"("groupId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tbl_settings_name_key" ON "tbl_settings"("name");
 
 -- CreateIndex
@@ -236,7 +251,7 @@ CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_Stakehold
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
 
 -- AddForeignKey
-ALTER TABLE "tbl_beneficiaries_groups" ADD CONSTRAINT "tbl_beneficiaries_groups_beneficiaryId_fkey" FOREIGN KEY ("beneficiaryId") REFERENCES "tbl_beneficiaries"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "tbl_beneficiaries_groups_tokens" ADD CONSTRAINT "tbl_beneficiaries_groups_tokens_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;

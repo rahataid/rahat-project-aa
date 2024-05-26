@@ -170,45 +170,45 @@ export class BeneficiaryService {
 
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
+    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } = payload
     return this.prisma.$transaction(async (prisma) => {
-
-      const group = await this.getOneGroup(payload.beneficiaryGroupId as UUID);
+      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
       if (!group || !group?.groupedBeneficiaries) {
         throw new RpcException('No beneficiaries found in the specified group.');
       }
 
-      // // Create reserve token 
-      // const reservetoken = await prisma.reserveToken.create({
-      //   data: {
-      //     groupId: payload.uuid,
-      //     title: payload.title,
-      //     numberOfTokens: totalTokensToAdd
-      //   }
-      // })
+      for (const member of group?.groupedBeneficiaries) {
+        const benf = await this.prisma.beneficiary.findUnique({
+          where: {
+            uuid: member?.beneficiaryId
+          }
+        })
+        if (benf.benTokens > 0) throw new RpcException('Token already assigned to beneficiary.')
+      }
 
-      // // Create group token
-      // await prisma.groupTokens.create({
-      //   data: {
-      //     groupId: payload.uuid,
-      //     totalTokensReserved: totalTokensToAdd
-      //   }
-      // })
+      const benfIds = group?.groupedBeneficiaries?.map((d: any) => d?.beneficiaryId)
 
-      // // Update beneficiaries token
-      // await prisma.beneficiary.updateMany({
-      //   where: { id: { in: beneficiaryIds } },
-      //   data: { benTokens: { increment: payload.tokens } },
-      // });
+      await this.prisma.beneficiary.updateMany({
+        where: {
+          uuid: {
+            in: benfIds
+          }
+        },
+        data: {
+          benTokens: numberOfTokens
+        }
+      })
 
-      // // Update beneficiary group total tokens
-      // await prisma.beneficiaryGroups.update({
-      //   where: { uuid: payload.uuid },
-      //   data: { tokensReserved: { increment: totalTokensToAdd } },
-      // });
+      await this.prisma.beneficiaryGroupTokens.create({
+        data: {
+          title,
+          groupId: beneficiaryGroupId,
+          numberOfTokens
+        }
+      })
 
-      // return reservetoken;
-      return "ok"
+      return group
     })
   }
 
