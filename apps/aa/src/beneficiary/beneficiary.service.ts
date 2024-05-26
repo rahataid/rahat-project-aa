@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
@@ -59,80 +59,34 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage } = dto;
-
-    const query = {
-      where: {
-        isDeleted: false,
-      },
-      include: {
-        beneficiary: true,
-      },
-    };
-
-    // this.prisma.beneficiaryGroups.findFirst({
-    //   include: {
-    //     beneficiary
+    // const benfGroups = await this.prisma.benGroups.findMany({
+    //   where: {
+    //     deletedAt: null
     //   }
     // })
+    const { page, perPage, sort, order } = dto;
 
-    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
-      page,
-      perPage,
-    });
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
 
-    const groupsMeta = benfGroups.meta
-    const groups = benfGroups.data as any
-
-    for (const group of groups) {
-      const benfIds = group?.beneficiary?.map((d) => d.uuid)
-      const benfData = this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-        { data: benfIds }
-      ).subscribe({
-        next: (data) => {
-          console.log(data);
-          return data
+    const benfGroups = await paginate(
+      this.prisma.benGroups,
+      {
+        where: {
+          deletedAt: null
         },
-        error: (err) => {
-          throw new RpcException('Error fetching beneficiary data.')
-        }
-      })
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
 
-      console.log(benfData);
-
-
-      // console.log(benfIds);
-    }
-    // console.log(groups);
-
-    return "ok"
-
-    // const groups = awa
-
-    // const orderBy: Record<string, 'asc' | 'desc'> = {};
-    // orderBy[sort] = order;
-
-
-
-    // const projectData = await paginate(
-    //   this.rsprisma.beneficiary,
-    //   {
-    //     where: {
-    //       deletedAt: null
-    //     },
-    //     // orderBy
-    //   },
-    //   {
-    //     page,
-    //     perPage
-    //   }
-    // )
-
-    // return this.client.send(
-    //   { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-    //   projectData
-    // );
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+      benfGroups
+    );
   }
 
   async findByUUID(uuid: UUID) {
@@ -187,6 +141,17 @@ export class BeneficiaryService {
       },
     });
   }
+
+  // merge to main group
+  async addGroupToProject(payload: AssignBenfGroupToProject) {
+    const { beneficiaryGroupData } = payload
+    return this.prisma.benGroups.create({
+      data: {
+        uuid: beneficiaryGroupData.uuid
+      }
+    })
+  }
+  // merge to main group
 
   // Check voucher availability
   async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {

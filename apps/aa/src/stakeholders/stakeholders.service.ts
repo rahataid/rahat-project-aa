@@ -6,6 +6,7 @@ import {
   AddStakeholdersGroups,
   FindStakeholdersGroup,
   GetAllGroups,
+  GetOneGroup,
   GetStakeholdersData,
   RemoveStakeholdersData,
   RemoveStakeholdersGroup,
@@ -175,6 +176,18 @@ export class StakeholdersService {
     return paginate(this.prisma.stakeholdersGroups, query, {
       page,
       perPage,
+    });
+  }
+
+  async getOneGroup(payload: GetOneGroup) {
+    const { uuid } = payload;
+    return await this.prisma.stakeholdersGroups.findUnique({
+      where: {
+        uuid: uuid,
+      },
+      include: {
+        stakeholders: true,
+      },
     });
   }
 

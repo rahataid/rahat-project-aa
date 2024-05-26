@@ -53,6 +53,10 @@ export interface GetAllGroups {
   perPage: number;
 }
 
+export interface GetOneGroup {
+  uuid: string;
+}
+
 export interface RemoveStakeholdersGroup {
   uuid: string;
 }
