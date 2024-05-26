@@ -32,12 +32,21 @@ CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "groupTokens" INTEGER NOT NULL DEFAULT 0,
+    "tokensReserved" INTEGER NOT NULL DEFAULT 0,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
     CONSTRAINT "tbl_beneficiaries_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GroupTokens" (
+    "uuid" TEXT NOT NULL,
+    "groupId" TEXT NOT NULL,
+    "totalTokensReserved" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3)
 );
 
 -- CreateTable
@@ -142,7 +151,7 @@ CREATE TABLE "tbl_activities" (
     "source" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "status" "ActivitiesStatus" NOT NULL DEFAULT 'NOT_STARTED',
-    "activityType" "ActivityTypes" NOT NULL DEFAULT 'GENERAL',
+    "isAutomated" BOOLEAN NOT NULL,
     "activityDocuments" JSONB,
     "activityCommunication" JSONB,
     "activityPayout" JSONB,
@@ -201,17 +210,14 @@ CREATE TABLE "_StakeholdersToStakeholdersGroups" (
     "B" INTEGER NOT NULL
 );
 
--- CreateTable
-CREATE TABLE "_ActivitiesToTriggers" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GroupTokens_uuid_key" ON "GroupTokens"("uuid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
@@ -267,11 +273,8 @@ CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_Stakehold
 -- CreateIndex
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
 
--- CreateIndex
-CREATE UNIQUE INDEX "_ActivitiesToTriggers_AB_unique" ON "_ActivitiesToTriggers"("A", "B");
-
--- CreateIndex
-CREATE INDEX "_ActivitiesToTriggers_B_index" ON "_ActivitiesToTriggers"("B");
+-- AddForeignKey
+ALTER TABLE "GroupTokens" ADD CONSTRAINT "GroupTokens_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -299,9 +302,3 @@ ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToS
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_stakeholders_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_activities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_ActivitiesToTriggers" ADD CONSTRAINT "_ActivitiesToTriggers_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_triggers"("id") ON DELETE CASCADE ON UPDATE CASCADE;

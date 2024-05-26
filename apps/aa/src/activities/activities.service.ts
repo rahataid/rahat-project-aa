@@ -36,7 +36,7 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    const { activityCommunication, title, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
+    const { activityCommunication, title, isAutomated, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
 
     const createActivityCommunicationPayload = []
     const createActivityPayoutPayload = []
@@ -70,6 +70,7 @@ export class ActivitiesService {
         leadTime,
         responsibility,
         source,
+        isAutomated,
         category: {
           connect: { uuid: categoryId }
         },
@@ -270,7 +271,7 @@ export class ActivitiesService {
   }
 
   async update(payload: UpdateActivityData) {
-    const { uuid, activityCommunication, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
+    const { uuid, activityCommunication, isAutomated, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
     const activity = await this.prisma.activities.findUnique({
       where: {
         uuid: uuid
@@ -286,6 +287,15 @@ export class ActivitiesService {
         switch (comms.groupType) {
           case 'STAKEHOLDERS':
             if (comms.campaignId) {
+              const campaginDetails = await this.communicationService.communication.getCampaign(Number(comms.campaignId))
+              const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
+
+              await this.communicationService.communication.updateCampaign(comms.campaignId, {
+                audienceIds: audienceIds,
+                details: JSON.parse(JSON.stringify({ message: comms.message })),
+                name: title || activity.title
+              })
+
               updateActivityCommunicationPayload.push(comms)
               break;
             }
@@ -316,6 +326,7 @@ export class ActivitiesService {
         source: source || activity.source,
         responsibility: responsibility || activity.responsibility,
         leadTime: leadTime || activity.leadTime,
+        isAutomated: isAutomated || activity.isAutomated,
         phase: {
           connect: {
             uuid: phaseId || activity.phaseId

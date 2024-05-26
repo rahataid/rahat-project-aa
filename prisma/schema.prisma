@@ -67,23 +67,50 @@ model BeneficiaryGroups {
 
   beneficiary Beneficiary[]
 
-  groupTokens Int @default(0)
+  tokensReserved Int @default(0)
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
+  groupTokens GroupTokens[]
+  reserveTokens ReserveToken[]
+
   @@map("tbl_beneficiaries_groups")
 }
 
-model Vouchers {
+model GroupTokens {
   uuid String @unique @default(uuid())
-  name String @unique
-  totalVouchers Int @default(0)
-  assignedVouchers Int @default(0)
+  groupId String
+  totalTokensReserved Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  beneficiaryGroup    BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+}
+
+model ReserveToken {
+  uuid String @unique @default(uuid())
+  groupId String
+
+  title String
+
+  numberOfTokens Int @default(0)
+  
+  benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+}
+
+model Vouchers {
+  uuid             String @unique @default(uuid())
+  name             String @unique
+  totalVouchers    Int    @default(0)
+  assignedVouchers Int    @default(0)
 
   @@map("tbl_vouchers")
 }
+
+
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
 
@@ -208,13 +235,14 @@ model Activities {
 
   status ActivitiesStatus @default(NOT_STARTED)
 
-  activityType ActivityTypes @default(GENERAL)
+  isAutomated Boolean
+  // activityType ActivityTypes @default(GENERAL)
 
   activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
   activityPayout        Json? @db.JsonB()
 
-  triggers Triggers[]
+  // triggers Triggers[]
 
   isDeleted Boolean @default(false)
 
@@ -245,7 +273,7 @@ model Triggers {
   hazardTypeId String?
 
   // datas      TriggersData[]
-  activities Activities[]
+  // activities Activities[]
 
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
