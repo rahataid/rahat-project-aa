@@ -78,13 +78,38 @@ model BeneficiaryGroups {
 
   beneficiary Beneficiary[]
 
-  groupTokens Int @default(0)
+  tokensReserved Int @default(0)
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
+  groupTokens GroupTokens[]
+  reserveTokens ReserveToken[]
+
   @@map("tbl_beneficiaries_groups")
+}
+
+model GroupTokens {
+  uuid String @unique @default(uuid())
+  groupId String
+  totalTokensReserved Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  beneficiaryGroup    BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+}
+
+model ReserveToken {
+  uuid String @unique @default(uuid())
+  groupId String
+
+  title String
+
+  numberOfTokens Int @default(0)
+  
+  benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 }
 
 model Vouchers {
@@ -95,6 +120,8 @@ model Vouchers {
 
   @@map("tbl_vouchers")
 }
+
+
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
 

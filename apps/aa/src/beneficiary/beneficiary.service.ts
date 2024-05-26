@@ -7,6 +7,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { title } from 'process';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -169,11 +170,59 @@ export class BeneficiaryService {
       where: { name },
       data: { assignedVouchers: { increment: vouchersRequested } }
     })
-
   }
 
 
-  // Assign token to beneficiary and group
+  async reserveTokenToGroup (payload: AddTokenToGroup) {
+    return this.prisma.$transaction(async (prisma) => {
+
+      // Find group with uuid
+      const group = await prisma.beneficiaryGroups.findUnique({
+        where: { uuid: payload.uuid },
+        include: { beneficiary: true },
+      });
+      if (!group || group.beneficiary.length === 0) {
+        throw new RpcException('No beneficiaries found in the specified group.');
+      }
+      const beneficiaryIds = group.beneficiary.map(b => b.id);
+
+      // Calcualte total tokens required
+      const totalTokensToAdd = group.beneficiary.length * payload.tokens;
+
+      // Create reserve token 
+      const reservetoken = await prisma.reserveToken.create({
+        data: {
+          groupId: payload.uuid,
+          title: payload.title,
+          numberOfTokens: totalTokensToAdd
+        }
+      })
+
+      // Create group token
+      await prisma.groupTokens.create({
+        data: {
+          groupId: payload.uuid,
+          totalTokensReserved: totalTokensToAdd
+        }
+      })
+
+      // Update beneficiaries token
+      await prisma.beneficiary.updateMany({
+        where: { id: { in: beneficiaryIds } },
+        data: { benTokens: { increment: payload.tokens } },
+      });
+
+      // Update beneficiary group total tokens
+      await prisma.beneficiaryGroups.update({
+        where: { uuid: payload.uuid },
+        data: { tokensReserved: { increment: totalTokensToAdd } },
+      });
+
+      return reservetoken;
+    })
+  }
+
+  // Unused function (only for reference): using reserveTokenToGroup 
   async assignTokenToGroup(payload: AddTokenToGroup) {
 
     const aaContract = await createContractInstanceSign(
@@ -213,7 +262,7 @@ export class BeneficiaryService {
       const totalTokensToAdd = group.beneficiary.length * payload.tokens;
       const addTokensToGroup = await prisma.beneficiaryGroups.update({
         where: { uuid: payload.uuid },
-        data: { groupTokens: { increment: totalTokensToAdd } },
+        data: { tokensReserved: { increment: totalTokensToAdd } },
       });
 
       return addTokensToGroup;
