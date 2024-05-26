@@ -58,80 +58,34 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage } = dto;
-
-    const query = {
-      where: {
-        isDeleted: false,
-      },
-      include: {
-        beneficiary: true,
-      },
-    };
-
-    // this.prisma.beneficiaryGroups.findFirst({
-    //   include: {
-    //     beneficiary
+    // const benfGroups = await this.prisma.benGroups.findMany({
+    //   where: {
+    //     deletedAt: null
     //   }
     // })
+    const { page, perPage, sort, order } = dto;
 
-    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
-      page,
-      perPage,
-    });
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
 
-    const groupsMeta = benfGroups.meta
-    const groups = benfGroups.data as any
-
-    for (const group of groups) {
-      const benfIds = group?.beneficiary?.map((d) => d.uuid)
-      const benfData = this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-        { data: benfIds }
-      ).subscribe({
-        next: (data) => {
-          console.log(data);
-          return data
+    const benfGroups = await paginate(
+      this.prisma.benGroups,
+      {
+        where: {
+          deletedAt: null
         },
-        error: (err) => {
-          throw new RpcException('Error fetching beneficiary data.')
-        }
-      })
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
 
-      console.log(benfData);
-
-
-      // console.log(benfIds);
-    }
-    // console.log(groups);
-
-    return "ok"
-
-    // const groups = awa
-
-    // const orderBy: Record<string, 'asc' | 'desc'> = {};
-    // orderBy[sort] = order;
-
-
-
-    // const projectData = await paginate(
-    //   this.rsprisma.beneficiary,
-    //   {
-    //     where: {
-    //       deletedAt: null
-    //     },
-    //     // orderBy
-    //   },
-    //   {
-    //     page,
-    //     perPage
-    //   }
-    // )
-
-    // return this.client.send(
-    //   { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-    //   projectData
-    // );
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+      benfGroups
+    );
   }
 
   async findByUUID(uuid: UUID) {
