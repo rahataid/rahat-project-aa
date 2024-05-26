@@ -75,7 +75,7 @@ export class BeneficiaryController {
 
 
   @MessagePattern({
-    cmd: JOBS.BENEFICIARY.ASSIGN_TOKEN_TO_GROUP,
+    cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
   async assignTokenToGroup(payload: AddTokenToGroup) {

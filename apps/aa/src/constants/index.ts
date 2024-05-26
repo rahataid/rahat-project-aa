@@ -38,7 +38,7 @@ export const JOBS = {
     BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
     REMOVE: 'rahat.jobs.beneficiary.remove',
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
-    ASSIGN_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.assign_token_to_group',
+    RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project'
   },

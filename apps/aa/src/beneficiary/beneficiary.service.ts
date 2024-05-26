@@ -171,7 +171,7 @@ export class BeneficiaryService {
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } = payload
-    return this.prisma.$transaction(async (prisma) => {
+    return this.prisma.$transaction(async () => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
       if (!group || !group?.groupedBeneficiaries) {
@@ -204,7 +204,7 @@ export class BeneficiaryService {
         data: {
           title,
           groupId: beneficiaryGroupId,
-          numberOfTokens
+          numberOfTokens: totalTokensReserved
         }
       })
 
