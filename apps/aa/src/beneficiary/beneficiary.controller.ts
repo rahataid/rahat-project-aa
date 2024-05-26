@@ -69,17 +69,28 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
   })
-  async getAllGroups(payload: AddBeneficiaryGroups) {
+  async getAllGroups(payload) {
     return this.beneficiaryService.getAllGroups(payload)
   }
+  // ***** groups end ********** //
 
 
+  // ***** groups fund mgmt ********** //
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  async assignTokenToGroup(payload: AddTokenToGroup) {
+  async reserveTokenToGroup(payload: AddTokenToGroup) {
     return this.beneficiaryService.reserveTokenToGroup(payload)
   }
-  // ***** groups end ********** //
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ALL_TOKEN_RESERVATION,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getTokenReservations(payload) {
+    return this.beneficiaryService.getAllTokenReservations(payload)
+  }
+
+  // ***** groups fund mgmt end ********** //
 }

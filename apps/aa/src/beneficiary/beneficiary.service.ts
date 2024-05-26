@@ -12,6 +12,16 @@ import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
+interface DataItem {
+  groupId: UUID;
+  [key: string]: any;
+}
+
+interface PaginateResult<T> {
+  data: T[];
+  meta: any;
+}
+
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
@@ -150,25 +160,6 @@ export class BeneficiaryService {
     })
   }
 
-  // async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
-  //   const res = await this.prisma.vouchers.findUnique({
-  //     where: { name }
-  //   })
-
-  //   const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
-  //   const vouchersRequested = noOfBen * tokens;
-
-  //   if (remainingVouchers < vouchersRequested) {
-  //     throw new RpcException("Voucher not enough");
-  //   }
-
-  //   await this.prisma.vouchers.update({
-  //     where: { name },
-  //     data: { assignedVouchers: { increment: vouchersRequested } }
-  //   })
-  // }
-
-
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } = payload
     return this.prisma.$transaction(async () => {
@@ -210,6 +201,42 @@ export class BeneficiaryService {
 
       return group
     })
+  }
+
+  async getAllTokenReservations(dto) {
+    const { page, perPage, sort, order } = dto;
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
+
+    const { data, meta }: PaginateResult<DataItem> = await paginate(
+      this.prisma.beneficiaryGroupTokens,
+      {
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
+
+    const formattedData: Array<DataItem & { group: ReturnType<typeof this.getOneGroup> }> = [];
+
+    for (const d of data) {
+      const group = await this.getOneGroup(d['groupId'] as UUID)
+      formattedData.push(
+        {
+          ...d,
+          group
+        }
+      )
+    }
+
+    return {
+      data: formattedData,
+      meta
+    }
   }
 
   // // Unused function (only for reference): using reserveTokenToGroup 
