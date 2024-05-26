@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { StakeholdersService } from './stakeholders.service';
-import { AddStakeholdersData, AddStakeholdersGroups, GetAllGroups, GetStakeholdersData, RemoveStakeholdersData, RemoveStakeholdersGroup, UpdateStakeholdersGroups } from './dto';
+import { AddStakeholdersData, AddStakeholdersGroups, GetAllGroups, GetOneGroup, GetStakeholdersData, RemoveStakeholdersData, RemoveStakeholdersGroup, UpdateStakeholdersGroups } from './dto';
 
 @Controller()
 export class StakeholdersController {
@@ -75,6 +75,14 @@ export class StakeholdersController {
     })
     async getAllGroups(payload: GetAllGroups) {
         return this.stakeholdersService.getAllGroups(payload)
+    }
+
+    @MessagePattern({
+        cmd: JOBS.STAKEHOLDERS.GET_ONE_GROUP,
+        uuid: process.env.PROJECT_ID,
+    })
+    async getOneGroup(payload: GetOneGroup) {
+        return this.stakeholdersService.getOneGroup(payload)
     }
     // ***** stakeholders groups end ********** //
 
