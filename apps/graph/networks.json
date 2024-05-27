@@ -3,6 +3,12 @@
     "AAProject": {
       "address": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
       "startBlock": 7390932
+    },
+    "RahatDonor": {
+      "address": "0x342328b34825687834d3eB4f604E7271463160a7"
+    },
+    "AAToken": {
+      "address": "0xE872879842DA906F497fd721410Df859d51B9ced"
     }
   }
 }
