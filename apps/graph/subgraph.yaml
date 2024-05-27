@@ -1,0 +1,50 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AAProject
+    network: polygon-amoy
+    source:
+      address: "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc"
+      abi: AAProject
+      startBlock: 7390932
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - BeneficiaryAdded
+        - BeneficiaryRemoved
+        - ClaimAssigned
+        - TokenBudgetDecrease
+        - TokenBudgetIncrease
+        - TokenReceived
+        - TokenRegistered
+        - TokenTransfer
+        - VendorUpdated
+      abis:
+        - name: AAProject
+          file: ./abis/AAProject.json
+      eventHandlers:
+        - event: BeneficiaryAdded(indexed address)
+          handler: handleBeneficiaryAdded
+        - event: BeneficiaryRemoved(indexed address)
+          handler: handleBeneficiaryRemoved
+        - event: ClaimAssigned(indexed address,indexed address,indexed address)
+          handler: handleClaimAssigned
+        - event: TokenBudgetDecrease(indexed address,uint256)
+          handler: handleTokenBudgetDecrease
+        - event: TokenBudgetIncrease(indexed address,uint256)
+          handler: handleTokenBudgetIncrease
+        - event: TokenReceived(indexed address,indexed address,uint256)
+          handler: handleTokenReceived
+        - event: TokenRegistered(indexed address)
+          handler: handleTokenRegistered
+        - event: TokenTransfer(indexed address,indexed address,uint256)
+          handler: handleTokenTransfer
+        - event: VendorUpdated(indexed address,bool)
+          handler: handleVendorUpdated
+      file: ./src/aa-project.ts
