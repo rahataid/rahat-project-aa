@@ -149,9 +149,9 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         uint256 _tokenAssigned,
         address _assigner
     ) private {
-        uint256 remainingBudget = tokenBudget(_tokenAddress);
-        require(remainingBudget > _tokenAssigned, 'token budget exceed');
+        require(benTokens[_beneficiary] >= _tokenAssigned, 'not enough balance');
         IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
+        benTokens[_beneficiary] = benTokens[_beneficiary] - _tokenAssigned;
         emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
     }
 
