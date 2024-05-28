@@ -1,9 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
-import { DataSource, Phase } from "@prisma/client";
 import { RpcException } from "@nestjs/microservices";
-import { CommunicationService } from '@rumsan/communication/services/communication.client';
 import { InjectQueue } from "@nestjs/bull";
 import { BQUEUE, JOBS } from "../constants";
 import { Queue } from "bull";
@@ -12,21 +10,15 @@ import { BeneficiaryService } from "../beneficiary/beneficiary.service";
 @Injectable()
 export class PhasesService {
   private readonly logger = new Logger(PhasesService.name);
-  private communicationService: CommunicationService;
 
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly beneficiaryService: BeneficiaryService,
     @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
-  ) {
-    this.communicationService = new CommunicationService({
-      baseURL: this.configService.get('COMMUNICATION_URL'),
-      headers: {
-        appId: this.configService.get('COMMUNICATION_APP_ID'),
-      },
-    });
-  }
+    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
+  ) { }
 
   async getAll() {
     return this.prisma.phases.findMany()
@@ -83,7 +75,6 @@ export class PhasesService {
   }
 
   async activatePhase(uuid: string) {
-    console.log("in activate phase");
     const phaseDetails = await this.prisma.phases.findUnique({
       where: {
         uuid: uuid
@@ -104,7 +95,7 @@ export class PhasesService {
     for (const activity of phaseActivities) {
       const activityComms = JSON.parse(JSON.stringify(activity.activityCommunication))
       for (const comm of activityComms) {
-        this.triggerQueue.add(JOBS.TRIGGERS.COMMS_TRIGGER, comm?.campaignId, {
+        this.communicationQueue.add(JOBS.COMMUNICATION.TRIGGER, comm?.campaignId, {
           attempts: 3,
           removeOnComplete: true,
           backoff: {
@@ -123,14 +114,12 @@ export class PhasesService {
       })
     }
 
-    if (phaseDetails.name === 'READINESS') {
-      console.log("readiness triggered");
+    // ASSIGN TOKENS ON ACTIVATION, REFACTOR TO GENERIC SOLUTION
+    if (phaseDetails.name === 'ACTIVATION') {
       const allBenfs = await this.beneficiaryService.getAllBenfs()
-      console.log("fetched all benfs");
       for (const benf of allBenfs) {
         if (benf.benTokens) {
-          console.log("sending queue msg");
-          this.triggerQueue.add(JOBS.TRIGGERS.PAYOUT_ASSIGN_TRIGGER, {
+          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, {
             benTokens: benf.benTokens,
             wallet: benf.walletAddress
           }, {

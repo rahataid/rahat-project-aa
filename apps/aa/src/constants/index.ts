@@ -64,7 +64,9 @@ export const JOBS = {
     ACTIVATE: 'aa.jobs.triggers.activate',
     REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
-    PAYOUT_ASSIGN_TRIGGER: 'aa.jobs.triggers.payoutAssignTrigger'
+  },
+  PAYOUT: {
+    ASSIGN_TOKEN: 'aa.jobs.payout.assignToken'
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -121,5 +123,7 @@ export const EVENTS = {
 
 export const BQUEUE = {
   SCHEDULE: 'SCHEDULE',
-  TRIGGER: 'TRIGGER'
+  TRIGGER: 'TRIGGER',
+  CONTRACT: 'CONTRACT',
+  COMMUNICATION: 'COMMUNICATION'
 };

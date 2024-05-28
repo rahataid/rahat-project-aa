@@ -5,9 +5,11 @@ import { TriggerProcessor } from "./trigger.processor";
 import { PhasesModule } from "../phases/phases.module";
 import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
 import { PrismaService } from "@rumsan/prisma";
+import { ContractProcessor } from "./contract.processor";
+import { CommunicationProcessor } from "./communication.processor";
 
 @Module({
     imports: [DataSourceModule, PhasesModule, BeneficiaryModule],
-    providers: [ScheduleProcessor, TriggerProcessor, PrismaService]
+    providers: [ScheduleProcessor, TriggerProcessor, PrismaService, ContractProcessor, CommunicationProcessor]
 })
 export class ProcessorsModule { }

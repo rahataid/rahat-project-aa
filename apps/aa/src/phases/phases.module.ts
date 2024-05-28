@@ -12,6 +12,12 @@ import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
         BullModule.registerQueue({
             name: BQUEUE.TRIGGER,
         }),
+        BullModule.registerQueue({
+            name: BQUEUE.CONTRACT,
+        }),
+        BullModule.registerQueue({
+            name: BQUEUE.COMMUNICATION,
+        }),
         BeneficiaryModule
     ],
     controllers: [PhasesController],
