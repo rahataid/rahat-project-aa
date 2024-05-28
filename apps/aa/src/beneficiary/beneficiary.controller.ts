@@ -100,5 +100,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.getOneTokenReservation(payload)
   }
 
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_RESERVATION_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getReservationStats(payload) {
+    return this.beneficiaryService.getReservationStats(payload)
+  }
+
   // ***** groups fund mgmt end ********** //
 }

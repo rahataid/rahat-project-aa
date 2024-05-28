@@ -257,6 +257,17 @@ export class BeneficiaryService {
     }
   }
 
+  async getReservationStats(payload) {
+    const totalReservedTokens = await this.prisma.beneficiary.aggregate({
+      _sum: {
+        benTokens: true
+      }
+    })
+    return {
+      totalReservedTokens
+    }
+  }
+
   // // Unused function (only for reference): using reserveTokenToGroup 
   // async assignTokenToGroup(payload: AddTokenToGroup) {
 

@@ -42,7 +42,8 @@ export const JOBS = {
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
-    GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation'
+    GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
+    GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats'
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
