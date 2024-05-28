@@ -45,11 +45,14 @@ export class TriggerProcessor {
       }
 
       const aaContract = await this.createContractInstanceSign('AAPROJECT')
-      console.log(aaContract);
-      const aa = aaContract.totalClaimsAssgined()
-      console.log("contract response", aa);
-      // const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens);
-      // this.logger.log("contract called with txn hash:", txn.hash);
+      const gasPrice = ethers.parseUnits('50', 'gwei')
+      // console.log(aaContract);
+      // const aa = await aaContract.totalClaimsAssigned()
+      // console.log("contract response", aa);
+      const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens, {
+        gasPrice: gasPrice
+      });
+      this.logger.log("contract called with txn hash:", txn.hash);
       return "ok"
     } catch (err) {
       console.log(err);

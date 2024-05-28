@@ -22,10 +22,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         address indexed assigner
     );
 
-    event BenTokensAssigned(
-      address indexed beneficiary,
-      uint indexed amount,
-    )
+    event BenTokensAssigned(address indexed beneficiary, uint indexed amount);
 
     /// @dev Interface ID for IAAProject
     bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
@@ -102,9 +99,6 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         _tokenBudgetIncrease(_tokenAddress, _amount);
     }
 
-
-
-
     // region *****Beneficiary Functions *****//
     ///@notice function to assign tokens to beneficiaries
     ///@param _address address of the beneficiary
@@ -114,21 +108,21 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         uint _amount
     ) public onlyAdmin {
         require(
-          IERC20(defaultToken).balanceOf(address(this)) >= totalClaimsAssigned() + _amount,
-          'not enough tokens'
-        )
+            IERC20(defaultToken).balanceOf(address(this)) >=
+                totalClaimsAssigned() + _amount,
+            'not enough tokens'
+        );
         _addBeneficiary(_address);
         benTokens[_address] = benTokens[_address] + _amount;
     }
 
     ///@notice function to add beneficiaries
-    ///@param _address address of the beneficiary
     ///@dev can only be called by project admin when project is open
     function totalClaimsAssigned() public view returns (uint _totalClaims) {
         for (uint i = 0; i < _beneficiaries.length(); i++) {
-          _totalClaims += benTokens[_beneficiaries.at(i)];
+            _totalClaims += benTokens[_beneficiaries.at(i)];
         }
-     }
+    }
 
     ///@notice function to remove beneficiaries
     ///@param _address address of the beneficiary to be removed
@@ -149,7 +143,10 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         uint256 _tokenAssigned,
         address _assigner
     ) private {
-        require(benTokens[_beneficiary] >= _tokenAssigned, 'not enough balance');
+        require(
+            benTokens[_beneficiary] >= _tokenAssigned,
+            'not enough balance'
+        );
         IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
         benTokens[_beneficiary] = benTokens[_beneficiary] - _tokenAssigned;
         emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
@@ -160,12 +157,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         uint256 _tokenAssigned
     ) public onlyAdmin {
         // require(TriggerManager.hasTriggered(), 'distribution not triggered');
-        _assignClaims(
-            _beneficiary,
-             defaultToken,
-            _tokenAssigned,
-            _msgSender()
-        );
+        _assignClaims(_beneficiary, defaultToken, _tokenAssigned, _msgSender());
     }
 
     // #endregion
