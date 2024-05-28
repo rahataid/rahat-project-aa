@@ -114,7 +114,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         uint _amount
     ) public onlyAdmin {
         require(
-          IERC20(defaultToken).balanceOf(address(this)) >= totalClaimsAssgined() + _amount,
+          IERC20(defaultToken).balanceOf(address(this)) >= totalClaimsAssigned() + _amount,
           'not enough tokens'
         )
         _addBeneficiary(_address);
@@ -124,7 +124,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
     ///@notice function to add beneficiaries
     ///@param _address address of the beneficiary
     ///@dev can only be called by project admin when project is open
-    function totalClaimsAssgined() public view returns (uint _totalClaims) {
+    function totalClaimsAssigned() public view returns (uint _totalClaims) {
         for (uint i = 0; i < _beneficiaries.length(); i++) {
           _totalClaims += benTokens[_beneficiaries.at(i)];
         }

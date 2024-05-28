@@ -4,6 +4,10 @@ import { PrismaService } from "@rumsan/prisma";
 import { DataSource, Phase } from "@prisma/client";
 import { RpcException } from "@nestjs/microservices";
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
+import { InjectQueue } from "@nestjs/bull";
+import { BQUEUE, JOBS } from "../constants";
+import { Queue } from "bull";
+import { BeneficiaryService } from "../beneficiary/beneficiary.service";
 
 @Injectable()
 export class PhasesService {
@@ -12,7 +16,9 @@ export class PhasesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly beneficiaryService: BeneficiaryService,
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -77,6 +83,7 @@ export class PhasesService {
   }
 
   async activatePhase(uuid: string) {
+    console.log("in activate phase");
     const phaseDetails = await this.prisma.phases.findUnique({
       where: {
         uuid: uuid
@@ -97,7 +104,14 @@ export class PhasesService {
     for (const activity of phaseActivities) {
       const activityComms = JSON.parse(JSON.stringify(activity.activityCommunication))
       for (const comm of activityComms) {
-        await this.communicationService.communication.triggerCampaign(comm?.campaignId)
+        this.triggerQueue.add(JOBS.TRIGGERS.COMMS_TRIGGER, comm?.campaignId, {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
       }
       await this.prisma.activities.update({
         where: {
@@ -107,6 +121,28 @@ export class PhasesService {
           status: 'COMPLETED'
         }
       })
+    }
+
+    if (phaseDetails.name === 'READINESS') {
+      console.log("readiness triggered");
+      const allBenfs = await this.beneficiaryService.getAllBenfs()
+      console.log("fetched all benfs");
+      for (const benf of allBenfs) {
+        if (benf.benTokens) {
+          console.log("sending queue msg");
+          this.triggerQueue.add(JOBS.TRIGGERS.PAYOUT_ASSIGN_TRIGGER, {
+            benTokens: benf.benTokens,
+            wallet: benf.walletAddress
+          }, {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          });
+        }
+      }
     }
 
     return this.prisma.phases.update({
