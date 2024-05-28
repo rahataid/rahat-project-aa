@@ -19,7 +19,7 @@ class ProjectFundManagemet extends ContractLib {
 async function main() {
     const projectFundManagemet = new ProjectFundManagemet();
     await projectFundManagemet.fundProject(10000);
-    console.log("Minting rahat tokens voucher")
+    console.log("Minting rahat tokens.")
     process.exit(0);
 }
 main();

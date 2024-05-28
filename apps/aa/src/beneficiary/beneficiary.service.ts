@@ -33,6 +33,10 @@ export class BeneficiaryService {
     this.rsprisma = prisma.rsclient;
   }
 
+  async getAllBenfs() {
+    return this.prisma.beneficiary.findMany()
+  }
+
   async create(dto: CreateBeneficiaryDto) {
     return this.rsprisma.beneficiary.create({
       data: dto,
@@ -267,52 +271,4 @@ export class BeneficiaryService {
       totalReservedTokens
     }
   }
-
-  // // Unused function (only for reference): using reserveTokenToGroup 
-  // async assignTokenToGroup(payload: AddTokenToGroup) {
-
-  //   const aaContract = await createContractInstanceSign(
-  //     await getContractByName('AAPROJECT', this.prisma.setting),
-  //     this.prisma.setting
-  //   );
-
-  //   const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
-  //   const tokenAddress = tokenContractInfo.ADDRESS;
-
-  //   return this.prisma.$transaction(async (prisma) => {
-  //     const group = await prisma.beneficiaryGroups.findUnique({
-  //       where: { uuid: payload.uuid },
-  //       include: { beneficiary: true },
-  //     });
-
-  //     if (!group || group.beneficiary.length === 0) {
-  //       throw new RpcException('No beneficiaries found in the specified group.');
-  //     }
-
-  //     const beneficiaryIds = group.beneficiary.map(b => b.id);
-
-  //     this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
-
-  //     // Contract call
-  //     group.beneficiary.map(async (ben) => {
-  //       const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
-  //       console.log("Contract called with txn hash:", txn.hash);
-  //       return ben.id;
-  //     })
-
-  //     await prisma.beneficiary.updateMany({
-  //       where: { id: { in: beneficiaryIds } },
-  //       data: { benTokens: { increment: payload.tokens } },
-  //     });
-
-  //     const totalTokensToAdd = group.beneficiary.length * payload.tokens;
-  //     const addTokensToGroup = await prisma.beneficiaryGroups.update({
-  //       where: { uuid: payload.uuid },
-  //       data: { tokensReserved: { increment: totalTokensToAdd } },
-  //     });
-
-  //     return addTokensToGroup;
-  //   })
-
-  // }
 }

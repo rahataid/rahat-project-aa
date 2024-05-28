@@ -23,5 +23,6 @@ import { BeneficiaryService } from './beneficiary.service';
   ],
   controllers: [BeneficiaryController],
   providers: [BeneficiaryService, PrismaService],
+  exports: [BeneficiaryService]
 })
 export class BeneficiaryModule { }

@@ -1,26 +1,24 @@
 import { ConfigService } from "@nestjs/config";
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
-import { DataSource, Phase } from "@prisma/client";
 import { RpcException } from "@nestjs/microservices";
-import { CommunicationService } from '@rumsan/communication/services/communication.client';
+import { InjectQueue } from "@nestjs/bull";
+import { BQUEUE, JOBS } from "../constants";
+import { Queue } from "bull";
+import { BeneficiaryService } from "../beneficiary/beneficiary.service";
 
 @Injectable()
 export class PhasesService {
   private readonly logger = new Logger(PhasesService.name);
-  private communicationService: CommunicationService;
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService
-  ) {
-    this.communicationService = new CommunicationService({
-      baseURL: this.configService.get('COMMUNICATION_URL'),
-      headers: {
-        appId: this.configService.get('COMMUNICATION_APP_ID'),
-      },
-    });
-  }
+    private readonly configService: ConfigService,
+    private readonly beneficiaryService: BeneficiaryService,
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
+    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
+  ) { }
 
   async getAll() {
     return this.prisma.phases.findMany()
@@ -97,7 +95,14 @@ export class PhasesService {
     for (const activity of phaseActivities) {
       const activityComms = JSON.parse(JSON.stringify(activity.activityCommunication))
       for (const comm of activityComms) {
-        await this.communicationService.communication.triggerCampaign(comm?.campaignId)
+        this.communicationQueue.add(JOBS.COMMUNICATION.TRIGGER, comm?.campaignId, {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
       }
       await this.prisma.activities.update({
         where: {
@@ -107,6 +112,26 @@ export class PhasesService {
           status: 'COMPLETED'
         }
       })
+    }
+
+    // ASSIGN TOKENS ON ACTIVATION, REFACTOR TO GENERIC SOLUTION
+    if (phaseDetails.name === 'ACTIVATION') {
+      const allBenfs = await this.beneficiaryService.getAllBenfs()
+      for (const benf of allBenfs) {
+        if (benf.benTokens) {
+          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, {
+            benTokens: benf.benTokens,
+            wallet: benf.walletAddress
+          }, {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          });
+        }
+      }
     }
 
     return this.prisma.phases.update({

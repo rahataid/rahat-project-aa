@@ -1,7 +1,6 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
-import { DhmService } from '../datasource/dhm.service';
 import { Job } from 'bull';
 import { PhasesService } from '../phases/phases.service';
 
@@ -10,7 +9,7 @@ export class TriggerProcessor {
   private readonly logger = new Logger(TriggerProcessor.name);
 
   constructor(
-    private readonly phaseService: PhasesService
+    private readonly phaseService: PhasesService,
   ) { }
 
   @Process(JOBS.TRIGGERS.REACHED_THRESHOLD)
@@ -20,6 +19,7 @@ export class TriggerProcessor {
     switch (payload.dataSource) {
       case DATA_SOURCES.DHM:
         await this.processDhmData(payload)
+        break;
       case DATA_SOURCES.MANUAL:
         await this.processManualTrigger(payload)
         break;
@@ -35,6 +35,7 @@ export class TriggerProcessor {
     })
 
     const conditionsMet = this.checkTriggerConditions(phaseData.triggerRequirements)
+
     if (conditionsMet) {
       this.phaseService.activatePhase(phaseData.uuid)
     }
@@ -47,6 +48,7 @@ export class TriggerProcessor {
     })
 
     const conditionsMet = this.checkTriggerConditions(phaseData.triggerRequirements)
+
     if (conditionsMet) {
       this.phaseService.activatePhase(phaseData.uuid)
     }
@@ -55,6 +57,9 @@ export class TriggerProcessor {
 
   checkTriggerConditions(triggerRequirements) {
     const { mandatoryTriggers, optionalTriggers } = triggerRequirements;
+
+    // if not triggers are set return false
+    if (!mandatoryTriggers.requiredTriggers && !optionalTriggers.requiredTriggers) return false
 
     const mandatoryMet = mandatoryTriggers.receivedTriggers >= mandatoryTriggers.requiredTriggers;
     const optionalMet = optionalTriggers.receivedTriggers >= optionalTriggers.requiredTriggers;

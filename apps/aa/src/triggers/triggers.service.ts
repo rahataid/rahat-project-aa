@@ -282,7 +282,7 @@ export class TriggersService {
       })
     }
 
-    await this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
+    this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
       attempts: 3,
       removeOnComplete: true,
       backoff: {
