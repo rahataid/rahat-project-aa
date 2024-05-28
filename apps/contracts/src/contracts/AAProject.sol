@@ -127,6 +127,13 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
     ///@notice function to remove beneficiaries
     ///@param _address address of the beneficiary to be removed
     ///@dev can only be called by project admin when project is open
+    function addBeneficiary(address _address) public onlyAdmin {
+        _addBeneficiary(_address);
+    }
+
+    ///@notice function to remove beneficiaries
+    ///@param _address address of the beneficiary to be removed
+    ///@dev can only be called by project admin when project is open
     function removeBeneficiary(address _address) public onlyAdmin {
         _removeBeneficiary(_address);
     }

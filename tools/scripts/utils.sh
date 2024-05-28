@@ -17,6 +17,7 @@ setup() {
     pnpm migrate
     pnpm seed:project
     pnpm seed:networks $current_dir
+    pnpm seed:all
 }
 
 graph_setup() {
