@@ -14,160 +14,193 @@ import '../interfaces/ITriggerManager.sol';
 /// @notice This contract implements the IAAProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
 /// @dev This contract uses the ERC2771Context for meta-transactions and extends AbstractProject for basic project functionality.
 contract AAProject is AbstractProject, IAAProject, ERC2771Context {
-  using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
-  event ClaimAssigned(
-    address indexed beneficiary,
-    address indexed token,
-    address indexed assigner
-  );
-
-  /// @dev Interface ID for IAAProject
-  bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
-
-  /// @dev access manager
-  IAccessManager public AccessManager;
-  ITriggerManager public TriggerManager;
-
-  /// @dev address of default token
-  address public defaultToken;
-
-  /// @dev set of claim assigners
-  EnumerableSet.AddressSet private claimAssigners;
-
-  /// @notice tracks the registered token address
-  /// @dev key-value pair of token address and registered status
-  mapping(address => bool) public registeredTokens;
-
-  ///@notice constructor
-  ///@param _name name of the project
-  ///@param _defaultToken address of the default token(ERC20)
-  ///@param _forwarder address of the forwarder contract
-  ///@param _accessManager Access Manager contract address
-  constructor(
-    string memory _name,
-    address _defaultToken,
-    address _forwarder,
-    address _accessManager,
-    address _triggerManager
-  ) AbstractProject(_name) ERC2771Context(_forwarder) {
-    defaultToken = _defaultToken;
-    AccessManager = IAccessManager(_accessManager);
-    TriggerManager = ITriggerManager(_triggerManager);
-  }
-
-  modifier onlyAdmin() {
-    require(AccessManager.isAdmin(_msgSender()), 'Only Admin can access');
-    _;
-  }
-
-  modifier onlyProjectManager() {
-    require(
-      AccessManager.isProjectManager(msg.sender),
-      'Only Project Manager can access'
+    event ClaimAssigned(
+        address indexed beneficiary,
+        address indexed token,
+        address indexed assigner
     );
-    _;
-  }
 
-  // #endregion
-  function supportsInterface(
-    bytes4 interfaceId
-  ) public view virtual override returns (bool) {
-    return interfaceId == IID_RAHAT_PROJECT;
-  }
+    event BenTokensAssigned(
+      address indexed beneficiary,
+      uint indexed amount,
+    )
 
-  ///@notice function to increase the tokenBudget
-  ///@param _amount amount to increase the budget
-  ///@param _tokenAddress address of the token to increase budget
-  ///@dev can only be called by admin.Mainly called during minting of tokens
-  function increaseTokenBudget(
-    address _tokenAddress,
-    uint256 _amount
-  ) public onlyAdmin {
-    uint256 budget = tokenBudget(_tokenAddress);
-    //TODO might not be needed
-    require(
-      IERC20(_tokenAddress).totalSupply() >= budget + _amount,
-      'Greater than total supply'
-    );
-    _tokenBudgetIncrease(_tokenAddress, _amount);
-  }
+    /// @dev Interface ID for IAAProject
+    bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
 
-  // region *****Beneficiary Functions *****//
-  ///@notice function to add beneficiaries
-  ///@param _address address of the beneficiary
-  ///@dev can only be called by project admin when project is open
-  function addBeneficiary(address _address) public onlyAdmin {
-    _addBeneficiary(_address);
-  }
+    /// @dev access manager
+    IAccessManager public AccessManager;
+    ITriggerManager public TriggerManager;
 
-  ///@notice function to remove beneficiaries
-  ///@param _address address of the beneficiary to be removed
-  ///@dev can only be called by project admin when project is open
-  function removeBeneficiary(address _address) public onlyAdmin {
-    _removeBeneficiary(_address);
-  }
+    /// @dev address of default token
+    address public defaultToken;
 
-  ///@notice internal function to assign  token/claims to beneficiaries
-  ///@param _beneficiary address of beneficiaires to assign claims
-  ///@param _tokenAddress address of the token to assign
-  ///@param _tokenAssigned amount of token assigned till date
-  ///@dev internal function to assign claims
-  // TODO Replace ClaimAssigned by using etherisc Insurance Framework
-  function _assignClaims(
-    address _beneficiary,
-    address _tokenAddress,
-    uint256 _tokenAssigned,
-    address _assigner
-  ) private {
-    uint256 remainingBudget = tokenBudget(_tokenAddress);
-    require(remainingBudget > _tokenAssigned, 'token budget exceed');
-    IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
-    emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
-  }
+    /// @dev set of claim assigners
+    EnumerableSet.AddressSet private claimAssigners;
 
-  function assignClaims(
-    address _beneficiary,
-    address _tokenAddress,
-    uint256 _tokenAssigned
-  ) public onlyAdmin {
-    require(TriggerManager.hasTriggered(), 'distribution not triggered');
-    _assignClaims(_beneficiary, _tokenAddress, _tokenAssigned, _msgSender());
-  }
+    /// @notice tracks the registered token address
+    /// @dev key-value pair of token address and registered status
+    mapping(address => bool) public registeredTokens;
 
-  // #endregion
+    /// @notice tracks the number of tokens assigned to a beneficiary
+    /// @dev key-value pair of token address and registered status
+    mapping(address => uint) public benTokens;
 
-  /// @dev overriding the method to ERC2771Context
-  function _msgSender()
-    internal
-    view
-    override(Context, ERC2771Context)
-    returns (address sender)
-  {
-    sender = ERC2771Context._msgSender();
-  }
+    ///@notice constructor
+    ///@param _name name of the project
+    ///@param _defaultToken address of the default token(ERC20)
+    ///@param _forwarder address of the forwarder contract
+    ///@param _accessManager Access Manager contract address
+    constructor(
+        string memory _name,
+        address _defaultToken,
+        address _forwarder,
+        address _accessManager,
+        address _triggerManager
+    ) AbstractProject(_name) ERC2771Context(_forwarder) {
+        defaultToken = _defaultToken;
+        AccessManager = IAccessManager(_accessManager);
+        TriggerManager = ITriggerManager(_triggerManager);
+    }
 
-  /// @dev overriding the method to ERC2771Context
-  function _msgData()
-    internal
-    view
-    override(Context, ERC2771Context)
-    returns (bytes calldata)
-  {
-    return ERC2771Context._msgData();
-  }
+    modifier onlyAdmin() {
+        require(AccessManager.isAdmin(_msgSender()), 'Only Admin can access');
+        _;
+    }
 
-  function _contextSuffixLength()
-    internal
-    view
-    override(Context, ERC2771Context)
-    returns (uint256)
-  {
-    return ERC2771Context._contextSuffixLength();
-  }
+    modifier onlyProjectManager() {
+        require(
+            AccessManager.isProjectManager(msg.sender),
+            'Only Project Manager can access'
+        );
+        _;
+    }
 
-  //     modifier  {
-  //     require(checkVendorStatus(_msgSender()), 'Only vendor can execute this transaction');
-  //     _;
-  //   }
+    // #endregion
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override returns (bool) {
+        return interfaceId == IID_RAHAT_PROJECT;
+    }
+
+    ///@notice function to increase the tokenBudget
+    ///@param _amount amount to increase the budget
+    ///@param _tokenAddress address of the token to increase budget
+    ///@dev can only be called by admin.Mainly called during minting of tokens
+    function increaseTokenBudget(
+        address _tokenAddress,
+        uint256 _amount
+    ) public onlyAdmin {
+        uint256 budget = tokenBudget(_tokenAddress);
+        //TODO might not be needed
+        require(
+            IERC20(_tokenAddress).totalSupply() >= budget + _amount,
+            'Greater than total supply'
+        );
+        _tokenBudgetIncrease(_tokenAddress, _amount);
+    }
+
+
+
+
+    // region *****Beneficiary Functions *****//
+    ///@notice function to assign tokens to beneficiaries
+    ///@param _address address of the beneficiary
+    ///@dev can only be called by project admin when project is open
+    function assignTokenToBeneficiary(
+        address _address,
+        uint _amount
+    ) public onlyAdmin {
+        require(
+          IERC20(defaultToken).balanceOf(address(this)) >= totalClaimsAssgined() + _amount,
+          'not enough tokens'
+        )
+        _addBeneficiary(_address);
+        benTokens[_address] = benTokens[_address] + _amount;
+    }
+
+    ///@notice function to add beneficiaries
+    ///@param _address address of the beneficiary
+    ///@dev can only be called by project admin when project is open
+    function totalClaimsAssgined() public view returns (uint _totalClaims) {
+        for (uint i = 0; i < _beneficiaries.length(); i++) {
+          _totalClaims += benTokens[_beneficiaries.at(i)];
+        }
+     }
+
+    ///@notice function to remove beneficiaries
+    ///@param _address address of the beneficiary to be removed
+    ///@dev can only be called by project admin when project is open
+    function removeBeneficiary(address _address) public onlyAdmin {
+        _removeBeneficiary(_address);
+    }
+
+    ///@notice internal function to assign  token/claims to beneficiaries
+    ///@param _beneficiary address of beneficiaires to assign claims
+    ///@param _tokenAddress address of the token to assign
+    ///@param _tokenAssigned amount of token assigned till date
+    ///@dev internal function to assign claims
+    // TODO Replace ClaimAssigned by using etherisc Insurance Framework
+    function _assignClaims(
+        address _beneficiary,
+        address _tokenAddress,
+        uint256 _tokenAssigned,
+        address _assigner
+    ) private {
+        uint256 remainingBudget = tokenBudget(_tokenAddress);
+        require(remainingBudget > _tokenAssigned, 'token budget exceed');
+        IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
+        emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
+    }
+
+    function assignClaims(
+        address _beneficiary,
+        uint256 _tokenAssigned
+    ) public onlyAdmin {
+        // require(TriggerManager.hasTriggered(), 'distribution not triggered');
+        _assignClaims(
+            _beneficiary,
+             defaultToken,
+            _tokenAssigned,
+            _msgSender()
+        );
+    }
+
+    // #endregion
+
+    /// @dev overriding the method to ERC2771Context
+    function _msgSender()
+        internal
+        view
+        override(Context, ERC2771Context)
+        returns (address sender)
+    {
+        sender = ERC2771Context._msgSender();
+    }
+
+    /// @dev overriding the method to ERC2771Context
+    function _msgData()
+        internal
+        view
+        override(Context, ERC2771Context)
+        returns (bytes calldata)
+    {
+        return ERC2771Context._msgData();
+    }
+
+    function _contextSuffixLength()
+        internal
+        view
+        override(Context, ERC2771Context)
+        returns (uint256)
+    {
+        return ERC2771Context._contextSuffixLength();
+    }
+
+    //     modifier  {
+    //     require(checkVendorStatus(_msgSender()), 'Only vendor can execute this transaction');
+    //     _;
+    //   }
 }

@@ -159,16 +159,6 @@ const main = async () => {
     // }
     // ***** seed activities complete ***
 
-    // ***** seed project voucher ****
-    await prisma.vouchers.create({
-        data: {
-            name: 'AaProject',
-            totalVouchers: 10000,
-            assignedVouchers: 0
-        }
-    })
-    // ***** seed project voucher end ****
-
     // ***** seed settings start ***
     await settings.create({
         name: 'DATASOURCE',

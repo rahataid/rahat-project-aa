@@ -42,15 +42,12 @@ enum SettingDataType {
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
-  id            Int     @id @default(autoincrement()) @db.Integer()
-  uuid          String  @unique @db.Uuid()
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @db.Uuid()
+
   walletAddress String?
-
-  extras Json?
-
-  beneficiaryGroups BeneficiaryGroups[]
-
-  benTokens Int @default(0)
+  extras        Json?
+  benTokens     Int     @default(0)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -59,69 +56,31 @@ model Beneficiary {
   @@map("tbl_beneficiaries")
 }
 
-model BenGroups {
+model BeneficiaryGroups {
   id   Int    @id @default(autoincrement()) @db.Integer()
-  uuid String @unique @db.Uuid()
+  uuid String @unique @default(uuid())
+
+  tokensReserved BeneficiaryGroupTokens?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   deletedAt DateTime?
 
-  @@map("tbl_ben_groups")
-}
-
-model BeneficiaryGroups {
-  id   Int    @id @default(autoincrement()) @db.Integer()
-  uuid String @unique @default(uuid())
-
-  name String
-
-  beneficiary Beneficiary[]
-
-  tokensReserved Int @default(0)
-
-  isDeleted Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
-
-  groupTokens GroupTokens[]
-  reserveTokens ReserveToken[]
-
   @@map("tbl_beneficiaries_groups")
 }
 
-model GroupTokens {
+model BeneficiaryGroupTokens {
+  id   Int    @id @default(autoincrement()) @db.Integer()
   uuid String @unique @default(uuid())
-  groupId String
-  totalTokensReserved Int @default(0)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
+  title          String
+  numberOfTokens Int    @default(0)
 
-  beneficiaryGroup    BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
-}
-
-model ReserveToken {
-  uuid String @unique @default(uuid())
-  groupId String
-
-  title String
-
-  numberOfTokens Int @default(0)
-  
+  groupId          String            @unique
   benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+
+  @@map("tbl_beneficiaries_groups_tokens")
 }
-
-model Vouchers {
-  uuid             String @unique @default(uuid())
-  name             String @unique
-  totalVouchers    Int    @default(0)
-  assignedVouchers Int    @default(0)
-
-  @@map("tbl_vouchers")
-}
-
-
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
 

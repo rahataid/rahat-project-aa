@@ -56,15 +56,7 @@ export class BeneficiaryController {
     );
   }
 
-  // ***** stakeholders groups start ********** //
-  @MessagePattern({
-    cmd: JOBS.BENEFICIARY.ADD_GROUP,
-    uuid: process.env.PROJECT_ID,
-  })
-  async addGroup(payload: AddBeneficiaryGroups) {
-    return this.beneficiaryService.addGroup(payload)
-  }
-
+  // ***** groups start ********** //
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
@@ -77,18 +69,45 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
   })
-  async getAllGroups(payload: AddBeneficiaryGroups) {
+  async getAllGroups(payload) {
     return this.beneficiaryService.getAllGroups(payload)
   }
-  // ***** stakeholders groups end ********** //
+  // ***** groups end ********** //
 
 
-  // ***** Assign token to group *****//
+  // ***** groups fund mgmt ********** //
   @MessagePattern({
-    cmd: JOBS.BENEFICIARY.ASSIGN_TOKEN_TO_GROUP,
+    cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  async assignTokenToGroup(payload: AddTokenToGroup) {
+  async reserveTokenToGroup(payload: AddTokenToGroup) {
     return this.beneficiaryService.reserveTokenToGroup(payload)
   }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ALL_TOKEN_RESERVATION,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getTokenReservations(payload) {
+    return this.beneficiaryService.getAllTokenReservations(payload)
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ONE_TOKEN_RESERVATION,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getOneTokenReservations(payload) {
+    return this.beneficiaryService.getOneTokenReservation(payload)
+  }
+
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_RESERVATION_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getReservationStats(payload) {
+    return this.beneficiaryService.getReservationStats(payload)
+  }
+
+  // ***** groups fund mgmt end ********** //
 }

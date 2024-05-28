@@ -1,0 +1,40 @@
+{
+    "polygon-amoy": {
+        "AAProject": {
+            "address": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
+            "startBlock": 7390932
+        },
+        "RahatDonor": {
+            "address": "0x342328b34825687834d3eB4f604E7271463160a7"
+        },
+        "AAToken": {
+            "address": "0xE872879842DA906F497fd721410Df859d51B9ced"
+        }
+    },
+    "mainnet": {
+        "AccessManager": {
+            "address": "0xac1C16515bf712599d8122AE35BB653e1f825849",
+            "startBlock": 1
+        },
+        "TriggerManager": {
+            "address": "0xa1fFD16Ae254FD8726286037deC84f1c993e50CB",
+            "startBlock": 1
+        },
+        "RahatDonor": {
+            "address": "0xD92DA83e04c5E40Bab68DF276A88d9Ed73Bf607b",
+            "startBlock": 1
+        },
+        "ERC2771Forwarder": {
+            "address": "0xABc7289891930Fad9BaA841e66D12daaAeF20D3F",
+            "startBlock": 1
+        },
+        "RahatToken": {
+            "address": "0x9417Ecc1a73ee763CdF65d17C7908c768e61F7d9",
+            "startBlock": 1
+        },
+        "AAProject": {
+            "address": "0x94f3Bb9e35e849bE380dF0DCc9AFaae40b91d869",
+            "startBlock": 1
+        }
+    }
+}
