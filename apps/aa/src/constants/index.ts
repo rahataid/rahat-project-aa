@@ -27,6 +27,9 @@ export const CONTROLLERS = {
 };
 
 export const JOBS = {
+  APP: {
+    RESET_ALL: 'rahat.jobs.beneficiary.create'
+  },
   BENEFICIARY: {
     CREATE: 'rahat.jobs.beneficiary.create',
     LIST: 'rahat.jobs.beneficiary.list',
