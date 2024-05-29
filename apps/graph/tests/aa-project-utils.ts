@@ -1,6 +1,7 @@
 import { newMockEvent } from "matchstick-as"
 import { ethereum, Address, BigInt } from "@graphprotocol/graph-ts"
 import {
+  BenTokensAssigned,
   BeneficiaryAdded,
   BeneficiaryRemoved,
   ClaimAssigned,
@@ -11,6 +12,27 @@ import {
   TokenTransfer,
   VendorUpdated
 } from "../generated/AAProject/AAProject"
+
+export function createBenTokensAssignedEvent(
+  beneficiary: Address,
+  amount: BigInt
+): BenTokensAssigned {
+  let benTokensAssignedEvent = changetype<BenTokensAssigned>(newMockEvent())
+
+  benTokensAssignedEvent.parameters = new Array()
+
+  benTokensAssignedEvent.parameters.push(
+    new ethereum.EventParam(
+      "beneficiary",
+      ethereum.Value.fromAddress(beneficiary)
+    )
+  )
+  benTokensAssignedEvent.parameters.push(
+    new ethereum.EventParam("amount", ethereum.Value.fromUnsignedBigInt(amount))
+  )
+
+  return benTokensAssignedEvent
+}
 
 export function createBeneficiaryAddedEvent(param0: Address): BeneficiaryAdded {
   let beneficiaryAddedEvent = changetype<BeneficiaryAdded>(newMockEvent())

@@ -1,4 +1,5 @@
 import {
+  BenTokensAssigned as BenTokensAssignedEvent,
   BeneficiaryAdded as BeneficiaryAddedEvent,
   BeneficiaryRemoved as BeneficiaryRemovedEvent,
   ClaimAssigned as ClaimAssignedEvent,
@@ -10,6 +11,7 @@ import {
   VendorUpdated as VendorUpdatedEvent
 } from "../generated/AAProject/AAProject"
 import {
+  BenTokensAssigned,
   BeneficiaryAdded,
   BeneficiaryRemoved,
   ClaimAssigned,
@@ -20,6 +22,20 @@ import {
   TokenTransfer,
   VendorUpdated
 } from "../generated/schema"
+
+export function handleBenTokensAssigned(event: BenTokensAssignedEvent): void {
+  let entity = new BenTokensAssigned(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.beneficiary = event.params.beneficiary
+  entity.amount = event.params.amount
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
 
 export function handleBeneficiaryAdded(event: BeneficiaryAddedEvent): void {
   let entity = new BeneficiaryAdded(

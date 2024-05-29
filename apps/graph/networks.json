@@ -1,40 +1,8 @@
 {
-    "polygon-amoy": {
-        "AAProject": {
-            "address": "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc",
-            "startBlock": 7390932
-        },
-        "RahatDonor": {
-            "address": "0x342328b34825687834d3eB4f604E7271463160a7"
-        },
-        "AAToken": {
-            "address": "0xE872879842DA906F497fd721410Df859d51B9ced"
-        }
-    },
-    "mainnet": {
-        "AccessManager": {
-            "address": "0x53c31B46eCd5FbB1C7fa41a1A1c91c1ff31FfdF5",
-            "startBlock": 1
-        },
-        "TriggerManager": {
-            "address": "0xd858E0BcC75D09e5852Ae7a04aFeBa698aCc1395",
-            "startBlock": 1
-        },
-        "RahatDonor": {
-            "address": "0x21C052f51A7791C3b0B3506a995435c5EFb185e3",
-            "startBlock": 1
-        },
-        "ERC2771Forwarder": {
-            "address": "0x12DDf94e08948d8A4454442693f6CBF4631b5fe2",
-            "startBlock": 1
-        },
-        "RahatToken": {
-            "address": "0x7A0E72CCf3bF5FD65C2dD0B93e8d3772A20Bb41b",
-            "startBlock": 1
-        },
-        "AAProject": {
-            "address": "0xE40dC2aB1A9a577779ffa52F77B6C0AbCe6f8AB4",
-            "startBlock": 1
-        }
+  "arbitrum-sepolia": {
+    "AAProject": {
+      "address": "0x8fdf853969b34A283d6B0fb8f5261089EA584138",
+      "startBlock": 49034811
     }
+  }
 }

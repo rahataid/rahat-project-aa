@@ -22,13 +22,6 @@ class SettingsSeed extends ContractLib {
         this.projectUUID = process.env.PROJECT_ID as string
     }
 
-    async getELDevSettings() {
-        const [devSettings] = await prismaClient.$queryRaw<any[]>(
-            Prisma.sql([`SELECT *  FROM tbl_settings WHERE name='EL_DEV'`])
-        )
-        return devSettings
-    }
-
     public async addAppSettings() {
         await settings.create({
             name: 'Blockchain',
@@ -86,16 +79,16 @@ class SettingsSeed extends ContractLib {
 
     }
 
-    public async updateProjectStatus(){
+    public async updateProjectStatus() {
         const projectId = process.env.PROJECT_ID;
         const url = `${process.env.RAHAT_CORE_URL}/v1/projects/${projectId}/status`;
-        await axios.patch(url,{status:'ACTIVE'})
+        await axios.patch(url, { status: 'ACTIVE' })
     }
 }
 async function main() {
     const seedProject = new SettingsSeed();
- 
-    const adminAccounts = ['0xf0c84735Af5669c809EfD62C9D4e466d331A95b0','0xAC6bFaf10e89202c293dD795eCe180BBf1430d7B','0xcDEe632FB1Ba1B3156b36cc0bDabBfd821305e06','0x033CC5Ea971bed3e08a773b3424A00b407193518']
+
+    const adminAccounts = ['0xf0c84735Af5669c809EfD62C9D4e466d331A95b0', '0xAC6bFaf10e89202c293dD795eCe180BBf1430d7B', '0xcDEe632FB1Ba1B3156b36cc0bDabBfd821305e06', '0x033CC5Ea971bed3e08a773b3424A00b407193518']
 
     await seedProject.addAppSettings();
     await seedProject.addAdminAddress(adminAccounts[0]);

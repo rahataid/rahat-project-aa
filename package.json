@@ -22,6 +22,7 @@
     "seed:project": "ts-node ./tools/project-scripts/projectSeed",
     "seed:networks": "ts-node ./tools/project-scripts/networksSeed",
     "seed:settings": "ts-node ./tools/project-scripts/settingsSeed",
+    "seed:chain": "ts-node ./tools/project-scripts/deploymentsettingsSeed",
     "manageaccess": "ts-node ./tools/project-scripts/manageAccess",
     "seed:all": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
