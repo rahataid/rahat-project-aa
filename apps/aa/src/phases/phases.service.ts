@@ -117,7 +117,7 @@ export class PhasesService {
     // ASSIGN TOKENS ON ACTIVATION, REFACTOR TO GENERIC SOLUTION
     if (phaseDetails.name === 'ACTIVATION') {
       const allBenfs = await this.beneficiaryService.getAllBenfs()
-      for (const benf of allBenfs) {
+      allBenfs?.forEach((benf, i) => {
         if (benf.benTokens) {
           this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, {
             benTokens: benf.benTokens,
@@ -127,10 +127,14 @@ export class PhasesService {
             removeOnComplete: true,
             backoff: {
               type: 'exponential',
-              delay: 1000,
+              delay: i * 500,
             },
+
           });
         }
+      })
+      for (const benf of allBenfs) {
+
       }
     }
 

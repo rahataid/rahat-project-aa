@@ -114,6 +114,7 @@ contract AAProject is AbstractProject, IAAProject, ERC2771Context {
         );
         _addBeneficiary(_address);
         benTokens[_address] = benTokens[_address] + _amount;
+        emit BenTokensAssigned(_address, _amount);
     }
 
     ///@notice function to add beneficiaries

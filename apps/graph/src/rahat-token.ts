@@ -5,7 +5,7 @@ import {
   Transfer as TransferEvent,
   UpdatedDescription as UpdatedDescriptionEvent,
   UpdatedTokenParams as UpdatedTokenParamsEvent,
-} from "../generated/AAToken/AAToken"
+} from "../generated/RahatToken/RahatToken"
 import {
   Approval,
   OwnerAdded,

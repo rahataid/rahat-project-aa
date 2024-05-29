@@ -1,3 +1,12 @@
+type BenTokensAssigned @entity(immutable: true) {
+  id: Bytes!
+  beneficiary: Bytes! # address
+  amount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
 type BeneficiaryAdded @entity(immutable: true) {
   id: Bytes!
   param0: Bytes! # address
@@ -78,39 +87,6 @@ type VendorUpdated @entity(immutable: true) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
-type OwnerAdded @entity(immutable: true) {
-  id: Bytes!
-  param0: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type OwnerRemoved @entity(immutable: true) {
-  id: Bytes!
-  param0: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type TokenCreated @entity(immutable: true) {
-  id: Bytes!
-  tokenAddress: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type TokenMintedAndApproved @entity(immutable: true) {
-  id: Bytes!
-  tokenAddress: Bytes! # address
-  approveAddress: Bytes! # address
-  amount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
 type Approval @entity(immutable: true) {
   id: Bytes!
   owner: Bytes! # address
@@ -121,7 +97,7 @@ type Approval @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type AATokenOwnerAdded @entity(immutable: true) {
+type OwnerAdded @entity(immutable: true) {
   id: Bytes!
   param0: Bytes! # address
   blockNumber: BigInt!
@@ -129,7 +105,7 @@ type AATokenOwnerAdded @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type AATokenOwnerRemoved @entity(immutable: true) {
+type OwnerRemoved @entity(immutable: true) {
   id: Bytes!
   param0: Bytes! # address
   blockNumber: BigInt!
@@ -160,6 +136,39 @@ type UpdatedTokenParams @entity(immutable: true) {
   id: Bytes!
   currency: String! # string
   price: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+type RahatDonorOwnerAdded @entity(immutable: true) {
+  id: Bytes!
+  param0: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type RahatDonorOwnerRemoved @entity(immutable: true) {
+  id: Bytes!
+  param0: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type TokenCreated @entity(immutable: true) {
+  id: Bytes!
+  tokenAddress: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type TokenMintedAndApproved @entity(immutable: true) {
+  id: Bytes!
+  tokenAddress: Bytes! # address
+  approveAddress: Bytes! # address
+  amount: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

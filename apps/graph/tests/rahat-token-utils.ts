@@ -7,7 +7,7 @@ import {
   Transfer,
   UpdatedDescription,
   UpdatedTokenParams
-} from "../generated/AAToken/AAToken"
+} from "../generated/RahatToken/RahatToken"
 
 export function createApprovalEvent(
   owner: Address,

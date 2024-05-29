@@ -6,16 +6,17 @@ schema:
 dataSources:
   - kind: ethereum
     name: AAProject
-    network: polygon-amoy
+    network: arbitrum-sepolia
     source:
-      address: "0xEDB0153cB839aC04deD91b992c5Bcad8813c9Ecc"
+      address: '0xca44a10a0Bb4589c1f1f583c526438d736b4a2a6'
       abi: AAProject
-      startBlock: 7390932
+      startBlock: 49079716
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
+        - BenTokensAssigned
         - BeneficiaryAdded
         - BeneficiaryRemoved
         - ClaimAssigned
@@ -29,6 +30,8 @@ dataSources:
         - name: AAProject
           file: ./abis/AAProject.json
       eventHandlers:
+        - event: BenTokensAssigned(indexed address,indexed uint256)
+          handler: handleBenTokensAssigned
         - event: BeneficiaryAdded(indexed address)
           handler: handleBeneficiaryAdded
         - event: BeneficiaryRemoved(indexed address)
@@ -49,19 +52,54 @@ dataSources:
           handler: handleVendorUpdated
       file: ./src/aa-project.ts
   - kind: ethereum
-    name: RahatDonor
-    network: polygon-amoy
+    name: RahatToken
+    network: arbitrum-sepolia
     source:
-      address: "0x342328b34825687834d3eB4f604E7271463160a7"
-      abi: RahatDonor
-      startBlock: 7390928
+      address: '0xA20563764805bBA4050F8Fe6db1439DCb9C5Fa4F'
+      abi: RahatToken
+      startBlock: 49079716
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
+        - Approval
         - OwnerAdded
         - OwnerRemoved
+        - Transfer
+        - UpdatedDescription
+        - UpdatedTokenParams
+      abis:
+        - name: RahatToken
+          file: ./abis/RahatToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: OwnerAdded(indexed address)
+          handler: handleOwnerAdded
+        - event: OwnerRemoved(indexed address)
+          handler: handleOwnerRemoved
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: UpdatedDescription(address,string)
+          handler: handleUpdatedDescription
+        - event: UpdatedTokenParams(string,uint256)
+          handler: handleUpdatedTokenParams
+      file: ./src/rahat-token.ts
+  - kind: ethereum
+    name: RahatDonor
+    network: arbitrum-sepolia
+    source:
+      address: '0x65d7a554d2166882A6671A41de02e503D71c3aBe'
+      abi: RahatDonor
+      startBlock: 49079716
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RahatDonorOwnerAdded
+        - RahatDonorOwnerRemoved
         - TokenCreated
         - TokenMintedAndApproved
       abis:
@@ -77,38 +115,3 @@ dataSources:
         - event: TokenMintedAndApproved(indexed address,indexed address,uint256)
           handler: handleTokenMintedAndApproved
       file: ./src/rahat-donor.ts
-  - kind: ethereum
-    name: AAToken
-    network: polygon-amoy
-    source:
-      address: "0xE872879842DA906F497fd721410Df859d51B9ced"
-      abi: AAToken
-      startBlock: 7390931
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - Approval
-        - AATokenOwnerAdded
-        - AATokenOwnerRemoved
-        - Transfer
-        - UpdatedDescription
-        - UpdatedTokenParams
-      abis:
-        - name: AAToken
-          file: ./abis/AAToken.json
-      eventHandlers:
-        - event: Approval(indexed address,indexed address,uint256)
-          handler: handleApproval
-        - event: OwnerAdded(indexed address)
-          handler: handleOwnerAdded
-        - event: OwnerRemoved(indexed address)
-          handler: handleOwnerRemoved
-        - event: Transfer(indexed address,indexed address,uint256)
-          handler: handleTransfer
-        - event: UpdatedDescription(address,string)
-          handler: handleUpdatedDescription
-        - event: UpdatedTokenParams(string,uint256)
-          handler: handleUpdatedTokenParams
-      file: ./src/aa-token.ts

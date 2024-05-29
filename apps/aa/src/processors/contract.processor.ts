@@ -29,20 +29,17 @@ export class ContractProcessor {
       const { contract: aaContract, provider, wallet } = await this.createContractInstanceSign('AAPROJECT')
       // const gasPrice = ethers.parseUnits('500', 'gwei')
 
-      let gasPrice = (await provider.getFeeData()).maxPriorityFeePerGas
-      if (!gasPrice) {
-        gasPrice = ethers.parseUnits('1000', 'gwei'); // Fallback gas price
-      }
+      // let gasPrice = (await provider.getFeeData()).maxPriorityFeePerGas
+      // if (!gasPrice) {
+      //   gasPrice = ethers.parseUnits('1000', 'gwei'); // Fallback gas price
+      // }
 
-      const nonce = await provider.getTransactionCount(wallet.address, 'latest');
+      // const nonce = await provider.getTransactionCount(wallet.address, 'latest');
 
-      console.log("Using gas:", gasPrice);
-      console.log("Using nonce:", nonce);
+      // console.log("Using gas:", gasPrice);
+      // console.log("Using nonce:", nonce);
 
-      const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens, {
-        gasPrice: gasPrice,
-        nonce: nonce
-      });
+      const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens);
       await txn.wait();
       this.logger.log("contract called with txn hash:", txn.hash);
       return "ok"
