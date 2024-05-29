@@ -27,4 +27,9 @@ export class AppController {
   getSettings(dto: any) {
     return this.appService.getSettings(dto)
   }
+
+  @MessagePattern({ cmd: JOBS.APP.RESET_ALL, uuid: process.env.PROJECT_ID })
+  resetAll() {
+    return this.appService.resetAll()
+  }
 }
