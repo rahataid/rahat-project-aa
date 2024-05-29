@@ -38,4 +38,8 @@ export class AppService {
       require('./settings.config').getSettings('PROJECT_SETTINGS');
     return { cmd: patternPrefix, uuid: settings.UUID || '' };
   }
+
+  async resetAll() {
+    return "ok"
+  }
 }
