@@ -38,8 +38,12 @@ export const JOBS = {
     BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
     REMOVE: 'rahat.jobs.beneficiary.remove',
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
-    ASSIGN_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.assign_token_to_group',
-    GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups'
+    RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
+    GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
+    GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
+    GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
+    GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats'
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -58,7 +62,11 @@ export const JOBS = {
     REMOVE: 'aa.jobs.triggers.remove',
     UPDATE: 'aa.jobs.triggers.update',
     ACTIVATE: 'aa.jobs.triggers.activate',
-    REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold'
+    REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
+    COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
+  },
+  PAYOUT: {
+    ASSIGN_TOKEN: 'aa.jobs.payout.assignToken'
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -92,6 +100,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
     GET_ALL_GROUPS: 'aa.jobs.stakeholders.getAllGroups',
+    GET_ONE_GROUP: 'aa.jobs.stakeholders.getOneGroup',
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
@@ -114,5 +123,7 @@ export const EVENTS = {
 
 export const BQUEUE = {
   SCHEDULE: 'SCHEDULE',
-  TRIGGER: 'TRIGGER'
+  TRIGGER: 'TRIGGER',
+  CONTRACT: 'CONTRACT',
+  COMMUNICATION: 'COMMUNICATION'
 };

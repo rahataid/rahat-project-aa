@@ -1,0 +1,14 @@
+{
+  "arbitrum-sepolia": {
+    "AAProject": {
+      "address": "0x8fdf853969b34A283d6B0fb8f5261089EA584138",
+      "startBlock": 49034811
+    },
+    "RahatToken": {
+      "address": "0x24cf5398ed50960E573c174fCdCD8d810f82e55A"
+    },
+    "RahatDonor": {
+      "address": "0xe07b6F0cd2b72e19D65A408d564d8f23e23FDBaF"
+    }
+  }
+}

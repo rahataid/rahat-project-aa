@@ -2,13 +2,25 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddBeneficiaryGroups, AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { title } from 'process';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
+
+interface DataItem {
+  groupId: UUID;
+  [key: string]: any;
+}
+
+interface PaginateResult<T> {
+  data: T[];
+  meta: any;
+}
 
 @Injectable()
 export class BeneficiaryService {
@@ -19,6 +31,10 @@ export class BeneficiaryService {
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
+  }
+
+  async getAllBenfs() {
+    return this.prisma.beneficiary.findMany()
   }
 
   async create(dto: CreateBeneficiaryDto) {
@@ -58,80 +74,29 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage } = dto;
+    const { page, perPage, sort, order } = dto;
 
-    const query = {
-      where: {
-        isDeleted: false,
-      },
-      include: {
-        beneficiary: true,
-      },
-    };
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
 
-    // this.prisma.beneficiaryGroups.findFirst({
-    //   include: {
-    //     beneficiary
-    //   }
-    // })
-
-    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
-      page,
-      perPage,
-    });
-
-    const groupsMeta = benfGroups.meta
-    const groups = benfGroups.data as any
-
-    for (const group of groups) {
-      const benfIds = group?.beneficiary?.map((d) => d.uuid)
-      const benfData = this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-        { data: benfIds }
-      ).subscribe({
-        next: (data) => {
-          console.log(data);
-          return data
+    const benfGroups = await paginate(
+      this.prisma.beneficiaryGroups,
+      {
+        where: {
+          deletedAt: null
         },
-        error: (err) => {
-          throw new RpcException('Error fetching beneficiary data.')
-        }
-      })
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
 
-      console.log(benfData);
-
-
-      // console.log(benfIds);
-    }
-    // console.log(groups);
-
-    return "ok"
-
-    // const groups = awa
-
-    // const orderBy: Record<string, 'asc' | 'desc'> = {};
-    // orderBy[sort] = order;
-
-
-
-    // const projectData = await paginate(
-    //   this.rsprisma.beneficiary,
-    //   {
-    //     where: {
-    //       deletedAt: null
-    //     },
-    //     // orderBy
-    //   },
-    //   {
-    //     page,
-    //     perPage
-    //   }
-    // )
-
-    // return this.client.send(
-    //   { cmd: 'rahat.jobs.beneficiary.list_by_project' },
-    //   projectData
-    // );
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+      benfGroups
+    );
   }
 
   async findByUUID(uuid: UUID) {
@@ -175,84 +140,135 @@ export class BeneficiaryService {
     return rdata;
   }
 
-  // ***** Create beneficiary groups ********** //
-  async addGroup(payload: AddBeneficiaryGroups) {
-    return await this.prisma.beneficiaryGroups.create({
+  // *****  beneficiary groups ********** //
+  async getOneGroup(uuid: UUID) {
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: {
+        uuid: uuid
+      }
+    })
+    if (!benfGroup) throw new RpcException('Beneficiary group not found.')
+
+    return lastValueFrom(this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
+      benfGroup.uuid
+    ));
+  }
+
+  async addGroupToProject(payload: AssignBenfGroupToProject) {
+    const { beneficiaryGroupData } = payload
+    return this.prisma.beneficiaryGroups.create({
       data: {
-        name: payload.name,
-        beneficiary: {
-          connect: payload.beneficiaries,
-        },
-      },
-    });
+        uuid: beneficiaryGroupData.uuid
+      }
+    })
   }
 
-  // Check voucher availability
-  async checkVoucherAvailabitliy(name: string, tokens?: number, noOfBen?: number) {
-    const res = await this.prisma.vouchers.findUnique({
-      where: { name }
-    })
+  async reserveTokenToGroup(payload: AddTokenToGroup) {
+    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } = payload
+    return this.prisma.$transaction(async () => {
+      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
-    const remainingVouchers = res?.totalVouchers - res?.assignedVouchers;
-    const vouchersRequested = noOfBen * tokens;
-
-    if (remainingVouchers < vouchersRequested) {
-      throw new RpcException("Voucher not enough");
-    }
-
-    await this.prisma.vouchers.update({
-      where: { name },
-      data: { assignedVouchers: { increment: vouchersRequested } }
-    })
-
-  }
-
-
-  // Assign token to beneficiary and group
-  async assignTokenToGroup(payload: AddTokenToGroup) {
-
-    const aaContract = await createContractInstanceSign(
-      await getContractByName('AAPROJECT', this.prisma.setting),
-      this.prisma.setting
-    );
-
-    const tokenContractInfo = await getContractByName('RAHATTOKEN', this.rsprisma.setting)
-    const tokenAddress = tokenContractInfo.ADDRESS;
-
-    return this.prisma.$transaction(async (prisma) => {
-      const group = await prisma.beneficiaryGroups.findUnique({
-        where: { uuid: payload.uuid },
-        include: { beneficiary: true },
-      });
-
-      if (!group || group.beneficiary.length === 0) {
+      if (!group || !group?.groupedBeneficiaries) {
         throw new RpcException('No beneficiaries found in the specified group.');
       }
 
-      const beneficiaryIds = group.beneficiary.map(b => b.id);
+      for (const member of group?.groupedBeneficiaries) {
+        const benf = await this.prisma.beneficiary.findUnique({
+          where: {
+            uuid: member?.beneficiaryId
+          }
+        })
+        if (benf.benTokens > 0) throw new RpcException('Token already assigned to beneficiary.')
+      }
 
-      this.checkVoucherAvailabitliy('AaProject', payload?.tokens, beneficiaryIds.length);
+      const benfIds = group?.groupedBeneficiaries?.map((d: any) => d?.beneficiaryId)
 
-      // Contract call
-      group.beneficiary.map(async (ben) => {
-        const txn = await aaContract.assignClaims(ben.walletAddress, tokenAddress, payload.tokens);
-        console.log("Contract called with txn hash:", txn.hash);
-        return ben.id;
+      await this.prisma.beneficiary.updateMany({
+        where: {
+          uuid: {
+            in: benfIds
+          }
+        },
+        data: {
+          benTokens: numberOfTokens
+        }
       })
 
-      await prisma.beneficiary.updateMany({
-        where: { id: { in: beneficiaryIds } },
-        data: { benTokens: { increment: payload.tokens } },
-      });
+      await this.prisma.beneficiaryGroupTokens.create({
+        data: {
+          title,
+          groupId: beneficiaryGroupId,
+          numberOfTokens: totalTokensReserved
+        }
+      })
 
-      const totalTokensToAdd = group.beneficiary.length * payload.tokens;
-      const addTokensToGroup = await prisma.beneficiaryGroups.update({
-        where: { uuid: payload.uuid },
-        data: { groupTokens: { increment: totalTokensToAdd } },
-      });
+      return group
+    })
+  }
 
-      return addTokensToGroup;
+  async getAllTokenReservations(dto) {
+    const { page, perPage, sort, order } = dto;
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
+
+    const { data, meta }: PaginateResult<DataItem> = await paginate(
+      this.prisma.beneficiaryGroupTokens,
+      {
+        orderBy
+      },
+      {
+        page,
+        perPage
+      }
+    )
+
+    const formattedData: Array<DataItem & { group: ReturnType<typeof this.getOneGroup> }> = [];
+
+    for (const d of data) {
+      const group = await this.getOneGroup(d['groupId'] as UUID)
+      formattedData.push(
+        {
+          ...d,
+          group
+        }
+      )
+    }
+
+    return {
+      data: formattedData,
+      meta
+    }
+  }
+
+  async getOneTokenReservation(payload) {
+
+    console.log(payload);
+    const { uuid } = payload
+    const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
+      where: {
+        uuid: uuid
+      }
     })
 
+    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID)
+
+    return {
+      ...benfGroupToken,
+      ...groupDetails
+    }
+  }
+
+  async getReservationStats(payload) {
+    const totalReservedTokens = await this.prisma.beneficiary.aggregate({
+      _sum: {
+        benTokens: true
+      }
+    })
+    return {
+      totalReservedTokens
+    }
   }
 }

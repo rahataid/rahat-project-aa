@@ -31,21 +31,22 @@ CREATE TABLE "tbl_beneficiaries" (
 CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "groupTokens" INTEGER NOT NULL DEFAULT 0,
-    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "tbl_beneficiaries_groups_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "tbl_vouchers" (
+CREATE TABLE "tbl_beneficiaries_groups_tokens" (
+    "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "totalVouchers" INTEGER NOT NULL DEFAULT 0,
-    "assignedVouchers" INTEGER NOT NULL DEFAULT 0
+    "title" TEXT NOT NULL,
+    "numberOfTokens" INTEGER NOT NULL DEFAULT 0,
+    "groupId" TEXT NOT NULL,
+
+    CONSTRAINT "tbl_beneficiaries_groups_tokens_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -190,12 +191,6 @@ CREATE TABLE "tbl_sources_data" (
 );
 
 -- CreateTable
-CREATE TABLE "_BeneficiaryToBeneficiaryGroups" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL
-);
-
--- CreateTable
 CREATE TABLE "_StakeholdersToStakeholdersGroups" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL
@@ -208,10 +203,10 @@ CREATE UNIQUE INDEX "tbl_beneficiaries_uuid_key" ON "tbl_beneficiaries"("uuid");
 CREATE UNIQUE INDEX "tbl_beneficiaries_groups_uuid_key" ON "tbl_beneficiaries_groups"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_vouchers_uuid_key" ON "tbl_vouchers"("uuid");
+CREATE UNIQUE INDEX "tbl_beneficiaries_groups_tokens_uuid_key" ON "tbl_beneficiaries_groups_tokens"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_vouchers_name_key" ON "tbl_vouchers"("name");
+CREATE UNIQUE INDEX "tbl_beneficiaries_groups_tokens_groupId_key" ON "tbl_beneficiaries_groups_tokens"("groupId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_settings_name_key" ON "tbl_settings"("name");
@@ -250,16 +245,13 @@ CREATE UNIQUE INDEX "tbl_triggers_repeatKey_key" ON "tbl_triggers"("repeatKey");
 CREATE UNIQUE INDEX "tbl_sources_data_uuid_key" ON "tbl_sources_data"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_BeneficiaryToBeneficiaryGroups_AB_unique" ON "_BeneficiaryToBeneficiaryGroups"("A", "B");
-
--- CreateIndex
-CREATE INDEX "_BeneficiaryToBeneficiaryGroups_B_index" ON "_BeneficiaryToBeneficiaryGroups"("B");
-
--- CreateIndex
 CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_StakeholdersToStakeholdersGroups"("A", "B");
 
 -- CreateIndex
 CREATE INDEX "_StakeholdersToStakeholdersGroups_B_index" ON "_StakeholdersToStakeholdersGroups"("B");
+
+-- AddForeignKey
+ALTER TABLE "tbl_beneficiaries_groups_tokens" ADD CONSTRAINT "tbl_beneficiaries_groups_tokens_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "tbl_beneficiaries_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -275,12 +267,6 @@ ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_BeneficiaryToBeneficiaryGroups" ADD CONSTRAINT "_BeneficiaryToBeneficiaryGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_beneficiaries"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "_BeneficiaryToBeneficiaryGroups" ADD CONSTRAINT "_BeneficiaryToBeneficiaryGroups_B_fkey" FOREIGN KEY ("B") REFERENCES "tbl_beneficiaries_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_stakeholders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

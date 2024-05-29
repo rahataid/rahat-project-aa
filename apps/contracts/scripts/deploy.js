@@ -36,7 +36,7 @@ const writeToFile = (filePath, newData) => {
         JSON.stringify(data, null, 2))
 }
 
-async function main(){
+async function main() {
 
     const [deployer] = await ethers.getSigners();
 
@@ -49,48 +49,54 @@ async function main(){
     console.log("---deploy access manager---")
     const accessManangerContract = await ethers.deployContract('AccessManager', [[deployer.address]])
     const accessManagerAddress = await accessManangerContract.getAddress();
-    console.log("---deploy access manager---")
+    console.log("---deploy trigger manager---")
     const triggerManagerContract = await ethers.deployContract('TriggerManager', [2])
     const triggerManagerAddress = await triggerManagerContract.getAddress();
     console.log("---deploying rahat donor------")
-    const donorContract = await ethers.deployContract('RahatDonor',[deployer.address, accessManagerAddress])
+    const donorContract = await ethers.deployContract('RahatDonor', [deployer.address, accessManagerAddress])
     const donorAddress = await donorContract.getAddress();
     console.log("deployed rahat donor")
     console.log("deploying forwarder contract")
-    const forwarder = await ethers.deployContract('ERC2771Forwarder',['ELForwarder']);
+    const forwarder = await ethers.deployContract('ERC2771Forwarder', ['ELForwarder']);
     const forwarderAddress = await forwarder.getAddress();
     console.log("deploying AA voucher")
-    const aaVoucher = await ethers.deployContract('RahatToken',[forwarderAddress,'aaVoucher','AA',donorAddress,1]);
+    const aaVoucher = await ethers.deployContract('RahatToken', [forwarderAddress, 'aaVoucher', 'AA', donorAddress, 1]);
     const aaVoucherAddress = await aaVoucher.getAddress();
     console.log("deploying AA project")
-    const aaProject = await ethers.deployContract('AAProject',['AAProject',aaVoucherAddress,forwarderAddress, accessManagerAddress,triggerManagerAddress]);
+    const aaProject = await ethers.deployContract('AAProject', ['AAProject', aaVoucherAddress, forwarderAddress, accessManagerAddress, triggerManagerAddress]);
     const aaProjectAddress = await aaProject.getAddress();
     console.log("All contract deployed successfully.")
-    console.log({donorAddress,
+    console.log({
+        donorAddress,
         aaVoucherAddress,
         forwarderAddress,
-        aaProjectAddress,})
+        aaProjectAddress,
+        accessManagerAddress,
+        triggerManagerAddress
+    })
 
-        console.log('-----register project in donor---')
-        await donorContract.registerProject(aaProjectAddress,true);
+    console.log('-----register project in donor---')
+    await donorContract.registerProject(aaProjectAddress, true);
 
     writeToFile(`${__dirname}/deployments.json`, {
         donorAddress,
         forwarderAddress,
         aaVoucherAddress,
         aaProjectAddress,
+        accessManagerAddress,
+        triggerManagerAddress
     })
     await sleep(200)
 
     let contractsDetails = [
-    {name: 'AAProject', address: aaProjectAddress},
-    {name: 'AccessManager', address: accessManagerAddress},
-    {name: 'RahatDonor', address: donorAddress},
-    {name: 'RahatToken', address: aaVoucherAddress},
-    {name: 'TriggerManager', address: triggerManagerAddress}
-     ]
+        { name: 'AAProject', address: aaProjectAddress },
+        { name: 'AccessManager', address: accessManagerAddress },
+        { name: 'RahatDonor', address: donorAddress },
+        { name: 'RahatToken', address: aaVoucherAddress },
+        { name: 'TriggerManager', address: triggerManagerAddress }
+    ]
 
-     const contractValues = await getDeployedContractDetails(contractsDetails)
+    const contractValues = await getDeployedContractDetails(contractsDetails)
 
     // ***** seed settings start ***    
     console.log("Saving contract details to settings")
@@ -101,19 +107,19 @@ async function main(){
     })
     console.log("Saved in settings successfully")
     // ***** seed settings complete ***
-    
 
 
-    // console.log("Verifying Contracts")
-    // console.log("Verifiying Rahat Donor")
-    // await verify(donorAddress,[deployer.address, accessManagerAddress]);
-    // console.log('veriying forwarder')
-    // await verify(forwarderAddress,['ELForwarder'])
-    // console.log('verfiying eye voucher')
-    // await verify(aaVoucher,[forwarderAddress,'aaVoucher','Eye',donorAddress,1])
-    // console.log('verifying el project')
-    // await verify(aaProjectAddress,['aaProject',aaVoucherAddress, process.env.OTP_SERVER_ADDRESS,forwarderAddress,3]);
-    // console.log("verification completed")
+
+    console.log("Verifying Contracts")
+    console.log("Verifiying Rahat Donor")
+    await verify(donorAddress, [deployer.address, accessManagerAddress]);
+    console.log('veriying forwarder')
+    await verify(forwarderAddress, ['ELForwarder'])
+    console.log('verfiying eye voucher')
+    await verify(aaVoucherAddress, [forwarderAddress, 'aaVoucher', 'AA', donorAddress, 1])
+    console.log('verifying el project')
+    await verify(aaProjectAddress, ['AAProject', aaVoucherAddress, forwarderAddress, accessManagerAddress, triggerManagerAddress]);
+    console.log("verification completed")
 
 }
 
