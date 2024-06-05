@@ -29,14 +29,19 @@ export interface GlofasStationInfo {
   TIMESTRING: string;
 }
 
+type PointForecast = {
+  header: string;
+  data: string;
+}
+
 export interface GlofasDataObject {
   pointForecastData: {
-    forecastDate: string;
-    maxProbability: string;
-    alertLevel: string;
-    maxProbabilityStep: string;
-    dischargeTendencyImage: string;
-    peakForecasted: string;
+    forecastDate: PointForecast;
+    maxProbability: PointForecast;
+    alertLevel: PointForecast;
+    maxProbabilityStep: PointForecast;
+    dischargeTendencyImage: PointForecast;
+    peakForecasted: PointForecast;
   };
   hydrographImageUrl: string;
   returnPeriodData: Array<{
