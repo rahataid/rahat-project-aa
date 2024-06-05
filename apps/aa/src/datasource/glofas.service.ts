@@ -97,56 +97,41 @@ export class GlofasService implements AbstractSource {
             return;
         }
 
-        const returnPeriodData = this.parseReturnPeriodData(rpTable, $)
+        const returnPeriodTable = this.parseReturnPeriodTable(rpTable, $)
         const pointForecastData = this.parsePointForecast(pfTable, $)
         const hydrographImageUrl = hydrographElement.attr('src');
 
         return {
-            ...returnPeriodData,
+            returnPeriodTable,
             pointForecastData,
             hydrographImageUrl
         }
     }
 
-    parseReturnPeriodData(rpTable: cheerio.Cheerio<cheerio.Element>, $: cheerio.CheerioAPI) {
+    parseReturnPeriodTable(rpTable: cheerio.Cheerio<cheerio.Element>, $: cheerio.CheerioAPI) {
         // first header row, consists of column names
         const headerRow = rpTable.find("tr").first();
         // get column names (th elements in tr)
-        const columnNames = headerRow
+        const returnPeriodHeaders = headerRow
             .find("th")
             .map((_, element) => $(element).text().trim())
             .toArray();
 
-        // first data row (excluding the header) , data from latest day
-        const dataRow = rpTable.find("tr").eq(1);
 
-        // data values from the first data row (excluding header cell)
-        const dataValues = dataRow
-            .find("td")
-            .map((_, element) => $(element).text().trim())
-            .toArray();
-
-        const forecastDate = dataValues[0];
-        const forecastYearMonthString = forecastDate
-            .split("-")
-            .slice(0, -1)
-            .join("-");
-
-        // remove col and row name
-        const sanitizedColumns = columnNames.slice(1);
-        const sanitizedData = dataValues.slice(1);
-
+        // first 5 data row (excluding the header) , data from latest day
+        const dataRow = rpTable.find("tr").slice(1, 6);
         const returnPeriodData = [];
 
-        sanitizedColumns.forEach((colData, i) => {
-            returnPeriodData.push({
-                forecastDate,
-                forecastDay: `${forecastYearMonthString}-${colData}`,
-                forecastData: sanitizedData[i],
-            });
-        });
+        for (const row of dataRow) {
+            const dataValues = $(row)
+                .find("td")
+                .map((_, element) => $(element).text().trim())
+                .toArray();
 
-        return { returnPeriodData, forecastDate }
+            returnPeriodData.push(dataValues)
+        }
+
+        return { returnPeriodData, returnPeriodHeaders }
     }
 
     parsePointForecast(pfTable: cheerio.Cheerio<cheerio.Element>, $: cheerio.CheerioAPI) {

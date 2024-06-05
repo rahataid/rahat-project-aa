@@ -44,10 +44,9 @@ export interface GlofasDataObject {
     peakForecasted: PointForecast;
   };
   hydrographImageUrl: string;
-  returnPeriodData: Array<{
-    forecastDay: string;
-    forecastDate: string;
-    forecastData: string;
-  }>;
+  returnPeriodTable: {
+    returnPeriodData: any[];
+    returnPeriodHeaders: string[];
+  };
   forecastDate: string;
 }

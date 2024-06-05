@@ -21,7 +21,7 @@ export class DataSourceService implements OnApplicationBootstrap {
         this.synchronizeGlofas()
     }
 
-    @Cron('*/10 * * * * *')
+    @Cron('*/5 * * * * *')
     async synchronizeGlofas() {
         try {
             const { dateString, dateTimeString } = getFormattedGlofasDate()
@@ -39,7 +39,7 @@ export class DataSourceService implements OnApplicationBootstrap {
 
             const glofasData = this.glofasService.parseGlofasData(reportingPoints)
 
-            await this.glofasService.saveGlofasStationData(glofasSettings.LOCATION, glofasData)
+            await this.glofasService.saveGlofasStationData(glofasSettings.LOCATION, { ...glofasData, forecastDate: dateString })
         } catch (err) {
             this.logger.error("Sync Glofas", err.message)
         }
