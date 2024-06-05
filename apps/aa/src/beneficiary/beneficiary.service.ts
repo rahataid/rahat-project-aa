@@ -159,7 +159,8 @@ export class BeneficiaryService {
     const { beneficiaryGroupData } = payload
     return this.prisma.beneficiaryGroups.create({
       data: {
-        uuid: beneficiaryGroupData.uuid
+        uuid: beneficiaryGroupData.uuid,
+        name: beneficiaryGroupData.name
       }
     })
   }
