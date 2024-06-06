@@ -166,7 +166,8 @@ model Phases {
   receivedMandatoryTriggers Int? @default(0)
   receivedOptionalTriggers  Int? @default(0)
 
-  isActive Boolean @default(false)
+  canTriggerPayout Boolean @default(false)
+  isActive         Boolean @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()

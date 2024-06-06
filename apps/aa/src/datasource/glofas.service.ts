@@ -9,6 +9,9 @@ import * as cheerio from 'cheerio';
 import { dataLength } from "ethers";
 import { PrismaService } from "@rumsan/prisma";
 import { SettingsService } from "@rumsan/settings";
+import { BQUEUE, JOBS } from "../constants";
+import { Queue } from "bull";
+import { InjectQueue } from "@nestjs/bull";
 
 @Injectable()
 export class GlofasService implements AbstractSource {
@@ -16,11 +19,111 @@ export class GlofasService implements AbstractSource {
 
     constructor(
         private readonly httpService: HttpService,
-        private prisma: PrismaService
+        private prisma: PrismaService,
+        @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
+
     ) { }
 
     async criteriaCheck(payload: AddTriggerStatement) {
-        return "OK"
+
+        const triggerData = await this.prisma.triggers.findUnique({
+            where: {
+                uuid: payload.uuid
+            }
+        })
+
+        // do not process if it is already triggered
+        if (triggerData.isTriggered) return
+
+        const dataSource = payload.dataSource;
+        const location = payload.location;
+        const probability = Number(payload.triggerStatement?.probability)
+
+        this.logger.log(`${dataSource}: monitoring`)
+
+        const recentData = await this.prisma.sourcesData.findFirst({
+            where: {
+                location,
+                source: dataSource,
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+
+        if (!recentData) {
+            this.logger.error(`${dataSource}:${location} : data not available`)
+            return
+        }
+
+        const recentStationData = JSON.parse(JSON.stringify(recentData.data)) as GlofasDataObject
+        const rpTable = recentStationData.returnPeriodTable;
+
+        const maxLeadTimeDays = Number(payload?.triggerStatement?.maxLeadTimeDays)
+        const latestForecastData = rpTable.returnPeriodData[0]
+
+        const [latestForecastDay] = latestForecastData[0].split('-').slice(-1)
+        const sanitizedForecastDay = Number(latestForecastDay)
+
+        const minForecastDayIndex = rpTable.returnPeriodHeaders.indexOf(sanitizedForecastDay.toString());
+        const maxForecastDayIndex = minForecastDayIndex + Number(maxLeadTimeDays)
+
+        const indexRange = this.createRange(minForecastDayIndex + 1, maxForecastDayIndex)
+
+        const probabilityReached = this.checkProbability(indexRange, latestForecastData, probability)
+
+        if (probabilityReached) {
+            if (payload.isMandatory) {
+                await this.prisma.phases.update({
+                    where: {
+                        uuid: payload.phaseId
+                    },
+                    data: {
+                        receivedMandatoryTriggers: {
+                            increment: 1
+                        }
+                    }
+                })
+            }
+
+            if (!payload.isMandatory) {
+                await this.prisma.phases.update({
+                    where: {
+                        uuid: payload.phaseId
+                    },
+                    data: {
+                        receivedOptionalTriggers: {
+                            increment: 1
+                        }
+                    }
+                })
+            }
+
+            await this.prisma.triggers.update({
+                where: {
+                    uuid: payload.uuid
+                },
+                data: {
+                    isTriggered: true
+                }
+            })
+
+            console.log("trigger updated");
+            console.log("reached probabiliy called");
+
+            this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
+                attempts: 3,
+                removeOnComplete: true,
+                backoff: {
+                    type: 'exponential',
+                    delay: 1000,
+                },
+            });
+
+            return
+        }
+
+
     }
 
     async getStationData(payload: GlofasStationInfo) {
@@ -42,7 +145,8 @@ export class GlofasService implements AbstractSource {
             BBOX: payload.BBOX,
             I: payload.I,
             J: payload.J,
-            TIME: payload.TIMESTRING,
+            TIME: "2024-06-05T00:00:00"
+            // TIME: payload.TIMESTRING,
         };
 
         for (const [key, value] of Object.entries(queryParams)) {
@@ -201,4 +305,23 @@ export class GlofasService implements AbstractSource {
             }
         })
     }
+
+    checkProbability(indexRange: number[], latestForecastData: any, probability: number) {
+        for (const index of indexRange) {
+            const forecastData = Number(latestForecastData[index])
+
+            if (forecastData && forecastData >= probability) {
+                return true
+            }
+        }
+    }
+
+    createRange(start: number, end: number) {
+        const rangeArray = [];
+        for (let i = start; i <= end; i++) {
+            rangeArray.push(i);
+        }
+        return rangeArray;
+    }
+
 }

@@ -21,11 +21,12 @@ const phaseData = [
     },
     {
         uuid: "ecce09ad-2364-4e21-a59a-09b0f3a3fde5",
-        name: Phase.READINESS
+        name: Phase.READINESS,
     },
     {
         uuid: "c7e69410-f71c-40c0-bd06-6bb95494fd82",
-        name: Phase.ACTIVATION
+        name: Phase.ACTIVATION,
+        canTriggerPayout: true
     }
 ]
 

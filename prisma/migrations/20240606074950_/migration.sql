@@ -31,6 +31,7 @@ CREATE TABLE "tbl_beneficiaries" (
 CREATE TABLE "tbl_beneficiaries_groups" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
     "deletedAt" TIMESTAMP(3),
@@ -111,6 +112,7 @@ CREATE TABLE "tbl_phases" (
     "requiredOptionalTriggers" INTEGER DEFAULT 0,
     "receivedMandatoryTriggers" INTEGER DEFAULT 0,
     "receivedOptionalTriggers" INTEGER DEFAULT 0,
+    "canTriggerPayout" BOOLEAN NOT NULL DEFAULT false,
     "isActive" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),

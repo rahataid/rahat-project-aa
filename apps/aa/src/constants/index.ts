@@ -3,7 +3,7 @@ export const NAMESPACE = 'rahat.projects';
 export const DATA_SOURCES = {
   DHM: 'DHM',
   MANUAL: 'MANUAL',
-  // GLOFAS: 'GLOFAS'
+  GLOFAS: 'GLOFAS'
 };
 
 export const TRIGGER_ACTIVITY = {
