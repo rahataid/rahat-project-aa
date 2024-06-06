@@ -60,6 +60,8 @@ model BeneficiaryGroups {
   id   Int    @id @default(autoincrement()) @db.Integer()
   uuid String @unique @default(uuid())
 
+  name String
+
   tokensReserved BeneficiaryGroupTokens?
 
   createdAt DateTime  @default(now())
