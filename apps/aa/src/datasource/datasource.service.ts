@@ -2,7 +2,9 @@ import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { Cron } from '@nestjs/schedule';
 import { SettingsService } from "@rumsan/settings";
 import { DhmService } from "./dhm.service";
-import { DhmDataObject } from "./dto";
+import { DhmDataObject, GlofasStationInfo } from "./dto";
+import { GlofasService } from "./glofas.service";
+import { getFormattedGlofasDate } from "../utils/date";
 
 @Injectable()
 export class DataSourceService implements OnApplicationBootstrap {
@@ -10,11 +12,37 @@ export class DataSourceService implements OnApplicationBootstrap {
     private readonly logger = new Logger(DataSourceService.name);
 
     constructor(
-        private readonly dhmService: DhmService
+        private readonly dhmService: DhmService,
+        private readonly glofasService: GlofasService
     ) { }
 
     async onApplicationBootstrap() {
         this.synchronizeDHM()
+        this.synchronizeGlofas()
+    }
+
+    @Cron('*/5 * * * * *')
+    async synchronizeGlofas() {
+        try {
+            const { dateString, dateTimeString } = getFormattedGlofasDate()
+            const glofasSettings = SettingsService.get('DATASOURCE.GLOFAS') as Omit<GlofasStationInfo, 'TIMESTRING'>;
+
+            const hasExistingRecord = await this.glofasService.findGlofasDataByDate(glofasSettings.LOCATION, dateString)
+
+            if (hasExistingRecord) {
+                // this.logger.log(`Glofas data for the date ${dateString} already exists.`)
+                return
+            }
+
+            const stationData = await this.glofasService.getStationData({ ...glofasSettings, TIMESTRING: dateTimeString })
+            const reportingPoints = stationData?.content["Reporting Points"].point
+
+            const glofasData = this.glofasService.parseGlofasData(reportingPoints)
+
+            await this.glofasService.saveGlofasStationData(glofasSettings.LOCATION, { ...glofasData, forecastDate: dateString })
+        } catch (err) {
+            this.logger.error("Sync Glofas", err.message)
+        }
     }
 
     @Cron('*/60 * * * * *')
