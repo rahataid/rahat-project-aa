@@ -12,8 +12,10 @@ import {
   UpdateActivityData,
 } from './dto';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { ActivitiesStatus } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
+import { UUID } from 'crypto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -25,7 +27,8 @@ export class ActivitiesService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-    private readonly stakeholdersService: StakeholdersService
+    private readonly stakeholdersService: StakeholdersService,
+    private readonly beneficiaryService: BeneficiaryService,
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -41,19 +44,24 @@ export class ActivitiesService {
     const createActivityCommunicationPayload = []
     const createActivityPayoutPayload = []
     const docs = activityDocuments || []
+    let campaignId: number;
 
     if (activityCommunication?.length) {
       for (const comms of activityCommunication) {
         switch (comms.groupType) {
           case 'STAKEHOLDERS':
-            const campaignId = await this.processStakeholdersCommunication(comms, title);
+            campaignId = await this.processStakeholdersCommunication(comms, title);
             createActivityCommunicationPayload.push({
               ...comms,
               campaignId
             })
             break;
           case 'BENEFICIARY':
-            await this.processBeneficiaryCommunication(comms)
+            campaignId = await this.processBeneficiaryCommunication(comms, title);
+            createActivityCommunicationPayload.push({
+              ...comms,
+              campaignId
+            })
             break;
           default:
             break;
@@ -142,8 +150,56 @@ export class ActivitiesService {
     return campaign.data.id;
   }
 
-  async processBeneficiaryCommunication(payload: ActivityCommunicationData) {
-    console.log(payload)
+  async processBeneficiaryCommunication(payload: ActivityCommunicationData, title: string) {
+    const transportId = await this.getTransportId(payload.communicationType)
+    const { data: audience } = await this.communicationService.communication.listAudience()
+    const beneficiaryGroup = await this.beneficiaryService.getOneGroup(payload.groupId as UUID)
+    const groupedBeneficiaries = beneficiaryGroup.groupedBeneficiaries;
+
+    const beneficiaryEmails = groupedBeneficiaries.map(beneficiary => beneficiary.Beneficiary.pii.email);
+    const beneficiaryPhones = groupedBeneficiaries.map(beneficiary => beneficiary.Beneficiary.pii.phone);
+
+    const audienceEmails = audience.map(audience => audience.details.email);
+    const audiencePhones = audience.map(audience => audience.details.phone);
+
+    // get beneficiaries not in audience
+    const beneficiariesNotInAudience = groupedBeneficiaries.filter(beneficiary => {
+      return !audienceEmails.includes(beneficiary.Beneficiary.pii.email) || !audiencePhones.includes(beneficiary.Beneficiary.pii.phone);
+    });
+
+    // get audience which already has beneficiaries
+    const beneficiariesInAudience = audience.filter(audience => {
+      return beneficiaryEmails.includes(audience.details.email) || beneficiaryPhones.includes(audience.details.phone);
+    });
+
+    const audienceIds = [...beneficiariesInAudience.map((audience) => audience.id)]
+
+    for (const beneficiary of beneficiariesNotInAudience) {
+      const response = await this.communicationService.communication.createAudience({
+        details: {
+          name: beneficiary.Beneficiary.pii.name,
+          phone: beneficiary.Beneficiary.pii.phone,
+          // fix: add email to audience type in sdk
+          // @ts-ignore: Unreachable code error
+          email: beneficiary.Beneficiary.pii.email,
+        },
+      });
+      audienceIds.push(response.data.id);
+    }
+
+    const campaignPayload = {
+      audienceIds: audienceIds,
+      name: title,
+      status: 'ONGOING',
+      transportId: transportId,
+      type: payload.communicationType.toUpperCase(),
+      details: { message: payload.message },
+      startTime: new Date(),
+    };
+
+    //create campaign
+    const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
+    return campaign.data.id;
   }
 
   async getTransportId(transportName: string) {
@@ -172,12 +228,12 @@ export class ActivitiesService {
       for (const comm of aComm) {
         const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
         const { data: campaignData } = await this.communicationService.communication.getCampaign(communication.campaignId)
-
+        let group: any;
         let groupName: string;
 
         switch (communication.groupType) {
           case 'STAKEHOLDERS':
-            const group = await this.prisma.stakeholdersGroups.findUnique({
+            group = await this.prisma.stakeholdersGroups.findUnique({
               where: {
                 uuid: communication.groupId
               }
@@ -185,7 +241,12 @@ export class ActivitiesService {
             groupName = group.name
             break;
           case 'BENEFICIARY':
-            console.log('Benificary logic here.')
+            group = await this.prisma.beneficiaryGroups.findUnique({
+              where: {
+                uuid: communication.groupId
+              }
+            })
+            groupName = group.name
             break;
           default:
             break;
@@ -284,6 +345,7 @@ export class ActivitiesService {
 
     if (activityCommunication?.length) {
       for (const comms of activityCommunication) {
+        let campaignId: number;
         switch (comms.groupType) {
           case 'STAKEHOLDERS':
             if (comms.campaignId) {
@@ -299,7 +361,7 @@ export class ActivitiesService {
               updateActivityCommunicationPayload.push(comms)
               break;
             }
-            const campaignId = await this.processStakeholdersCommunication(comms, title || activity.title);
+            campaignId = await this.processStakeholdersCommunication(comms, title || activity.title);
 
             updateActivityCommunicationPayload.push({
               ...comms,
@@ -307,7 +369,25 @@ export class ActivitiesService {
             })
             break;
           case 'BENEFICIARY':
-            await this.processBeneficiaryCommunication(comms)
+            if (comms.campaignId) {
+              const campaginDetails = await this.communicationService.communication.getCampaign(Number(comms.campaignId))
+              const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
+
+              await this.communicationService.communication.updateCampaign(comms.campaignId, {
+                audienceIds: audienceIds,
+                details: JSON.parse(JSON.stringify({ message: comms.message })),
+                name: title || activity.title
+              })
+
+              updateActivityCommunicationPayload.push(comms)
+              break;
+            }
+            campaignId = await this.processBeneficiaryCommunication(comms, title || activity.title);
+
+            updateActivityCommunicationPayload.push({
+              ...comms,
+              campaignId
+            })
             break;
           default:
             break;

@@ -5,6 +5,7 @@ import { Job } from 'bull';
 import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
 import { AddTriggerStatement } from '../dto';
 import { DhmService } from '../datasource/dhm.service';
+import { GlofasService } from '../datasource/glofas.service';
 
 @Processor(BQUEUE.SCHEDULE)
 export class ScheduleProcessor {
@@ -12,6 +13,7 @@ export class ScheduleProcessor {
 
   constructor(
     private readonly dhmService: DhmService,
+    private readonly glofasService: GlofasService
   ) { }
 
   @Process(JOBS.SCHEDULE.ADD)
@@ -20,9 +22,9 @@ export class ScheduleProcessor {
       case DATA_SOURCES.DHM:
         await this.dhmService.criteriaCheck(job.data);
         break;
-      // case DATA_SOURCES.GLOFAS:
-      //   await this.glofasService.criteriaCheck(job.data);
-      //   break;
+      case DATA_SOURCES.GLOFAS:
+        await this.glofasService.criteriaCheck(job.data);
+        break;
       default:
       // do nothing
     }

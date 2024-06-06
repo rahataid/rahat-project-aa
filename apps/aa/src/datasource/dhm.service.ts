@@ -9,6 +9,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, JOBS } from '../constants';
 import { Queue } from 'bull';
+import { SettingsService } from '@rumsan/settings';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -183,12 +184,15 @@ export class DhmService implements AbstractSource {
 
   async getWaterLevels(payload: GetWaterLevel) {
     const { page, perPage } = payload
+    const dhmSettings = SettingsService.get('DATASOURCE.DHM');
+    const location = dhmSettings['LOCATION']
+
     return paginate(
       this.prisma.sourcesData,
       {
         where: {
           source: 'DHM',
-          location: 'Karnali at Chisapani'
+          location: location
         },
         orderBy: {
           createdAt: 'desc'

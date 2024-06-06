@@ -19,3 +19,34 @@ export interface DhmDataObject {
   description: string;
   station: number;
 }
+
+export interface GlofasStationInfo {
+  LOCATION: string;
+  I: string;
+  J: string;
+  URL: string;
+  BBOX: string;
+  TIMESTRING: string;
+}
+
+type PointForecast = {
+  header: string;
+  data: string;
+}
+
+export interface GlofasDataObject {
+  pointForecastData: {
+    forecastDate: PointForecast;
+    maxProbability: PointForecast;
+    alertLevel: PointForecast;
+    maxProbabilityStep: PointForecast;
+    dischargeTendencyImage: PointForecast;
+    peakForecasted: PointForecast;
+  };
+  hydrographImageUrl: string;
+  returnPeriodTable: {
+    returnPeriodData: any[];
+    returnPeriodHeaders: string[];
+  };
+  forecastDate: string;
+}

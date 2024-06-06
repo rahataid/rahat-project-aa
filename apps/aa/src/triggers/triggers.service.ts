@@ -91,43 +91,6 @@ export class TriggersService {
       return this.createManualTrigger(payload)
     }
 
-    // const readinessLevelInput = payload.triggerStatement && 'readinessLevel' in payload.triggerStatement;
-    // const activationLevelInput = payload.triggerStatement && 'activationLevel' in payload.triggerStatement;
-
-    // if (readinessLevelInput && payload.dataSource === 'DHM') {
-    //   const readinessExists = await this.prisma.triggers.findFirst({
-    //     where: {
-    //       dataSource: payload.dataSource,
-    //       location: payload.location,
-    //       triggerStatement: {
-    //         path: ['readinessLevel'],
-    //         not: null
-    //       },
-    //       isDeleted: false
-    //     }
-    //   })
-    //   if (readinessExists) throw new RpcException(`${payload.dataSource} already configured for readiness level.`)
-    // }
-
-    // if (activationLevelInput && payload.dataSource === 'DHM') {
-    //   const activationExists = await this.prisma.triggers.findFirst({
-    //     where: {
-    //       dataSource: payload.dataSource,
-    //       location: payload.location,
-    //       triggerStatement: {
-    //         path: ['activationLevel'],
-    //         not: null
-    //       },
-    //       isDeleted: false
-    //     }
-    //   })
-    //   if (activationExists) throw new RpcException(`${payload.dataSource} already configured for activation level.`)
-    // }
-
-    // if (dataSource) {
-    //   throw new RpcException(`${payload.dataSource} has already been configued!`);
-    // }
-
     const sanitizedPayload: AddTriggerStatement = {
       title: payload.title,
       dataSource: payload.dataSource,
@@ -136,7 +99,6 @@ export class TriggersService {
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
       isMandatory: payload.isMandatory,
-      // activities: payload.activities,
       repeatEvery: "30000",
     }
 
@@ -167,7 +129,6 @@ export class TriggersService {
   async scheduleJob(payload) {
     const uuid = randomUUID()
 
-    // const { activities, ...restOfPayload } = payload
     const { ...restOfPayload } = payload
 
     const jobPayload = {
@@ -200,9 +161,6 @@ export class TriggersService {
     await this.prisma.triggers.create({
       data: {
         ...createData,
-        // activities: {
-        //   connect: activities
-        // }
       }
     })
 

@@ -21,11 +21,12 @@ const phaseData = [
     },
     {
         uuid: "ecce09ad-2364-4e21-a59a-09b0f3a3fde5",
-        name: Phase.READINESS
+        name: Phase.READINESS,
     },
     {
         uuid: "c7e69410-f71c-40c0-bd06-6bb95494fd82",
-        name: Phase.ACTIVATION
+        name: Phase.ACTIVATION,
+        canTriggerPayout: true
     }
 ]
 
@@ -166,6 +167,13 @@ const main = async () => {
             DHM: {
                 location: 'Karnali at Chisapani',
                 url: 'https://bipadportal.gov.np/api/v1'
+            },
+            GLOFAS: {
+                location: 'Karnali at Chisapani',
+                url: "https://ows.globalfloods.eu/glofas-ows/ows.py",
+                bbox: "8753364.64714296,3117815.425733483,9092541.220653716,3456991.999244238", //bounding box for karnali at chisapani
+                i: "721", //coordinate for station
+                j: "303"
             }
         },
         isPrivate: false

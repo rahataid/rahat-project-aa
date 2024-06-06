@@ -114,8 +114,7 @@ export class PhasesService {
       })
     }
 
-    // ASSIGN TOKENS ON ACTIVATION, REFACTOR TO GENERIC SOLUTION
-    if (phaseDetails.name === 'ACTIVATION') {
+    if (phaseDetails.canTriggerPayout) {
       const allBenfs = await this.beneficiaryService.getAllBenfs()
       allBenfs?.forEach((benf, i) => {
         if (benf.benTokens) {
@@ -129,13 +128,9 @@ export class PhasesService {
               type: 'exponential',
               delay: i * 500,
             },
-
           });
         }
       })
-      for (const benf of allBenfs) {
-
-      }
     }
 
     return this.prisma.phases.update({
