@@ -63,6 +63,7 @@
     "@rumsan/settings": "^0.0.108",
     "axios": "^1.7.2",
     "bull": "^4.12.9",
+    "cheerio": "1.0.0-rc.12",
     "ethers": "^6.12.1",
     "ioredis": "^5.4.1",
     "luxon": "^3.4.4",

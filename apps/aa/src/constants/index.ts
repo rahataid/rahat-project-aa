@@ -53,6 +53,7 @@ export const JOBS = {
   },
   WATER_LEVELS: {
     GET_DHM: 'aa.jobs.waterLevels.getDhm',
+    GET_GLOFAS: 'aa.jobs.waterLevels.getGlofas'
   },
   SCHEDULE: {
     ADD: 'aa.jobs.schedule.add',

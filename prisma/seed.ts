@@ -166,6 +166,13 @@ const main = async () => {
             DHM: {
                 location: 'Karnali at Chisapani',
                 url: 'https://bipadportal.gov.np/api/v1'
+            },
+            GLOFAS: {
+                location: 'Karnali at Chisapani',
+                url: "https://ows.globalfloods.eu/glofas-ows/ows.py",
+                bbox: "8753364.64714296,3117815.425733483,9092541.220653716,3456991.999244238", //bounding box for karnali at chisapani
+                i: "721", //coordinate for station
+                j: "303"
             }
         },
         isPrivate: false
