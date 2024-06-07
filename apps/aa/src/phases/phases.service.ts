@@ -7,6 +7,7 @@ import { BQUEUE, JOBS } from "../constants";
 import { Queue } from "bull";
 import { BeneficiaryService } from "../beneficiary/beneficiary.service";
 import { TriggersService } from "../triggers/triggers.service";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 @Injectable()
 export class PhasesService {
@@ -16,6 +17,7 @@ export class PhasesService {
     private prisma: PrismaService,
     private readonly beneficiaryService: BeneficiaryService,
     private readonly triggerService: TriggersService,
+    private eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
   ) { }
