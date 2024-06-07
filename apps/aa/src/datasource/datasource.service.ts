@@ -21,9 +21,11 @@ export class DataSourceService implements OnApplicationBootstrap {
         this.synchronizeGlofas()
     }
 
-    @Cron('*/5 * * * * *')
+    // run one time every hour
+    @Cron('0 * * * *') 
     async synchronizeGlofas() {
         try {
+            this.logger.log("GLOFAS syncing once every hour")
             const { dateString, dateTimeString } = getFormattedGlofasDate()
             const glofasSettings = SettingsService.get('DATASOURCE.GLOFAS') as Omit<GlofasStationInfo, 'TIMESTRING'>;
 
@@ -45,9 +47,11 @@ export class DataSourceService implements OnApplicationBootstrap {
         }
     }
 
-    @Cron('*/60 * * * * *')
+
+    @Cron('*/5 * * * *') //every five minutes
     async synchronizeDHM() {
         try {
+            this.logger.log("DHM syncing every five minutes")
             const dhmSettings = SettingsService.get('DATASOURCE.DHM');
             const location = dhmSettings['LOCATION']
             const dhmURL = dhmSettings['URL']
