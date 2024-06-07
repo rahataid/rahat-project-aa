@@ -178,6 +178,11 @@ const main = async () => {
         },
         isPrivate: false
     })
+    await settings.create({
+        name: 'HAZARD_TYPE',
+        value: "River Flood",
+        isPrivate: false
+    })
     // ***** seed settings complete ***
 }
 

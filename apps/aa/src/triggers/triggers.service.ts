@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
 import { RpcException } from '@nestjs/microservices';
-import { Queue } from 'bull'
+import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { AddTriggerStatement, RemoveTriggerStatement, UpdateTriggerStatement } from '../dto';
+import {
+  AddTriggerStatement,
+  RemoveTriggerStatement,
+  UpdateTriggerStatement,
+} from '../dto';
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { GetOneTrigger, GetTriggers } from './dto';
@@ -19,43 +23,43 @@ export class TriggersService {
     private prisma: PrismaService,
     // private readonly glofasService: GlofasService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
-    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
-  ) { }
+    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue
+  ) {}
 
   /***********************
-  * Development Only
-  *************************/
+   * Development Only
+   *************************/
   async dev(payload: AddTriggerStatement) {
-    const all = await this.scheduleQueue.getRepeatableJobs()
+    const all = await this.scheduleQueue.getRepeatableJobs();
     // console.log(all)
     // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
     // console.log(all)
     for (const job of all) {
-      await this.scheduleQueue.removeRepeatableByKey(job.key)
+      await this.scheduleQueue.removeRepeatableByKey(job.key);
     }
-    return all
+    return all;
   }
   /***********************
-  * Development Only
-  *************************/
+   * Development Only
+   *************************/
 
   async getOne(payload: GetOneTrigger) {
     // console.log(payload)
-    const { repeatKey } = payload
+    const { repeatKey } = payload;
     return this.prisma.triggers.findUnique({
       where: {
-        repeatKey: repeatKey
+        repeatKey: repeatKey,
       },
       include: {
         // activities: true,
         hazardType: true,
-        phase: true
-      }
-    })
+        phase: true,
+      },
+    });
   }
 
   async getAll(payload: GetTriggers) {
-    const { page, perPage } = payload
+    const { page, perPage } = payload;
 
     // this.prisma.triggers.findMany({
     //   where: {
@@ -67,19 +71,19 @@ export class TriggersService {
       this.prisma.triggers,
       {
         where: {
-          isDeleted: false
+          isDeleted: false,
         },
         include: {
           hazardType: true,
           // activities: true,
-          phase: true
-        }
+          phase: true,
+        },
       },
       {
         page,
-        perPage
+        perPage,
       }
-    )
+    );
   }
 
   async create(payload: AddTriggerStatement) {
@@ -88,7 +92,7 @@ export class TriggersService {
     }
 
     if (payload.dataSource === DATA_SOURCES.MANUAL) {
-      return this.createManualTrigger(payload)
+      return this.createManualTrigger(payload);
     }
 
     const sanitizedPayload: AddTriggerStatement = {
@@ -99,55 +103,105 @@ export class TriggersService {
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
       isMandatory: payload.isMandatory,
-      repeatEvery: "30000",
-    }
+      repeatEvery: '30000',
+    };
 
     return this.scheduleJob(sanitizedPayload);
   }
 
   async remove(payload: RemoveTriggerStatement) {
-    const { repeatKey } = payload
-    const schedule = await this.prisma.triggers.findUnique({
+    const { repeatKey } = payload;
+    const trigger = await this.prisma.triggers.findUnique({
       where: {
         repeatKey: repeatKey,
-        isDeleted: false
-      }
-    })
-    if (!schedule) throw new RpcException(`Active schedule with id: ${repeatKey} not found.`)
-    await this.scheduleQueue.removeRepeatableByKey(repeatKey)
-    const updated = await this.prisma.triggers.update({
+        isDeleted: false,
+      },
+    });
+    if (!trigger)
+      throw new RpcException(`Active trigger with id: ${repeatKey} not found.`);
+    if (trigger.isTriggered)
+      throw new RpcException(`Cannot remove an activated trigger.`);
+
+    // this.phase
+
+    // if(trigger.isMandatory){
+    //   trigger.p
+    // }
+
+    await this.scheduleQueue.removeRepeatableByKey(repeatKey);
+    const updatedTrigger = await this.prisma.triggers.update({
       where: {
-        repeatKey: repeatKey
+        repeatKey: repeatKey,
       },
       data: {
-        isDeleted: true
-      }
-    })
-    return updated
+        isDeleted: true,
+      },
+    });
+
+    // if(trigger.isMandatory){
+    //   await this.prisma.phases.update({
+    //     where: {
+    //       uuid: trigger.phaseId
+    //     },
+    //     data: {
+
+    //     }
+    //   })
+    // }
+
+    return updatedTrigger;
+  }
+
+  async archive(payload: RemoveTriggerStatement) {
+    const { repeatKey } = payload;
+    const trigger = await this.prisma.triggers.findUnique({
+      where: {
+        repeatKey: repeatKey,
+        isDeleted: false,
+      },
+    });
+    if (!trigger)
+      throw new RpcException(`Active trigger with id: ${repeatKey} not found.`);
+
+    await this.scheduleQueue.removeRepeatableByKey(repeatKey);
+    const updatedTrigger = await this.prisma.triggers.update({
+      where: {
+        repeatKey: repeatKey,
+      },
+      data: {
+        isDeleted: true,
+      },
+    });
+
+    return updatedTrigger;
   }
 
   private async scheduleJob(payload) {
-    const uuid = randomUUID()
+    const uuid = randomUUID();
 
-    const { ...restOfPayload } = payload
+    const { ...restOfPayload } = payload;
 
     const jobPayload = {
       ...restOfPayload,
-      uuid
-    }
+      uuid,
+    };
 
-    const repeatable = await this.scheduleQueue.add(JOBS.SCHEDULE.ADD, jobPayload, {
-      jobId: uuid,
-      attempts: 3,
-      removeOnComplete: false,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-      repeat: {
-        every: Number(payload.repeatEvery)
+    const repeatable = await this.scheduleQueue.add(
+      JOBS.SCHEDULE.ADD,
+      jobPayload,
+      {
+        jobId: uuid,
+        attempts: 3,
+        removeOnComplete: false,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+        repeat: {
+          every: Number(payload.repeatEvery),
+        },
       }
-    });
+    );
 
     const repeatableKey = repeatable.opts.repeat.key;
 
@@ -155,30 +209,30 @@ export class TriggersService {
       repeatKey: repeatableKey,
       uuid: uuid,
       isDeleted: false,
-      ...restOfPayload
-    }
+      ...restOfPayload,
+    };
 
     await this.prisma.triggers.create({
       data: {
         ...createData,
-      }
-    })
+      },
+    });
 
-    return createData
+    return createData;
   }
 
   private async createManualTrigger(payload) {
-    const uuid = randomUUID()
-    const repeatKey = randomUUID()
+    const uuid = randomUUID();
+    const repeatKey = randomUUID();
 
     // const { activities, ...restData } = payload
-    const { ...restData } = payload
+    const { ...restData } = payload;
 
     const createData = {
       repeatKey: repeatKey,
       uuid: uuid,
-      ...restData
-    }
+      ...restData,
+    };
 
     return this.prisma.triggers.create({
       data: {
@@ -186,58 +240,63 @@ export class TriggersService {
         // activities: {
         //   connect: payload.activities
         // }
-      }
-    })
+      },
+    });
   }
 
   async activateTrigger(payload: UpdateTriggerStatement) {
     const trigger = await this.prisma.triggers.findUnique({
       where: {
-        repeatKey: payload?.repeatKey
-      }
-    })
+        repeatKey: payload?.repeatKey,
+      },
+    });
 
-    if (!trigger) throw new RpcException('Trigger not found.')
-    if (trigger.isTriggered) throw new RpcException('Trigger has already been activated.')
-    if (trigger.dataSource !== DATA_SOURCES.MANUAL) throw new RpcException('Cannot activate an automated trigger.')
+    if (!trigger) throw new RpcException('Trigger not found.');
+    if (trigger.isTriggered)
+      throw new RpcException('Trigger has already been activated.');
+    if (trigger.dataSource !== DATA_SOURCES.MANUAL)
+      throw new RpcException('Cannot activate an automated trigger.');
 
-    const triggerDocs = payload?.triggerDocuments ? JSON.parse(JSON.stringify(payload.triggerDocuments)) : []
+    const triggerDocs = payload?.triggerDocuments
+      ? JSON.parse(JSON.stringify(payload.triggerDocuments))
+      : [];
 
     const updatedTrigger = await this.prisma.triggers.update({
       where: {
-        uuid: trigger.uuid
+        uuid: trigger.uuid,
       },
       data: {
         isTriggered: true,
+        triggeredAt: new Date(),
         triggerDocuments: triggerDocs,
-        notes: payload?.notes || ""
-      }
-    })
+        notes: payload?.notes || '',
+      },
+    });
 
     if (trigger.isMandatory) {
       await this.prisma.phases.update({
         where: {
-          uuid: trigger.phaseId
+          uuid: trigger.phaseId,
         },
         data: {
           receivedMandatoryTriggers: {
-            increment: 1
-          }
-        }
-      })
+            increment: 1,
+          },
+        },
+      });
     }
 
     if (!trigger.isMandatory) {
       await this.prisma.phases.update({
         where: {
-          uuid: trigger.phaseId
+          uuid: trigger.phaseId,
         },
         data: {
           receivedOptionalTriggers: {
-            increment: 1
-          }
-        }
-      })
+            increment: 1,
+          },
+        },
+      });
     }
 
     this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
@@ -249,7 +308,7 @@ export class TriggersService {
       },
     });
 
-    return updatedTrigger
+    return updatedTrigger;
   }
 
   isValidDataSource(value: string) {

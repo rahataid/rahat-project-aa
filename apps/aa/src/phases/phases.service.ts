@@ -140,7 +140,8 @@ export class PhasesService {
         uuid: uuid
       },
       data: {
-        isActive: true
+        isActive: true,
+        activatedAt: new Date()
       }
     })
   }
@@ -222,7 +223,7 @@ export class PhasesService {
         })
       }
 
-      await this.triggerService.remove({
+      await this.triggerService.archive({
         repeatKey
       })
     }
@@ -234,7 +235,8 @@ export class PhasesService {
       data: {
         receivedMandatoryTriggers: 0,
         receivedOptionalTriggers: 0,
-        isActive: false
+        isActive: false,
+        activatedAt: null
       }
     })
 
