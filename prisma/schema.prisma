@@ -142,8 +142,8 @@ model HazardTypes {
   uuid String @unique @default(uuid())
 
   name       String       @unique
-  activities Activities[]
-  triggers   Triggers[]
+  // activities Activities[]
+  // triggers   Triggers[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -199,8 +199,8 @@ model Activities {
   phaseId        String
   category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
   categoryId     String
-  hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
-  hazardTypeId   String
+  // hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
+  // hazardTypeId   String
   leadTime       String
   responsibility String
   source         String
@@ -242,8 +242,8 @@ model Triggers {
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
   phaseId String?
 
-  hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
-  hazardTypeId String?
+  // hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
+  // hazardTypeId String?
 
   // datas      TriggersData[]
   // activities Activities[]
