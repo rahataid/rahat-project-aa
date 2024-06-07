@@ -6,6 +6,7 @@ import { InjectQueue } from "@nestjs/bull";
 import { BQUEUE, JOBS } from "../constants";
 import { Queue } from "bull";
 import { BeneficiaryService } from "../beneficiary/beneficiary.service";
+import { TriggersService } from "../triggers/triggers.service";
 
 @Injectable()
 export class PhasesService {
@@ -13,9 +14,8 @@ export class PhasesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService,
     private readonly beneficiaryService: BeneficiaryService,
-    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
+    private readonly triggerService: TriggersService,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
   ) { }
@@ -179,9 +179,63 @@ export class PhasesService {
     return updatedPhase
   }
 
-  async revertPhase(payload){
-    console.log(payload)
-    return "ok"
+  async revertPhase(payload) {
+    const { phaseId } = payload
+    const phase = await this.prisma.phases.findUnique({
+      where: {
+        uuid: phaseId
+      },
+      include: {
+        triggers: {
+          where: {
+            isDeleted: false
+          }
+        }
+      }
+    })
+
+    if (!phase) throw new RpcException('Phase not found.')
+
+    if (!phase.triggers.length || !phase.isActive || !phase.canRevert) throw new RpcException('Phase cannot be reverted.');
+
+    for (const trigger of phase.triggers) {
+      const { repeatKey } = trigger
+      if (trigger.dataSource === 'MANUAL') {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+          hazardTypeId: trigger.hazardTypeId
+        })
+      } else {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          location: trigger.location,
+          triggerStatement: JSON.parse(JSON.stringify(trigger.triggerStatement)),
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+          hazardTypeId: trigger.hazardTypeId
+        })
+      }
+
+      await this.triggerService.remove({
+        repeatKey
+      })
+    }
+
+    const updatedPhase = await this.prisma.phases.update({
+      where: {
+        uuid: phaseId
+      },
+      data: {
+        receivedMandatoryTriggers: 0,
+        receivedOptionalTriggers: 0
+      }
+    })
+
+    return updatedPhase
   }
 
   async calculatePhaseActivities() {

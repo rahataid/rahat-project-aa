@@ -23,5 +23,6 @@ import { DataSourceModule } from '../datasource/datasource.module';
   ],
   providers: [TriggersService],
   controllers: [TriggersController],
+  exports: [TriggersService]
 })
 export class TriggersModule { }

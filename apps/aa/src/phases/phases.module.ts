@@ -5,6 +5,7 @@ import { PrismaModule } from "@rumsan/prisma";
 import { BullModule } from "@nestjs/bull";
 import { BQUEUE } from "../constants";
 import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
+import { TriggersModule } from "../triggers/triggers.module";
 
 @Module({
     imports: [
@@ -18,7 +19,8 @@ import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
         BullModule.registerQueue({
             name: BQUEUE.COMMUNICATION,
         }),
-        BeneficiaryModule
+        BeneficiaryModule,
+        TriggersModule
     ],
     controllers: [PhasesController],
     providers: [PhasesService],

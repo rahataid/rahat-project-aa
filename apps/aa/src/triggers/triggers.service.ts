@@ -23,8 +23,8 @@ export class TriggersService {
   ) { }
 
   /***********************
-* Development Only
-*************************/
+  * Development Only
+  *************************/
   async dev(payload: AddTriggerStatement) {
     const all = await this.scheduleQueue.getRepeatableJobs()
     // console.log(all)
@@ -36,8 +36,8 @@ export class TriggersService {
     return all
   }
   /***********************
-* Development Only
-*************************/
+  * Development Only
+  *************************/
 
   async getOne(payload: GetOneTrigger) {
     // console.log(payload)
@@ -126,7 +126,7 @@ export class TriggersService {
     return updated
   }
 
-  async scheduleJob(payload) {
+  private async scheduleJob(payload) {
     const uuid = randomUUID()
 
     const { ...restOfPayload } = payload
@@ -167,7 +167,7 @@ export class TriggersService {
     return createData
   }
 
-  async createManualTrigger(payload) {
+  private async createManualTrigger(payload) {
     const uuid = randomUUID()
     const repeatKey = randomUUID()
 

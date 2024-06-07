@@ -37,7 +37,7 @@ export class PhasesController {
     })
     async revertPhase(payload) {
         return this.phasesService.revertPhase(payload)
-    }
+    } 
 
     @MessagePattern({
         cmd: JOBS.PHASES.GET_STATS,
