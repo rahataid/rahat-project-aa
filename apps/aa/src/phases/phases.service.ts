@@ -231,7 +231,8 @@ export class PhasesService {
       },
       data: {
         receivedMandatoryTriggers: 0,
-        receivedOptionalTriggers: 0
+        receivedOptionalTriggers: 0,
+        isActive: false
       }
     })
 
