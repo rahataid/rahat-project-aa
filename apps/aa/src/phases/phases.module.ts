@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { PhasesController } from "./phases.controller";
 import { PhasesService } from "./phases.service";
 import { PrismaModule } from "@rumsan/prisma";
@@ -20,7 +20,8 @@ import { TriggersModule } from "../triggers/triggers.module";
             name: BQUEUE.COMMUNICATION,
         }),
         BeneficiaryModule,
-        TriggersModule
+        // TriggersModule
+        forwardRef(() => TriggersModule)
     ],
     controllers: [PhasesController],
     providers: [PhasesService],

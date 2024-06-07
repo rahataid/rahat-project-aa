@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
 import { RpcException } from "@nestjs/microservices";
 import { InjectQueue } from "@nestjs/bull";
@@ -16,6 +16,7 @@ export class PhasesService {
   constructor(
     private prisma: PrismaService,
     private readonly beneficiaryService: BeneficiaryService,
+    @Inject(forwardRef(() => TriggersService))
     private readonly triggerService: TriggersService,
     private eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,

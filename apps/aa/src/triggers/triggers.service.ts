@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { BQUEUE, DATA_SOURCES, JOBS } from '../constants';
 import { RpcException } from '@nestjs/microservices';
 import { Queue } from 'bull';
@@ -11,7 +11,7 @@ import {
 import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { GetOneTrigger, GetTriggers } from './dto';
-// import { GlofasService } from '../datasource/glofas.service';
+import { PhasesService } from '../phases/phases.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -21,37 +21,29 @@ export class TriggersService {
 
   constructor(
     private prisma: PrismaService,
-    // private readonly glofasService: GlofasService,
+    @Inject(forwardRef(() => PhasesService))
+    private readonly phasesService: PhasesService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue
   ) {}
 
-  /***********************
-   * Development Only
-   *************************/
+  // dev only
   async dev(payload: AddTriggerStatement) {
     const all = await this.scheduleQueue.getRepeatableJobs();
-    // console.log(all)
-    // await this.scheduleQueue.removeRepeatableByKey('aa.jobs.schedule.add:8a8a552f-f516-4442-a7d6-8a3bd967c12b::5555555')
-    // console.log(all)
     for (const job of all) {
       await this.scheduleQueue.removeRepeatableByKey(job.key);
     }
     return all;
   }
-  /***********************
-   * Development Only
-   *************************/
+  // dev only end
 
   async getOne(payload: GetOneTrigger) {
-    // console.log(payload)
     const { repeatKey } = payload;
     return this.prisma.triggers.findUnique({
       where: {
         repeatKey: repeatKey,
       },
       include: {
-        // activities: true,
         hazardType: true,
         phase: true,
       },
@@ -116,16 +108,31 @@ export class TriggersService {
         repeatKey: repeatKey,
         isDeleted: false,
       },
+      include: {phase: true}
     });
     if (!trigger)
       throw new RpcException(`Active trigger with id: ${repeatKey} not found.`);
     if (trigger.isTriggered)
       throw new RpcException(`Cannot remove an activated trigger.`);
+    if(trigger.phase.isActive) throw new RpcException('Cannot remove triggers from an active phase.')
 
-    // this.phase
+    const phaseDetail = await this.phasesService.getOne({
+      uuid: trigger.phaseId
+    })
+
+    // check if optional triggers criterias are disrupted
+    if(!trigger.isMandatory){
+      const totalTriggersAfterDeleting = Number(phaseDetail.triggerRequirements.optionalTriggers.totalTriggers) - 1
+      if(totalTriggersAfterDeleting<phaseDetail.requiredOptionalTriggers) {
+        throw new RpcException('Trigger criterias disrupted.')
+      }
+    }
 
     // if(trigger.isMandatory){
-    //   trigger.p
+    //   const totalTriggersAfterDeleting = Number(phaseDetail.triggerRequirements.mandatoryTriggers.totalTriggers) - 1
+    //   if(totalTriggersAfterDeleting<phaseDetail.requiredMandatoryTriggers) {
+    //     throw new RpcException('Trigger criterias disrupted.')
+    //   }
     // }
 
     await this.scheduleQueue.removeRepeatableByKey(repeatKey);
@@ -138,16 +145,40 @@ export class TriggersService {
       },
     });
 
-    // if(trigger.isMandatory){
+    if(trigger.isMandatory){
+      await this.prisma.phases.update({
+        where: {
+          uuid: trigger.phaseId
+        },
+        data: {
+          requiredMandatoryTriggers: {
+            decrement: 1
+          }
+        }
+      })
+    }
+
+    // if(!trigger.isMandatory){
     //   await this.prisma.phases.update({
     //     where: {
     //       uuid: trigger.phaseId
     //     },
     //     data: {
-
+    //       requiredOptionalTriggers: {
+    //         decrement: 1
+    //       }
     //     }
     //   })
     // }
+    
+    this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+    });
 
     return updatedTrigger;
   }
