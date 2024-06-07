@@ -272,3 +272,14 @@ model SourcesData {
 
   @@map("tbl_sources_data")
 }
+
+model Stats {
+  name  String  @id @unique
+  data  Json
+  group String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stats")
+}
