@@ -179,6 +179,11 @@ export class PhasesService {
     return updatedPhase
   }
 
+  async revertPhase(payload){
+    console.log(payload)
+    return "ok"
+  }
+
   async calculatePhaseActivities() {
     const phases = await this.prisma.phases.findMany()
 

@@ -166,6 +166,7 @@ model Phases {
   receivedMandatoryTriggers Int? @default(0)
   receivedOptionalTriggers  Int? @default(0)
 
+  canRevert        Boolean @default(false)
   canTriggerPayout Boolean @default(false)
   isActive         Boolean @default(false)
 

@@ -32,6 +32,14 @@ export class PhasesController {
     }
 
     @MessagePattern({
+        cmd: JOBS.PHASES.REVERT_PHASE,
+        uuid: process.env.PROJECT_ID,
+    })
+    async revertPhase(payload) {
+        return this.phasesService.revertPhase(payload)
+    }
+
+    @MessagePattern({
         cmd: JOBS.PHASES.GET_STATS,
         uuid: process.env.PROJECT_ID,
     })

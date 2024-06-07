@@ -112,6 +112,7 @@ CREATE TABLE "tbl_phases" (
     "requiredOptionalTriggers" INTEGER DEFAULT 0,
     "receivedMandatoryTriggers" INTEGER DEFAULT 0,
     "receivedOptionalTriggers" INTEGER DEFAULT 0,
+    "canRevert" BOOLEAN NOT NULL DEFAULT false,
     "canTriggerPayout" BOOLEAN NOT NULL DEFAULT false,
     "isActive" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
