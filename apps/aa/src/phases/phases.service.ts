@@ -1,11 +1,13 @@
 import { ConfigService } from "@nestjs/config";
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
 import { RpcException } from "@nestjs/microservices";
 import { InjectQueue } from "@nestjs/bull";
 import { BQUEUE, JOBS } from "../constants";
 import { Queue } from "bull";
 import { BeneficiaryService } from "../beneficiary/beneficiary.service";
+import { TriggersService } from "../triggers/triggers.service";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 @Injectable()
 export class PhasesService {
@@ -13,9 +15,10 @@ export class PhasesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService,
     private readonly beneficiaryService: BeneficiaryService,
-    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
+    @Inject(forwardRef(() => TriggersService))
+    private readonly triggerService: TriggersService,
+    private eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
   ) { }
@@ -138,7 +141,8 @@ export class PhasesService {
         uuid: uuid
       },
       data: {
-        isActive: true
+        isActive: true,
+        activatedAt: new Date()
       }
     })
   }
@@ -173,6 +177,67 @@ export class PhasesService {
       data: {
         requiredMandatoryTriggers: triggerRequirements.mandatoryTriggers.requiredTriggers,
         requiredOptionalTriggers: triggerRequirements.optionalTriggers.requiredTriggers
+      }
+    })
+
+    return updatedPhase
+  }
+
+  async revertPhase(payload) {
+    const { phaseId } = payload
+    const phase = await this.prisma.phases.findUnique({
+      where: {
+        uuid: phaseId
+      },
+      include: {
+        triggers: {
+          where: {
+            isDeleted: false
+          }
+        }
+      }
+    })
+
+    if (!phase) throw new RpcException('Phase not found.')
+
+    if (!phase.triggers.length || !phase.isActive || !phase.canRevert) throw new RpcException('Phase cannot be reverted.');
+
+    for (const trigger of phase.triggers) {
+      const { repeatKey } = trigger
+      if (trigger.dataSource === 'MANUAL') {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+          hazardTypeId: trigger.hazardTypeId
+        })
+      } else {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          location: trigger.location,
+          triggerStatement: JSON.parse(JSON.stringify(trigger.triggerStatement)),
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+          hazardTypeId: trigger.hazardTypeId
+        })
+      }
+
+      await this.triggerService.archive({
+        repeatKey
+      })
+    }
+
+    const updatedPhase = await this.prisma.phases.update({
+      where: {
+        uuid: phaseId
+      },
+      data: {
+        receivedMandatoryTriggers: 0,
+        receivedOptionalTriggers: 0,
+        isActive: false,
+        activatedAt: null
       }
     })
 

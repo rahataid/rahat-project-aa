@@ -112,8 +112,10 @@ CREATE TABLE "tbl_phases" (
     "requiredOptionalTriggers" INTEGER DEFAULT 0,
     "receivedMandatoryTriggers" INTEGER DEFAULT 0,
     "receivedOptionalTriggers" INTEGER DEFAULT 0,
+    "canRevert" BOOLEAN NOT NULL DEFAULT false,
     "canTriggerPayout" BOOLEAN NOT NULL DEFAULT false,
     "isActive" BOOLEAN NOT NULL DEFAULT false,
+    "activatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
@@ -173,6 +175,7 @@ CREATE TABLE "tbl_triggers" (
     "isMandatory" BOOLEAN NOT NULL DEFAULT false,
     "isTriggered" BOOLEAN NOT NULL DEFAULT false,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "triggeredAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
@@ -190,6 +193,17 @@ CREATE TABLE "tbl_sources_data" (
     "updatedAt" TIMESTAMP(3),
 
     CONSTRAINT "tbl_sources_data_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_stats" (
+    "name" TEXT NOT NULL,
+    "data" JSONB NOT NULL,
+    "group" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_stats_pkey" PRIMARY KEY ("name")
 );
 
 -- CreateTable
@@ -245,6 +259,9 @@ CREATE UNIQUE INDEX "tbl_triggers_repeatKey_key" ON "tbl_triggers"("repeatKey");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tbl_sources_data_uuid_key" ON "tbl_sources_data"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_stats_name_key" ON "tbl_stats"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "_StakeholdersToStakeholdersGroups_AB_unique" ON "_StakeholdersToStakeholdersGroups"("A", "B");

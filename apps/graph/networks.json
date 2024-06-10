@@ -1,14 +1,40 @@
 {
-  "arbitrum-sepolia": {
-    "AAProject": {
-      "address": "0x8fdf853969b34A283d6B0fb8f5261089EA584138",
-      "startBlock": 49034811
+    "arbitrum-sepolia": {
+        "AAProject": {
+            "address": "0x8fdf853969b34A283d6B0fb8f5261089EA584138",
+            "startBlock": 49034811
+        },
+        "RahatToken": {
+            "address": "0x24cf5398ed50960E573c174fCdCD8d810f82e55A"
+        },
+        "RahatDonor": {
+            "address": "0xe07b6F0cd2b72e19D65A408d564d8f23e23FDBaF"
+        }
     },
-    "RahatToken": {
-      "address": "0x24cf5398ed50960E573c174fCdCD8d810f82e55A"
-    },
-    "RahatDonor": {
-      "address": "0xe07b6F0cd2b72e19D65A408d564d8f23e23FDBaF"
+    "mainnet": {
+        "AccessManager": {
+            "address": "0xc6B4354CA5B86571C9fD791814acA64E4aFfED2B",
+            "startBlock": 1
+        },
+        "TriggerManager": {
+            "address": "0x2a994d38bD9baB9832297ddcB9596D76a8315c54",
+            "startBlock": 1
+        },
+        "RahatDonor": {
+            "address": "0xc975552C1Bf33eAf5495565696A973f1ae8DDeF6",
+            "startBlock": 1
+        },
+        "ERC2771Forwarder": {
+            "address": "0x92a28dF7AA7F9FEAd5fbc7d13F0EE32E2353BE65",
+            "startBlock": 1
+        },
+        "RahatToken": {
+            "address": "0xF87dd6cD537f830b4C49F5A9E57e407D64074e89",
+            "startBlock": 1
+        },
+        "AAProject": {
+            "address": "0xb0c7602F3c4BB02fEf446083dE9f1071D6b7B696",
+            "startBlock": 1
+        }
     }
-  }
 }

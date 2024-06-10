@@ -166,9 +166,11 @@ model Phases {
   receivedMandatoryTriggers Int? @default(0)
   receivedOptionalTriggers  Int? @default(0)
 
+  canRevert        Boolean @default(false)
   canTriggerPayout Boolean @default(false)
   isActive         Boolean @default(false)
 
+  activatedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -250,10 +252,11 @@ model Triggers {
 
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
+  isDeleted   Boolean @default(false)
 
-  isDeleted Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
 
   @@map("tbl_triggers")
 }
@@ -270,4 +273,15 @@ model SourcesData {
   updatedAt DateTime? @updatedAt()
 
   @@map("tbl_sources_data")
+}
+
+model Stats {
+  name  String  @id @unique
+  data  Json
+  group String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stats")
 }

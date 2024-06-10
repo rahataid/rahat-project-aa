@@ -1,10 +1,11 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { PhasesController } from "./phases.controller";
 import { PhasesService } from "./phases.service";
 import { PrismaModule } from "@rumsan/prisma";
 import { BullModule } from "@nestjs/bull";
 import { BQUEUE } from "../constants";
 import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
+import { TriggersModule } from "../triggers/triggers.module";
 
 @Module({
     imports: [
@@ -18,7 +19,9 @@ import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
         BullModule.registerQueue({
             name: BQUEUE.COMMUNICATION,
         }),
-        BeneficiaryModule
+        BeneficiaryModule,
+        // TriggersModule
+        forwardRef(() => TriggersModule)
     ],
     controllers: [PhasesController],
     providers: [PhasesService],
