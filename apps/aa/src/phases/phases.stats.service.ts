@@ -136,13 +136,21 @@ export class PhasesStatsService {
         phase,
       });
     }
-    return activitiesStats;
+
+    await this.statsService.save({
+      name: 'ACTIVITIES',
+      group: 'activities',
+      data: activitiesStats
+    })
+
+    return;
   }
 
   async getStats() {
-    const [phaseActivities] = await Promise.all([
-      this.calculatePhaseActivities(),
-    ]);
+    const phaseActivities = await this.statsService.findOne({
+      name: 'ACTIVITIES'
+    })
+ 
     return {
       phaseActivities,
     };

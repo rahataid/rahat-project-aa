@@ -126,6 +126,9 @@ export const JOBS = {
 export const EVENTS = {
   PHASE_ACTIVATED: 'events.phase_activated',
   PHASE_REVERTED: 'events.phase_reverted',
+  ACTIVITY_COMPLETED: 'events.activity_completed',
+  ACTIVITY_DELETED: 'events.activity_deleted',
+  ACTIVITY_ADDED: 'events.activity_added'
 };
 
 export const BQUEUE = {

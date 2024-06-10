@@ -22,4 +22,12 @@ export class StatsProcessor {
     return
   }
 
+  @OnEvent(EVENTS.ACTIVITY_COMPLETED)
+  @OnEvent(EVENTS.ACTIVITY_DELETED)
+  @OnEvent(EVENTS.ACTIVITY_ADDED)
+  async onActivityCompleted() {
+    this.phasesStatsService.calculatePhaseActivities()
+    return
+  }
+
 }
