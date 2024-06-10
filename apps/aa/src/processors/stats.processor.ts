@@ -1,14 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
 import { PhasesService } from '../phases/phases.service';
 import { PhasesStatsService } from '../phases/phases.stats.service';
 
 @Injectable()
-export class StatsProcessor {
+export class StatsProcessor implements OnApplicationBootstrap{
   constructor(
     private readonly phasesStatsService: PhasesStatsService
   ) { }
+
+  async onApplicationBootstrap() {
+    this.phasesStatsService.calculatePhaseActivities()
+  }
 
   @OnEvent(EVENTS.PHASE_ACTIVATED)
   async onPhaseTriggered(eventObject) {
