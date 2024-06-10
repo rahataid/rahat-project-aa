@@ -39,7 +39,7 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    const { activityCommunication, title, isAutomated, leadTime, categoryId, description, hazardTypeId, phaseId, responsibility, source, activityDocuments } = payload
+    const { activityCommunication, title, isAutomated, leadTime, categoryId, description, phaseId, responsibility, source, activityDocuments } = payload
 
     const createActivityCommunicationPayload = []
     const createActivityPayoutPayload = []
@@ -82,9 +82,9 @@ export class ActivitiesService {
         category: {
           connect: { uuid: categoryId }
         },
-        hazardType: {
-          connect: { uuid: hazardTypeId }
-        },
+        // hazardType: {
+        //   connect: { uuid: hazardTypeId }
+        // },
         phase: {
           connect: { uuid: phaseId }
         },
@@ -216,7 +216,7 @@ export class ActivitiesService {
       },
       include: {
         category: true,
-        hazardType: true,
+        // hazardType: true,
         phase: true
       }
     })
@@ -273,7 +273,7 @@ export class ActivitiesService {
       perPage,
       title,
       category,
-      hazardType,
+      // hazardType,
       phase,
       isComplete,
       isApproved,
@@ -284,14 +284,14 @@ export class ActivitiesService {
         isDeleted: false,
         ...(title && { title: { contains: title, mode: 'insensitive' } }),
         ...(category && { categoryId: category }),
-        ...(hazardType && { hazardTypeId: hazardType }),
+        // ...(hazardType && { hazardTypeId: hazardType }),
         ...(phase && { phaseId: phase }),
         ...(isComplete && { isComplete: isComplete }),
         ...(isApproved && { isApproved: isApproved }),
       },
       include: {
         category: true,
-        hazardType: true,
+        // hazardType: true,
         phase: true,
       },
     };
@@ -332,7 +332,7 @@ export class ActivitiesService {
   }
 
   async update(payload: UpdateActivityData) {
-    const { uuid, activityCommunication, isAutomated, title, source, responsibility, phaseId, leadTime, hazardTypeId, description, categoryId, activityDocuments } = payload
+    const { uuid, activityCommunication, isAutomated, title, source, responsibility, phaseId, leadTime, description, categoryId, activityDocuments } = payload
     const activity = await this.prisma.activities.findUnique({
       where: {
         uuid: uuid
@@ -417,11 +417,11 @@ export class ActivitiesService {
             uuid: categoryId || activity.categoryId
           }
         },
-        hazardType: {
-          connect: {
-            uuid: hazardTypeId || activity.hazardTypeId
-          }
-        },
+        // hazardType: {
+        //   connect: {
+        //     uuid: hazardTypeId || activity.hazardTypeId
+        //   }
+        // },
         activityCommunication: updateActivityCommunicationPayload,
         activityDocuments: updateActivityDocuments || activity.activityDocuments,
         updatedAt: new Date()

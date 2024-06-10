@@ -17,7 +17,7 @@ export interface AddActivityData {
   leadTime: string;
   phaseId: string;
   categoryId: string;
-  hazardTypeId: string;
+  // hazardTypeId: string;
   responsibility: string;
   source: string;
   description: string;
@@ -33,7 +33,7 @@ export interface UpdateActivityData {
   leadTime?: string;
   phaseId?: string;
   categoryId?: string;
-  hazardTypeId?: string;
+  // hazardTypeId?: string;
   responsibility?: string;
   isAutomated: boolean;
   source?: string;
@@ -62,7 +62,7 @@ export interface GetActivitiesDto {
   isApproved: boolean;
   phase: string;
   category: string;
-  hazardType: string;
+  // hazardType: string;
   page: number;
   perPage: number;
 }

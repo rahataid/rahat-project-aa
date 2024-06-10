@@ -44,10 +44,11 @@ export class TriggersService {
         repeatKey: repeatKey,
       },
       include: {
-        hazardType: true,
-        phase: true,
-      },
-    });
+        // activities: true,
+        // hazardType: true,
+        phase: true
+      }
+    })
   }
 
   async getAll(payload: GetTriggers) {
@@ -66,7 +67,7 @@ export class TriggersService {
           isDeleted: false,
         },
         include: {
-          hazardType: true,
+          // hazardType: true,
           // activities: true,
           phase: true,
         },
@@ -91,7 +92,7 @@ export class TriggersService {
       title: payload.title,
       dataSource: payload.dataSource,
       location: payload.location,
-      hazardTypeId: payload.hazardTypeId,
+      // hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
       isMandatory: payload.isMandatory,
