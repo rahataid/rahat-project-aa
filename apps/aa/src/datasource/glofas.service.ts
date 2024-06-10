@@ -108,9 +108,6 @@ export class GlofasService implements AbstractSource {
                 }
             })
 
-            console.log("trigger updated");
-            console.log("reached probabiliy called");
-
             this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, payload, {
                 attempts: 3,
                 removeOnComplete: true,

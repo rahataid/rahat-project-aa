@@ -24,8 +24,6 @@ export class ContractProcessor {
         wallet: string
       }
 
-      console.log("Processing payload:", payload);
-
       const { contract: aaContract, provider, wallet } = await this.createContractInstanceSign('AAPROJECT')
       // const gasPrice = ethers.parseUnits('500', 'gwei')
 
@@ -44,7 +42,6 @@ export class ContractProcessor {
       this.logger.log("contract called with txn hash:", txn.hash);
       return "ok"
     } catch (err) {
-      console.log(err);
       throw err
     }
   }
