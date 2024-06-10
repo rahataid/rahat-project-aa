@@ -128,6 +128,7 @@ export const JOBS = {
 
 export const EVENTS = {
   WATER_LEVEL_NOTIFICATION: 'events.water_level_notification',
+  PHASE_TRIGGERED: 'events.phase_triggered'
 };
 
 export const BQUEUE = {
