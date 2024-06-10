@@ -245,8 +245,6 @@ export class BeneficiaryService {
   }
 
   async getOneTokenReservation(payload) {
-
-    console.log(payload);
     const { uuid } = payload
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: {

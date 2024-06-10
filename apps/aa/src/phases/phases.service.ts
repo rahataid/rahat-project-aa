@@ -147,7 +147,7 @@ export class PhasesService {
     })
 
     // event to calculate reporting 
-    this.eventEmitter.emit(EVENTS.PHASE_TRIGGERED, {
+    this.eventEmitter.emit(EVENTS.PHASE_ACTIVATED, {
       phaseId: phaseDetails.uuid
     });
 
@@ -234,6 +234,8 @@ export class PhasesService {
       })
     }
 
+    const currentDate = new Date()
+
     const updatedPhase = await this.prisma.phases.update({
       where: {
         uuid: phaseId
@@ -242,9 +244,15 @@ export class PhasesService {
         receivedMandatoryTriggers: 0,
         receivedOptionalTriggers: 0,
         isActive: false,
-        activatedAt: null
+        activatedAt: null,
+        updatedAt: currentDate
       }
     })
+
+    this.eventEmitter.emit(EVENTS.PHASE_REVERTED, {
+      phaseId: phase.uuid,
+      revertedAt: currentDate.toISOString()
+    });
 
     return updatedPhase
   }

@@ -10,9 +10,15 @@ export class StatsProcessor {
     private readonly phasesStatsService: PhasesStatsService
   ) { }
 
-  @OnEvent(EVENTS.PHASE_TRIGGERED)
+  @OnEvent(EVENTS.PHASE_ACTIVATED)
   async onPhaseTriggered(eventObject) {
-    this.phasesStatsService.saveTriggerStats(eventObject.phaseId)
+    this.phasesStatsService.savePhaseActivatedStats(eventObject.phaseId)
+    return
+  }
+
+  @OnEvent(EVENTS.PHASE_REVERTED)
+  async onPhaseReverted(eventObject) {
+    this.phasesStatsService.savePhaseRevertStats(eventObject)
     return
   }
 

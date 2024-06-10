@@ -12,7 +12,6 @@ export class ContractController {
         uuid: process.env.PROJECT_ID,
     })
     async increaseBudget(data) {
-      console.log(data)
         return "True"
     }
 

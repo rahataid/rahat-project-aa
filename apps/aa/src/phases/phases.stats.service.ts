@@ -1,6 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@rumsan/prisma";
-import { StatsService } from "../stats";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '@rumsan/prisma';
+import { StatsService } from '../stats';
 
 @Injectable()
 export class PhasesStatsService {
@@ -9,32 +9,113 @@ export class PhasesStatsService {
   constructor(
     private prisma: PrismaService,
     private readonly statsService: StatsService
-  ) { }
+  ) {}
 
-  
-  async calculatePhaseTriggeres(phaseId: string) {
-    const phaseDetail = this.prisma.phases.findUnique({
-        where: {
-            uuid: phaseId
-        }
-    })
-    const prevStats = this.statsService.findOne({
-        name: 'phase_triggered'
-    })
-    console.log("prev stats", prevStats)
+  async savePhaseActivatedStats(phaseId: string) {
+    const phaseDetail = await this.prisma.phases.findUnique({
+      where: {
+        uuid: phaseId,
+      },
+    });
+	
+	const statName = (`${phaseDetail.name}_phase_activated`).toUpperCase()
+
+    const prevStats = await this.statsService.findOne({
+      name: statName,
+    });
+
+
+    // intitial record
+    if (!prevStats) {
+      await this.statsService.save({
+        name: statName,
+        group: 'phase',
+        data: {
+          activationHistory: [
+            { phase: phaseDetail.name, activatedAt: phaseDetail.activatedAt },
+          ],
+          count: 1,
+        },
+      });
+      return;
+    }
+
+    const prevStatsData = JSON.parse(JSON.stringify(prevStats.data));
+
+    const newActivationStats = {
+      activationHistory: [
+        ...prevStatsData.activationHistory,
+        { phase: phaseDetail.name, activatedAt: phaseDetail.activatedAt },
+      ],
+      count: Number(prevStatsData.count) + 1,
+    };
+
+    await this.statsService.save({
+      name: statName,
+      group: 'phase',
+      data: newActivationStats,
+    });
+
+    return;
+  }
+
+  async savePhaseRevertStats(payload: { phaseId: string; revertedAt: string }) {
+    const { phaseId, revertedAt } = payload;
+    const phaseDetail = await this.prisma.phases.findUnique({
+      where: {
+        uuid: phaseId,
+      },
+    });
+
+	const statName = (`${phaseDetail.name}_phase_reverted`).toUpperCase()
+
+    const prevStats = await this.statsService.findOne({
+      name: statName
+    });
+
+    // intitial record
+    if (!prevStats) {
+      await this.statsService.save({
+        name: statName,
+        group: 'phase',
+        data: {
+          revertHistory: [{ phase: phaseDetail.name, revertedAt }],
+          count: 1,
+        },
+      });
+      return;
+    }
+
+    const prevStatsData = JSON.parse(JSON.stringify(prevStats.data));
+
+    const newRevertStats = {
+		revertHistory: [
+        ...prevStatsData.revertHistory,
+        { phase: phaseDetail.name, revertedAt },
+      ],
+      count: Number(prevStatsData.count) + 1,
+    };
+
+    await this.statsService.save({
+      name: statName,
+      group: 'phase',
+      data: newRevertStats,
+    });
+
+    return;
   }
 
   async calculatePhaseActivities() {
-    const phases = await this.prisma.phases.findMany()
+    const phases = await this.prisma.phases.findMany();
 
-    let activitiesStats = []
+    let activitiesStats = [];
     for (const phase of phases) {
       const totalActivities = await this.prisma.activities.count({
         where: {
           phaseId: phase.uuid,
-          isDeleted: false
+          isDeleted: false,
         },
-      })
+      });
 
       const totalCompletedActivities = await this.prisma.activities.count({
         where: {
@@ -44,35 +125,26 @@ export class PhasesStatsService {
         },
       });
 
-      const completedPercentage = totalCompletedActivities ? ((totalCompletedActivities / totalActivities) * 100).toFixed(2) : 0;
+      const completedPercentage = totalCompletedActivities
+        ? ((totalCompletedActivities / totalActivities) * 100).toFixed(2)
+        : 0;
 
       activitiesStats.push({
         totalActivities,
         totalCompletedActivities,
         completedPercentage,
-        phase
-      })
+        phase,
+      });
     }
-    return activitiesStats
+    return activitiesStats;
   }
 
   async getStats() {
     const [phaseActivities] = await Promise.all([
-      this.calculatePhaseActivities()
+      this.calculatePhaseActivities(),
     ]);
     return {
-      phaseActivities
-    }
-  }
-
-  async saveTriggerStats(phaseId: string){
-    const data = this.calculatePhaseTriggeres(phaseId)
-
-    await this.statsService.save({
-        name: 'phase_triggered',
-        group: 'phase',
-        data: {}
-    })
+      phaseActivities,
+    };
   }
 }
-
