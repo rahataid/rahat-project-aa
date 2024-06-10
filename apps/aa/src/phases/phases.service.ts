@@ -210,7 +210,6 @@ export class PhasesService {
           dataSource: trigger.dataSource,
           isMandatory: trigger.isMandatory,
           phaseId: trigger.phaseId,
-          hazardTypeId: trigger.hazardTypeId
         })
       } else {
         await this.triggerService.create({
@@ -220,7 +219,6 @@ export class PhasesService {
           triggerStatement: JSON.parse(JSON.stringify(trigger.triggerStatement)),
           isMandatory: trigger.isMandatory,
           phaseId: trigger.phaseId,
-          hazardTypeId: trigger.hazardTypeId
         })
       }
 
