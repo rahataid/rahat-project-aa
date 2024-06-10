@@ -285,3 +285,17 @@ model Stats {
 
   @@map("tbl_stats")
 }
+
+model DailyMonitoring {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  source   String?
+  location String?
+  data     Json    @db.JsonB()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_daily_monitoring")
+}

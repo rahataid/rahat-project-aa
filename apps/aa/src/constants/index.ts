@@ -123,6 +123,13 @@ export const JOBS = {
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
     GET_ONE: 'aa.jobs.stats.getAll'
+  },
+  DAILYMONITORING: {
+    ADD: 'aa.jobs.dailyMonitoring.add',
+    GET_ALL: 'aa.jobs.dailyMonitoring.getAll',
+    GET_ONE: 'aa.jobs.dailyMonitoring.getOne',
+    UPDATE: 'aa.jobs.dailyMonitoring.update',
+    REMOVE: 'aa.jobs.dailyMonitoring.remove',
   }
 };
 
