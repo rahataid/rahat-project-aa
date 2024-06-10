@@ -82,9 +82,6 @@ export class ActivitiesService {
         category: {
           connect: { uuid: categoryId }
         },
-        // hazardType: {
-        //   connect: { uuid: hazardTypeId }
-        // },
         phase: {
           connect: { uuid: phaseId }
         },
@@ -216,7 +213,6 @@ export class ActivitiesService {
       },
       include: {
         category: true,
-        // hazardType: true,
         phase: true
       }
     })
@@ -273,7 +269,6 @@ export class ActivitiesService {
       perPage,
       title,
       category,
-      // hazardType,
       phase,
       isComplete,
       isApproved,
@@ -284,14 +279,12 @@ export class ActivitiesService {
         isDeleted: false,
         ...(title && { title: { contains: title, mode: 'insensitive' } }),
         ...(category && { categoryId: category }),
-        // ...(hazardType && { hazardTypeId: hazardType }),
         ...(phase && { phaseId: phase }),
         ...(isComplete && { isComplete: isComplete }),
         ...(isApproved && { isApproved: isApproved }),
       },
       include: {
         category: true,
-        // hazardType: true,
         phase: true,
       },
     };
@@ -417,11 +410,6 @@ export class ActivitiesService {
             uuid: categoryId || activity.categoryId
           }
         },
-        // hazardType: {
-        //   connect: {
-        //     uuid: hazardTypeId || activity.hazardTypeId
-        //   }
-        // },
         activityCommunication: updateActivityCommunicationPayload,
         activityDocuments: updateActivityDocuments || activity.activityDocuments,
         updatedAt: new Date()

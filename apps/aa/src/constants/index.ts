@@ -89,9 +89,6 @@ export const JOBS = {
     ADD: 'aa.jobs.activityCategories.add',
     REMOVE: 'aa.jobs.activityCategories.remove',
   },
-  HAZARD_TYPES: {
-    GET_ALL: 'aa.jobs.hazardTypes.getAll',
-  },
   PHASES: {
     GET_ONE: 'aa.jobs.phases.getOne',
     GET_ALL: 'aa.jobs.phases.getAll',

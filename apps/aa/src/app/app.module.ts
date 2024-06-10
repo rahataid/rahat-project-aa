@@ -8,7 +8,6 @@ import { BullModule } from '@nestjs/bull';
 import { ProcessorsModule } from '../processors/processors.module';
 import { DataSourceModule } from '../datasource/datasource.module';
 import { ActivitiesModule } from '../activities/activites.module';
-import { HazardTypesModule } from '../hazard-types/hazard-types.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
@@ -36,7 +35,6 @@ import { StatsModule } from '../stats';
     DataSourceModule,
     ProcessorsModule,
     ActivitiesModule,
-    HazardTypesModule,
     PhasesModule,
     ActivityCategoriesModule,
     BeneficiaryModule,
