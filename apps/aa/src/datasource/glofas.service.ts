@@ -145,8 +145,11 @@ export class GlofasService implements AbstractSource {
             BBOX: payload.BBOX,
             I: payload.I,
             J: payload.J,
-            // TIME: "2024-06-05T00:00:00"
-            TIME: payload.TIMESTRING,
+             TIME: payload.TIMESTRING,
+            // BBOX: '9914392.14877593,2400326.5202299603,12627804.736861974,5113739.108316004',
+            // I: '108',
+            // J: '341',
+            // TIME: "2024-06-09T00:00:00"
         };
 
         for (const [key, value] of Object.entries(queryParams)) {

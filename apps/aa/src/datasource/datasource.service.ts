@@ -23,6 +23,7 @@ export class DataSourceService implements OnApplicationBootstrap {
 
     // run one time every hour
     @Cron('0 * * * *') 
+    // @Cron('*/10 * * * * *') 
     async synchronizeGlofas() {
         try {
             this.logger.log("GLOFAS syncing once every hour")
