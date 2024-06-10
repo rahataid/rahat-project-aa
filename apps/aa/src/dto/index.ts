@@ -14,7 +14,7 @@ export interface AddTriggerStatement {
     uuid: string;
   }>;
   triggerStatement?: Record<string, any>;
-  hazardTypeId?: string;
+  // hazardTypeId?: string;
   phaseId: string;
   title?: string;
   triggerDocuments?: Array<TriggerDocs>
@@ -33,7 +33,7 @@ export interface UpdateTriggerStatement {
   }>;
   triggerStatement?: Record<string, any>;
   triggerDocuments?: Array<TriggerDocs>
-  hazardTypeId?: string;
+  // hazardTypeId?: string;
   phaseId: string;
   title?: string;
   notes?: string;
