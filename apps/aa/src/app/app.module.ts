@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ListenersModule } from '../listeners/listeners.module';
 import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -34,7 +33,6 @@ import { StatsModule } from '../stats';
       inject: [ConfigService],
     }),
     TriggersModule,
-    ListenersModule,
     DataSourceModule,
     ProcessorsModule,
     ActivitiesModule,

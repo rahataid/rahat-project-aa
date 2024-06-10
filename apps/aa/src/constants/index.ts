@@ -127,7 +127,6 @@ export const JOBS = {
 };
 
 export const EVENTS = {
-  WATER_LEVEL_NOTIFICATION: 'events.water_level_notification',
   PHASE_ACTIVATED: 'events.phase_activated',
   PHASE_REVERTED: 'events.phase_reverted',
 };
