@@ -26,14 +26,13 @@ export class DataSourceService implements OnApplicationBootstrap {
     // @Cron('*/10 * * * * *') 
     async synchronizeGlofas() {
         try {
-            this.logger.log("GLOFAS syncing once every hour")
+            this.logger.log("GLOFAS: syncing once every hour")
             const { dateString, dateTimeString } = getFormattedGlofasDate()
             const glofasSettings = SettingsService.get('DATASOURCE.GLOFAS') as Omit<GlofasStationInfo, 'TIMESTRING'>;
 
             const hasExistingRecord = await this.glofasService.findGlofasDataByDate(glofasSettings.LOCATION, dateString)
 
             if (hasExistingRecord) {
-                // this.logger.log(`Glofas data for the date ${dateString} already exists.`)
                 return
             }
 
@@ -44,7 +43,7 @@ export class DataSourceService implements OnApplicationBootstrap {
 
             await this.glofasService.saveGlofasStationData(glofasSettings.LOCATION, { ...glofasData, forecastDate: dateString })
         } catch (err) {
-            this.logger.error("Sync Glofas", err.message)
+            this.logger.error("GLOFAS Err:", err.message)
         }
     }
 
@@ -52,7 +51,7 @@ export class DataSourceService implements OnApplicationBootstrap {
     @Cron('*/5 * * * *') //every five minutes
     async synchronizeDHM() {
         try {
-            this.logger.log("DHM syncing every five minutes")
+            this.logger.log("DHM: syncing every five minutes")
             const dhmSettings = SettingsService.get('DATASOURCE.DHM');
             const location = dhmSettings['LOCATION']
             const dhmURL = dhmSettings['URL']
@@ -69,7 +68,7 @@ export class DataSourceService implements OnApplicationBootstrap {
             const recentWaterLevel = waterLevelData[0]
             await this.dhmService.saveWaterLevelsData(location, recentWaterLevel)
         } catch (err) {
-            this.logger.error(err.message)
+            this.logger.error("DHM Err:", err.message)
         }
     }
 
