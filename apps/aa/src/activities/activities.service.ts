@@ -139,7 +139,7 @@ export class ActivitiesService {
     }
 
     const campaignPayload = {
-      audienceIds: audienceIds,
+      audienceIds: JSON.stringify(audienceIds),
       name: title,
       status: 'ONGOING',
       transportId: transportId,
@@ -149,6 +149,7 @@ export class ActivitiesService {
     };
 
     //create campaign
+    // @ts-ignore
     const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
     return campaign.data.id;
   }
