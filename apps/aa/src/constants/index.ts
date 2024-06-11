@@ -89,14 +89,12 @@ export const JOBS = {
     ADD: 'aa.jobs.activityCategories.add',
     REMOVE: 'aa.jobs.activityCategories.remove',
   },
-  HAZARD_TYPES: {
-    GET_ALL: 'aa.jobs.hazardTypes.getAll',
-  },
   PHASES: {
     GET_ONE: 'aa.jobs.phases.getOne',
     GET_ALL: 'aa.jobs.phases.getAll',
     GET_STATS: 'aa.jobs.phases.getStats',
     ADD_TRIGGERS: 'aa.jobs.phases.addTriggers',
+    REVERT_PHASE: 'aa.jobs.phases.revertPhase',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -118,11 +116,20 @@ export const JOBS = {
   },
   CONTRACT: {
     INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget'
+  },
+  STATS: {
+    GET_ALL: 'aa.jobs.stats.getAll',
+    GET_ONE: 'aa.jobs.stats.getAll',
+    GET_COMMS: 'aa.jobs.stats.getComms'
   }
 };
 
 export const EVENTS = {
-  WATER_LEVEL_NOTIFICATION: 'events.water_level_notification',
+  PHASE_ACTIVATED: 'events.phase_activated',
+  PHASE_REVERTED: 'events.phase_reverted',
+  ACTIVITY_COMPLETED: 'events.activity_completed',
+  ACTIVITY_DELETED: 'events.activity_deleted',
+  ACTIVITY_ADDED: 'events.activity_added'
 };
 
 export const BQUEUE = {

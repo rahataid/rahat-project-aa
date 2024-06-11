@@ -142,7 +142,6 @@ export class ContractLib {
     filename: string,
     signer: ethers.Wallet
   ) {
-    console.log({ ...args });
     const contractAddress = await this.getDeployedAddress(filename, contractName);
     const abi = this.getContractArtifacts(contractName).abi;
     const contract = new ethers.Contract(contractAddress, abi, signer);
@@ -152,9 +151,6 @@ export class ContractLib {
     tx.wait();
     console.log(tx);
     return tx;
-
-    // const tx = this.callContractMethod('RahatDonor', 'mintTokenAndApprove', [this.getDeployedAddress(contractName), this.getDeployedAddress('ELProject'),amount,voucherDetails],'EyeVoucher' ,deployerAccount);
-    // console.log(tx);
   }
 
   public async getDeployedContractDetails(contractAddressFile: string, contractName: string[]) {
@@ -163,7 +159,6 @@ export class ContractLib {
     contractName.map(async (contract) => {
       const address = await this.getDeployedAddress(contractAddressFile, contract);
       const { abi } = this.getContractArtifacts(contract);
-      // console.log(abi)
       contractDetails[contract] = {
         address,
         abi,

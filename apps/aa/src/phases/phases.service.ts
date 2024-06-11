@@ -1,11 +1,13 @@
 import { ConfigService } from "@nestjs/config";
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { PrismaService } from "@rumsan/prisma";
 import { RpcException } from "@nestjs/microservices";
 import { InjectQueue } from "@nestjs/bull";
-import { BQUEUE, JOBS } from "../constants";
+import { BQUEUE, EVENTS, JOBS } from "../constants";
 import { Queue } from "bull";
 import { BeneficiaryService } from "../beneficiary/beneficiary.service";
+import { TriggersService } from "../triggers/triggers.service";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 @Injectable()
 export class PhasesService {
@@ -13,9 +15,10 @@ export class PhasesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService,
     private readonly beneficiaryService: BeneficiaryService,
-    @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue,
+    @Inject(forwardRef(() => TriggersService))
+    private readonly triggerService: TriggersService,
+    private eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
   ) { }
@@ -133,14 +136,22 @@ export class PhasesService {
       })
     }
 
-    return this.prisma.phases.update({
+    const updatedPhase = await this.prisma.phases.update({
       where: {
         uuid: uuid
       },
       data: {
-        isActive: true
+        isActive: true,
+        activatedAt: new Date()
       }
     })
+
+    // event to calculate reporting 
+    this.eventEmitter.emit(EVENTS.PHASE_ACTIVATED, {
+      phaseId: phaseDetails.uuid
+    });
+
+    return updatedPhase
   }
 
   async addTriggersToPhases(payload) {
@@ -179,45 +190,71 @@ export class PhasesService {
     return updatedPhase
   }
 
-  async calculatePhaseActivities() {
-    const phases = await this.prisma.phases.findMany()
+  async revertPhase(payload) {
+    const { phaseId } = payload
+    const phase = await this.prisma.phases.findUnique({
+      where: {
+        uuid: phaseId
+      },
+      include: {
+        triggers: {
+          where: {
+            isDeleted: false
+          }
+        }
+      }
+    })
 
-    let activitiesStats = []
-    for (const phase of phases) {
-      const totalActivities = await this.prisma.activities.count({
-        where: {
-          phaseId: phase.uuid,
-          isDeleted: false
-        },
-      })
+    if (!phase) throw new RpcException('Phase not found.')
 
-      const totalCompletedActivities = await this.prisma.activities.count({
-        where: {
-          phaseId: phase.uuid,
-          status: 'COMPLETED',
-          isDeleted: false,
-        },
-      });
+    if (!phase.triggers.length || !phase.isActive || !phase.canRevert) throw new RpcException('Phase cannot be reverted.');
 
-      const completedPercentage = totalCompletedActivities ? ((totalCompletedActivities / totalActivities) * 100).toFixed(2) : 0;
+    for (const trigger of phase.triggers) {
+      const { repeatKey } = trigger
+      if (trigger.dataSource === 'MANUAL') {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+        })
+      } else {
+        await this.triggerService.create({
+          title: trigger.title,
+          dataSource: trigger.dataSource,
+          location: trigger.location,
+          triggerStatement: JSON.parse(JSON.stringify(trigger.triggerStatement)),
+          isMandatory: trigger.isMandatory,
+          phaseId: trigger.phaseId,
+        })
+      }
 
-      activitiesStats.push({
-        totalActivities,
-        totalCompletedActivities,
-        completedPercentage,
-        phase
+      await this.triggerService.archive({
+        repeatKey
       })
     }
-    return activitiesStats
-  }
 
-  async getStats() {
-    const [phaseActivities] = await Promise.all([
-      this.calculatePhaseActivities()
-    ]);
-    return {
-      phaseActivities
-    }
+    const currentDate = new Date()
+
+    const updatedPhase = await this.prisma.phases.update({
+      where: {
+        uuid: phaseId
+      },
+      data: {
+        receivedMandatoryTriggers: 0,
+        receivedOptionalTriggers: 0,
+        isActive: false,
+        activatedAt: null,
+        updatedAt: currentDate
+      }
+    })
+
+    this.eventEmitter.emit(EVENTS.PHASE_REVERTED, {
+      phaseId: phase.uuid,
+      revertedAt: currentDate.toISOString()
+    });
+
+    return updatedPhase
   }
 }
 
