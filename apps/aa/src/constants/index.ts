@@ -124,7 +124,7 @@ export const JOBS = {
     GET_ALL: 'aa.jobs.stats.getAll',
     GET_ONE: 'aa.jobs.stats.getAll'
   },
-  DAILYMONITORING: {
+  DAILY_MONITORING: {
     ADD: 'aa.jobs.dailyMonitoring.add',
     GET_ALL: 'aa.jobs.dailyMonitoring.getAll',
     GET_ONE: 'aa.jobs.dailyMonitoring.getOne',

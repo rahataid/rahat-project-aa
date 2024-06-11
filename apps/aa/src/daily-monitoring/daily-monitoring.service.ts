@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { PaginatorTypes, PrismaService, paginator } from "@rumsan/prisma";
-import { AddDailyMonitoringData, GetDailyMonitoringData } from "./dto";
+import { AddDailyMonitoringData, GetDailyMonitoringData, GetOneMonitoringData, RemoveMonitoringData, UpdateMonitoringData } from "./dto";
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -13,19 +13,47 @@ export class DailyMonitoringService {
     ) { }
 
     async add(payload: AddDailyMonitoringData) {
-        console.log('service payload::', payload)
-        const { source, location, ...rest } = payload
+        const { source, location } = payload
         return await this.prisma.dailyMonitoring.create({
-            data: { source, location, data: JSON.stringify(rest) }
+            data: { source, location, data: JSON.parse(JSON.stringify(payload)) }
         })
     }
 
     async getAll(payload: GetDailyMonitoringData) {
         const { page, perPage } = payload;
 
-        return paginate(this.prisma.dailyMonitoring, {
+        const query = {
+            where: {
+                isDeleted: false,
+            },
+        }
+
+        return paginate(this.prisma.dailyMonitoring, query, {
             page,
             perPage
+        })
+    }
+
+    async getOne(payload: GetOneMonitoringData) {
+        const { uuid } = payload;
+        return await this.prisma.dailyMonitoring.findUnique({
+            where: {
+                uuid: uuid,
+            }
+        })
+    }
+
+    async update(payload: UpdateMonitoringData) { console.log('update payload::', payload) }
+
+    async remove(payload: RemoveMonitoringData) {
+        const { uuid } = payload;
+        return await this.prisma.dailyMonitoring.update({
+            where: {
+                uuid: uuid,
+            },
+            data: {
+                isDeleted: true,
+            }
         })
     }
 }

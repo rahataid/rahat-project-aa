@@ -294,6 +294,7 @@ model DailyMonitoring {
   location String?
   data     Json    @db.JsonB()
 
+  isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
