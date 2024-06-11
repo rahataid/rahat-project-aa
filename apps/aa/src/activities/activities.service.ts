@@ -16,6 +16,8 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { ActivitiesStatus } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { UUID } from 'crypto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EVENTS } from '../constants';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -29,6 +31,7 @@ export class ActivitiesService {
     private configService: ConfigService,
     private readonly stakeholdersService: StakeholdersService,
     private readonly beneficiaryService: BeneficiaryService,
+    private eventEmitter: EventEmitter2,
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -71,7 +74,7 @@ export class ActivitiesService {
 
 
 
-    return await this.prisma.activities.create({
+    const newActivity = await this.prisma.activities.create({
       data: {
         title,
         description,
@@ -82,9 +85,6 @@ export class ActivitiesService {
         category: {
           connect: { uuid: categoryId }
         },
-        // hazardType: {
-        //   connect: { uuid: hazardTypeId }
-        // },
         phase: {
           connect: { uuid: phaseId }
         },
@@ -93,6 +93,9 @@ export class ActivitiesService {
         activityDocuments: JSON.parse(JSON.stringify(docs))
       },
     });
+
+    this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
+    return newActivity
   }
 
   async processStakeholdersCommunication(payload: ActivityCommunicationData, title: string) {
@@ -216,7 +219,6 @@ export class ActivitiesService {
       },
       include: {
         category: true,
-        // hazardType: true,
         phase: true
       }
     })
@@ -273,7 +275,6 @@ export class ActivitiesService {
       perPage,
       title,
       category,
-      // hazardType,
       phase,
       isComplete,
       isApproved,
@@ -284,14 +285,12 @@ export class ActivitiesService {
         isDeleted: false,
         ...(title && { title: { contains: title, mode: 'insensitive' } }),
         ...(category && { categoryId: category }),
-        // ...(hazardType && { hazardTypeId: hazardType }),
         ...(phase && { phaseId: phase }),
         ...(isComplete && { isComplete: isComplete }),
         ...(isApproved && { isApproved: isApproved }),
       },
       include: {
         category: true,
-        // hazardType: true,
         phase: true,
       },
     };
@@ -303,7 +302,7 @@ export class ActivitiesService {
   }
 
   async remove(payload: RemoveActivityData) {
-    return await this.prisma.activities.update({
+    const deletedActivity = await this.prisma.activities.update({
       where: {
         uuid: payload.uuid,
       },
@@ -311,6 +310,10 @@ export class ActivitiesService {
         isDeleted: true,
       },
     });
+
+    this.eventEmitter.emit(EVENTS.ACTIVITY_DELETED, {});
+
+    return deletedActivity
   }
 
   async triggerCommunication(campaignId: string) {
@@ -321,7 +324,7 @@ export class ActivitiesService {
 
   async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
     const { status, uuid } = payload
-    return this.prisma.activities.update({
+    const updatedActivity = await this.prisma.activities.update({
       where: {
         uuid: uuid
       },
@@ -329,6 +332,11 @@ export class ActivitiesService {
         status: status
       }
     })
+    if(status === 'COMPLETED'){
+      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
+    }
+
+    return updatedActivity
   }
 
   async update(payload: UpdateActivityData) {
@@ -417,11 +425,6 @@ export class ActivitiesService {
             uuid: categoryId || activity.categoryId
           }
         },
-        // hazardType: {
-        //   connect: {
-        //     uuid: hazardTypeId || activity.hazardTypeId
-        //   }
-        // },
         activityCommunication: updateActivityCommunicationPayload,
         activityDocuments: updateActivityDocuments || activity.activityDocuments,
         updatedAt: new Date()

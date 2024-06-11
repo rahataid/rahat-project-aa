@@ -6,6 +6,8 @@ import { BullModule } from "@nestjs/bull";
 import { BQUEUE } from "../constants";
 import { BeneficiaryModule } from "../beneficiary/beneficiary.module";
 import { TriggersModule } from "../triggers/triggers.module";
+import { PhasesStatsService } from "./phases.stats.service";
+import { StatsModule } from "../stats";
 
 @Module({
     imports: [
@@ -20,11 +22,11 @@ import { TriggersModule } from "../triggers/triggers.module";
             name: BQUEUE.COMMUNICATION,
         }),
         BeneficiaryModule,
-        // TriggersModule
-        forwardRef(() => TriggersModule)
+        forwardRef(() => TriggersModule),
+        StatsModule
     ],
     controllers: [PhasesController],
-    providers: [PhasesService],
-    exports: [PhasesService]
+    providers: [PhasesService,PhasesStatsService],
+    exports: [PhasesService, PhasesStatsService]
 })
 export class PhasesModule { }

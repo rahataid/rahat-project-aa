@@ -2,10 +2,14 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { PhasesService } from './phases.service';
+import { PhasesStatsService } from './phases.stats.service';
 
 @Controller()
 export class PhasesController {
-    constructor(private readonly phasesService: PhasesService) { }
+    constructor(
+        private readonly phasesService: PhasesService,
+        private readonly phasesStatsService: PhasesStatsService,
+    ) { }
 
     @MessagePattern({
         cmd: JOBS.PHASES.GET_ALL,
@@ -43,7 +47,7 @@ export class PhasesController {
         cmd: JOBS.PHASES.GET_STATS,
         uuid: process.env.PROJECT_ID,
     })
-    async getStats(payload) {
-        return this.phasesService.getStats()
+    async getStats() {
+        return this.phasesStatsService.getStats()
     }
 }

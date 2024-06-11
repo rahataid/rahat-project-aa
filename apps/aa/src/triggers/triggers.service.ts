@@ -44,8 +44,6 @@ export class TriggersService {
         repeatKey: repeatKey,
       },
       include: {
-        // activities: true,
-        // hazardType: true,
         phase: true
       }
     })
@@ -53,13 +51,7 @@ export class TriggersService {
 
   async getAll(payload: GetTriggers) {
     const { page, perPage } = payload;
-
-    // this.prisma.triggers.findMany({
-    //   where: {
-    //     isDeleted:false
-    //   }
-    // })
-
+   
     return paginate(
       this.prisma.triggers,
       {
@@ -67,8 +59,6 @@ export class TriggersService {
           isDeleted: false,
         },
         include: {
-          // hazardType: true,
-          // activities: true,
           phase: true,
         },
       },
@@ -92,7 +82,6 @@ export class TriggersService {
       title: payload.title,
       dataSource: payload.dataSource,
       location: payload.location,
-      // hazardTypeId: payload.hazardTypeId,
       triggerStatement: payload.triggerStatement,
       phaseId: payload.phaseId,
       isMandatory: payload.isMandatory,

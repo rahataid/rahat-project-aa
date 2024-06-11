@@ -128,27 +128,12 @@ model StakeholdersGroups {
   name String
 
   stakeholders Stakeholders[]
-  // activityComms ActivityComms[]
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
   @@map("tbl_stakeholders_groups")
-}
-
-model HazardTypes {
-  id   Int    @id @default(autoincrement())
-  uuid String @unique @default(uuid())
-
-  name       String       @unique
-  // activities Activities[]
-  // triggers   Triggers[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
-
-  @@map("tbl_hazard_types")
 }
 
 model Phases {
@@ -201,8 +186,6 @@ model Activities {
   phaseId        String
   category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
   categoryId     String
-  // hazardType     HazardTypes?        @relation(fields: [hazardTypeId], references: [uuid])
-  // hazardTypeId   String
   leadTime       String
   responsibility String
   source         String
@@ -211,13 +194,10 @@ model Activities {
   status ActivitiesStatus @default(NOT_STARTED)
 
   isAutomated Boolean
-  // activityType ActivityTypes @default(GENERAL)
 
   activityDocuments     Json? @db.JsonB()
   activityCommunication Json? @db.JsonB()
   activityPayout        Json? @db.JsonB()
-
-  // triggers Triggers[]
 
   isDeleted Boolean @default(false)
 
@@ -243,12 +223,6 @@ model Triggers {
 
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
   phaseId String?
-
-  // hazardType   HazardTypes? @relation(fields: [hazardTypeId], references: [uuid])
-  // hazardTypeId String?
-
-  // datas      TriggersData[]
-  // activities Activities[]
 
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)

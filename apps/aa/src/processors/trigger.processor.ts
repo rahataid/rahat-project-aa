@@ -14,8 +14,6 @@ export class TriggerProcessor {
 
   @Process(JOBS.TRIGGERS.REACHED_THRESHOLD)
   async processTrigger(job: Job) {
-
-      this.logger.log("Aaaaaaaaaaaa")
     const payload = job.data
 
     switch (payload.dataSource) {

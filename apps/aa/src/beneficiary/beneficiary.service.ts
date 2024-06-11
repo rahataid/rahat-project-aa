@@ -2,13 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { AddBeneficiaryGroups, AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import { AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { createContractInstanceSign, getContractByName } from '../utils/web3';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { title } from 'process';
-import { firstValueFrom, lastValueFrom } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -245,8 +243,6 @@ export class BeneficiaryService {
   }
 
   async getOneTokenReservation(payload) {
-
-    console.log(payload);
     const { uuid } = payload
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: {

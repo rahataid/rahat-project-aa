@@ -93,17 +93,6 @@ CREATE TABLE "tbl_stakeholders_groups" (
 );
 
 -- CreateTable
-CREATE TABLE "tbl_hazard_types" (
-    "id" SERIAL NOT NULL,
-    "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3),
-
-    CONSTRAINT "tbl_hazard_types_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "tbl_phases" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
@@ -141,7 +130,6 @@ CREATE TABLE "tbl_activities" (
     "title" TEXT NOT NULL,
     "phaseId" TEXT NOT NULL,
     "categoryId" TEXT NOT NULL,
-    "hazardTypeId" TEXT NOT NULL,
     "leadTime" TEXT NOT NULL,
     "responsibility" TEXT NOT NULL,
     "source" TEXT NOT NULL,
@@ -171,7 +159,6 @@ CREATE TABLE "tbl_triggers" (
     "triggerDocuments" JSONB,
     "notes" TEXT,
     "phaseId" TEXT,
-    "hazardTypeId" TEXT,
     "isMandatory" BOOLEAN NOT NULL DEFAULT false,
     "isTriggered" BOOLEAN NOT NULL DEFAULT false,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
@@ -234,12 +221,6 @@ CREATE UNIQUE INDEX "tbl_stakeholders_uuid_key" ON "tbl_stakeholders"("uuid");
 CREATE UNIQUE INDEX "tbl_stakeholders_groups_uuid_key" ON "tbl_stakeholders_groups"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tbl_hazard_types_uuid_key" ON "tbl_hazard_types"("uuid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_hazard_types_name_key" ON "tbl_hazard_types"("name");
-
--- CreateIndex
 CREATE UNIQUE INDEX "tbl_phases_uuid_key" ON "tbl_phases"("uuid");
 
 -- CreateIndex
@@ -279,13 +260,7 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_phaseId_fkey" FOREIG
 ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "tbl_activity_categories"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_hazardTypeId_fkey" FOREIGN KEY ("hazardTypeId") REFERENCES "tbl_hazard_types"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_stakeholders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
