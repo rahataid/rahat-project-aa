@@ -290,9 +290,10 @@ model DailyMonitoring {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
-  source   String?
-  location String?
-  data     Json    @db.JsonB()
+  dataEntryBy String
+  source      String?
+  location    String?
+  data        Json    @db.JsonB()
 
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())

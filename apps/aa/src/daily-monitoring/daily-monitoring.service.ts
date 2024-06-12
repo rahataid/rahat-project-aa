@@ -13,10 +13,25 @@ export class DailyMonitoringService {
     ) { }
 
     async add(payload: AddDailyMonitoringData) {
-        const { source, location } = payload
-        return await this.prisma.dailyMonitoring.create({
-            data: { source, location, data: JSON.parse(JSON.stringify(payload)) }
-        })
+        const { dataEntryBy, location, data } = payload;
+        const allData = JSON.parse(JSON.stringify(data));
+
+        const sanitizedDataArray = allData.map((item: any) => ({
+            dataEntryBy,
+            location,
+            source: item.source,
+            data: {
+                dataEntryBy,
+                location,
+                ...item
+            }
+        }));
+
+        const response = await this.prisma.dailyMonitoring.createMany({
+            data: sanitizedDataArray
+        });
+
+        return response;
     }
 
     async getAll(payload: GetDailyMonitoringData) {
