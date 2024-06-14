@@ -89,9 +89,6 @@ export const JOBS = {
     ADD: 'aa.jobs.activityCategories.add',
     REMOVE: 'aa.jobs.activityCategories.remove',
   },
-  HAZARD_TYPES: {
-    GET_ALL: 'aa.jobs.hazardTypes.getAll',
-  },
   PHASES: {
     GET_ONE: 'aa.jobs.phases.getOne',
     GET_ALL: 'aa.jobs.phases.getAll',
@@ -134,7 +131,11 @@ export const JOBS = {
 };
 
 export const EVENTS = {
-  WATER_LEVEL_NOTIFICATION: 'events.water_level_notification',
+  PHASE_ACTIVATED: 'events.phase_activated',
+  PHASE_REVERTED: 'events.phase_reverted',
+  ACTIVITY_COMPLETED: 'events.activity_completed',
+  ACTIVITY_DELETED: 'events.activity_deleted',
+  ACTIVITY_ADDED: 'events.activity_added'
 };
 
 export const BQUEUE = {

@@ -2,14 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { StatDto } from './dto/stat.dto';
 
+import { CommunicationService } from '@rumsan/communication/services/communication.client';
+import { ConfigService } from '@nestjs/config';
+
 @Injectable()
 export class StatsService {
-  constructor(private prismaService: PrismaService) {}
+  private communicationService: CommunicationService;
+
+  constructor(
+    private prismaService: PrismaService,
+    private configService: ConfigService
+  ) {
+    this.communicationService = new CommunicationService({
+      baseURL: this.configService.get('COMMUNICATION_URL'),
+      headers: {
+        appId: this.configService.get('COMMUNICATION_APP_ID'),
+      },
+    });
+  }
   async save(data: StatDto) {
     data.name = data.name.toUpperCase();
-    if (data.group !== 'beneficiary') {
-      data.name = data.name + '_ID_' + data.group;
-    }
 
     return this.prismaService.stats.upsert({
       where: { name: data.name },
@@ -43,5 +55,9 @@ export class StatsService {
     return this.prismaService.stats.delete({
       where: { name },
     });
+  }
+
+  async getCommsStats() {
+    return (await this.communicationService.communication.getStats()).data
   }
 }
