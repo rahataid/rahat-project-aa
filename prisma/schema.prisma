@@ -259,3 +259,19 @@ model Stats {
 
   @@map("tbl_stats")
 }
+
+model DailyMonitoring {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  dataEntryBy String
+  source      String?
+  location    String?
+  data        Json    @db.JsonB()
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_daily_monitoring")
+}
