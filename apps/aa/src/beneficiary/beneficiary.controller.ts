@@ -4,6 +4,7 @@ import { CONTROLLERS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
 import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
+import { UUID } from 'crypto';
 
 @Controller()
 export class BeneficiaryController {
@@ -71,6 +72,14 @@ export class BeneficiaryController {
   })
   async getAllGroups(payload) {
     return this.beneficiaryService.getAllGroups(payload)
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ONE_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getOneGroup(payload: {uuid: UUID}) {
+    return this.beneficiaryService.getOneGroup(payload.uuid)
   }
   // ***** groups end ********** //
 

@@ -142,7 +142,8 @@ export class BeneficiaryService {
   async getOneGroup(uuid: UUID) {
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
-        uuid: uuid
+        uuid: uuid,
+        deletedAt: null
       }
     })
     if (!benfGroup) throw new RpcException('Beneficiary group not found.')

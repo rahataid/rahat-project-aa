@@ -43,6 +43,7 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
