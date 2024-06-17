@@ -51,6 +51,9 @@ export interface GetOneMonitoringData {
 }
 export interface UpdateMonitoringData {
     uuid: string;
+    dataEntryBy?: string;
+    location?: string;
+    data?: DHM | GLOFAS | NCMWRFAccumulated | NCMWRFDeterministicAndProbabilistic | FlashFloodRiskMonitoring;
 }
 export interface RemoveMonitoringData {
     uuid: string;
