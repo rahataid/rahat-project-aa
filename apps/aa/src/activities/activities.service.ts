@@ -213,6 +213,7 @@ export class ActivitiesService {
   }
 
   async getOne(payload: GetOneActivity) {
+    try{
     const { uuid } = payload
     const { activityCommunication: aComm, ...activityData } = await this.prisma.activities.findUnique({
       where: {
@@ -230,7 +231,13 @@ export class ActivitiesService {
     if (Array.isArray(aComm) && aComm.length) {
       for (const comm of aComm) {
         const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
-        const { data: campaignData } = await this.communicationService.communication.getCampaign(communication.campaignId)
+        let campaignData = null;
+        try{
+          const { data } = await this.communicationService.communication.getCampaign(communication.campaignId)
+          campaignData = data
+        }catch(err){
+          this.logger.error("Error fetching campagin details.")
+        }
         let group: any;
         let groupName: string;
 
@@ -268,6 +275,9 @@ export class ActivitiesService {
       activityCommunication,
       activityPayout
     }
+  }catch(err){
+    console.log(err)
+  }
   }
 
   async getAll(payload: GetActivitiesDto) {
