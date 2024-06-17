@@ -50,17 +50,25 @@ export class StakeholdersService {
       municipality,
       organization,
       page,
-      perPage
+      perPage,
     } = payload;
 
     const query = {
       where: {
         isDeleted: false,
         ...(name && { name: { contains: name, mode: 'insensitive' } }),
-        ...(designation && { designation: { contains: designation, mode: 'insensitive' } }),
-        ...(district && { district: { contains: district, mode: 'insensitive' } }),
-        ...(municipality && { municipality: { contains: municipality, mode: 'insensitive' } }),
-        ...(organization && { organization: { contains: organization, mode: 'insensitive' } }),
+        ...(designation && {
+          designation: { contains: designation, mode: 'insensitive' },
+        }),
+        ...(district && {
+          district: { contains: district, mode: 'insensitive' },
+        }),
+        ...(municipality && {
+          municipality: { contains: municipality, mode: 'insensitive' },
+        }),
+        ...(organization && {
+          organization: { contains: organization, mode: 'insensitive' },
+        }),
       },
       include: {
         stakeholdersGroups: true,
@@ -169,7 +177,11 @@ export class StakeholdersService {
         isDeleted: false,
       },
       include: {
-        stakeholders: true,
+        _count: {
+          select: {
+            stakeholders: true,
+          },
+        },
       },
     };
 
