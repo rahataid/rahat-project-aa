@@ -366,6 +366,11 @@ export class ActivitiesService {
 
   async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
     const { status, uuid } = payload
+
+    if(status === 'COMPLETED'){
+      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
+    }
+
     const updatedActivity = await this.prisma.activities.update({
       where: {
         uuid: uuid
@@ -374,10 +379,7 @@ export class ActivitiesService {
         status: status
       }
     })
-    if(status === 'COMPLETED'){
-      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
-    }
-
+   
     return updatedActivity
   }
 
