@@ -42,6 +42,7 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
+    try{
     const { activityCommunication, title, isAutomated, leadTime, categoryId, description, phaseId, responsibility, source, activityDocuments } = payload
 
     const createActivityCommunicationPayload = []
@@ -96,6 +97,9 @@ export class ActivitiesService {
 
     this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
     return newActivity
+  }catch(err){
+    console.log(err)
+  }
   }
 
   async processStakeholdersCommunication(payload: ActivityCommunicationData, title: string) {
@@ -192,7 +196,7 @@ export class ActivitiesService {
     }
 
     const campaignPayload = {
-      audienceIds: audienceIds,
+      audienceIds: JSON.stringify(audienceIds),
       name: title,
       status: 'ONGOING',
       transportId: transportId,
@@ -202,6 +206,7 @@ export class ActivitiesService {
     };
 
     //create campaign
+    // @ts-ignore
     const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
     return campaign.data.id;
   }
