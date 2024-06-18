@@ -1,0 +1,26 @@
+{
+  "AccessManager": {
+    "address": "0xEAc0C9540AF606dCCb7b772644e2b6185e4cC2b4",
+    "startBlock": 1
+  },
+  "TriggerManager": {
+    "address": "0x726464991745265F8B64ab9BdAbb3cC8dfF5853b",
+    "startBlock": 1
+  },
+  "RahatDonor": {
+    "address": "0x7D34251677B2B62024E1213F8AEb23f47e702169",
+    "startBlock": 1
+  },
+  "ERC2771Forwarder": {
+    "address": "0x8E63FFC69f2901c66Bab485B8A0828Eb6bbC2cD9",
+    "startBlock": 1
+  },
+  "RahatToken": {
+    "address": "0xF7843c646EaB4117C16c12261724d9800500922C",
+    "startBlock": 1
+  },
+  "AAProject": {
+    "address": "0xC81824a2205869d1D048C811c8E6E168d72c9881",
+    "startBlock": 1
+  }
+}
