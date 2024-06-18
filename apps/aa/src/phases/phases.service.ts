@@ -118,7 +118,9 @@ export class PhasesService {
     }
 
     if (phaseDetails.canTriggerPayout) {
-      const allBenfs = await this.beneficiaryService.getAllBenfs()
+      
+      const allBenfs = await this.beneficiaryService.getAllBenfs() // 5,200 : 50
+      
       allBenfs?.forEach((benf, i) => {
         if (benf.benTokens) {
           this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, {

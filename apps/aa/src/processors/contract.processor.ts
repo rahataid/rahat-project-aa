@@ -5,6 +5,9 @@ import { Job } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
 import { JsonRpcProvider, ethers } from 'ethers';
 
+type IStringArr = string[] 
+type ICallData = IStringArr[]
+
 @Processor(BQUEUE.CONTRACT)
 export class ContractProcessor {
   private readonly logger = new Logger(ContractProcessor.name);
@@ -36,9 +39,19 @@ export class ContractProcessor {
 
       // console.log("Using gas:", gasPrice);
       // console.log("Using nonce:", nonce);
+      // const multicallData = this.generateMultiCallData(aaContract,'assignTokenToBeneficiary',[
+      //   // ['wallet','tokens'],
+      // ])
+
 
       const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens);
-      await txn.wait();
+      // await txn.wait();
+      // const txn = await this.multiSend(
+      //   aaContract,
+      //   'assignTokenToBeneficiary',
+      //   // ['wa']
+      // )
+
       this.logger.log("contract called with txn hash:", txn.hash);
       return "ok"
     } catch (err) {
@@ -114,5 +127,37 @@ export class ContractProcessor {
     }
     // If the key is not found in any of the objects, return undefined
     return undefined;
+  }
+
+  private generateMultiCallData(
+    contract: ethers.Contract,
+    functionName: string,
+    callData: ICallData
+  ) {
+    const encodedData = [];
+    if (callData) {
+      for (const callD of callData) {
+        const encodedD = contract.interface.encodeFunctionData(functionName, [
+          ...callD,
+        ]);
+        encodedData.push(encodedD);
+      }
+    }
+    return encodedData;
+  }
+
+  private async multiSend(
+    contract: ethers.Contract,
+    functionName: string,
+    callData?: ICallData
+  ) {
+    const encodedData = this.generateMultiCallData(
+      contract,
+      functionName,
+      callData
+    );
+    const tx = await contract.multicall(encodedData);
+    const result = await tx.wait();
+    return result;
   }
 }
