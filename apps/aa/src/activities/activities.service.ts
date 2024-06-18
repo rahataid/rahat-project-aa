@@ -5,6 +5,7 @@ import { CommunicationService } from '@rumsan/communication/services/communicati
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   ActivityCommunicationData,
+  ActivityDocs,
   AddActivityData,
   GetActivitiesDto,
   GetOneActivity,
@@ -43,63 +44,63 @@ export class ActivitiesService {
 
   async add(payload: AddActivityData) {
     try{
-    const { activityCommunication, title, isAutomated, leadTime, categoryId, description, phaseId, responsibility, source, activityDocuments } = payload
+      const { activityCommunication, title, isAutomated, leadTime, categoryId, description, phaseId, responsibility, source, activityDocuments } = payload
 
-    const createActivityCommunicationPayload = []
-    const createActivityPayoutPayload = []
-    const docs = activityDocuments || []
-    let campaignId: number;
+      const createActivityCommunicationPayload = []
+      const createActivityPayoutPayload = []
+      const docs = activityDocuments || []
+      let campaignId: number;
 
-    if (activityCommunication?.length) {
-      for (const comms of activityCommunication) {
-        switch (comms.groupType) {
-          case 'STAKEHOLDERS':
-            campaignId = await this.processStakeholdersCommunication(comms, title);
-            createActivityCommunicationPayload.push({
-              ...comms,
-              campaignId
-            })
-            break;
-          case 'BENEFICIARY':
-            campaignId = await this.processBeneficiaryCommunication(comms, title);
-            createActivityCommunicationPayload.push({
-              ...comms,
-              campaignId
-            })
-            break;
-          default:
-            break;
+      if (activityCommunication?.length) {
+        for (const comms of activityCommunication) {
+          switch (comms.groupType) {
+            case 'STAKEHOLDERS':
+              campaignId = await this.processStakeholdersCommunication(comms, title);
+              createActivityCommunicationPayload.push({
+                ...comms,
+                campaignId
+              })
+              break;
+            case 'BENEFICIARY':
+              campaignId = await this.processBeneficiaryCommunication(comms, title);
+              createActivityCommunicationPayload.push({
+                ...comms,
+                campaignId
+              })
+              break;
+            default:
+              break;
+          }
         }
       }
-    }
 
 
 
-    const newActivity = await this.prisma.activities.create({
-      data: {
-        title,
-        description,
-        leadTime,
-        responsibility,
-        source,
-        isAutomated,
-        category: {
-          connect: { uuid: categoryId }
+      const newActivity = await this.prisma.activities.create({
+        data: {
+          title,
+          description,
+          leadTime,
+          responsibility,
+          source,
+          isAutomated,
+          category: {
+            connect: { uuid: categoryId }
+          },
+          phase: {
+            connect: { uuid: phaseId }
+          },
+          activityCommunication: createActivityCommunicationPayload,
+          activityPayout: createActivityPayoutPayload,
+          activityDocuments: JSON.parse(JSON.stringify(docs))
         },
-        phase: {
-          connect: { uuid: phaseId }
-        },
-        activityCommunication: createActivityCommunicationPayload,
-        activityPayout: createActivityPayoutPayload,
-        activityDocuments: JSON.parse(JSON.stringify(docs))
-      },
-    });
+      });
 
-    this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
-    return newActivity
+      this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
+      return newActivity
   }catch(err){
-    console.log(err)
-  }
+      console.log(err)
+    }
   }
 
   async processStakeholdersCommunication(payload: ActivityCommunicationData, title: string) {
@@ -364,8 +365,10 @@ export class ActivitiesService {
     return triggerResponse.data;
   }
 
-  async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
-    const { status, uuid } = payload
+  async updateStatus(payload: { uuid: string, status: ActivitiesStatus, activityDocuments: Array<ActivityDocs> }) {
+    const { status, uuid, activityDocuments } = payload;
+
+    const docs = activityDocuments || [];
 
     if(status === 'COMPLETED'){
       this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
@@ -376,10 +379,11 @@ export class ActivitiesService {
         uuid: uuid
       },
       data: {
-        status: status
+        status: status,
+        activityDocuments: JSON.parse(JSON.stringify(docs))
       }
     })
-   
+
     return updatedActivity
   }
 
