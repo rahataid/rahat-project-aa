@@ -148,16 +148,21 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: {},
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
 
     if (payload.message) {
-      campaignPayload.details = { message: payload.message }
+      campaignPayload.details.message = payload.message
     }
 
     if (payload.audioURL) {
-      campaignPayload.details = { audio: payload.audioURL }
+      campaignPayload.file = payload.audioURL
     }
 
     //create campaign
@@ -209,16 +214,21 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: {},
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
 
     if (payload.message) {
-      campaignPayload.details = { message: payload.message }
+      campaignPayload.details.message = payload.message
     }
 
     if (payload.audioURL) {
-      campaignPayload.details = { audio: payload.audioURL }
+      campaignPayload.file = payload.audioURL
     }
 
     //create campaign
