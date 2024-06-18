@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ActivitiesService } from './activities.service';
-import { AddActivityData, GetActivitiesDto, GetOneActivity, RemoveActivityData, UpdateActivityData } from './dto';
+import { ActivityDocs, AddActivityData, GetActivitiesDto, GetOneActivity, RemoveActivityData, UpdateActivityData } from './dto';
 import { ActivitiesStatus } from '@prisma/client';
 
 @Controller()
@@ -53,7 +53,7 @@ export class ActivitiesController {
     cmd: JOBS.ACTIVITIES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
-  async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
+  async updateStatus(payload: { uuid: string, status: ActivitiesStatus, activityDocuments: Array<ActivityDocs> }) {
     return this.activitiesService.updateStatus(payload);
   }
 
