@@ -148,9 +148,22 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: { message: payload.message },
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
+
+    if (payload.message) {
+      campaignPayload.details.message = payload.message
+    }
+
+    if (payload.audioURL) {
+      campaignPayload.file = payload.audioURL
+    }
 
     //create campaign
     // @ts-ignore
@@ -201,9 +214,22 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: { message: payload.message },
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
+
+    if (payload.message) {
+      campaignPayload.details.message = payload.message
+    }
+
+    if (payload.audioURL) {
+      campaignPayload.file = payload.audioURL
+    }
 
     //create campaign
     // @ts-ignore
@@ -219,70 +245,70 @@ export class ActivitiesService {
 
   async getOne(payload: GetOneActivity) {
     try{
-    const { uuid } = payload
-    const { activityCommunication: aComm, ...activityData } = await this.prisma.activities.findUnique({
-      where: {
-        uuid: uuid
-      },
-      include: {
-        category: true,
-        phase: true
-      }
-    })
+      const { uuid } = payload
+      const { activityCommunication: aComm, ...activityData } = await this.prisma.activities.findUnique({
+        where: {
+          uuid: uuid
+        },
+        include: {
+          category: true,
+          phase: true
+        }
+      })
 
-    const activityCommunication = []
-    const activityPayout = []
+      const activityCommunication = []
+      const activityPayout = []
 
-    if (Array.isArray(aComm) && aComm.length) {
-      for (const comm of aComm) {
-        const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
-        let campaignData = null;
+      if (Array.isArray(aComm) && aComm.length) {
+        for (const comm of aComm) {
+          const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
+          let campaignData = null;
         try{
-          const { data } = await this.communicationService.communication.getCampaign(communication.campaignId)
-          campaignData = data
+            const { data } = await this.communicationService.communication.getCampaign(communication.campaignId)
+            campaignData = data
         }catch(err){
-          this.logger.error("Error fetching campagin details.")
-        }
-        let group: any;
-        let groupName: string;
+            this.logger.error("Error fetching campagin details.")
+          }
+          let group: any;
+          let groupName: string;
 
-        switch (communication.groupType) {
-          case 'STAKEHOLDERS':
-            group = await this.prisma.stakeholdersGroups.findUnique({
-              where: {
-                uuid: communication.groupId
-              }
-            })
-            groupName = group.name
-            break;
-          case 'BENEFICIARY':
-            group = await this.prisma.beneficiaryGroups.findUnique({
-              where: {
-                uuid: communication.groupId
-              }
-            })
-            groupName = group.name
-            break;
-          default:
-            break;
-        }
+          switch (communication.groupType) {
+            case 'STAKEHOLDERS':
+              group = await this.prisma.stakeholdersGroups.findUnique({
+                where: {
+                  uuid: communication.groupId
+                }
+              })
+              groupName = group.name
+              break;
+            case 'BENEFICIARY':
+              group = await this.prisma.beneficiaryGroups.findUnique({
+                where: {
+                  uuid: communication.groupId
+                }
+              })
+              groupName = group.name
+              break;
+            default:
+              break;
+          }
 
-        activityCommunication.push({
-          ...communication,
-          groupName: groupName,
-          campaignData: campaignData
-        })
+          activityCommunication.push({
+            ...communication,
+            groupName: groupName,
+            campaignData: campaignData
+          })
+        }
       }
-    }
 
-    return {
-      ...activityData,
-      activityCommunication,
-      activityPayout
-    }
+      return {
+        ...activityData,
+        activityCommunication,
+        activityPayout
+      }
   }catch(err){
-    console.log(err)
-  }
+      console.log(err)
+    }
   }
 
   async getAll(payload: GetActivitiesDto) {
@@ -340,6 +366,11 @@ export class ActivitiesService {
 
   async updateStatus(payload: { uuid: string, status: ActivitiesStatus }) {
     const { status, uuid } = payload
+
+    if(status === 'COMPLETED'){
+      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
+    }
+
     const updatedActivity = await this.prisma.activities.update({
       where: {
         uuid: uuid
@@ -348,10 +379,7 @@ export class ActivitiesService {
         status: status
       }
     })
-    if(status === 'COMPLETED'){
-      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
-    }
-
+   
     return updatedActivity
   }
 
