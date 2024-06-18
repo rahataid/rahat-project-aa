@@ -377,7 +377,8 @@ export class ActivitiesService {
               const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
 
               await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                audienceIds: audienceIds,
+                // @ts-ignore
+                audienceIds: JSON.stringify(audienceIds),
                 details: JSON.parse(JSON.stringify({ message: comms.message })),
                 name: title || activity.title
               })
@@ -398,7 +399,8 @@ export class ActivitiesService {
               const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
 
               await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                audienceIds: audienceIds,
+                // @ts-ignore
+                audienceIds: JSON.stringify(audienceIds),
                 details: JSON.parse(JSON.stringify({ message: comms.message })),
                 name: title || activity.title
               })
