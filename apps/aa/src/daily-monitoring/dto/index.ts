@@ -1,39 +1,60 @@
-interface BaseForecast {
+interface Source {
     source?: string;
+}
+interface DHM extends Source {
     forecast?: string;
+    today?: string;
+    tomorrow?: string;
+    dayAfterTomorrow?: string;
+    todayAfternoon?: string;
+    todayNight?: string;
+    tomorrowAfternoon?: string;
+    tomorrowNight?: string;
+    dayAfterTomorrowAfternoon?: string;
+    dayAfterTomorrowNight?: string;
+    waterLevel?: string;
+    hours24NWP?: string;
+    hours48?: string;
+    hours72NWP?: string;
 }
-
-interface DHM extends BaseForecast {
-    todayStatus?: string;
-    tomorrowStatus?: string;
-    dayAfterTomorrowStatus?: string;
+interface GLOFAS extends Source {
+    todayGLOFAS?: string;
+    days3?: string;
+    days5?: string;
+    inBetweenTodayUntil7DaysIsThereAnyPossibilityOfPeak?: string;
 }
-
-interface NCMWRF extends BaseForecast {
-    hours24Status?: string;
-    hours48Status?: string;
-    hours72Status?: string;
+interface NCMWRFAccumulated extends Source {
+    heavyRainfallForecastInKarnaliBasin?: string;
+    hours24?: string;
+    hours72?: string;
+    hours168?: string;
 }
-
-export interface AddDailyMonitoringData {
+interface NCMWRFDeterministicAndProbabilistic extends Source {
+    extremeWeatherOutlook?: string;
+    deterministicsPredictionSystem?: string;
+    probabilisticPredictionSystem?: string;
+}
+interface FlashFloodRiskMonitoring extends Source {
+    status?: string;
+}
+export interface AddDailyMonitoringData extends Source {
     dataEntryBy: string;
     location: string;
-    data: Array<DHM | NCMWRF>;
+    data: Array<DHM | GLOFAS | NCMWRFAccumulated | NCMWRFDeterministicAndProbabilistic | FlashFloodRiskMonitoring>;
 }
-
 export interface GetDailyMonitoringData {
     page: number;
     perPage: number;
 }
-
 export interface GetOneMonitoringData {
     uuid: string;
 }
-
 export interface UpdateMonitoringData {
     uuid: string;
+    dataEntryBy?: string;
+    location?: string;
+    data?: DHM | GLOFAS | NCMWRFAccumulated | NCMWRFDeterministicAndProbabilistic | FlashFloodRiskMonitoring;
 }
-
 export interface RemoveMonitoringData {
     uuid: string;
 }

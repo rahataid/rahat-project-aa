@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { PaginatorTypes, PrismaService, paginator } from "@rumsan/prisma";
 import { AddDailyMonitoringData, GetDailyMonitoringData, GetOneMonitoringData, RemoveMonitoringData, UpdateMonitoringData } from "./dto";
+import { RpcException } from "@nestjs/microservices";
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -58,7 +59,34 @@ export class DailyMonitoringService {
         })
     }
 
-    async update(payload: UpdateMonitoringData) { console.log('update payload::', payload) }
+    async update(payload: UpdateMonitoringData) {
+        const { uuid, dataEntryBy, location, data } = payload;
+        const existing = await this.prisma.dailyMonitoring.findUnique({
+            where: {
+                uuid: uuid,
+            },
+        });
+
+        if (!existing) throw new RpcException('Monitoring Data not found!');
+
+        const existingData = JSON.parse(JSON.stringify(existing));
+
+        const updatedMonitoringData = await this.prisma.dailyMonitoring.update({
+            where: {
+                uuid: uuid,
+            },
+            data: {
+                dataEntryBy: dataEntryBy || existingData.dataEntryBy,
+                location: location || existingData.location,
+                source: data.source || existingData.data.source,
+                data: { dataEntryBy, location, ...data } || existingData.data,
+                updatedAt: new Date(),
+            },
+        });
+
+        return updatedMonitoringData;
+
+    }
 
     async remove(payload: RemoveMonitoringData) {
         const { uuid } = payload;
