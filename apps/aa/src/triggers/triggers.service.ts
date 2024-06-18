@@ -50,13 +50,14 @@ export class TriggersService {
   }
 
   async getAll(payload: GetTriggers) {
-    const { page, perPage } = payload;
-   
+    const { page, perPage, phaseId } = payload;
+
     return paginate(
       this.prisma.triggers,
       {
         where: {
           isDeleted: false,
+          ...(phaseId && { phaseId }),
         },
         include: {
           phase: true,
