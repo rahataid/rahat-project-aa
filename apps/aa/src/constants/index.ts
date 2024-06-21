@@ -137,7 +137,10 @@ export const EVENTS = {
   PHASE_REVERTED: 'events.phase_reverted',
   ACTIVITY_COMPLETED: 'events.activity_completed',
   ACTIVITY_DELETED: 'events.activity_deleted',
-  ACTIVITY_ADDED: 'events.activity_added'
+  ACTIVITY_ADDED: 'events.activity_added',
+  BENEFICIARY_CREATED: 'events.beneficiary_created',
+  BENEFICIARY_REMOVED: 'events.beneficiary_updated',
+  BENEFICIARY_UPDATED: 'events.beneficiary_updated',
 };
 
 export const BQUEUE = {

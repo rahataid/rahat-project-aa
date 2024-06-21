@@ -39,6 +39,13 @@ enum SettingDataType {
   OBJECT
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -46,6 +53,7 @@ model Beneficiary {
   uuid String @unique @db.Uuid()
 
   walletAddress String?
+  gender        Gender  @default(UNKNOWN)
   extras        Json?
   benTokens     Int     @default(0)
 

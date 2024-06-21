@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { PrismaService } from '@rumsan/prisma';
-// import { StatsModule } from '../stats/stats.module';
 import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
-// import { BeneficiaryStatsService } from './beneficiary.stats.service';
+import { StatsModule } from '../stats';
+import { BeneficiaryStatService } from './beneficiaryStat.service';
 
 @Module({
   imports: [
@@ -19,10 +19,11 @@ import { BeneficiaryService } from './beneficiary.service';
           password: process.env.REDIS_PASSWORD,
         }
       }
-    ])
+    ]),
+    StatsModule
   ],
   controllers: [BeneficiaryController],
-  providers: [BeneficiaryService, PrismaService],
+  providers: [BeneficiaryService, PrismaService,BeneficiaryStatService],
   exports: [BeneficiaryService]
 })
 export class BeneficiaryModule { }
