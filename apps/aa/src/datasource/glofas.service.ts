@@ -104,7 +104,8 @@ export class GlofasService implements AbstractSource {
                     uuid: payload.uuid
                 },
                 data: {
-                    isTriggered: true
+                    isTriggered: true,
+                    triggeredAt: new Date()
                 }
             })
 

@@ -7,6 +7,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { ProjectContants } from "@rahataid/sdk"
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
+import { EVENTS } from '../constants';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -36,13 +37,21 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    return this.rsprisma.beneficiary.create({
+    const rdata = await this.rsprisma.beneficiary.create({
       data: dto,
     });
+
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+
+    return rdata;
   }
 
   async createMany(dto) {
-    return this.rsprisma.beneficiary.createMany({ data: dto })
+    const rdata = await this.rsprisma.beneficiary.createMany({ data: dto });
+
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+
+    return rdata;
   }
 
   async findAll(dto) {
@@ -110,10 +119,14 @@ export class BeneficiaryService {
   }
 
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
-    return await this.rsprisma.beneficiary.update({
+    const rdata = await this.rsprisma.beneficiary.update({
       where: { id: id },
       data: { ...updateBeneficiaryDto },
     });
+
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_UPDATED)
+
+    return rdata;
   }
 
   async remove(payload: any) {
@@ -135,6 +148,8 @@ export class BeneficiaryService {
       },
     });
 
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_REMOVED);
+
     return rdata;
   }
 
@@ -142,7 +157,8 @@ export class BeneficiaryService {
   async getOneGroup(uuid: UUID) {
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
-        uuid: uuid
+        uuid: uuid,
+        deletedAt: null
       }
     })
     if (!benfGroup) throw new RpcException('Beneficiary group not found.')

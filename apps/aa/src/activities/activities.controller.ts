@@ -3,6 +3,7 @@ import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ActivitiesService } from './activities.service';
 import {
+  ActivityDocs,
   AddActivityData,
   GetActivitiesDto,
   GetOneActivity,
@@ -67,7 +68,11 @@ export class ActivitiesController {
     cmd: JOBS.ACTIVITIES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
-  async updateStatus(payload: { uuid: string; status: ActivitiesStatus }) {
+  async updateStatus(payload: {
+    uuid: string;
+    status: ActivitiesStatus;
+    activityDocuments: Array<ActivityDocs>;
+  }) {
     return this.activitiesService.updateStatus(payload);
   }
 

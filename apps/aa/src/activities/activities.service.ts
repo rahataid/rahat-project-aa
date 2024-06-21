@@ -5,6 +5,7 @@ import { CommunicationService } from '@rumsan/communication/services/communicati
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   ActivityCommunicationData,
+  ActivityDocs,
   AddActivityData,
   GetActivitiesDto,
   GetOneActivity,
@@ -42,75 +43,79 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    const {
-      activityCommunication,
-      title,
-      isAutomated,
-      leadTime,
-      categoryId,
-      description,
-      phaseId,
-      responsibility,
-      source,
-      activityDocuments,
-    } = payload;
-
-    const createActivityCommunicationPayload = [];
-    const createActivityPayoutPayload = [];
-    const docs = activityDocuments || [];
-    let campaignId: number;
-
-    if (activityCommunication?.length) {
-      for (const comms of activityCommunication) {
-        switch (comms.groupType) {
-          case 'STAKEHOLDERS':
-            campaignId = await this.processStakeholdersCommunication(
-              comms,
-              title
-            );
-            createActivityCommunicationPayload.push({
-              ...comms,
-              campaignId,
-            });
-            break;
-          case 'BENEFICIARY':
-            campaignId = await this.processBeneficiaryCommunication(
-              comms,
-              title
-            );
-            createActivityCommunicationPayload.push({
-              ...comms,
-              campaignId,
-            });
-            break;
-          default:
-            break;
-        }
-      }
-    }
-
-    const newActivity = await this.prisma.activities.create({
-      data: {
+    try {
+      const {
+        activityCommunication,
         title,
-        description,
+        isAutomated,
         leadTime,
+        categoryId,
+        description,
+        phaseId,
         responsibility,
         source,
-        isAutomated,
-        category: {
-          connect: { uuid: categoryId },
-        },
-        phase: {
-          connect: { uuid: phaseId },
-        },
-        activityCommunication: createActivityCommunicationPayload,
-        activityPayout: createActivityPayoutPayload,
-        activityDocuments: JSON.parse(JSON.stringify(docs)),
-      },
-    });
+        activityDocuments,
+      } = payload;
 
-    this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
-    return newActivity;
+      const createActivityCommunicationPayload = [];
+      const createActivityPayoutPayload = [];
+      const docs = activityDocuments || [];
+      let campaignId: number;
+
+      if (activityCommunication?.length) {
+        for (const comms of activityCommunication) {
+          switch (comms.groupType) {
+            case 'STAKEHOLDERS':
+              campaignId = await this.processStakeholdersCommunication(
+                comms,
+                title
+              );
+              createActivityCommunicationPayload.push({
+                ...comms,
+                campaignId,
+              });
+              break;
+            case 'BENEFICIARY':
+              campaignId = await this.processBeneficiaryCommunication(
+                comms,
+                title
+              );
+              createActivityCommunicationPayload.push({
+                ...comms,
+                campaignId,
+              });
+              break;
+            default:
+              break;
+          }
+        }
+      }
+
+      const newActivity = await this.prisma.activities.create({
+        data: {
+          title,
+          description,
+          leadTime,
+          responsibility,
+          source,
+          isAutomated,
+          category: {
+            connect: { uuid: categoryId },
+          },
+          phase: {
+            connect: { uuid: phaseId },
+          },
+          activityCommunication: createActivityCommunicationPayload,
+          activityPayout: createActivityPayoutPayload,
+          activityDocuments: JSON.parse(JSON.stringify(docs)),
+        },
+      });
+
+      this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
+      return newActivity;
+    } catch (err) {
+      console.log(err);
+    }
   }
 
   async processStakeholdersCommunication(
@@ -162,11 +167,11 @@ export class ActivitiesService {
       const response =
         await this.communicationService.communication.createAudience({
           details: {
-            name: stakeholder.name,
-            phone: stakeholder.phone,
+            name: stakeholder?.name,
+            phone: stakeholder?.phone,
             // fix: add email to audience type in sdk
             // @ts-ignore: Unreachable code error
-            email: stakeholder.email,
+            email: stakeholder?.email,
           },
         });
       audienceIds.push(response.data.id);
@@ -178,12 +183,24 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: { message: payload.message },
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
 
+    if (payload.message) {
+      campaignPayload.details.message = payload.message;
+    }
+
+    if (payload.audioURL) {
+      campaignPayload.file = payload.audioURL;
+    }
+
     //create campaign
-    // @ts-ignore
     const campaign =
       await this.communicationService.communication.createCampaign(
         campaignPayload
@@ -239,11 +256,11 @@ export class ActivitiesService {
       const response =
         await this.communicationService.communication.createAudience({
           details: {
-            name: beneficiary.Beneficiary.pii.name,
-            phone: beneficiary.Beneficiary.pii.phone,
+            name: beneficiary?.Beneficiary?.pii?.name,
+            phone: beneficiary?.Beneficiary?.pii?.phone,
             // fix: add email to audience type in sdk
             // @ts-ignore: Unreachable code error
-            email: beneficiary.Beneficiary.pii.email,
+            email: beneficiary?.Beneficiary?.pii?.email,
           },
         });
       audienceIds.push(response.data.id);
@@ -255,9 +272,22 @@ export class ActivitiesService {
       status: 'ONGOING',
       transportId: transportId,
       type: payload.communicationType.toUpperCase(),
-      details: { message: payload.message },
+      details: {
+        message: '',
+        ivrFileName: '',
+        ivrMediaURL: '',
+      },
+      file: {},
       startTime: new Date(),
     };
+
+    if (payload.message) {
+      campaignPayload.details.message = payload.message;
+    }
+
+    if (payload.audioURL) {
+      campaignPayload.file = payload.audioURL;
+    }
 
     //create campaign
     const campaign =
@@ -277,67 +307,77 @@ export class ActivitiesService {
   }
 
   async getOne(payload: GetOneActivity) {
-    const { uuid } = payload;
-    const { activityCommunication: aComm, ...activityData } =
-      await this.prisma.activities.findUnique({
-        where: {
-          uuid: uuid,
-        },
-        include: {
-          category: true,
-          phase: true,
-        },
-      });
-
-    const activityCommunication = [];
-    const activityPayout = [];
-
-    if (Array.isArray(aComm) && aComm.length) {
-      for (const comm of aComm) {
-        const communication = JSON.parse(
-          JSON.stringify(comm)
-        ) as ActivityCommunicationData & { campaignId: number };
-        const { data: campaignData } =
-          await this.communicationService.communication.getCampaign(
-            communication.campaignId
-          );
-        let group: any;
-        let groupName: string;
-
-        switch (communication.groupType) {
-          case 'STAKEHOLDERS':
-            group = await this.prisma.stakeholdersGroups.findUnique({
-              where: {
-                uuid: communication.groupId,
-              },
-            });
-            groupName = group.name;
-            break;
-          case 'BENEFICIARY':
-            group = await this.prisma.beneficiaryGroups.findUnique({
-              where: {
-                uuid: communication.groupId,
-              },
-            });
-            groupName = group.name;
-            break;
-          default:
-            break;
-        }
-
-        activityCommunication.push({
-          ...communication,
-          groupName: groupName,
-          campaignData: campaignData,
+    try {
+      const { uuid } = payload;
+      const { activityCommunication: aComm, ...activityData } =
+        await this.prisma.activities.findUnique({
+          where: {
+            uuid: uuid,
+          },
+          include: {
+            category: true,
+            phase: true,
+          },
         });
-      }
-    }
 
-    return {
-      ...activityData,
-      activityCommunication,
-      activityPayout,
-    };
+      const activityCommunication = [];
+      const activityPayout = [];
+
+      if (Array.isArray(aComm) && aComm.length) {
+        for (const comm of aComm) {
+          const communication = JSON.parse(
+            JSON.stringify(comm)
+          ) as ActivityCommunicationData & { campaignId: number };
+          let campaignData = null;
+          try {
+            const { data } =
+              await this.communicationService.communication.getCampaign(
+                communication.campaignId
+              );
+            campaignData = data;
+          } catch (err) {
+            this.logger.error('Error fetching campagin details.');
+          }
+          let group: any;
+          let groupName: string;
+
+          switch (communication.groupType) {
+            case 'STAKEHOLDERS':
+              group = await this.prisma.stakeholdersGroups.findUnique({
+                where: {
+                  uuid: communication.groupId,
+                },
+              });
+              groupName = group.name;
+              break;
+            case 'BENEFICIARY':
+              group = await this.prisma.beneficiaryGroups.findUnique({
+                where: {
+                  uuid: communication.groupId,
+                },
+              });
+              groupName = group.name;
+              break;
+            default:
+              break;
+          }
+
+          activityCommunication.push({
+            ...communication,
+            groupName: groupName,
+            campaignData: campaignData,
+          });
+        }
+      }
+
+      return {
+        ...activityData,
+        activityCommunication,
+        activityPayout,
+      };
+    } catch (err) {
+      console.log(err);
+    }
   }
 
   async getAll(payload: GetActivitiesDto) {
@@ -387,19 +427,28 @@ export class ActivitiesService {
     return triggerResponse.data;
   }
 
-  async updateStatus(payload: { uuid: string; status: ActivitiesStatus }) {
-    const { status, uuid } = payload;
+  async updateStatus(payload: {
+    uuid: string;
+    status: ActivitiesStatus;
+    activityDocuments: Array<ActivityDocs>;
+  }) {
+    const { status, uuid, activityDocuments } = payload;
+
+    const docs = activityDocuments || [];
+
+    if (status === 'COMPLETED') {
+      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
+    }
+
     const updatedActivity = await this.prisma.activities.update({
       where: {
         uuid: uuid,
       },
       data: {
         status: status,
+        activityDocuments: JSON.parse(JSON.stringify(docs)),
       },
     });
-    if (status === 'COMPLETED') {
-      this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
-    }
 
     return updatedActivity;
   }

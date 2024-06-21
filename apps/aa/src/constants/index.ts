@@ -43,6 +43,7 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
@@ -120,8 +121,15 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
-    GET_ONE: 'aa.jobs.stats.getAll',
+    GET_ONE: 'aa.jobs.stats.getOne',
     GET_COMMS: 'aa.jobs.stats.getComms',
+  },
+  DAILY_MONITORING: {
+    ADD: 'aa.jobs.dailyMonitoring.add',
+    GET_ALL: 'aa.jobs.dailyMonitoring.getAll',
+    GET_ONE: 'aa.jobs.dailyMonitoring.getOne',
+    UPDATE: 'aa.jobs.dailyMonitoring.update',
+    REMOVE: 'aa.jobs.dailyMonitoring.remove',
   },
 };
 
@@ -131,6 +139,9 @@ export const EVENTS = {
   ACTIVITY_COMPLETED: 'events.activity_completed',
   ACTIVITY_DELETED: 'events.activity_deleted',
   ACTIVITY_ADDED: 'events.activity_added',
+  BENEFICIARY_CREATED: 'events.beneficiary_created',
+  BENEFICIARY_REMOVED: 'events.beneficiary_updated',
+  BENEFICIARY_UPDATED: 'events.beneficiary_updated',
 };
 
 export const BQUEUE = {

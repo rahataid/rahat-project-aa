@@ -15,6 +15,8 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { SettingsModule } from "@rumsan/settings"
 import { ScheduleModule } from '@nestjs/schedule';
 import { StatsModule } from '../stats';
+import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
+import { ListenersModule } from '../listeners/listeners.module';
 
 @Module({
   imports: [
@@ -41,7 +43,9 @@ import { StatsModule } from '../stats';
     StakeholdersModule,
     SettingsModule,
     ScheduleModule.forRoot(),
-    StatsModule
+    StatsModule,
+    DailyMonitoringModule,
+    ListenersModule
   ],
   controllers: [AppController],
   providers: [AppService],

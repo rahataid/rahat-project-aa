@@ -4,7 +4,8 @@ export interface ActivityCommunicationData {
   groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
   groupId: string;
   communicationType: string;
-  message: string;
+  message?: string;
+  audioURL?: { mediaURL: string, fileName: string }
 }
 
 export interface ActivityDocs {
