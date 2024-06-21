@@ -51,8 +51,8 @@ importers:
         specifier: ^0.0.24
         version: 0.0.24(typescript@5.4.5)
       '@rumsan/communication':
-        specifier: 0.0.11
-        version: 0.0.11
+        specifier: 0.0.17
+        version: 0.0.17
       '@rumsan/prisma':
         specifier: ^1.0.130
         version: 1.0.130(class-transformer@0.5.1)(class-validator@0.14.1)(prisma@5.10.2)(reflect-metadata@0.1.14)(rxjs@7.8.1)
@@ -1701,8 +1701,8 @@ packages:
   '@rahataid/sdk@0.0.24':
     resolution: {integrity: sha512-lGJ/pSPZi7+WN4b8fWWBB8vsq3C5CCCN/it1ONYWa64JKvs53mjIEqOilKKxzcjuyoi/FKNNs3Tc8owI112kwQ==, tarball: https://npm.pkg.github.com/download/@rahataid/sdk/0.0.24/92007ecef5a66cd4b3ae59e6115f343c04a50626}
 
-  '@rumsan/communication@0.0.11':
-    resolution: {integrity: sha512-S64Vj0dHpX6LmVPEI3ehInJ2Kbg3OimFQdocsHZv412de68vk2I6xXzfYmqGNawBN2NYVusfJ5Gwx/Y9ieAL/w==, tarball: https://npm.pkg.github.com/download/@rumsan/communication/0.0.11/e2e780068c7b591e89bf0ad6916ca67f4873f28d}
+  '@rumsan/communication@0.0.17':
+    resolution: {integrity: sha512-bqkJVzonn78LAaZlSwQ/WVuLEkS4DuPJRVA+z35LzWKImDS8jA1RzJMA6r7nP8LXsg+r0nJms6bj0L9L1Lm/jQ==, tarball: https://npm.pkg.github.com/download/@rumsan/communication/0.0.17/7ae8bd62a30349860de4ec5d38647add940e6cff}
 
   '@rumsan/core@3.0.116':
     resolution: {integrity: sha512-BMpikkcSDSqTr3TSpFjfPyg0g9r2cYchqySi5XNOuf4wwAExSdx5b9UNCrMpN8iBaUNs13B8T29Z7CsDDo/yMA==, tarball: https://npm.pkg.github.com/download/@rumsan/core/3.0.116/ffe97a6a5986d871820d517b2ddb82d7936c0b01}
@@ -8582,11 +8582,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@rumsan/communication@0.0.11':
-    dependencies:
-      axios: 1.7.2
-    transitivePeerDependencies:
-      - debug
+  '@rumsan/communication@0.0.17': {}
 
   '@rumsan/core@3.0.116(@nestjs/core@10.3.8(@nestjs/common@10.3.8(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.1.14)(rxjs@7.8.1))(@nestjs/microservices@10.3.8)(@nestjs/platform-express@10.3.8)(reflect-metadata@0.1.14)(rxjs@7.8.1))(prisma@5.10.2)(reflect-metadata@0.1.14)':
     dependencies:
