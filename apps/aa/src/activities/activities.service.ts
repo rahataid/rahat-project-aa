@@ -32,7 +32,7 @@ export class ActivitiesService {
     private configService: ConfigService,
     private readonly stakeholdersService: StakeholdersService,
     private readonly beneficiaryService: BeneficiaryService,
-    private eventEmitter: EventEmitter2,
+    private eventEmitter: EventEmitter2
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -43,38 +43,53 @@ export class ActivitiesService {
   }
 
   async add(payload: AddActivityData) {
-    try{
-      const { activityCommunication, title, isAutomated, leadTime, categoryId, description, phaseId, responsibility, source, activityDocuments } = payload
+    try {
+      const {
+        activityCommunication,
+        title,
+        isAutomated,
+        leadTime,
+        categoryId,
+        description,
+        phaseId,
+        responsibility,
+        source,
+        activityDocuments,
+      } = payload;
 
-      const createActivityCommunicationPayload = []
-      const createActivityPayoutPayload = []
-      const docs = activityDocuments || []
+      const createActivityCommunicationPayload = [];
+      const createActivityPayoutPayload = [];
+      const docs = activityDocuments || [];
       let campaignId: number;
 
       if (activityCommunication?.length) {
         for (const comms of activityCommunication) {
           switch (comms.groupType) {
             case 'STAKEHOLDERS':
-              campaignId = await this.processStakeholdersCommunication(comms, title);
+              campaignId = await this.processStakeholdersCommunication(
+                comms,
+                title
+              );
               createActivityCommunicationPayload.push({
                 ...comms,
-                campaignId
-              })
+                campaignId,
+              });
               break;
             case 'BENEFICIARY':
-              campaignId = await this.processBeneficiaryCommunication(comms, title);
+              campaignId = await this.processBeneficiaryCommunication(
+                comms,
+                title
+              );
               createActivityCommunicationPayload.push({
                 ...comms,
-                campaignId
-              })
+                campaignId,
+              });
               break;
             default:
               break;
           }
         }
       }
-
-
 
       const newActivity = await this.prisma.activities.create({
         data: {
@@ -85,61 +100,80 @@ export class ActivitiesService {
           source,
           isAutomated,
           category: {
-            connect: { uuid: categoryId }
+            connect: { uuid: categoryId },
           },
           phase: {
-            connect: { uuid: phaseId }
+            connect: { uuid: phaseId },
           },
           activityCommunication: createActivityCommunicationPayload,
           activityPayout: createActivityPayoutPayload,
-          activityDocuments: JSON.parse(JSON.stringify(docs))
+          activityDocuments: JSON.parse(JSON.stringify(docs)),
         },
       });
 
       this.eventEmitter.emit(EVENTS.ACTIVITY_ADDED, {});
-      return newActivity
-  }catch(err){
-      console.log(err)
+      return newActivity;
+    } catch (err) {
+      console.log(err);
     }
   }
 
-  async processStakeholdersCommunication(payload: ActivityCommunicationData, title: string) {
-    const transportId = await this.getTransportId(payload.communicationType)
+  async processStakeholdersCommunication(
+    payload: ActivityCommunicationData,
+    title: string
+  ) {
+    const transportId = await this.getTransportId(payload.communicationType);
 
-    const { data: audience } = await this.communicationService.communication.listAudience()
+    const { data: audience } =
+      await this.communicationService.communication.listAudience();
 
     const stakeholderGroup = await this.stakeholdersService.findOneGroup({
       uuid: payload.groupId,
     });
 
-    const stakeholderEmails = stakeholderGroup.stakeholders.map(stakeholder => stakeholder.email);
-    const stakeholderPhones = stakeholderGroup.stakeholders.map(stakeholder => stakeholder.phone);
+    const stakeholderEmails = stakeholderGroup.stakeholders.map(
+      (stakeholder) => stakeholder.email
+    );
+    const stakeholderPhones = stakeholderGroup.stakeholders.map(
+      (stakeholder) => stakeholder.phone
+    );
 
-    const audienceEmails = audience.map(audience => audience.details.email);
-    const audiencePhones = audience.map(audience => audience.details.phone);
+    const audienceEmails = audience.map((audience) => audience.details.email);
+    const audiencePhones = audience.map((audience) => audience.details.phone);
 
     // get stakeholders not in audience
-    const stakeholdersNotInAudience = stakeholderGroup.stakeholders.filter(stakeholder => {
-      return !audienceEmails.includes(stakeholder.email) || !audiencePhones.includes(stakeholder.phone);
-    });
+    const stakeholdersNotInAudience = stakeholderGroup.stakeholders.filter(
+      (stakeholder) => {
+        return (
+          !audienceEmails.includes(stakeholder.email) ||
+          !audiencePhones.includes(stakeholder.phone)
+        );
+      }
+    );
 
     // get audience which already has stakeholders
-    const stakeholdersInAudience = audience.filter(audience => {
-      return stakeholderEmails.includes(audience.details.email) || stakeholderPhones.includes(audience.details.phone);
+    const stakeholdersInAudience = audience.filter((audience) => {
+      return (
+        stakeholderEmails.includes(audience.details.email) ||
+        stakeholderPhones.includes(audience.details.phone)
+      );
     });
 
-    const audienceIds = [...stakeholdersInAudience.map((audience) => audience.id)]
+    const audienceIds = [
+      ...stakeholdersInAudience.map((audience) => audience.id),
+    ];
 
     for (const stakeholder of stakeholdersNotInAudience) {
-      const response = await this.communicationService.communication.createAudience({
-        details: {
-          name: stakeholder?.name,
-          phone: stakeholder?.phone,
-          // fix: add email to audience type in sdk
-          // @ts-ignore: Unreachable code error
-          email: stakeholder?.email,
-        },
-      });
+      const response =
+        await this.communicationService.communication.createAudience({
+          details: {
+            name: stakeholder?.name,
+            phone: stakeholder?.phone,
+            // fix: add email to audience type in sdk
+            // @ts-ignore: Unreachable code error
+            email: stakeholder?.email,
+          },
+        });
       audienceIds.push(response.data.id);
     }
 
@@ -159,52 +193,76 @@ export class ActivitiesService {
     };
 
     if (payload.message) {
-      campaignPayload.details.message = payload.message
+      campaignPayload.details.message = payload.message;
     }
 
     if (payload.audioURL) {
-      campaignPayload.file = payload.audioURL
+      campaignPayload.file = payload.audioURL;
     }
 
     //create campaign
-    const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
+    const campaign =
+      await this.communicationService.communication.createCampaign(
+        campaignPayload
+      );
     return campaign.data.id;
   }
 
-  async processBeneficiaryCommunication(payload: ActivityCommunicationData, title: string) {
-    const transportId = await this.getTransportId(payload.communicationType)
-    const { data: audience } = await this.communicationService.communication.listAudience()
-    const beneficiaryGroup = await this.beneficiaryService.getOneGroup(payload.groupId as UUID)
+  async processBeneficiaryCommunication(
+    payload: ActivityCommunicationData,
+    title: string
+  ) {
+    const transportId = await this.getTransportId(payload.communicationType);
+    const { data: audience } =
+      await this.communicationService.communication.listAudience();
+    const beneficiaryGroup = await this.beneficiaryService.getOneGroup(
+      payload.groupId as UUID
+    );
     const groupedBeneficiaries = beneficiaryGroup.groupedBeneficiaries;
 
-    const beneficiaryEmails = groupedBeneficiaries.map(beneficiary => beneficiary.Beneficiary.pii.email);
-    const beneficiaryPhones = groupedBeneficiaries.map(beneficiary => beneficiary.Beneficiary.pii.phone);
+    const beneficiaryEmails = groupedBeneficiaries.map(
+      (beneficiary) => beneficiary.Beneficiary.pii.email
+    );
+    const beneficiaryPhones = groupedBeneficiaries.map(
+      (beneficiary) => beneficiary.Beneficiary.pii.phone
+    );
 
-    const audienceEmails = audience.map(audience => audience.details.email);
-    const audiencePhones = audience.map(audience => audience.details.phone);
+    const audienceEmails = audience.map((audience) => audience.details.email);
+    const audiencePhones = audience.map((audience) => audience.details.phone);
 
     // get beneficiaries not in audience
-    const beneficiariesNotInAudience = groupedBeneficiaries.filter(beneficiary => {
-      return !audienceEmails.includes(beneficiary.Beneficiary.pii.email) || !audiencePhones.includes(beneficiary.Beneficiary.pii.phone);
-    });
+    const beneficiariesNotInAudience = groupedBeneficiaries.filter(
+      (beneficiary) => {
+        return (
+          !audienceEmails.includes(beneficiary.Beneficiary.pii.email) ||
+          !audiencePhones.includes(beneficiary.Beneficiary.pii.phone)
+        );
+      }
+    );
 
     // get audience which already has beneficiaries
-    const beneficiariesInAudience = audience.filter(audience => {
-      return beneficiaryEmails.includes(audience.details.email) || beneficiaryPhones.includes(audience.details.phone);
+    const beneficiariesInAudience = audience.filter((audience) => {
+      return (
+        beneficiaryEmails.includes(audience.details.email) ||
+        beneficiaryPhones.includes(audience.details.phone)
+      );
     });
 
-    const audienceIds = [...beneficiariesInAudience.map((audience) => audience.id)]
+    const audienceIds = [
+      ...beneficiariesInAudience.map((audience) => audience.id),
+    ];
 
     for (const beneficiary of beneficiariesNotInAudience) {
-      const response = await this.communicationService.communication.createAudience({
-        details: {
-          name: beneficiary?.Beneficiary?.pii?.name,
-          phone: beneficiary?.Beneficiary?.pii?.phone,
-          // fix: add email to audience type in sdk
-          // @ts-ignore: Unreachable code error
-          email: beneficiary?.Beneficiary?.pii?.email,
-        },
-      });
+      const response =
+        await this.communicationService.communication.createAudience({
+          details: {
+            name: beneficiary?.Beneficiary?.pii?.name,
+            phone: beneficiary?.Beneficiary?.pii?.phone,
+            // fix: add email to audience type in sdk
+            // @ts-ignore: Unreachable code error
+            email: beneficiary?.Beneficiary?.pii?.email,
+          },
+        });
       audienceIds.push(response.data.id);
     }
 
@@ -224,49 +282,61 @@ export class ActivitiesService {
     };
 
     if (payload.message) {
-      campaignPayload.details.message = payload.message
+      campaignPayload.details.message = payload.message;
     }
 
     if (payload.audioURL) {
-      campaignPayload.file = payload.audioURL
+      campaignPayload.file = payload.audioURL;
     }
 
     //create campaign
-    const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
+    const campaign =
+      await this.communicationService.communication.createCampaign(
+        campaignPayload
+      );
     return campaign.data.id;
   }
 
   async getTransportId(transportName: string) {
-    const transports = await this.communicationService.communication.listTransport();
-    const t = transports.data.find((d) => d.name.toLowerCase() === transportName.toLowerCase())
+    const transports =
+      await this.communicationService.communication.listTransport();
+    const t = transports.data.find(
+      (d) => d.name.toLowerCase() === transportName.toLowerCase()
+    );
     return t.id;
   }
 
   async getOne(payload: GetOneActivity) {
-    try{
-      const { uuid } = payload
-      const { activityCommunication: aComm, ...activityData } = await this.prisma.activities.findUnique({
-        where: {
-          uuid: uuid
-        },
-        include: {
-          category: true,
-          phase: true
-        }
-      })
+    try {
+      const { uuid } = payload;
+      const { activityCommunication: aComm, ...activityData } =
+        await this.prisma.activities.findUnique({
+          where: {
+            uuid: uuid,
+          },
+          include: {
+            category: true,
+            phase: true,
+          },
+        });
 
-      const activityCommunication = []
-      const activityPayout = []
+      const activityCommunication = [];
+      const activityPayout = [];
 
       if (Array.isArray(aComm) && aComm.length) {
         for (const comm of aComm) {
-          const communication = JSON.parse(JSON.stringify(comm)) as ActivityCommunicationData & { campaignId: number }
+          const communication = JSON.parse(
+            JSON.stringify(comm)
+          ) as ActivityCommunicationData & { campaignId: number };
           let campaignData = null;
-        try{
-            const { data } = await this.communicationService.communication.getCampaign(communication.campaignId)
-            campaignData = data
-        }catch(err){
-            this.logger.error("Error fetching campagin details.")
+          try {
+            const { data } =
+              await this.communicationService.communication.getCampaign(
+                communication.campaignId
+              );
+            campaignData = data;
+          } catch (err) {
+            this.logger.error('Error fetching campagin details.');
           }
           let group: any;
           let groupName: string;
@@ -275,18 +345,18 @@ export class ActivitiesService {
             case 'STAKEHOLDERS':
               group = await this.prisma.stakeholdersGroups.findUnique({
                 where: {
-                  uuid: communication.groupId
-                }
-              })
-              groupName = group.name
+                  uuid: communication.groupId,
+                },
+              });
+              groupName = group.name;
               break;
             case 'BENEFICIARY':
               group = await this.prisma.beneficiaryGroups.findUnique({
                 where: {
-                  uuid: communication.groupId
-                }
-              })
-              groupName = group.name
+                  uuid: communication.groupId,
+                },
+              });
+              groupName = group.name;
               break;
             default:
               break;
@@ -295,31 +365,24 @@ export class ActivitiesService {
           activityCommunication.push({
             ...communication,
             groupName: groupName,
-            campaignData: campaignData
-          })
+            campaignData: campaignData,
+          });
         }
       }
 
       return {
         ...activityData,
         activityCommunication,
-        activityPayout
-      }
-  }catch(err){
-      console.log(err)
+        activityPayout,
+      };
+    } catch (err) {
+      console.log(err);
     }
   }
 
   async getAll(payload: GetActivitiesDto) {
-    const {
-      page,
-      perPage,
-      title,
-      category,
-      phase,
-      isComplete,
-      isApproved,
-    } = payload;
+    const { page, perPage, title, category, phase, isComplete, isApproved } =
+      payload;
 
     const query = {
       where: {
@@ -354,48 +417,67 @@ export class ActivitiesService {
 
     this.eventEmitter.emit(EVENTS.ACTIVITY_DELETED, {});
 
-    return deletedActivity
+    return deletedActivity;
   }
 
   async triggerCommunication(campaignId: string) {
-    const cId = Number(campaignId)
-    const triggerResponse = await this.communicationService.communication.triggerCampaign(cId)
+    const cId = Number(campaignId);
+    const triggerResponse =
+      await this.communicationService.communication.triggerCampaign(cId);
     return triggerResponse.data;
   }
 
-  async updateStatus(payload: { uuid: string, status: ActivitiesStatus, activityDocuments: Array<ActivityDocs> }) {
+  async updateStatus(payload: {
+    uuid: string;
+    status: ActivitiesStatus;
+    activityDocuments: Array<ActivityDocs>;
+  }) {
     const { status, uuid, activityDocuments } = payload;
 
     const docs = activityDocuments || [];
 
-    if(status === 'COMPLETED'){
+    if (status === 'COMPLETED') {
       this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
     }
 
     const updatedActivity = await this.prisma.activities.update({
       where: {
-        uuid: uuid
+        uuid: uuid,
       },
       data: {
         status: status,
-        activityDocuments: JSON.parse(JSON.stringify(docs))
-      }
-    })
+        activityDocuments: JSON.parse(JSON.stringify(docs)),
+      },
+    });
 
-    return updatedActivity
+    return updatedActivity;
   }
 
   async update(payload: UpdateActivityData) {
-    const { uuid, activityCommunication, isAutomated, title, source, responsibility, phaseId, leadTime, description, categoryId, activityDocuments } = payload
+    const {
+      uuid,
+      activityCommunication,
+      isAutomated,
+      title,
+      source,
+      responsibility,
+      phaseId,
+      leadTime,
+      description,
+      categoryId,
+      activityDocuments,
+    } = payload;
     const activity = await this.prisma.activities.findUnique({
       where: {
-        uuid: uuid
-      }
-    })
-    if (!activity) throw new RpcException('Activity not found.')
+        uuid: uuid,
+      },
+    });
+    if (!activity) throw new RpcException('Activity not found.');
 
-    const updateActivityCommunicationPayload = []
-    const updateActivityDocuments = activityDocuments?.length ? JSON.parse(JSON.stringify(activityDocuments)) : []
+    const updateActivityCommunicationPayload = [];
+    const updateActivityDocuments = activityDocuments?.length
+      ? JSON.parse(JSON.stringify(activityDocuments))
+      : [];
 
     if (activityCommunication?.length) {
       for (const comms of activityCommunication) {
@@ -403,45 +485,71 @@ export class ActivitiesService {
         switch (comms.groupType) {
           case 'STAKEHOLDERS':
             if (comms.campaignId) {
-              const campaginDetails = await this.communicationService.communication.getCampaign(Number(comms.campaignId))
-              const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
+              const campaginDetails =
+                await this.communicationService.communication.getCampaign(
+                  Number(comms.campaignId)
+                );
+              const audienceIds = campaginDetails.data?.audiences?.map(
+                (d) => d.id
+              );
 
-              await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                audienceIds: audienceIds,
-                details: JSON.parse(JSON.stringify({ message: comms.message })),
-                name: title || activity.title
-              })
+              await this.communicationService.communication.updateCampaign(
+                comms.campaignId,
+                {
+                  audienceIds: audienceIds,
+                  details: JSON.parse(
+                    JSON.stringify({ message: comms.message })
+                  ),
+                  name: title || activity.title,
+                }
+              );
 
-              updateActivityCommunicationPayload.push(comms)
+              updateActivityCommunicationPayload.push(comms);
               break;
             }
-            campaignId = await this.processStakeholdersCommunication(comms, title || activity.title);
+            campaignId = await this.processStakeholdersCommunication(
+              comms,
+              title || activity.title
+            );
 
             updateActivityCommunicationPayload.push({
               ...comms,
-              campaignId
-            })
+              campaignId,
+            });
             break;
           case 'BENEFICIARY':
             if (comms.campaignId) {
-              const campaginDetails = await this.communicationService.communication.getCampaign(Number(comms.campaignId))
-              const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
+              const campaginDetails =
+                await this.communicationService.communication.getCampaign(
+                  Number(comms.campaignId)
+                );
+              const audienceIds = campaginDetails.data?.audiences?.map(
+                (d) => d.id
+              );
 
-              await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                audienceIds: audienceIds,
-                details: JSON.parse(JSON.stringify({ message: comms.message })),
-                name: title || activity.title
-              })
+              await this.communicationService.communication.updateCampaign(
+                comms.campaignId,
+                {
+                  audienceIds: audienceIds,
+                  details: JSON.parse(
+                    JSON.stringify({ message: comms.message })
+                  ),
+                  name: title || activity.title,
+                }
+              );
 
-              updateActivityCommunicationPayload.push(comms)
+              updateActivityCommunicationPayload.push(comms);
               break;
             }
-            campaignId = await this.processBeneficiaryCommunication(comms, title || activity.title);
+            campaignId = await this.processBeneficiaryCommunication(
+              comms,
+              title || activity.title
+            );
 
             updateActivityCommunicationPayload.push({
               ...comms,
-              campaignId
-            })
+              campaignId,
+            });
             break;
           default:
             break;
@@ -449,10 +557,9 @@ export class ActivitiesService {
       }
     }
 
-
     return await this.prisma.activities.update({
       where: {
-        uuid: uuid
+        uuid: uuid,
       },
       data: {
         title: title || activity.title,
@@ -463,18 +570,25 @@ export class ActivitiesService {
         isAutomated: isAutomated || activity.isAutomated,
         phase: {
           connect: {
-            uuid: phaseId || activity.phaseId
-          }
+            uuid: phaseId || activity.phaseId,
+          },
         },
         category: {
           connect: {
-            uuid: categoryId || activity.categoryId
-          }
+            uuid: categoryId || activity.categoryId,
+          },
         },
         activityCommunication: updateActivityCommunicationPayload,
-        activityDocuments: updateActivityDocuments || activity.activityDocuments,
-        updatedAt: new Date()
-      }
-    })
+        activityDocuments:
+          updateActivityDocuments || activity.activityDocuments,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  async getCommunicationLogs() {
+    const commsLogs =
+      await this.communicationService.communication.getCommunicationLogs();
+    return commsLogs.data;
   }
 }

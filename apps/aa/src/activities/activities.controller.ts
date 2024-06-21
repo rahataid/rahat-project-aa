@@ -2,12 +2,19 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { ActivitiesService } from './activities.service';
-import { ActivityDocs, AddActivityData, GetActivitiesDto, GetOneActivity, RemoveActivityData, UpdateActivityData } from './dto';
+import {
+  ActivityDocs,
+  AddActivityData,
+  GetActivitiesDto,
+  GetOneActivity,
+  RemoveActivityData,
+  UpdateActivityData,
+} from './dto';
 import { ActivitiesStatus } from '@prisma/client';
 
 @Controller()
 export class ActivitiesController {
-  constructor(private readonly activitiesService: ActivitiesService) { }
+  constructor(private readonly activitiesService: ActivitiesService) {}
 
   @MessagePattern({
     cmd: JOBS.ACTIVITIES.ADD,
@@ -50,10 +57,22 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
+    cmd: JOBS.COMMUNICATION.COMMUNICATION_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async communicationLogs() {
+    return this.activitiesService.getCommunicationLogs();
+  }
+
+  @MessagePattern({
     cmd: JOBS.ACTIVITIES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
-  async updateStatus(payload: { uuid: string, status: ActivitiesStatus, activityDocuments: Array<ActivityDocs> }) {
+  async updateStatus(payload: {
+    uuid: string;
+    status: ActivitiesStatus;
+    activityDocuments: Array<ActivityDocs>;
+  }) {
     return this.activitiesService.updateStatus(payload);
   }
 
@@ -64,5 +83,4 @@ export class ActivitiesController {
   async update(payload: UpdateActivityData) {
     return this.activitiesService.update(payload);
   }
-
 }
