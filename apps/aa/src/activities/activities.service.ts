@@ -133,18 +133,18 @@ export class ActivitiesService {
     for (const stakeholder of stakeholdersNotInAudience) {
       const response = await this.communicationService.communication.createAudience({
         details: {
-          name: stakeholder.name,
-          phone: stakeholder.phone,
+          name: stakeholder?.name,
+          phone: stakeholder?.phone,
           // fix: add email to audience type in sdk
           // @ts-ignore: Unreachable code error
-          email: stakeholder.email,
+          email: stakeholder?.email,
         },
       });
       audienceIds.push(response.data.id);
     }
 
     const campaignPayload = {
-      audienceIds: JSON.stringify(audienceIds),
+      audienceIds: audienceIds,
       name: title,
       status: 'ONGOING',
       transportId: transportId,
@@ -167,7 +167,6 @@ export class ActivitiesService {
     }
 
     //create campaign
-    // @ts-ignore
     const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
     return campaign.data.id;
   }
@@ -199,18 +198,18 @@ export class ActivitiesService {
     for (const beneficiary of beneficiariesNotInAudience) {
       const response = await this.communicationService.communication.createAudience({
         details: {
-          name: beneficiary.Beneficiary.pii.name,
-          phone: beneficiary.Beneficiary.pii.phone,
+          name: beneficiary?.Beneficiary?.pii?.name,
+          phone: beneficiary?.Beneficiary?.pii?.phone,
           // fix: add email to audience type in sdk
           // @ts-ignore: Unreachable code error
-          email: beneficiary.Beneficiary.pii.email,
+          email: beneficiary?.Beneficiary?.pii?.email,
         },
       });
       audienceIds.push(response.data.id);
     }
 
     const campaignPayload = {
-      audienceIds: JSON.stringify(audienceIds),
+      audienceIds: audienceIds,
       name: title,
       status: 'ONGOING',
       transportId: transportId,
@@ -233,7 +232,6 @@ export class ActivitiesService {
     }
 
     //create campaign
-    // @ts-ignore
     const campaign = await this.communicationService.communication.createCampaign(campaignPayload);
     return campaign.data.id;
   }
@@ -409,8 +407,7 @@ export class ActivitiesService {
               const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
 
               await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                // @ts-ignore
-                audienceIds: JSON.stringify(audienceIds),
+                audienceIds: audienceIds,
                 details: JSON.parse(JSON.stringify({ message: comms.message })),
                 name: title || activity.title
               })
@@ -431,8 +428,7 @@ export class ActivitiesService {
               const audienceIds = campaginDetails.data?.audiences?.map((d) => d.id)
 
               await this.communicationService.communication.updateCampaign(comms.campaignId, {
-                // @ts-ignore
-                audienceIds: JSON.stringify(audienceIds),
+                audienceIds: audienceIds,
                 details: JSON.parse(JSON.stringify({ message: comms.message })),
                 name: title || activity.title
               })
