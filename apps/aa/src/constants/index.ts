@@ -3,7 +3,7 @@ export const NAMESPACE = 'rahat.projects';
 export const DATA_SOURCES = {
   DHM: 'DHM',
   MANUAL: 'MANUAL',
-  GLOFAS: 'GLOFAS'
+  GLOFAS: 'GLOFAS',
 };
 
 export const TRIGGER_ACTIVITY = {
@@ -28,7 +28,7 @@ export const CONTROLLERS = {
 
 export const JOBS = {
   APP: {
-    RESET_ALL: 'rahat.jobs.beneficiary.create'
+    RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
   BENEFICIARY: {
     CREATE: 'rahat.jobs.beneficiary.create',
@@ -46,14 +46,14 @@ export const JOBS = {
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
-    GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats'
+    GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
   },
   WATER_LEVELS: {
     GET_DHM: 'aa.jobs.waterLevels.getDhm',
-    GET_GLOFAS: 'aa.jobs.waterLevels.getGlofas'
+    GET_GLOFAS: 'aa.jobs.waterLevels.getGlofas',
   },
   SCHEDULE: {
     ADD: 'aa.jobs.schedule.add',
@@ -70,7 +70,7 @@ export const JOBS = {
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
   },
   PAYOUT: {
-    ASSIGN_TOKEN: 'aa.jobs.payout.assignToken'
+    ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -83,6 +83,7 @@ export const JOBS = {
   COMMUNICATION: {
     ADD: 'aa.jobs.activity.communication.add',
     TRIGGER: 'aa.jobs.activity.communication.trigger',
+    COMMUNICATION_LOGS: 'aa.jobs.communication.getCommunicationLogs',
   },
   ACTIVITY_CATEGORIES: {
     GET_ALL: 'aa.jobs.activityCategories.getAll',
@@ -115,13 +116,13 @@ export const JOBS = {
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
-    INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget'
+    INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget',
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
     GET_ONE: 'aa.jobs.stats.getAll',
-    GET_COMMS: 'aa.jobs.stats.getComms'
-  }
+    GET_COMMS: 'aa.jobs.stats.getComms',
+  },
 };
 
 export const EVENTS = {
@@ -129,12 +130,12 @@ export const EVENTS = {
   PHASE_REVERTED: 'events.phase_reverted',
   ACTIVITY_COMPLETED: 'events.activity_completed',
   ACTIVITY_DELETED: 'events.activity_deleted',
-  ACTIVITY_ADDED: 'events.activity_added'
+  ACTIVITY_ADDED: 'events.activity_added',
 };
 
 export const BQUEUE = {
   SCHEDULE: 'SCHEDULE',
   TRIGGER: 'TRIGGER',
   CONTRACT: 'CONTRACT',
-  COMMUNICATION: 'COMMUNICATION'
+  COMMUNICATION: 'COMMUNICATION',
 };
