@@ -59,7 +59,7 @@
     "@prisma/client": "5.10.2",
     "@rahataid/contracts": "^0.0.1",
     "@rahataid/sdk": "^0.0.24",
-    "@rumsan/communication": "0.0.11",
+    "@rumsan/communication": "0.0.17",
     "@rumsan/prisma": "^1.0.130",
     "@rumsan/settings": "^0.0.108",
     "axios": "^1.7.2",
