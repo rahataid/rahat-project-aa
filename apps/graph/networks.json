@@ -13,27 +13,27 @@
     },
     "mainnet": {
         "AccessManager": {
-            "address": "0xF1832A7dEbC78F427Fe1428fD55D54094841067E",
+            "address": "0x48a91Bc69B811B41cc90D508DCb1F77dcd0Db184",
             "startBlock": 1
         },
         "TriggerManager": {
-            "address": "0x1F9aa83c759d4306F7a02e339E882a78B04B1539",
+            "address": "0xA23fbBAAa8e784f43Fc7EF336D0Cf60F4D47ec20",
             "startBlock": 1
         },
         "RahatDonor": {
-            "address": "0x556Bdd7601C06B89F4ac73f8f98228F3A59286f8",
+            "address": "0x33032DE662867F17922EB5e2eA0092b257CDEDC1",
             "startBlock": 1
         },
         "ERC2771Forwarder": {
-            "address": "0xBb514e5B1BC19f04a10039e8cf35701B83B59043",
+            "address": "0xDBbfdD73411D405fe8FffB137a6D2391Ce2a67A8",
             "startBlock": 1
         },
         "RahatToken": {
-            "address": "0x5640D109C3c98Ac223940dF66823cC161Da3bf00",
+            "address": "0x966Cb560771D709B2BB54cAadD42F2D08EB86473",
             "startBlock": 1
         },
         "AAProject": {
-            "address": "0xd8E232E4EbC347F3360bF57F8E1b81Cb4Eb79294",
+            "address": "0x7C252a67869Cf738763BCAd6f2232ee288df274C",
             "startBlock": 1
         }
     }
