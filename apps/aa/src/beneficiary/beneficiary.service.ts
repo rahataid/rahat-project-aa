@@ -36,6 +36,25 @@ export class BeneficiaryService {
     return this.prisma.beneficiary.findMany()
   }
 
+  async getCount(){
+    return this.prisma.beneficiary.count({
+      where: {
+        deletedAt: null
+      }
+    })
+  }
+
+  async getBenfBetweenIds(startId: number,endId: number){
+    return  this.prisma.beneficiary.findMany({
+      where: {
+        id: {
+          gte: startId,
+          lte: endId,
+        },
+      },
+    });
+  }
+
   async create(dto: CreateBeneficiaryDto) {
     const rdata = await this.rsprisma.beneficiary.create({
       data: dto,
@@ -206,7 +225,9 @@ export class BeneficiaryService {
           }
         },
         data: {
-          benTokens: numberOfTokens
+          benTokens: {
+            increment: numberOfTokens
+          }
         }
       })
 

@@ -4,9 +4,10 @@ import { BQUEUE, JOBS } from '../constants';
 import { Job } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
 import { JsonRpcProvider, ethers } from 'ethers';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 
-type IStringArr = string[] 
-type ICallData = IStringArr[]
+type IStringArr = string[];
+type ICallData = IStringArr[];
 
 @Processor(BQUEUE.CONTRACT)
 export class ContractProcessor {
@@ -14,48 +15,54 @@ export class ContractProcessor {
 
   constructor(
     private readonly prisma: PrismaService,
-  ) { }
+    private readonly beneficiaryService: BeneficiaryService
+  ) {}
 
   @Process({
     name: JOBS.PAYOUT.ASSIGN_TOKEN,
-    concurrency: 1
   })
   async processPayoutAssignToken(job: Job) {
     try {
       const payload = job.data as {
-        benTokens: number;
-        wallet: string
+        size: number;
+        start: number;
+        end: number;
+      };
+
+      const benfs = await this.beneficiaryService.getBenfBetweenIds(
+        payload.start,
+        payload.end
+      );
+
+      const multicallTxnPayload = [];
+      for (const benf of benfs) {
+        if (benf.benTokens) {
+          multicallTxnPayload.push([benf.walletAddress, benf.benTokens]);
+        }
       }
 
-      const { contract: aaContract, provider, wallet } = await this.createContractInstanceSign('AAPROJECT')
-      // const gasPrice = ethers.parseUnits('500', 'gwei')
+      const {
+        contract: aaContract,
+      } = await this.createContractInstanceSign('AAPROJECT');
 
-      // let gasPrice = (await provider.getFeeData()).maxPriorityFeePerGas
-      // if (!gasPrice) {
-      //   gasPrice = ethers.parseUnits('1000', 'gwei'); // Fallback gas price
-      // }
-
-      // const nonce = await provider.getTransactionCount(wallet.address, 'latest');
-
-      // console.log("Using gas:", gasPrice);
-      // console.log("Using nonce:", nonce);
-      // const multicallData = this.generateMultiCallData(aaContract,'assignTokenToBeneficiary',[
-      //   // ['wallet','tokens'],
-      // ])
-
-
-      const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens);
-      // await txn.wait();
-      // const txn = await this.multiSend(
+      // const multicallData = this.generateMultiCallData(
       //   aaContract,
       //   'assignTokenToBeneficiary',
-      //   // ['wa']
-      // )
+      //   multicallTxnPayload
+      // );
 
-      this.logger.log("contract called with txn hash:", txn.hash);
-      return "ok"
+      // const txn = await aaContract.assignTokenToBeneficiary(payload.wallet, payload.benTokens);
+      const txn = await this.multiSend(
+        aaContract,
+        'assignTokenToBeneficiary',
+        multicallTxnPayload
+      );
+      // await txn.wait();
+
+      this.logger.log('contract called with txn hash:', txn.hash);
+      return 'ok';
     } catch (err) {
-      throw err
+      throw err;
     }
   }
 
@@ -70,7 +77,7 @@ export class ContractProcessor {
         value: true,
       },
     });
-    const blockChainSetting = JSON.parse(JSON.stringify(res))
+    const blockChainSetting = JSON.parse(JSON.stringify(res));
 
     //  create wallet from private key
     const provider = new JsonRpcProvider(blockChainSetting?.value?.RPCURL);
@@ -92,17 +99,17 @@ export class ContractProcessor {
         }
       }
       return newObj;
-    }
+    };
 
-    const contract = await this.getContractByName(contractName)
-    const abi = contract.ABI.map(convertToLowerCase)
+    const contract = await this.getContractByName(contractName);
+    const abi = contract.ABI.map(convertToLowerCase);
     //  create an instance of the contract
     const c = new ethers.Contract(contract.ADDRESS, abi, wallet);
     return {
       contract: c,
       provider,
-      wallet
-    }
+      wallet,
+    };
   }
 
   async getContractByName(contractName: string) {
@@ -161,3 +168,15 @@ export class ContractProcessor {
     return result;
   }
 }
+
+// const gasPrice = ethers.parseUnits('500', 'gwei')
+
+// let gasPrice = (await provider.getFeeData()).maxPriorityFeePerGas
+// if (!gasPrice) {
+//   gasPrice = ethers.parseUnits('1000', 'gwei'); // Fallback gas price
+// }
+
+// const nonce = await provider.getTransactionCount(wallet.address, 'latest');
+
+// console.log("Using gas:", gasPrice);
+// console.log("Using nonce:", nonce);

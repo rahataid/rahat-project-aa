@@ -1,13 +1,15 @@
-import { ConfigService } from "@nestjs/config";
-import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
-import { PrismaService } from "@rumsan/prisma";
-import { RpcException } from "@nestjs/microservices";
-import { InjectQueue } from "@nestjs/bull";
-import { BQUEUE, EVENTS, JOBS } from "../constants";
-import { Queue } from "bull";
-import { BeneficiaryService } from "../beneficiary/beneficiary.service";
-import { TriggersService } from "../triggers/triggers.service";
-import { EventEmitter2 } from "@nestjs/event-emitter";
+import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { PrismaService } from '@rumsan/prisma';
+import { RpcException } from '@nestjs/microservices';
+import { InjectQueue } from '@nestjs/bull';
+import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { Queue } from 'bull';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { TriggersService } from '../triggers/triggers.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
+const BATCH_SIZE = 4;
 
 @Injectable()
 export class PhasesService {
@@ -20,243 +22,275 @@ export class PhasesService {
     private readonly triggerService: TriggersService,
     private eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
-    @InjectQueue(BQUEUE.COMMUNICATION) private readonly communicationQueue: Queue,
-  ) { }
+    @InjectQueue(BQUEUE.COMMUNICATION)
+    private readonly communicationQueue: Queue
+  ) {}
 
   async getAll() {
-    return this.prisma.phases.findMany()
+    return this.prisma.phases.findMany();
   }
 
   async getOne(payload: { uuid: string }) {
-    const { uuid } = payload
+    const { uuid } = payload;
     const phase = await this.prisma.phases.findUnique({
       where: {
-        uuid: uuid
+        uuid: uuid,
       },
       include: {
         triggers: {
           where: {
-            isDeleted: false
+            isDeleted: false,
           },
           include: {
-            phase: true
-          }
+            phase: true,
+          },
         },
         activities: true,
-      }
-    })
+      },
+    });
 
     const totalMandatoryTriggers = await this.prisma.triggers.count({
       where: {
         phaseId: phase.uuid,
         isMandatory: true,
-        isDeleted: false
-      }
-    })
+        isDeleted: false,
+      },
+    });
     const totalOptionalTriggers = await this.prisma.triggers.count({
       where: {
         phaseId: phase.uuid,
         isMandatory: false,
-        isDeleted: false
-      }
-    })
+        isDeleted: false,
+      },
+    });
 
     const triggerRequirements = {
       mandatoryTriggers: {
         totalTriggers: totalMandatoryTriggers,
         requiredTriggers: phase.requiredMandatoryTriggers,
-        receivedTriggers: phase.receivedMandatoryTriggers
+        receivedTriggers: phase.receivedMandatoryTriggers,
       },
       optionalTriggers: {
         totalTriggers: totalOptionalTriggers,
         requiredTriggers: phase.requiredOptionalTriggers,
-        receivedTriggers: phase.receivedOptionalTriggers
-      }
-    }
+        receivedTriggers: phase.receivedOptionalTriggers,
+      },
+    };
 
-    return { ...phase, triggerRequirements }
+    return { ...phase, triggerRequirements };
   }
 
   async activatePhase(uuid: string) {
     const phaseDetails = await this.prisma.phases.findUnique({
       where: {
-        uuid: uuid
+        uuid: uuid,
       },
       include: {
         activities: {
           where: {
             isAutomated: true,
             status: {
-              not: 'COMPLETED'
-            }
-          }
-        }
-      }
-    })
+              not: 'COMPLETED',
+            },
+          },
+        },
+      },
+    });
 
     const phaseActivities = phaseDetails.activities;
     for (const activity of phaseActivities) {
-      const activityComms = JSON.parse(JSON.stringify(activity.activityCommunication))
+      const activityComms = JSON.parse(
+        JSON.stringify(activity.activityCommunication)
+      );
       for (const comm of activityComms) {
-        this.communicationQueue.add(JOBS.COMMUNICATION.TRIGGER, comm?.campaignId, {
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        });
-      }
-      await this.prisma.activities.update({
-        where: {
-          uuid: activity.uuid
-        },
-        data: {
-          status: 'COMPLETED'
-        }
-      })
-    }
-
-    if (phaseDetails.canTriggerPayout) {
-      
-      const allBenfs = await this.beneficiaryService.getAllBenfs() // 5,200 : 50
-      
-      allBenfs?.forEach((benf, i) => {
-        if (benf.benTokens) {
-          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, {
-            benTokens: benf.benTokens,
-            wallet: benf.walletAddress
-          }, {
+        this.communicationQueue.add(
+          JOBS.COMMUNICATION.TRIGGER,
+          comm?.campaignId,
+          {
             attempts: 3,
             removeOnComplete: true,
             backoff: {
               type: 'exponential',
-              delay: i * 500,
+              delay: 1000,
             },
-          });
-        }
-      })
+          }
+        );
+      }
+      await this.prisma.activities.update({
+        where: {
+          uuid: activity.uuid,
+        },
+        data: {
+          status: 'COMPLETED',
+        },
+      });
+    }
+
+    if (phaseDetails.canTriggerPayout) {
+      const allBenfs = await this.beneficiaryService.getCount();
+      const batches = this.createBatches(allBenfs, BATCH_SIZE);
+
+      if (batches.length) {
+        batches?.forEach((batch) => {
+          this.contractQueue.add(
+            JOBS.PAYOUT.ASSIGN_TOKEN,
+            batch,
+            {
+              attempts: 3,
+              removeOnComplete: true,
+              backoff: {
+                type: 'exponential',
+                delay: 1000,
+              },
+            }
+          );
+        });
+      }
     }
 
     const updatedPhase = await this.prisma.phases.update({
       where: {
-        uuid: uuid
+        uuid: uuid,
       },
       data: {
         isActive: true,
-        activatedAt: new Date()
-      }
-    })
-
-    // event to calculate reporting 
-    this.eventEmitter.emit(EVENTS.PHASE_ACTIVATED, {
-      phaseId: phaseDetails.uuid
+        activatedAt: new Date(),
+      },
     });
 
-    return updatedPhase
+    // event to calculate reporting
+    this.eventEmitter.emit(EVENTS.PHASE_ACTIVATED, {
+      phaseId: phaseDetails.uuid,
+    });
+
+    return updatedPhase;
   }
 
   async addTriggersToPhases(payload) {
-    const { uuid, triggers, triggerRequirements } = payload
+    const { uuid, triggers, triggerRequirements } = payload;
     const phase = await this.prisma.phases.findUnique({
       where: {
-        uuid: uuid
-      }
-    })
-    if (!phase) throw new RpcException('Phase not found.')
-    if (phase.isActive) throw new RpcException('Cannot add triggers to an active phase.')
+        uuid: uuid,
+      },
+    });
+    if (!phase) throw new RpcException('Phase not found.');
+    if (phase.isActive)
+      throw new RpcException('Cannot add triggers to an active phase.');
 
     for (const trigger of triggers) {
-      const tg = await this.prisma.triggers.findUnique({ where: { repeatKey: trigger.repeatKey } })
+      const tg = await this.prisma.triggers.findUnique({
+        where: { repeatKey: trigger.repeatKey },
+      });
 
       await this.prisma.triggers.update({
         where: {
-          uuid: tg.uuid
+          uuid: tg.uuid,
         },
         data: {
           isMandatory: trigger.isMandatory,
-          phaseId: phase.uuid
-        }
-      })
+          phaseId: phase.uuid,
+        },
+      });
     }
     const updatedPhase = await this.prisma.phases.update({
       where: {
-        uuid: phase.uuid
+        uuid: phase.uuid,
       },
       data: {
-        requiredMandatoryTriggers: triggerRequirements.mandatoryTriggers.requiredTriggers,
-        requiredOptionalTriggers: triggerRequirements.optionalTriggers.requiredTriggers
-      }
-    })
+        requiredMandatoryTriggers:
+          triggerRequirements.mandatoryTriggers.requiredTriggers,
+        requiredOptionalTriggers:
+          triggerRequirements.optionalTriggers.requiredTriggers,
+      },
+    });
 
-    return updatedPhase
+    return updatedPhase;
   }
 
   async revertPhase(payload) {
-    const { phaseId } = payload
+    const { phaseId } = payload;
     const phase = await this.prisma.phases.findUnique({
       where: {
-        uuid: phaseId
+        uuid: phaseId,
       },
       include: {
         triggers: {
           where: {
-            isDeleted: false
-          }
-        }
-      }
-    })
+            isDeleted: false,
+          },
+        },
+      },
+    });
 
-    if (!phase) throw new RpcException('Phase not found.')
+    if (!phase) throw new RpcException('Phase not found.');
 
-    if (!phase.triggers.length || !phase.isActive || !phase.canRevert) throw new RpcException('Phase cannot be reverted.');
+    if (!phase.triggers.length || !phase.isActive || !phase.canRevert)
+      throw new RpcException('Phase cannot be reverted.');
 
     for (const trigger of phase.triggers) {
-      const { repeatKey } = trigger
+      const { repeatKey } = trigger;
       if (trigger.dataSource === 'MANUAL') {
         await this.triggerService.create({
           title: trigger.title,
           dataSource: trigger.dataSource,
           isMandatory: trigger.isMandatory,
           phaseId: trigger.phaseId,
-        })
+        });
       } else {
         await this.triggerService.create({
           title: trigger.title,
           dataSource: trigger.dataSource,
           location: trigger.location,
-          triggerStatement: JSON.parse(JSON.stringify(trigger.triggerStatement)),
+          triggerStatement: JSON.parse(
+            JSON.stringify(trigger.triggerStatement)
+          ),
           isMandatory: trigger.isMandatory,
           phaseId: trigger.phaseId,
-        })
+        });
       }
 
       await this.triggerService.archive({
-        repeatKey
-      })
+        repeatKey,
+      });
     }
 
-    const currentDate = new Date()
+    const currentDate = new Date();
 
     const updatedPhase = await this.prisma.phases.update({
       where: {
-        uuid: phaseId
+        uuid: phaseId,
       },
       data: {
         receivedMandatoryTriggers: 0,
         receivedOptionalTriggers: 0,
         isActive: false,
         activatedAt: null,
-        updatedAt: currentDate
-      }
-    })
+        updatedAt: currentDate,
+      },
+    });
 
     this.eventEmitter.emit(EVENTS.PHASE_REVERTED, {
       phaseId: phase.uuid,
-      revertedAt: currentDate.toISOString()
+      revertedAt: currentDate.toISOString(),
     });
 
-    return updatedPhase
+    return updatedPhase;
+  }
+
+  createBatches(total: number, batchSize: number) {
+    const batches = [];
+    let start = 1;
+
+    while (start <= total) {
+      const end = Math.min(start + batchSize - 1, total);
+      batches.push({
+        size: end - start + 1,
+        start: start,
+        end: end,
+      });
+      start = end + 1;
+    }
+
+    return batches;
   }
 }
-
