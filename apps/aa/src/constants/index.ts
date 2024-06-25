@@ -142,6 +142,7 @@ export const EVENTS = {
   BENEFICIARY_CREATED: 'events.beneficiary_created',
   BENEFICIARY_REMOVED: 'events.beneficiary_updated',
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
+  AUTOMATED_TRIGGERED: 'events.automated_triggered'
 };
 
 export const BQUEUE = {
