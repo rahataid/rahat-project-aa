@@ -156,7 +156,7 @@ export class BeneficiaryService {
       },
     });
 
-    if (!findUuid) throw new Error('Data not Found');
+    if (!findUuid) return "OK"
 
     const rdata = await this.rsprisma.beneficiary.update({
       where: {

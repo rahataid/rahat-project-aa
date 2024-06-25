@@ -17,7 +17,10 @@ export class TriggerProcessor {
     const payload = job.data
 
     switch (payload.dataSource) {
-      case DATA_SOURCES.DHM || DATA_SOURCES.GLOFAS:
+      case DATA_SOURCES.DHM:
+        await this.processAutomatedData(payload)
+        break;
+      case DATA_SOURCES.GLOFAS:
         await this.processAutomatedData(payload)
         break;
       case DATA_SOURCES.MANUAL:
