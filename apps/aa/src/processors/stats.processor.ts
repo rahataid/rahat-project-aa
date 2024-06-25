@@ -26,9 +26,13 @@ export class StatsProcessor implements OnApplicationBootstrap{
     return
   }
 
+
+  // this also has phase status in it
   @OnEvent(EVENTS.ACTIVITY_COMPLETED)
   @OnEvent(EVENTS.ACTIVITY_DELETED)
   @OnEvent(EVENTS.ACTIVITY_ADDED)
+  @OnEvent(EVENTS.PHASE_REVERTED)
+  @OnEvent(EVENTS.PHASE_ACTIVATED)
   async onActivityCompleted() {
     this.phasesStatsService.calculatePhaseActivities()
     return
