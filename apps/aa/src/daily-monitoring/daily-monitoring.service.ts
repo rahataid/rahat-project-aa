@@ -15,24 +15,27 @@ export class DailyMonitoringService {
 
     async add(payload: AddDailyMonitoringData) {
         const { dataEntryBy, location, data } = payload;
-        const allData = JSON.parse(JSON.stringify(data));
+        // const allData = JSON.parse(JSON.stringify(data));
 
-        const sanitizedDataArray = allData.map((item: any) => ({
-            dataEntryBy,
-            location,
-            source: item.source,
-            data: {
-                dataEntryBy,
-                location,
-                ...item
-            }
-        }));
+        // const sanitizedDataArray = allData.map((item: any) => ({
+        //     dataEntryBy,
+        //     location,
+        //     source: item.source,
+        //     data: {
+        //         dataEntryBy,
+        //         location,
+        //         ...item
+        //     }
+        // }));
 
-        const response = await this.prisma.dailyMonitoring.createMany({
-            data: sanitizedDataArray
-        });
+        // const response = await this.prisma.dailyMonitoring.createMany({
+        //     data: sanitizedDataArray
+        // });
 
-        return response;
+        // return response;
+        return await this.prisma.dailyMonitoring.create({
+            data: { dataEntryBy, location, data: JSON.parse(JSON.stringify(data)) }
+        })
     }
 
     async getAll(payload: GetDailyMonitoringData) {
@@ -52,11 +55,14 @@ export class DailyMonitoringService {
 
     async getOne(payload: GetOneMonitoringData) {
         const { uuid } = payload;
-        return await this.prisma.dailyMonitoring.findUnique({
+        const result = await this.prisma.dailyMonitoring.findUnique({
             where: {
                 uuid: uuid,
-            }
+            },
         })
+        console.log('result:', result)
+        const finalData = result
+        return finalData
     }
 
     async update(payload: UpdateMonitoringData) {
