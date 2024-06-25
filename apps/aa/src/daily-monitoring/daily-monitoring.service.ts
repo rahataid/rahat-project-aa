@@ -58,11 +58,16 @@ export class DailyMonitoringService {
         const result = await this.prisma.dailyMonitoring.findUnique({
             where: {
                 uuid: uuid,
+                isDeleted: false
             },
         })
         console.log('result:', result)
-        const finalData = result
-        return finalData
+        const { data: reportingData, ...rest} = result
+
+        return {
+            ...rest,
+            reportingData
+        }
     }
 
     async update(payload: UpdateMonitoringData) {
