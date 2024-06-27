@@ -61,12 +61,46 @@ export class DailyMonitoringService {
                 isDeleted: false
             },
         })
-        console.log('result:', result)
-        const { data: reportingData, ...rest} = result
+
+        // const latest = new Date(result.createdAt);
+
+        // const oneDayBeforeLatest = new Date(latest);
+        // oneDayBeforeLatest.setDate(latest.getDate() - 1);
+
+        // const twoDaysBeforeLatest = new Date(latest);
+        // twoDaysBeforeLatest.setDate(latest.getDate() - 2);
+
+        // const manyData = await this.prisma.dailyMonitoring.findMany({
+        //     where: {
+        //         createdAt: {
+        //             gte: twoDaysBeforeLatest,
+        //             lte: latest
+        //         },
+        //         location: result.location 
+        //         isDeleted: false
+        //     }
+        // })
+
+        const latest = result.id;
+        const manyData = await this.prisma.dailyMonitoring.findMany({
+            where: {
+                id: {
+                    gte: latest - 2,
+                    lte: latest
+                },
+                location: result.location,
+                isDeleted: false
+            }
+        })
+
+        const { data: monitoringData, ...rest } = result
 
         return {
-            ...rest,
-            reportingData
+            singleData: {
+                ...rest,
+                monitoringData
+            },
+            multipleData: manyData
         }
     }
 
@@ -89,14 +123,12 @@ export class DailyMonitoringService {
             data: {
                 dataEntryBy: dataEntryBy || existingData.dataEntryBy,
                 location: location || existingData.location,
-                source: data.source || existingData.data.source,
-                data: { dataEntryBy, location, ...data } || existingData.data,
+                data: JSON.parse(JSON.stringify(data)) || existingData,
                 updatedAt: new Date(),
             },
         });
 
         return updatedMonitoringData;
-
     }
 
     async remove(payload: RemoveMonitoringData) {
