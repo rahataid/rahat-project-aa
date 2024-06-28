@@ -190,6 +190,17 @@ export class BeneficiaryStatService {
       count: myData[d],
     }));
   }
+
+  async calculateHouseholdCashSupport() {
+    return this.prisma.beneficiary.count({
+      where: {
+        benTokens: {
+          gt: 0,
+        },
+      },
+    });
+  }
+
   async calculateAllStats() {
     const [
       total,
@@ -200,6 +211,7 @@ export class BeneficiaryStatService {
       countByBank,
       phoneStatus,
       vulnerabilityCountStats,
+      householdCashSupport,
     ] = await Promise.all([
       this.totalBeneficiaries(),
       this.calculateGenderStats(),
@@ -209,6 +221,7 @@ export class BeneficiaryStatService {
       this.calculateCountByBankStats(),
       this.calculatePhoneStatusStats(),
       this.calculateVulnerabilityCountStats(),
+      this.calculateHouseholdCashSupport(),
     ]);
     return {
       total,
@@ -219,6 +232,7 @@ export class BeneficiaryStatService {
       countByBank,
       phoneStatus,
       vulnerabilityCountStats,
+      householdCashSupport,
     };
   }
 
@@ -231,7 +245,8 @@ export class BeneficiaryStatService {
       phoneType,
       countByBank,
       phoneStatus,
-      vulnerabilityCountStats
+      vulnerabilityCountStats,
+      householdCashSupport,
     } = await this.calculateAllStats();
 
     await Promise.all([
@@ -275,6 +290,11 @@ export class BeneficiaryStatService {
         data: vulnerabilityCountStats,
         group: 'beneficiary',
       }),
+      this.statsService.save({
+        name: 'beneficiary_householdCashSupport',
+        data: { householdCashSupport: householdCashSupport },
+        group: 'beneficiary',
+      }),
     ]);
 
     return {
@@ -285,6 +305,8 @@ export class BeneficiaryStatService {
       phoneType,
       countByBank,
       phoneStatus,
+      vulnerabilityCountStats,
+      householdCashSupport,
     };
   }
 }
