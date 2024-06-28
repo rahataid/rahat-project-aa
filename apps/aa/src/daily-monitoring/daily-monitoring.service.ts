@@ -15,24 +15,27 @@ export class DailyMonitoringService {
 
     async add(payload: AddDailyMonitoringData) {
         const { dataEntryBy, location, data } = payload;
-        const allData = JSON.parse(JSON.stringify(data));
+        // const allData = JSON.parse(JSON.stringify(data));
 
-        const sanitizedDataArray = allData.map((item: any) => ({
-            dataEntryBy,
-            location,
-            source: item.source,
-            data: {
-                dataEntryBy,
-                location,
-                ...item
-            }
-        }));
+        // const sanitizedDataArray = allData.map((item: any) => ({
+        //     dataEntryBy,
+        //     location,
+        //     source: item.source,
+        //     data: {
+        //         dataEntryBy,
+        //         location,
+        //         ...item
+        //     }
+        // }));
 
-        const response = await this.prisma.dailyMonitoring.createMany({
-            data: sanitizedDataArray
-        });
+        // const response = await this.prisma.dailyMonitoring.createMany({
+        //     data: sanitizedDataArray
+        // });
 
-        return response;
+        // return response;
+        return await this.prisma.dailyMonitoring.create({
+            data: { dataEntryBy, location, data: JSON.parse(JSON.stringify(data)) }
+        })
     }
 
     async getAll(payload: GetDailyMonitoringData) {
@@ -52,11 +55,53 @@ export class DailyMonitoringService {
 
     async getOne(payload: GetOneMonitoringData) {
         const { uuid } = payload;
-        return await this.prisma.dailyMonitoring.findUnique({
+        const result = await this.prisma.dailyMonitoring.findUnique({
             where: {
                 uuid: uuid,
+                isDeleted: false
+            },
+        })
+
+        // const latest = new Date(result.createdAt);
+
+        // const oneDayBeforeLatest = new Date(latest);
+        // oneDayBeforeLatest.setDate(latest.getDate() - 1);
+
+        // const twoDaysBeforeLatest = new Date(latest);
+        // twoDaysBeforeLatest.setDate(latest.getDate() - 2);
+
+        // const manyData = await this.prisma.dailyMonitoring.findMany({
+        //     where: {
+        //         createdAt: {
+        //             gte: twoDaysBeforeLatest,
+        //             lte: latest
+        //         },
+        //         location: result.location 
+        //         isDeleted: false
+        //     }
+        // })
+
+        const latest = result.id;
+        const manyData = await this.prisma.dailyMonitoring.findMany({
+            where: {
+                id: {
+                    gte: latest - 2,
+                    lte: latest
+                },
+                location: result.location,
+                isDeleted: false
             }
         })
+
+        const { data: monitoringData, ...rest } = result
+
+        return {
+            singleData: {
+                ...rest,
+                monitoringData
+            },
+            multipleData: manyData
+        }
     }
 
     async update(payload: UpdateMonitoringData) {
@@ -78,14 +123,12 @@ export class DailyMonitoringService {
             data: {
                 dataEntryBy: dataEntryBy || existingData.dataEntryBy,
                 location: location || existingData.location,
-                source: data.source || existingData.data.source,
-                data: { dataEntryBy, location, ...data } || existingData.data,
+                data: JSON.parse(JSON.stringify(data)) || existingData,
                 updatedAt: new Date(),
             },
         });
 
         return updatedMonitoringData;
-
     }
 
     async remove(payload: RemoveMonitoringData) {

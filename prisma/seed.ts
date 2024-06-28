@@ -15,6 +15,7 @@ const phaseData = [
     {
         uuid: "ecce09ad-2364-4e21-a59a-09b0f3a3fde5",
         name: Phase.READINESS,
+        canRevert: true
     },
     {
         uuid: "c7e69410-f71c-40c0-bd06-6bb95494fd82",
@@ -35,6 +36,22 @@ const activityCategoriesData = [
     {
         uuid: '0a824dad-360f-4c43-af86-c110f81a019a',
         name: 'Cleaning The Drains'
+    },
+    {
+        uuid: "6fa910ef-0893-4141-9878-c54667cb2143",
+        name: "Strengthening Embankments By Placing Sand Bags"
+    },
+    {
+        uuid: "cabfdcbd-e13b-4e67-ac07-f767ec0bcd3f",
+        name: "Support For Early Harvesting"
+    },
+    {
+        uuid: "9d086c69-e058-4bea-973d-97f78fb93917",
+        name: "People, Livestock And Property Evacuation"
+    },
+    {
+        uuid: "132c20d0-3a74-4e9c-beaa-c7d44bcecf08",
+        name: "Complaints Handling Mechanism"
     },
     {
         uuid: '7cf2aed6-cfe9-45bb-a12f-4b138e7911bf',
