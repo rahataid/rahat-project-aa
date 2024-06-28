@@ -142,7 +142,7 @@ export const EVENTS = {
   BENEFICIARY_CREATED: 'events.beneficiary_created',
   BENEFICIARY_REMOVED: 'events.beneficiary_updated',
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
-  AUTOMATED_TRIGGERED: 'events.automated_triggered'
+  AUTOMATED_TRIGGERED: 'events.automated_triggered',
 };
 
 export const BQUEUE = {
@@ -150,4 +150,12 @@ export const BQUEUE = {
   TRIGGER: 'TRIGGER',
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
+};
+
+export const VULNERABILITY_FIELD = {
+  HOW_MANY_LACTATING: 'if_yes_how_many_lactating',
+  HOW_MANY_PREGNANT: 'if_yes_how_many_pregnant',
+  TYPE_OF_SSA_1: 'type_of_ssa_1',
+  TYPE_OF_SSA_2: 'type_of_ssa_2',
+  TYPE_OF_SSA_3: 'type_of_ssa_3',
 };
