@@ -199,7 +199,7 @@ export class BeneficiaryStatService {
       phoneType,
       countByBank,
       phoneStatus,
-      calculateVulnerabilityCountStats,
+      vulnerabilityCountStats,
     ] = await Promise.all([
       this.totalBeneficiaries(),
       this.calculateGenderStats(),
@@ -218,7 +218,7 @@ export class BeneficiaryStatService {
       phoneType,
       countByBank,
       phoneStatus,
-      calculateVulnerabilityCountStats,
+      vulnerabilityCountStats,
     };
   }
 
@@ -231,6 +231,7 @@ export class BeneficiaryStatService {
       phoneType,
       countByBank,
       phoneStatus,
+      vulnerabilityCountStats
     } = await this.calculateAllStats();
 
     await Promise.all([
@@ -267,6 +268,11 @@ export class BeneficiaryStatService {
       this.statsService.save({
         name: 'beneficiary_phoneStatus',
         data: phoneStatus,
+        group: 'beneficiary',
+      }),
+      this.statsService.save({
+        name: 'beneficiary_countByVulnerability',
+        data: vulnerabilityCountStats,
         group: 'beneficiary',
       }),
     ]);
