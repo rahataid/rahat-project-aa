@@ -2,9 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { AddTokenToGroup, AssignBenfGroupToProject, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import {
+  AddTokenToGroup,
+  AssignBenfGroupToProject,
+  CreateBeneficiaryDto,
+} from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { ProjectContants } from "@rahataid/sdk"
+import { ProjectContants } from '@rahataid/sdk';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { EVENTS } from '../constants';
@@ -33,19 +37,19 @@ export class BeneficiaryService {
   }
 
   async getAllBenfs() {
-    return this.prisma.beneficiary.findMany()
+    return this.prisma.beneficiary.findMany();
   }
 
-  async getCount(){
+  async getCount() {
     return this.prisma.beneficiary.count({
       where: {
-        deletedAt: null
-      }
-    })
+        deletedAt: null,
+      },
+    });
   }
 
-  async getBenfBetweenIds(startId: number,endId: number){
-    return  this.prisma.beneficiary.findMany({
+  async getBenfBetweenIds(startId: number, endId: number) {
+    return this.prisma.beneficiary.findMany({
       where: {
         id: {
           gte: startId,
@@ -83,15 +87,15 @@ export class BeneficiaryService {
       this.rsprisma.beneficiary,
       {
         where: {
-          deletedAt: null
+          deletedAt: null,
         },
-        orderBy
+        orderBy,
       },
       {
         page,
-        perPage
+        perPage,
       }
-    )
+    );
 
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_by_project' },
@@ -109,15 +113,15 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
-          deletedAt: null
+          deletedAt: null,
         },
-        orderBy
+        orderBy,
       },
       {
         page,
-        perPage
+        perPage,
       }
-    )
+    );
 
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
@@ -131,10 +135,11 @@ export class BeneficiaryService {
 
   async findOne(payload) {
     const { uuid, data } = payload;
-    const projectBendata = await this.rsprisma.beneficiary.findUnique({ where: { uuid } });
-    if (data) return { ...data, ...projectBendata }
-    return projectBendata
-
+    const projectBendata = await this.rsprisma.beneficiary.findUnique({
+      where: { uuid },
+    });
+    if (data) return { ...data, ...projectBendata };
+    return projectBendata;
   }
 
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
@@ -143,7 +148,7 @@ export class BeneficiaryService {
       data: { ...updateBeneficiaryDto },
     });
 
-    this.eventEmitter.emit(EVENTS.BENEFICIARY_UPDATED)
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_UPDATED);
 
     return rdata;
   }
@@ -156,7 +161,7 @@ export class BeneficiaryService {
       },
     });
 
-    if (!findUuid) return "OK"
+    if (!findUuid) return 'OK';
 
     const rdata = await this.rsprisma.beneficiary.update({
       where: {
@@ -177,70 +182,80 @@ export class BeneficiaryService {
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
-        deletedAt: null
-      }
-    })
-    if (!benfGroup) throw new RpcException('Beneficiary group not found.')
+        deletedAt: null,
+      },
+    });
+    if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    return lastValueFrom(this.client.send(
-      { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
-      benfGroup.uuid
-    ));
+    return lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
+        benfGroup.uuid
+      )
+    );
   }
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
-    const { beneficiaryGroupData } = payload
+    const { beneficiaryGroupData } = payload;
     return this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,
-        name: beneficiaryGroupData.name
-      }
-    })
+        name: beneficiaryGroupData.name,
+      },
+    });
   }
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
-    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } = payload
+    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } =
+      payload;
     return this.prisma.$transaction(async () => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
       if (!group || !group?.groupedBeneficiaries) {
-        throw new RpcException('No beneficiaries found in the specified group.');
+        throw new RpcException(
+          'No beneficiaries found in the specified group.'
+        );
       }
 
       for (const member of group?.groupedBeneficiaries) {
         const benf = await this.prisma.beneficiary.findUnique({
           where: {
-            uuid: member?.beneficiaryId
-          }
-        })
-        if (benf.benTokens > 0) throw new RpcException('Token already assigned to beneficiary.')
+            uuid: member?.beneficiaryId,
+          },
+        });
+        if (benf.benTokens > 0)
+          throw new RpcException('Token already assigned to beneficiary.');
       }
 
-      const benfIds = group?.groupedBeneficiaries?.map((d: any) => d?.beneficiaryId)
+      const benfIds = group?.groupedBeneficiaries?.map(
+        (d: any) => d?.beneficiaryId
+      );
 
       await this.prisma.beneficiary.updateMany({
         where: {
           uuid: {
-            in: benfIds
-          }
+            in: benfIds,
+          },
         },
         data: {
           benTokens: {
-            increment: numberOfTokens
-          }
-        }
-      })
+            increment: numberOfTokens,
+          },
+        },
+      });
 
       await this.prisma.beneficiaryGroupTokens.create({
         data: {
           title,
           groupId: beneficiaryGroupId,
-          numberOfTokens: totalTokensReserved
-        }
-      })
+          numberOfTokens: totalTokensReserved,
+        },
+      });
 
-      return group
-    })
+      this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
+
+      return group;
+    });
   }
 
   async getAllTokenReservations(dto) {
@@ -249,60 +264,59 @@ export class BeneficiaryService {
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
 
-
     const { data, meta }: PaginateResult<DataItem> = await paginate(
       this.prisma.beneficiaryGroupTokens,
       {
-        orderBy
+        orderBy,
       },
       {
         page,
-        perPage
+        perPage,
       }
-    )
+    );
 
-    const formattedData: Array<DataItem & { group: ReturnType<typeof this.getOneGroup> }> = [];
+    const formattedData: Array<
+      DataItem & { group: ReturnType<typeof this.getOneGroup> }
+    > = [];
 
     for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID)
-      formattedData.push(
-        {
-          ...d,
-          group
-        }
-      )
+      const group = await this.getOneGroup(d['groupId'] as UUID);
+      formattedData.push({
+        ...d,
+        group,
+      });
     }
 
     return {
       data: formattedData,
-      meta
-    }
+      meta,
+    };
   }
 
   async getOneTokenReservation(payload) {
-    const { uuid } = payload
+    const { uuid } = payload;
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: {
-        uuid: uuid
-      }
-    })
+        uuid: uuid,
+      },
+    });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID)
+    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
 
     return {
       ...benfGroupToken,
-      ...groupDetails
-    }
+      ...groupDetails,
+    };
   }
 
   async getReservationStats(payload) {
     const totalReservedTokens = await this.prisma.beneficiary.aggregate({
       _sum: {
-        benTokens: true
-      }
-    })
+        benTokens: true,
+      },
+    });
     return {
-      totalReservedTokens
-    }
+      totalReservedTokens,
+    };
   }
 }
