@@ -143,6 +143,7 @@ export const EVENTS = {
   BENEFICIARY_REMOVED: 'events.beneficiary_updated',
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
   AUTOMATED_TRIGGERED: 'events.automated_triggered',
+  TOKEN_RESERVED: 'events.token_reserved',
 };
 
 export const BQUEUE = {
