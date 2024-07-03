@@ -17,6 +17,7 @@ export class ListernersService {
   @OnEvent(EVENTS.BENEFICIARY_CREATED)
   @OnEvent(EVENTS.BENEFICIARY_REMOVED)
   @OnEvent(EVENTS.BENEFICIARY_UPDATED)
+  @OnEvent(EVENTS.TOKEN_RESERVED)
   async onBeneficiaryChanged() {
     await this.aaStats.saveAllStats();
   }
@@ -26,7 +27,7 @@ export class ListernersService {
     const allJobs = await this.scheduleQueue.getRepeatableJobs();
     const targetJob = allJobs.find((j) => j.key === payload.repeatKey);
     await this.scheduleQueue.removeRepeatableByKey(targetJob.key);
-    this.logger.log("Triggered automated job removed.")
+    this.logger.log('Triggered automated job removed.');
     return;
   }
 }
