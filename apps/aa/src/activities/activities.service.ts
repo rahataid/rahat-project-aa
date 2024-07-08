@@ -567,7 +567,7 @@ export class ActivitiesService {
         source: source || activity.source,
         responsibility: responsibility || activity.responsibility,
         leadTime: leadTime || activity.leadTime,
-        isAutomated: isAutomated || activity.isAutomated,
+        isAutomated: isAutomated,
         phase: {
           connect: {
             uuid: phaseId || activity.phaseId,
