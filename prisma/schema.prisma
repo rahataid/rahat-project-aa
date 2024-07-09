@@ -114,7 +114,7 @@ model Stakeholders {
 
   name         String
   email        String?
-  phone        String?
+  phone        String? @unique 
   designation  String
   organization String
   district     String
