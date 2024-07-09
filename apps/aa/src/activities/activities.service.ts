@@ -397,6 +397,9 @@ export class ActivitiesService {
         category: true,
         phase: true,
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
     };
 
     return paginate(this.prisma.activities, query, {
