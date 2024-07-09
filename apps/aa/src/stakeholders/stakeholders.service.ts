@@ -196,7 +196,11 @@ export class StakeholdersService {
       include: {
         _count: {
           select: {
-            stakeholders: true,
+            stakeholders: {
+              where: {
+                isDeleted: false,
+              },
+            },
           },
         },
       },
@@ -215,7 +219,11 @@ export class StakeholdersService {
         uuid: uuid,
       },
       include: {
-        stakeholders: true,
+        stakeholders: {
+          where: {
+            isDeleted: false,
+          },
+        },
       },
     });
   }
