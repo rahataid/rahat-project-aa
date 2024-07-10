@@ -209,6 +209,8 @@ model Activities {
 
   isDeleted Boolean @default(false)
 
+  activatedBy String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -235,6 +237,8 @@ model Triggers {
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
   isDeleted   Boolean @default(false)
+
+  triggeredBy String? 
 
   triggeredAt DateTime?
   createdAt   DateTime  @default(now())
