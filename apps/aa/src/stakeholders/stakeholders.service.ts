@@ -119,14 +119,18 @@ export class StakeholdersService {
 
     if (!existingStakeholder) throw new RpcException('Stakeholder not found!');
 
-    const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst({
-      where: {
-        phone: phone,
-        uuid: { not: uuid },
-      },
-    });
-    if (stakeholderWithSamePhone)
-      throw new RpcException('Phone number must be unique');
+    if (phone) {
+      const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst(
+        {
+          where: {
+            phone: phone,
+            uuid: { not: uuid },
+          },
+        }
+      );
+      if (stakeholderWithSamePhone)
+        throw new RpcException('Phone number must be unique');
+    }
 
     const updatedStakeholder = await this.prisma.stakeholders.update({
       where: {
@@ -134,8 +138,8 @@ export class StakeholdersService {
       },
       data: {
         name: name || existingStakeholder.name,
-        email: email || existingStakeholder.email,
-        phone: phone || existingStakeholder.phone,
+        email: email,
+        phone: phone,
         designation: designation || existingStakeholder.designation,
         organization: organization || existingStakeholder.organization,
         district: district || existingStakeholder.district,
