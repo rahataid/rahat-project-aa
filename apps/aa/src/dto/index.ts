@@ -35,6 +35,7 @@ export interface UpdateTriggerStatement {
   phaseId: string;
   title?: string;
   notes?: string;
+  user?: any;
 }
 
 export interface RemoveTriggerStatement {

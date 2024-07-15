@@ -44,9 +44,9 @@ export class TriggersService {
         repeatKey: repeatKey,
       },
       include: {
-        phase: true
-      }
-    })
+        phase: true,
+      },
+    });
   }
 
   async getAll(payload: GetTriggers) {
@@ -99,23 +99,26 @@ export class TriggersService {
         repeatKey: repeatKey,
         isDeleted: false,
       },
-      include: {phase: true}
+      include: { phase: true },
     });
     if (!trigger)
       throw new RpcException(`Active trigger with id: ${repeatKey} not found.`);
     if (trigger.isTriggered)
       throw new RpcException(`Cannot remove an activated trigger.`);
-    if(trigger.phase.isActive) throw new RpcException('Cannot remove triggers from an active phase.')
+    if (trigger.phase.isActive)
+      throw new RpcException('Cannot remove triggers from an active phase.');
 
     const phaseDetail = await this.phasesService.getOne({
-      uuid: trigger.phaseId
-    })
+      uuid: trigger.phaseId,
+    });
 
     // check if optional triggers criterias are disrupted
-    if(!trigger.isMandatory){
-      const totalTriggersAfterDeleting = Number(phaseDetail.triggerRequirements.optionalTriggers.totalTriggers) - 1
-      if(totalTriggersAfterDeleting<phaseDetail.requiredOptionalTriggers) {
-        throw new RpcException('Trigger criterias disrupted.')
+    if (!trigger.isMandatory) {
+      const totalTriggersAfterDeleting =
+        Number(phaseDetail.triggerRequirements.optionalTriggers.totalTriggers) -
+        1;
+      if (totalTriggersAfterDeleting < phaseDetail.requiredOptionalTriggers) {
+        throw new RpcException('Trigger criterias disrupted.');
       }
     }
 
@@ -136,17 +139,17 @@ export class TriggersService {
       },
     });
 
-    if(trigger.isMandatory){
+    if (trigger.isMandatory) {
       await this.prisma.phases.update({
         where: {
-          uuid: trigger.phaseId
+          uuid: trigger.phaseId,
         },
         data: {
           requiredMandatoryTriggers: {
-            decrement: 1
-          }
-        }
-      })
+            decrement: 1,
+          },
+        },
+      });
     }
 
     // if(!trigger.isMandatory){
@@ -161,7 +164,7 @@ export class TriggersService {
     //     }
     //   })
     // }
-    
+
     this.triggerQueue.add(JOBS.TRIGGERS.REACHED_THRESHOLD, trigger, {
       attempts: 3,
       removeOnComplete: true,
@@ -267,6 +270,8 @@ export class TriggersService {
   }
 
   async activateTrigger(payload: UpdateTriggerStatement) {
+    const { user } = payload;
+
     const trigger = await this.prisma.triggers.findUnique({
       where: {
         repeatKey: payload?.repeatKey,
@@ -292,6 +297,7 @@ export class TriggersService {
         triggeredAt: new Date(),
         triggerDocuments: triggerDocs,
         notes: payload?.notes || '',
+        triggeredBy: user?.name
       },
     });
 

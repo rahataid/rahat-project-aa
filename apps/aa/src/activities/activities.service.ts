@@ -436,7 +436,6 @@ export class ActivitiesService {
     activityDocuments: Array<ActivityDocs>;
     user: any
   }) {
-
     const { status, uuid, activityDocuments, user } = payload;
 
     const docs = activityDocuments || [];
