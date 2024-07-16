@@ -451,7 +451,8 @@ export class ActivitiesService {
       data: {
         status: status,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
-        ...((status === 'COMPLETED') && {completedBy: user?.name})
+        ...((status === 'COMPLETED') && {completedBy: user?.name}),
+        ...((status === 'COMPLETED') && {completedAt: new Date()}),
       },
     });
 

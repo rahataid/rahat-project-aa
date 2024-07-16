@@ -38,7 +38,8 @@ interface FlashFloodRiskMonitoring extends Source {
     status?: string;
 }
 export interface AddDailyMonitoringData extends Source {
-    dataEntryBy: string;
+    user?: any;
+    dataEntryBy?: string;
     location: string;
     data: Array<DHM | GLOFAS | NCMWRFAccumulated | NCMWRFDeterministicAndProbabilistic | FlashFloodRiskMonitoring>;
 }
