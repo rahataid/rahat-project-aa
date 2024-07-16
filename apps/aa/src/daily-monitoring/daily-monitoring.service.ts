@@ -1,7 +1,13 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PaginatorTypes, PrismaService, paginator } from "@rumsan/prisma";
-import { AddDailyMonitoringData, GetDailyMonitoringData, GetOneMonitoringData, RemoveMonitoringData, UpdateMonitoringData } from "./dto";
-import { RpcException } from "@nestjs/microservices";
+import { Injectable, Logger } from '@nestjs/common';
+import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import {
+  AddDailyMonitoringData,
+  GetDailyMonitoringData,
+  GetOneMonitoringData,
+  RemoveMonitoringData,
+  UpdateMonitoringData,
+} from './dto';
+import { RpcException } from '@nestjs/microservices';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -9,9 +15,7 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 export class DailyMonitoringService {
   private readonly logger = new Logger(DailyMonitoringService.name);
 
-    constructor(
-        private prisma: PrismaService
-    ) { }
+  constructor(private prisma: PrismaService) {}
 
   async add(payload: AddDailyMonitoringData) {
     const { dataEntryBy, location, data } = payload;
@@ -34,8 +38,8 @@ export class DailyMonitoringService {
 
     // return response;
     return await this.prisma.dailyMonitoring.create({
-            data: { dataEntryBy, location, data: JSON.parse(JSON.stringify(data)) }
-        })
+      data: { dataEntryBy, location, data: JSON.parse(JSON.stringify(data)) },
+    });
   }
 
   async getAll(payload: GetDailyMonitoringData) {
@@ -52,16 +56,16 @@ export class DailyMonitoringService {
         }),
         ...(createdAt && {
           createdAt: {
-            gte: createdAt
-          }
+            gte: createdAt,
+          },
         }),
       },
     };
 
     return paginate(this.prisma.dailyMonitoring, query, {
       page,
-            perPage
-        })
+      perPage,
+    });
   }
 
   async getOne(payload: GetOneMonitoringData) {
@@ -69,9 +73,9 @@ export class DailyMonitoringService {
     const result = await this.prisma.dailyMonitoring.findUnique({
       where: {
         uuid: uuid,
-                isDeleted: false
+        isDeleted: false,
       },
-        })
+    });
 
     // const latest = new Date(result.createdAt);
 
@@ -97,22 +101,22 @@ export class DailyMonitoringService {
       where: {
         id: {
           gte: latest - 2,
-                    lte: latest
+          lte: latest,
         },
         location: result.location,
-                isDeleted: false
-            }
-        })
+        isDeleted: false,
+      },
+    });
 
-        const { data: monitoringData, ...rest } = result
+    const { data: monitoringData, ...rest } = result;
 
     return {
       singleData: {
         ...rest,
-                monitoringData
+        monitoringData,
       },
-            multipleData: manyData
-        }
+      multipleData: manyData,
+    };
   }
 
   async update(payload: UpdateMonitoringData) {
@@ -150,7 +154,7 @@ export class DailyMonitoringService {
       },
       data: {
         isDeleted: true,
-            }
-        })
+      },
+    });
   }
 }
