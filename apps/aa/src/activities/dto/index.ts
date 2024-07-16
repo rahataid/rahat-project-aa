@@ -5,7 +5,7 @@ export interface ActivityCommunicationData {
   groupId: string;
   communicationType: string;
   message?: string;
-  audioURL?: { mediaURL: string, fileName: string }
+  audioURL?: { mediaURL: string; fileName: string };
 }
 
 export interface ActivityDocs {
@@ -22,9 +22,9 @@ export interface AddActivityData {
   source: string;
   description: string;
   isAutomated: boolean;
-  activityCommunication?: Array<ActivityCommunicationData>
+  activityCommunication?: Array<ActivityCommunicationData>;
   activityPayout?: Array<Record<string, any>>;
-  activityDocuments?: Array<ActivityDocs>
+  activityDocuments?: Array<ActivityDocs>;
 }
 
 export interface UpdateActivityData {
@@ -37,9 +37,11 @@ export interface UpdateActivityData {
   isAutomated: boolean;
   source?: string;
   description?: string;
-  activityCommunication?: Array<ActivityCommunicationData & { campaignId: string }>
+  activityCommunication?: Array<
+    ActivityCommunicationData & { campaignId: string }
+  >;
   activityPayout?: Array<Record<string, any>>;
-  activityDocuments?: Array<ActivityDocs>
+  activityDocuments?: Array<ActivityDocs>;
 }
 
 export interface AddActivityComms {
@@ -49,11 +51,11 @@ export interface AddActivityComms {
 }
 
 interface ActivityUUID {
-  uuid: string
+  uuid: string;
 }
-export type RemoveActivityData = ActivityUUID
+export type RemoveActivityData = ActivityUUID;
 
-export type GetOneActivity = ActivityUUID
+export type GetOneActivity = ActivityUUID;
 
 export interface GetActivitiesDto {
   title: string;
@@ -63,4 +65,5 @@ export interface GetActivitiesDto {
   category: string;
   page: number;
   perPage: number;
+  responsibility: string;
 }
