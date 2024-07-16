@@ -434,8 +434,9 @@ export class ActivitiesService {
     uuid: string;
     status: ActivitiesStatus;
     activityDocuments: Array<ActivityDocs>;
+    user: any
   }) {
-    const { status, uuid, activityDocuments } = payload;
+    const { status, uuid, activityDocuments, user } = payload;
 
     const docs = activityDocuments || [];
 
@@ -450,6 +451,7 @@ export class ActivitiesService {
       data: {
         status: status,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
+        ...((status === 'COMPLETED') && {completedBy: user?.name})
       },
     });
 

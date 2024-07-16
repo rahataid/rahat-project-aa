@@ -72,6 +72,7 @@ export class ActivitiesController {
     uuid: string;
     status: ActivitiesStatus;
     activityDocuments: Array<ActivityDocs>;
+    user: any;
   }) {
     return this.activitiesService.updateStatus(payload);
   }
