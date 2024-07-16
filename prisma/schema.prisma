@@ -114,7 +114,7 @@ model Stakeholders {
 
   name         String
   email        String?
-  phone        String?
+  phone        String? @unique 
   designation  String
   organization String
   district     String
@@ -209,6 +209,8 @@ model Activities {
 
   isDeleted Boolean @default(false)
 
+  completedBy String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
@@ -235,6 +237,8 @@ model Triggers {
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
   isDeleted   Boolean @default(false)
+
+  triggeredBy String? 
 
   triggeredAt DateTime?
   createdAt   DateTime  @default(now())

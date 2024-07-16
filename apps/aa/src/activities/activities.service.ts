@@ -397,6 +397,9 @@ export class ActivitiesService {
         category: true,
         phase: true,
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
     };
 
     return paginate(this.prisma.activities, query, {
@@ -431,8 +434,9 @@ export class ActivitiesService {
     uuid: string;
     status: ActivitiesStatus;
     activityDocuments: Array<ActivityDocs>;
+    user: any
   }) {
-    const { status, uuid, activityDocuments } = payload;
+    const { status, uuid, activityDocuments, user } = payload;
 
     const docs = activityDocuments || [];
 
@@ -447,6 +451,7 @@ export class ActivitiesService {
       data: {
         status: status,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
+        ...((status === 'COMPLETED') && {completedBy: user?.name})
       },
     });
 
@@ -567,7 +572,7 @@ export class ActivitiesService {
         source: source || activity.source,
         responsibility: responsibility || activity.responsibility,
         leadTime: leadTime || activity.leadTime,
-        isAutomated: isAutomated || activity.isAutomated,
+        isAutomated: isAutomated,
         phase: {
           connect: {
             uuid: phaseId || activity.phaseId,
