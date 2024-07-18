@@ -206,8 +206,9 @@ export class BeneficiaryService {
   }
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
-    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved } =
+    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved, user } =
       payload;
+
     return this.prisma.$transaction(async () => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
@@ -217,15 +218,15 @@ export class BeneficiaryService {
         );
       }
 
-      for (const member of group?.groupedBeneficiaries) {
-        const benf = await this.prisma.beneficiary.findUnique({
-          where: {
-            uuid: member?.beneficiaryId,
-          },
-        });
-        if (benf.benTokens > 0)
-          throw new RpcException('Token already assigned to beneficiary.');
-      }
+      // for (const member of group?.groupedBeneficiaries) {
+      //   const benf = await this.prisma.beneficiary.findUnique({
+      //     where: {
+      //       uuid: member?.beneficiaryId,
+      //     },
+      //   });
+      //   if (benf.benTokens > 0)
+      //     throw new RpcException('Token already assigned to beneficiary.');
+      // }
 
       const benfIds = group?.groupedBeneficiaries?.map(
         (d: any) => d?.beneficiaryId
@@ -249,6 +250,7 @@ export class BeneficiaryService {
           title,
           groupId: beneficiaryGroupId,
           numberOfTokens: totalTokensReserved,
+          createdBy: user?.name
         },
       });
 
