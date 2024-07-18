@@ -89,6 +89,8 @@ model BeneficiaryGroupTokens {
   groupId          String            @unique
   benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
+  createdBy String?
+
   @@map("tbl_beneficiaries_groups_tokens")
 }
 
@@ -210,6 +212,7 @@ model Activities {
   isDeleted Boolean @default(false)
 
   completedBy String?
+  completedAt DateTime? 
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -281,6 +284,7 @@ model DailyMonitoring {
   location    String?
   data        Json    @db.JsonB()
 
+  createdBy String?
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
