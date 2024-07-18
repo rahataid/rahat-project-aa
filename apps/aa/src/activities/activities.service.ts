@@ -381,8 +381,16 @@ export class ActivitiesService {
   }
 
   async getAll(payload: GetActivitiesDto) {
-    const { page, perPage, title, category, phase, isComplete, isApproved } =
-      payload;
+    const {
+      page,
+      perPage,
+      title,
+      category,
+      phase,
+      isComplete,
+      isApproved,
+      responsibility,
+    } = payload;
 
     const query = {
       where: {
@@ -392,6 +400,9 @@ export class ActivitiesService {
         ...(phase && { phaseId: phase }),
         ...(isComplete && { isComplete: isComplete }),
         ...(isApproved && { isApproved: isApproved }),
+        ...(responsibility && {
+          responsibility: { contains: responsibility, mode: 'insensitive' },
+        }),
       },
       include: {
         category: true,
@@ -434,7 +445,7 @@ export class ActivitiesService {
     uuid: string;
     status: ActivitiesStatus;
     activityDocuments: Array<ActivityDocs>;
-    user: any
+    user: any;
   }) {
     const { status, uuid, activityDocuments, user } = payload;
 
