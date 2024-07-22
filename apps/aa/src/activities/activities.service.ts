@@ -132,21 +132,21 @@ export class ActivitiesService {
     });
 
     const stakeholderEmails = stakeholderGroup.stakeholders.map(
-      (stakeholder) => stakeholder.email
+      (stakeholder) => stakeholder?.email
     );
     const stakeholderPhones = stakeholderGroup.stakeholders.map(
-      (stakeholder) => stakeholder.phone
+      (stakeholder) => stakeholder?.phone
     );
 
-    const audienceEmails = audience.map((audience) => audience.details.email);
-    const audiencePhones = audience.map((audience) => audience.details.phone);
+    const audienceEmails = audience.map((audience) => audience?.details?.email);
+    const audiencePhones = audience.map((audience) => audience?.details?.phone);
 
     // get stakeholders not in audience
     const stakeholdersNotInAudience = stakeholderGroup.stakeholders.filter(
       (stakeholder) => {
         return (
-          !audienceEmails.includes(stakeholder.email) ||
-          !audiencePhones.includes(stakeholder.phone)
+          !audienceEmails.includes(stakeholder?.email) ||
+          !audiencePhones.includes(stakeholder?.phone)
         );
       }
     );
@@ -154,8 +154,8 @@ export class ActivitiesService {
     // get audience which already has stakeholders
     const stakeholdersInAudience = audience.filter((audience) => {
       return (
-        stakeholderEmails.includes(audience.details.email) ||
-        stakeholderPhones.includes(audience.details.phone)
+        stakeholderEmails.includes(audience?.details?.email) ||
+        stakeholderPhones.includes(audience?.details?.phone)
       );
     });
 
@@ -221,21 +221,21 @@ export class ActivitiesService {
     const groupedBeneficiaries = beneficiaryGroup.groupedBeneficiaries;
 
     const beneficiaryEmails = groupedBeneficiaries.map(
-      (beneficiary) => beneficiary.Beneficiary.pii.email
+      (beneficiary) => beneficiary.Beneficiary?.pii?.email
     );
     const beneficiaryPhones = groupedBeneficiaries.map(
-      (beneficiary) => beneficiary.Beneficiary.pii.phone
+      (beneficiary) => beneficiary.Beneficiary?.pii?.phone
     );
 
-    const audienceEmails = audience.map((audience) => audience.details.email);
-    const audiencePhones = audience.map((audience) => audience.details.phone);
+    const audienceEmails = audience.map((audience) => audience?.details?.email);
+    const audiencePhones = audience.map((audience) => audience?.details?.phone);
 
     // get beneficiaries not in audience
     const beneficiariesNotInAudience = groupedBeneficiaries.filter(
       (beneficiary) => {
         return (
-          !audienceEmails.includes(beneficiary.Beneficiary.pii.email) ||
-          !audiencePhones.includes(beneficiary.Beneficiary.pii.phone)
+          !audienceEmails.includes(beneficiary?.Beneficiary?.pii?.email) ||
+          !audiencePhones.includes(beneficiary?.Beneficiary?.pii?.phone)
         );
       }
     );
@@ -243,8 +243,8 @@ export class ActivitiesService {
     // get audience which already has beneficiaries
     const beneficiariesInAudience = audience.filter((audience) => {
       return (
-        beneficiaryEmails.includes(audience.details.email) ||
-        beneficiaryPhones.includes(audience.details.phone)
+        beneficiaryEmails.includes(audience?.details?.email) ||
+        beneficiaryPhones.includes(audience?.details?.phone)
       );
     });
 
