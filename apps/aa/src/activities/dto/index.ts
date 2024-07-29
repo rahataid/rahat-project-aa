@@ -66,4 +66,5 @@ export interface GetActivitiesDto {
   page: number;
   perPage: number;
   responsibility: string;
+  status: 'NOT_STARTED' | 'WORK_IN_PROGRESS' | 'COMPLETED' | 'DELAYED';
 }

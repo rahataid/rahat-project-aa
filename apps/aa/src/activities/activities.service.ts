@@ -390,6 +390,7 @@ export class ActivitiesService {
       isComplete,
       isApproved,
       responsibility,
+      status,
     } = payload;
 
     const query = {
@@ -403,6 +404,7 @@ export class ActivitiesService {
         ...(responsibility && {
           responsibility: { contains: responsibility, mode: 'insensitive' },
         }),
+        ...(status && { status: status }),
       },
       include: {
         category: true,
@@ -462,8 +464,8 @@ export class ActivitiesService {
       data: {
         status: status,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
-        ...((status === 'COMPLETED') && {completedBy: user?.name}),
-        ...((status === 'COMPLETED') && {completedAt: new Date()}),
+        ...(status === 'COMPLETED' && { completedBy: user?.name }),
+        ...(status === 'COMPLETED' && { completedAt: new Date() }),
       },
     });
 
