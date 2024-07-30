@@ -121,15 +121,15 @@ const updateIdInGSheet = async (
 // //Rahat Staging
 // const sheetId = '1sMLv7S_WgpQgbX_HHqeA6ZRyt5K-W-xdT2oZSsDAKmY';
 // const sheetName = 'activities';
-// const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcklkIjoxLCJ1dWlkIjoiNjQ1NDEzZmMtOTFiMC00Nzg0LWE4NDYtMDI5YWY4YzE1ZTc5IiwibmFtZSI6IlJ1bXNhbiBBZG1pbiIsImVtYWlsIjoicnVtc2FuQG1haWxpbmF0b3IuY29tIiwicGhvbmUiOm51bGwsIndhbGxldCI6IjB4NzVmNTk4ODc0REMzOUUzNjQ4NDZkNTc3Q0VkZTQ4ZDUwMzc4YUM0MCIsInJvbGVzIjpbIkFkbWluIl0sInBlcm1pc3Npb25zIjpbeyJhY3Rpb24iOiJtYW5hZ2UiLCJzdWJqZWN0IjoiYWxsIiwiaW52ZXJ0ZWQiOmZhbHNlLCJjb25kaXRpb25zIjpudWxsfV0sImlhdCI6MTcyMTg4OTQzNCwiZXhwIjoxNzIyNDk0MjM0fQ.9N5pOwirP-oMAbNIPdqZACmj0kQNR0UNduWI2qu29Nk';
+// const accessToken = '';
 // const baseUrl = 'https://api.aa.xs.rahat.io/v1';
 // const projectActionUrl = (projectId: string): string => `${baseUrl}/projects/${projectId}/actions`;
 // const projectId = '369e043e-bc2e-42e5-9222-e2f9ac29962a';
 
-// Rahat Demo Training
+// //Rahat Demo Training
 const sheetId = '1sMLv7S_WgpQgbX_HHqeA6ZRyt5K-W-xdT2oZSsDAKmY';
 const sheetName = 'activities';
-const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcklkIjoxLCJ1dWlkIjoiNjZkNzE4OGYtZGVmMi00MWMyLWJmZGEtN2FkMDE3ZTExMTY2IiwibmFtZSI6IlJ1bXNhbiBBZG1pbiIsImVtYWlsIjoicnVtc2FuQG1haWxpbmF0b3IuY29tIiwicGhvbmUiOm51bGwsIndhbGxldCI6IjB4NzVmNTk4ODc0REMzOUUzNjQ4NDZkNTc3Q0VkZTQ4ZDUwMzc4YUM0MCIsInJvbGVzIjpbIkFkbWluIl0sInBlcm1pc3Npb25zIjpbeyJhY3Rpb24iOiJtYW5hZ2UiLCJzdWJqZWN0IjoiYWxsIiwiaW52ZXJ0ZWQiOmZhbHNlLCJjb25kaXRpb25zIjpudWxsfV0sImlhdCI6MTcyMTgzMTU4MSwiZXhwIjoxNzIyNDM2MzgxfQ.im5eUsJGb5K-miqI5Bj72fqkgkMe4-YtjKUHmuZLZEg'
+const accessToken = ''
 const baseUrl = 'https://api.aa-rumsan.drc.np.rahat.io/v1';
 const projectActionUrl = (projectId: string): string => `${baseUrl}/projects/${projectId}/actions`;
 const projectId = '4c51c884-6c84-41fe-a4b9-149c70e667f2';
