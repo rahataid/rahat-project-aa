@@ -19,6 +19,7 @@ import { RpcException } from '@nestjs/microservices';
 import { UUID } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
+import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -390,6 +391,7 @@ export class ActivitiesService {
       isComplete,
       isApproved,
       responsibility,
+      status,
     } = payload;
 
     const query = {
@@ -403,6 +405,7 @@ export class ActivitiesService {
         ...(responsibility && {
           responsibility: { contains: responsibility, mode: 'insensitive' },
         }),
+        ...(status && { status: status }),
       },
       include: {
         category: true,
@@ -444,10 +447,11 @@ export class ActivitiesService {
   async updateStatus(payload: {
     uuid: string;
     status: ActivitiesStatus;
+    notes: string;
     activityDocuments: Array<ActivityDocs>;
     user: any;
   }) {
-    const { status, uuid, activityDocuments, user } = payload;
+    const { status, uuid, notes, activityDocuments, user } = payload;
 
     const docs = activityDocuments || [];
 
@@ -461,11 +465,36 @@ export class ActivitiesService {
       },
       data: {
         status: status,
+        notes: notes,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
-        ...((status === 'COMPLETED') && {completedBy: user?.name}),
-        ...((status === 'COMPLETED') && {completedAt: new Date()}),
+        ...(status === 'COMPLETED' && { completedBy: user?.name }),
+        ...(status === 'COMPLETED' && { completedAt: new Date() }),
+      },
+      include: {
+        phase: true,
       },
     });
+
+    if (
+      updatedActivity?.status === 'COMPLETED' &&
+      !updatedActivity?.differenceInTriggerAndActivityCompletion &&
+      updatedActivity?.phase?.activatedAt
+    ) {
+      const timeDifference = getTriggerAndActivityCompletionTimeDifference(
+        updatedActivity.phase.activatedAt,
+        updatedActivity.completedAt
+      );
+
+      const finalUpdate = await this.prisma.activities.update({
+        where: {
+          uuid: uuid,
+        },
+        data: {
+          differenceInTriggerAndActivityCompletion: timeDifference,
+        },
+      });
+      return finalUpdate;
+    }
 
     return updatedActivity;
   }
