@@ -19,6 +19,7 @@ import { RpcException } from '@nestjs/microservices';
 import { UUID } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
+import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -469,7 +470,31 @@ export class ActivitiesService {
         ...(status === 'COMPLETED' && { completedBy: user?.name }),
         ...(status === 'COMPLETED' && { completedAt: new Date() }),
       },
+      include: {
+        phase: true,
+      },
     });
+
+    if (
+      updatedActivity?.status === 'COMPLETED' &&
+      !updatedActivity?.differenceInTriggerAndActivityCompletion &&
+      updatedActivity?.phase?.activatedAt
+    ) {
+      const timeDifference = getTriggerAndActivityCompletionTimeDifference(
+        updatedActivity.phase.activatedAt,
+        updatedActivity.completedAt
+      );
+
+      const finalUpdate = await this.prisma.activities.update({
+        where: {
+          uuid: uuid,
+        },
+        data: {
+          differenceInTriggerAndActivityCompletion: timeDifference,
+        },
+      });
+      return finalUpdate;
+    }
 
     return updatedActivity;
   }

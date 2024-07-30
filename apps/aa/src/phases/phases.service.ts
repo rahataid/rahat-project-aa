@@ -8,6 +8,7 @@ import { Queue } from 'bull';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TriggersService } from '../triggers/triggers.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 
 const BATCH_SIZE = 4;
 
@@ -132,18 +133,14 @@ export class PhasesService {
 
       if (batches.length) {
         batches?.forEach((batch) => {
-          this.contractQueue.add(
-            JOBS.PAYOUT.ASSIGN_TOKEN,
-            batch,
-            {
-              attempts: 3,
-              removeOnComplete: true,
-              backoff: {
-                type: 'exponential',
-                delay: 1000,
-              },
-            }
-          );
+          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          });
         });
       }
     }
@@ -208,6 +205,33 @@ export class PhasesService {
   }
 
   async revertPhase(payload) {
+    const activitiesCompletedBeforePhaseActivated =
+      await this.prisma.activities.findMany({
+        where: {
+          differenceInTriggerAndActivityCompletion: null,
+          status: 'COMPLETED',
+          isDeleted: false,
+        },
+        include: {
+          phase: true,
+        },
+      });
+
+    for (const activity of activitiesCompletedBeforePhaseActivated) {
+      const timeDifference = getTriggerAndActivityCompletionTimeDifference(
+        activity.phase.activatedAt,
+        activity.completedAt
+      );
+      await this.prisma.activities.update({
+        where: {
+          uuid: activity.uuid,
+        },
+        data: {
+          differenceInTriggerAndActivityCompletion: timeDifference,
+        },
+      });
+    }
+
     const { phaseId } = payload;
     const phase = await this.prisma.phases.findUnique({
       where: {
