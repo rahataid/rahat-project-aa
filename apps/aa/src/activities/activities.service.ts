@@ -446,10 +446,11 @@ export class ActivitiesService {
   async updateStatus(payload: {
     uuid: string;
     status: ActivitiesStatus;
+    notes: string;
     activityDocuments: Array<ActivityDocs>;
     user: any;
   }) {
-    const { status, uuid, activityDocuments, user } = payload;
+    const { status, uuid, notes, activityDocuments, user } = payload;
 
     const docs = activityDocuments || [];
 
@@ -463,6 +464,7 @@ export class ActivitiesService {
       },
       data: {
         status: status,
+        notes: notes,
         activityDocuments: JSON.parse(JSON.stringify(docs)),
         ...(status === 'COMPLETED' && { completedBy: user?.name }),
         ...(status === 'COMPLETED' && { completedAt: new Date() }),
