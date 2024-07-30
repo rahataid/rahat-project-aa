@@ -199,7 +199,8 @@ model Activities {
   leadTime       String
   responsibility String
   source         String
-  description    String
+  description    String?
+  notes          String?
 
   status ActivitiesStatus @default(NOT_STARTED)
 

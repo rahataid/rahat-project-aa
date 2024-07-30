@@ -71,6 +71,7 @@ export class ActivitiesController {
   async updateStatus(payload: {
     uuid: string;
     status: ActivitiesStatus;
+    notes: string;
     activityDocuments: Array<ActivityDocs>;
     user: any;
   }) {
