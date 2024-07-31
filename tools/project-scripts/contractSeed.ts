@@ -5,10 +5,16 @@ import * as dotenv from 'dotenv';
 import { uuidV4 } from 'ethers';
 import { writeFileSync } from 'fs';
 import { ContractLib } from './_common';
+import { Prisma, PrismaClient } from '@prisma/client';
 dotenv.config();
 
+
+const corePrisma = new PrismaClient({
+  datasourceUrl: process.env.CORE_DATABASE_URL as string
+});
 const prisma = new PrismaService();
 const settings = new SettingsService(prisma);
+
 
 const contractName = [
   'ERC2771Forwarder',
@@ -18,7 +24,7 @@ const contractName = [
   'RahatToken'
 ];
 
-class SeedProject extends ContractLib {
+class ContractSeed extends ContractLib {
   projectUUID: string;
 
   constructor() {
@@ -35,33 +41,43 @@ class SeedProject extends ContractLib {
   }
 
   public async deployAAContracts() {
-    const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
+
+    const deployerKey = (await prisma.setting.findUnique({
+      where: {
+        name: 'DEPLOYER_PRIVATE_KEY'
+      }
+    }))?.value as string
+
+    console.log("------DEPLOYER KEY-----");
+    console.log(deployerKey);
+
+    const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
 
     console.log(deployerAccount)
     console.log("----------Deploying Access Manager-----------------")
-    const AccessContract = await this.deployContract('AccessManager', [[deployerAccount]], 'AccessManager');
+    const AccessContract = await this.deployContract('AccessManager', [[deployerAccount]], deployerKey);
     console.log({ AccessContract: AccessContract.contract.target, blockNumber: AccessContract.blockNumber })
 
     console.log("----------Depolying Trigger Contract -------------------")
-    const TriggerManager = await this.deployContract('TriggerManager', [2], 'TriggerManager');
+    const TriggerManager = await this.deployContract('TriggerManager', [2], deployerKey);
     console.log({ TriggerManager: TriggerManager.contract.target, blockNumber: TriggerManager.blockNumber })
 
 
     console.log("----------Depolying Rahat Donor-------------------")
-    const DonorContract = await this.deployContract('RahatDonor', [deployerAccount, await AccessContract.contract.getAddress()], 'RahatDonor');
+    const DonorContract = await this.deployContract('RahatDonor', [deployerAccount, await AccessContract.contract.getAddress()], deployerKey);
     console.log({ DonorContract: DonorContract.contract.target, blockNumber: DonorContract.blockNumber })
 
     console.log("----------Depolying Forwarder Contracts-------------------")
-    const ForwarderContract = await this.deployContract('ERC2771Forwarder', ["Rumsan Forwarder"], 'ERC2771Forwarder');
+    const ForwarderContract = await this.deployContract('ERC2771Forwarder', ["Rumsan Forwarder"], deployerKey);
     console.log({ ForwarderContract: ForwarderContract.contract.target, blockNumber: DonorContract.blockNumber });
 
     console.log("----------Depolying Rahat Token-------------------")
-    const RahatToken = await this.deployContract('RahatToken', [await ForwarderContract.contract.getAddress(), "RahatToken", "RHT", await DonorContract.contract.getAddress(), 1], 'RahatToken');
+    const RahatToken = await this.deployContract('RahatToken', [await ForwarderContract.contract.getAddress(), "RahatToken", "RHT", await DonorContract.contract.getAddress(), 1], deployerKey);
     console.log({ RahatToken: RahatToken.contract.target, blockNumber: DonorContract.blockNumber });
 
 
     console.log("----------Depolying AA Project Contract-------------------")
-    const AAProjectContract = await this.deployContract('AAProject', ["AAProject", await RahatToken.contract.getAddress(), await ForwarderContract.contract.getAddress(), await AccessContract.contract.getAddress(), await TriggerManager.contract.getAddress()], 'AAProject');
+    const AAProjectContract = await this.deployContract('AAProject', ["AAProject", await RahatToken.contract.getAddress(), await ForwarderContract.contract.getAddress(), await AccessContract.contract.getAddress(), await TriggerManager.contract.getAddress()], deployerKey);
     console.log({ AAProjectContract: AAProjectContract.contract.target, blockNumber: DonorContract.blockNumber });
 
     console.log("Writing deployed address to file")
@@ -115,11 +131,11 @@ class SeedProject extends ContractLib {
     await settings.create(data);
   }
 }
-export default SeedProject;
+export default ContractSeed;
 async function main() {
-  const seedProject = new SeedProject();
-  await seedProject.deployAAContracts();
-  await seedProject.addContractSettings();
+  const contractSeed = new ContractSeed();
+  await contractSeed.deployAAContracts();
+  await contractSeed.addContractSettings();
 
   process.exit(0);
 }

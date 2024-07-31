@@ -19,7 +19,7 @@
     "migrate:status": "prisma migrate status --preview-feature",
     "migrate:resolve": "prisma migrate resolve --preview-feature",
     "seed:aa": "ts-node ./tools/scripts/seed.aa.ts",
-    "seed:project": "ts-node ./tools/project-scripts/projectSeed",
+    "seed:contract": "ts-node ./tools/project-scripts/contractSeed",
     "seed:networks": "ts-node ./tools/project-scripts/networksSeed",
     "seed:settings": "ts-node ./tools/project-scripts/settingsSeed",
     "seed:chain": "ts-node ./tools/project-scripts/deploymentsettingsSeed",

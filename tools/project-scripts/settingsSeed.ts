@@ -21,7 +21,7 @@ class SettingsSeed extends ContractLib {
         this.projectUUID = process.env.PROJECT_ID as string
     }
 
-    async getELDevSettings() {
+    async getAADevSettings() {
         const [devSettings] = await prismaClient.$queryRaw<any[]>(
             Prisma.sql([`SELECT *  FROM tbl_settings WHERE name='AA_DEV'`])
         )
@@ -46,13 +46,13 @@ class SettingsSeed extends ContractLib {
         await settings.create({
             name: 'Blockchain',
             value: {
-                chainId: process.env.CHAIN_ID,
-                rpcUrl: process.env.NETWORK_PROVIDER,
-                chainName: process.env.CHAIN_NAME,
-                networkId: process.env.CHAIN_ID,
+                chainId: 8888,
+                rpcUrl: "http://127.0.0.1:8888",
+                chainName: "localhost",
+                networkId: 8888,
                 nativeCurrency: {
-                    name: process.env.CURRENCY_NAME,
-                    symbol: process.env.CURRENCY_SYMBOL,
+                    name: "ETH",
+                    symbol: "ETH",
                 },
             },
             isPrivate: false
@@ -83,19 +83,19 @@ class SettingsSeed extends ContractLib {
     }
 
 
-    public async addAdminToEl(addresses: any) {
+    public async addAdminToAA(addresses: any, deployerKey: string) {
         const adminValues = addresses.map((address: any) => [address, true]);
         const multicallData = await this.generateMultiCallData('AccessManager', 'updateAdmin', adminValues);
-        const contracts = await this.getContracts('AccessManager', this.projectUUID, 'AccessManager');
+        const contracts = await this.getContracts('AccessManager', this.projectUUID, deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Admins ${addresses} to AccessManager`)
     }
 
-    public async addDonor(addresses: any) {
+    public async addDonor(addresses: any, deployerKey: string) {
         const adminValues = addresses.map((address: any) => [address, true]);
         const multicallData = await this.generateMultiCallData('AccessManager', 'updateDonor', adminValues);
-        const contracts = await this.getContracts('AccessManager', this.projectUUID, 'AccessManager');
+        const contracts = await this.getContracts('AccessManager', this.projectUUID, deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Donor ${addresses} to  Project`)
@@ -103,15 +103,22 @@ class SettingsSeed extends ContractLib {
 }
 async function main() {
     const seedProject = new SettingsSeed();
-    const devSettings = await seedProject.getELDevSettings()
+    const devSettings = await seedProject.getAADevSettings()
     const adminAccounts = devSettings.value!.adminAccounts
+
+    const deployerKey = (await prisma.setting.findUnique({
+        where: {
+            name: 'DEPLOYER_PRIVATE_KEY'
+        }
+    }))?.value as string
+
 
     await seedProject.addAppSettings();
     await seedProject.addAdminAddress(adminAccounts[0]);
     await seedProject.addGraphSettings();
 
-    await seedProject.addAdminToEl(adminAccounts);
-    await seedProject.addDonor(adminAccounts)
+    await seedProject.addAdminToAA(adminAccounts, deployerKey);
+    await seedProject.addDonor(adminAccounts, deployerKey)
     await seedProject.updateProjectStatus();
     await seedProject.addAccessManager();
 

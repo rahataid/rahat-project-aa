@@ -8,31 +8,22 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const privateKeys = {
-  deployer: process.env.DEPLOYER_PRIVATE_KEY,
-  admin: process.env.RAHAT_ADMIN_PRIVATE_KEY,
-};
-
 export class ContractLib {
   private provider: JsonRpcProvider;
   private networkSettings: Config['blockchain'];
   public deployedContracts: DeployedContractsData;
-  public deployerAddress: any;
-  public adminAddress: any;
 
   constructor() {
-    const network = process.env.NETWORK_PROVIDER || 'http://127.0.0.1:8888';
+    const network = 'http://127.0.0.1:8888';
     this.networkSettings = {
       rpcUrl: network,
-      chainName: process.env.CHAIN_NAME || 'matic',
-      chainId: Number(process.env.CHAIN_ID) || 8888,
+      chainName: 'localhost',
+      chainId: 8888,
       blockExplorerUrls: [
-        process.env.BLOCK_EXPLORER_URL ||
-        'https://explorer-mumbai.maticvigil.com/',
+        'http://local-explorer.com/',
       ],
     };
     this.provider = new JsonRpcProvider(network);
-    this.deployerAddress = privateKeys.deployer;
     this.deployedContracts = {};
   }
 
@@ -62,9 +53,9 @@ export class ContractLib {
   public async deployContract(
     contractName: string,
     args: any[],
-    depolyedContractName: string
+    deployerKey: string
   ) {
-    const signer = new ethers.Wallet(privateKeys.deployer || '', this.provider);
+    const signer = new ethers.Wallet(deployerKey || '', this.provider);
 
     const { abi, bytecode } = this.getContractArtifacts(contractName);
     const factory = new ContractFactory(abi, bytecode, signer);
