@@ -19,7 +19,7 @@ const settings = new SettingsService(prisma);
 const contractName = [
   'ERC2771Forwarder',
   'AAProject',
-  'AccessManager',
+  'RahatAccessManager',
   'RahatDonor',
   'RahatToken'
 ];
@@ -55,7 +55,7 @@ class ContractSeed extends ContractLib {
 
     console.log(deployerAccount)
     console.log("----------Deploying Access Manager-----------------")
-    const AccessContract = await this.deployContract('AccessManager', [[deployerAccount]], deployerKey);
+    const AccessContract = await this.deployContract('RahatAccessManager', [deployerAccount], deployerKey);
     console.log({ AccessContract: AccessContract.contract.target, blockNumber: AccessContract.blockNumber })
 
     console.log("----------Depolying Trigger Contract -------------------")
@@ -82,7 +82,7 @@ class ContractSeed extends ContractLib {
 
     console.log("Writing deployed address to file")
     writeFileSync(`${__dirname}/${this.projectUUID}.json`, JSON.stringify({
-      AccessManager: {
+      RahatAccessManager: {
         address: AccessContract.contract.target,
         startBlock: AccessContract.blockNumber
       },
@@ -113,7 +113,7 @@ class ContractSeed extends ContractLib {
 
     console.log("Adding donor contract as admin in AA Project")
     console.log([DonorContract.contract.target, true])
-    await this.callContractMethod('AccessManager', 'updateAdmin', [DonorContract.contract.target, true], 'AccessManager', this.projectUUID, deployerAccount);
+    await this.callContractMethod('RahatAccessManager', 'grantRole', [0, DonorContract.contract.target, 0], 'RahatAccessManager', this.projectUUID, deployerAccount);
 
     console.log("Registering Project in Donor")
     await this.callContractMethod('RahatDonor', 'registerProject', [AAProjectContract.contract.target, true], 'RahatDonor', this.projectUUID, deployerAccount);
@@ -135,7 +135,7 @@ export default ContractSeed;
 async function main() {
   const contractSeed = new ContractSeed();
   await contractSeed.deployAAContracts();
-  await contractSeed.addContractSettings();
+  //  await contractSeed.addContractSettings();
 
   process.exit(0);
 }

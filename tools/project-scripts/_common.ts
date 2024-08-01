@@ -124,6 +124,8 @@ export class ContractLib {
     const fileData = readFileSync(`${__dirname}/${contractAddressFile}.json`, 'utf8');
 
     const data = JSON.parse(fileData);
+    console.log({ data })
+    console.log({ contractName })
     return data[contractName].address;
   }
 
@@ -164,10 +166,9 @@ export class ContractLib {
     return iface;
   }
 
-  public async getContracts(contractName: string, contractAddressFile: string, deployedContractName: string, signer?: ethers.Signer) {
+  public async getContracts(contractName: string, contractAddressFile: string, deployedContractName: string, privateKey: string) {
     const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
     const abi = this.getContractArtifacts(contractName).abi;
-    const privateKey = process.env.RAHAT_ADMIN_PRIVATE_KEY || '';
 
     const wallet = new ethers.Wallet(privateKey, this.provider);
 

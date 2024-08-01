@@ -34,13 +34,7 @@ class SettingsSeed extends ContractLib {
         )
         console.log(`Project status updated to ${status}`)
     }
-    //Insert AccessManager contract address in tbl_settings
-    async addAccessManager() {
-        const accessManager = this.getDeployedAddress(this.projectUUID, 'AccessManager');
-        await prismaClient.$executeRaw<any[]>(
-            Prisma.sql([`INSERT INTO tbl_settings (name, value, "dataType" , "isPrivate") VALUES ('ACCESS_MANAGER', '${JSON.stringify(accessManager)}' , 'STRING', 'false')`])
-        )
-    }
+
 
     public async addAppSettings() {
         await settings.create({
@@ -84,18 +78,18 @@ class SettingsSeed extends ContractLib {
 
 
     public async addAdminToAA(addresses: any, deployerKey: string) {
-        const adminValues = addresses.map((address: any) => [address, true]);
-        const multicallData = await this.generateMultiCallData('AccessManager', 'updateAdmin', adminValues);
-        const contracts = await this.getContracts('AccessManager', this.projectUUID, deployerKey);
+        const adminValues = addresses.map((address: any) => [0, address, 0]);
+        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
+        const contracts = await this.getContracts('RahatAccessManager', this.projectUUID, 'RahatAccessManager', deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Admins ${addresses} to AccessManager`)
     }
 
     public async addDonor(addresses: any, deployerKey: string) {
-        const adminValues = addresses.map((address: any) => [address, true]);
-        const multicallData = await this.generateMultiCallData('AccessManager', 'updateDonor', adminValues);
-        const contracts = await this.getContracts('AccessManager', this.projectUUID, deployerKey);
+        const adminValues = addresses.map((address: any) => [0, address, 0]);
+        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
+        const contracts = await this.getContracts('RahatAccessManager', this.projectUUID, 'RahatAccessManager', deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Donor ${addresses} to  Project`)
@@ -104,6 +98,7 @@ class SettingsSeed extends ContractLib {
 async function main() {
     const seedProject = new SettingsSeed();
     const devSettings = await seedProject.getAADevSettings()
+    console.log("devSettings", devSettings)
     const adminAccounts = devSettings.value!.adminAccounts
 
     const deployerKey = (await prisma.setting.findUnique({
@@ -112,7 +107,7 @@ async function main() {
         }
     }))?.value as string
 
-
+    console.log("adding app settings")
     await seedProject.addAppSettings();
     await seedProject.addAdminAddress(adminAccounts[0]);
     await seedProject.addGraphSettings();
@@ -120,8 +115,6 @@ async function main() {
     await seedProject.addAdminToAA(adminAccounts, deployerKey);
     await seedProject.addDonor(adminAccounts, deployerKey)
     await seedProject.updateProjectStatus();
-    await seedProject.addAccessManager();
-
     console.log("=====Local Settings Seeded Successfully=====")
 
     process.exit(0);
