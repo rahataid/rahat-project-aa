@@ -91,11 +91,10 @@ export class ContractLib {
     contractName: string,
     methodName: string,
     args: any[],
-    deployedContractName: string,
-    contractAddressFile: string,
+    contractAddress: string,
     signer?: ethers.Signer,
   ) {
-    const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
+    //const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
     const abi = this.getContractArtifacts(contractName).abi;
     // const contractData = this.deployedContracts[contractName];
     if (!contractAddress) {
@@ -186,8 +185,7 @@ export class ContractLib {
     return iface;
   }
 
-  public async getContracts(contractName: string, contractAddressFile: string, deployedContractName: string, privateKey: string) {
-    const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
+  public async getContracts(contractName: string, contractAddress: string, privateKey: string) {
     const abi = this.getContractArtifacts(contractName).abi;
 
     const wallet = new ethers.Wallet(privateKey, this.provider);

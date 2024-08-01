@@ -28,6 +28,16 @@ class SettingsSeed extends ContractLib {
         return devSettings
     }
 
+    public async getDevContracts() {
+        const [devSettings] = await prismaClient.$queryRaw<any[]>(
+            Prisma.sql([
+                `SELECT *  FROM tbl_settings WHERE name='CONTRACTS'`,
+            ])
+        );
+        return devSettings;
+    }
+
+
     async updateProjectStatus(status = 'ACTIVE') {
         await prismaClient.$queryRaw<any[]>(
             Prisma.sql([`UPDATE tbl_projects SET status='${status}' WHERE uuid='${this.projectUUID}'`])
@@ -78,18 +88,24 @@ class SettingsSeed extends ContractLib {
 
 
     public async addAdminToAA(addresses: any, deployerKey: string) {
+        const contractDetails = await this.getDevContracts();
+        console.log('contractDetails', contractDetails);
+        const rahatAccessManagerAddress = contractDetails.value.RAHATACCESSMANAGER.ADDRESS;
         const adminValues = addresses.map((address: any) => [0, address, 0]);
         const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
-        const contracts = await this.getContracts('RahatAccessManager', this.projectUUID, 'RahatAccessManager', deployerKey);
+        const contracts = await this.getContracts('RahatAccessManager', rahatAccessManagerAddress, deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Admins ${addresses} to AccessManager`)
     }
 
     public async addDonor(addresses: any, deployerKey: string) {
+        const contractDetails = await this.getDevContracts();
+        console.log('contractDetails', contractDetails);
+        const rahatAccessManagerAddress = contractDetails.value.RAHATACCESSMANAGER.ADDRESS;
         const adminValues = addresses.map((address: any) => [0, address, 0]);
         const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
-        const contracts = await this.getContracts('RahatAccessManager', this.projectUUID, 'RahatAccessManager', deployerKey);
+        const contracts = await this.getContracts('RahatAccessManager', rahatAccessManagerAddress, deployerKey);
         const res = await contracts.multicall(multicallData);
         await this.delay(2000)
         console.log(`Added Donor ${addresses} to  Project`)

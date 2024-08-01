@@ -13,7 +13,7 @@ class ManageAccess extends ContractLib {
 
     public async addDonor(addresses: `0x${string}`) {
         const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
-        await this.callContractMethod('AccessManager', 'updateDonor', [addresses, true], 'AccessManager', this.projectUUID, deployerAccount);
+        await this.callContractMethod('AccessManager', 'updateDonor', [addresses, true], this.projectUUID, deployerAccount);
         await this.delay(2000)
         console.log(`Added Donor ${addresses} to  Project`)
 
@@ -21,12 +21,12 @@ class ManageAccess extends ContractLib {
 
     public addAdmin(addresses: `0x${string}`) {
         const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
-        return this.callContractMethod('AccessManager', 'updateAdmin', [addresses, true], 'AccessManager', this.projectUUID, deployerAccount);
+        return this.callContractMethod('AccessManager', 'updateAdmin', [addresses, true], this.projectUUID, deployerAccount);
     }
 
     public addProjectManager(addresses: `0x${string}`) {
         const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
-        return this.callContractMethod('AccessManager', 'updateProjectManager', [addresses, true], 'AccessManager', this.projectUUID, deployerAccount);
+        return this.callContractMethod('AccessManager', 'updateProjectManager', [addresses, true], this.projectUUID, deployerAccount);
     }
 }
 

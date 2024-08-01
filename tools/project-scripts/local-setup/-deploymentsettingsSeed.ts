@@ -66,14 +66,16 @@ class SettingsSeed extends ContractLib {
 
     public async addAdminToEl(addresses: any) {
         const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
-        await this.callContractMethod('AccessManager', 'updateAdmin', [addresses, true], 'AccessManager', this.projectUUID, deployerAccount);
+        const contractAddress = this.getDeployedAddress(this.projectUUID, 'RahatAccessManager');
+        await this.callContractMethod('AccessManager', 'updateAdmin', [addresses, true], contractAddress, deployerAccount);
         await this.delay(2000)
         console.log(`Added Admins ${addresses} to AccessManager`)
     }
 
     public async addDonor(addresses: any) {
         const deployerAccount = this.getWalletFromPrivateKey(this.deployerAddress);
-        await this.callContractMethod('AccessManager', 'updateDonor', [addresses, true], 'AccessManager', this.projectUUID, deployerAccount);
+        const contractAddress = this.getDeployedAddress(this.projectUUID, 'RahatAccessManager');
+        await this.callContractMethod('AccessManager', 'updateDonor', [addresses, true], contractAddress, deployerAccount);
         await this.delay(2000)
         console.log(`Added Donor ${addresses} to  Project`)
 

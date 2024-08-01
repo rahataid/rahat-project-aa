@@ -17,9 +17,7 @@ const settings = new SettingsService(prisma);
 
 
 const contractName = [
-  'ERC2771Forwarder',
   'AAProject',
-  'RahatAccessManager',
   'RahatDonor',
   'RahatToken'
 ];
@@ -48,7 +46,23 @@ class ContractSeed extends ContractLib {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  public async getDevSettings() {
+
+    const [devSettings] = await corePrisma.$queryRaw<any[]>(
+      Prisma.sql([
+        `SELECT *  FROM tbl_settings WHERE name='CONTRACTS'`,
+      ])
+    );
+    return devSettings;
+  }
+
   public async deployAAContracts() {
+    const contractDetails = await this.getDevSettings();
+    console.log('contractDetails', contractDetails);
+
+    const RahatAccessManagerAddress = contractDetails.value.RAHATACCESSMANAGER.ADDRESS;
+    const forwarderAddress = contractDetails.value.ERC2771FORWARDER.ADDRESS;
+    const treasuryAddress = contractDetails.value.RAHATTREASURY.ADDRESS;
 
     const deployerKey = (await prisma.setting.findUnique({
       where: {
@@ -62,12 +76,6 @@ class ContractSeed extends ContractLib {
     const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
 
     console.log(deployerAccount)
-    console.log("----------Deploying Access Manager-----------------")
-    const AccessContract = await this.deployContract('RahatAccessManager', [deployerAccount], deployerKey);
-    this.contracts['RahatAccessManager'] = {
-      address: AccessContract.contract.target,
-      startBlock: AccessContract.blockNumber
-    };
 
     console.log("----------Depolying Trigger Contract -------------------")
     const TriggerManager = await this.deployContract('TriggerManager', [2], deployerKey);
@@ -77,27 +85,20 @@ class ContractSeed extends ContractLib {
     };
 
     console.log("----------Depolying Rahat Donor-------------------")
-    const DonorContract = await this.deployContract('RahatDonor', [deployerAccount, await AccessContract.contract.getAddress()], deployerKey);
+    const DonorContract = await this.deployContract('RahatDonor', [deployerAccount, RahatAccessManagerAddress], deployerKey);
     this.contracts['RahatDonor'] = {
       address: DonorContract.contract.target,
       startBlock: DonorContract.blockNumber
     };
 
-    console.log("----------Depolying Forwarder Contracts-------------------")
-    const ForwarderContract = await this.deployContract('ERC2771Forwarder', ["Rumsan Forwarder"], deployerKey);
-    this.contracts['ERC2771Forwarder'] = {
-      address: ForwarderContract.contract.target,
-      startBlock: ForwarderContract.blockNumber
-    };
-
     console.log("----------Depolying Rahat Token-------------------")
-    const RahatToken = await this.deployContract('RahatToken', [await ForwarderContract.contract.getAddress(), "RahatToken", "RHT", await DonorContract.contract.getAddress(), 1], deployerKey);
+    const RahatToken = await this.deployContract('RahatToken', [forwarderAddress, "RahatToken", "RHT", await DonorContract.contract.getAddress(), 1], deployerKey);
     this.contracts['RahatToken'] = {
       address: RahatToken.contract.target,
       startBlock: RahatToken.blockNumber
     };
     console.log("----------Depolying AA Project Contract-------------------")
-    const AAProjectContract = await this.deployContract('AAProject', ["AAProject", await RahatToken.contract.getAddress(), await ForwarderContract.contract.getAddress(), await AccessContract.contract.getAddress(), await TriggerManager.contract.getAddress()], deployerKey);
+    const AAProjectContract = await this.deployContract('AAProject', ["AAProject", await RahatToken.contract.getAddress(), forwarderAddress, RahatAccessManagerAddress, await TriggerManager.contract.getAddress()], deployerKey);
     this.contracts['AAProject'] = {
       address: AAProjectContract.contract.target,
       startBlock: AAProjectContract.blockNumber
@@ -110,10 +111,11 @@ class ContractSeed extends ContractLib {
 
     console.log("Adding donor contract as admin in AA Project")
     console.log([DonorContract.contract.target, true])
-    await this.callContractMethod('RahatAccessManager', 'grantRole', [0, DonorContract.contract.target, 0], 'RahatAccessManager', this.projectUUID, deployerAccount);
+    await this.callContractMethod('RahatAccessManager', 'grantRole', [0, DonorContract.contract.target, 0], RahatAccessManagerAddress, deployerAccount);
 
     console.log("Registering Project in Donor")
-    await this.callContractMethod('RahatDonor', 'registerProject', [AAProjectContract.contract.target, true], 'RahatDonor', this.projectUUID, deployerAccount);
+    const donorContractAddress = this.getDeployedAddress(this.projectUUID, 'RahatDonor');
+    await this.callContractMethod('RahatDonor', 'registerProject', [AAProjectContract.contract.target, true], donorContractAddress, deployerAccount);
 
   }
 
