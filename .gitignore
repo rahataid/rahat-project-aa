@@ -5,6 +5,8 @@ dist
 tmp
 /out-tsc
 config/
+/tools/project-scripts/local-setup/deployments
+
 
 # dependencies
 node_modules

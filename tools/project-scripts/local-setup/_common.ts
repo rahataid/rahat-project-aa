@@ -1,8 +1,8 @@
 import { Contract, ContractFactory, JsonRpcProvider, ethers } from 'ethers';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 
-import { Config } from './types/config';
-import { ContractArtifacts, DeployedContractsData } from './types/contract';
+import { Config } from '../types/config';
+import { ContractArtifacts, DeployedContractsData } from '../types/contract';
 
 import * as dotenv from 'dotenv';
 
@@ -46,7 +46,7 @@ export class ContractLib {
 
   public getContractArtifacts(contractName: string): ContractArtifacts {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const contract = require(`./contracts/${contractName}.json`);
+    const contract = require(`../contracts/${contractName}.json`);
     return contract;
   }
 
@@ -121,7 +121,7 @@ export class ContractLib {
   }
 
   public getDeployedAddress(contractAddressFile: string, contractName: string) {
-    const fileData = readFileSync(`${__dirname}/${contractAddressFile}.json`, 'utf8');
+    const fileData = readFileSync(`${__dirname}/deployments/${contractAddressFile}.json`, 'utf8');
 
     const data = JSON.parse(fileData);
     console.log({ data })
@@ -158,6 +158,26 @@ export class ContractLib {
       };
     });
     return contractDetails;
+  }
+
+  public async writeToDeploymentFile(fileName: string, newData: any) {
+    const dirPath = `${__dirname}/deployments`;
+    const filePath = `${dirPath}/${fileName}.json`;
+
+    // Ensure the directory exists
+    if (!existsSync(dirPath)) {
+      mkdirSync(dirPath);
+    }
+
+    let fileData = {};
+    if (existsSync(filePath)) {
+      // Read and parse the existing file if it exists
+      const existingData = readFileSync(filePath, { encoding: 'utf8' });
+      if (existingData) fileData = JSON.parse(existingData);
+    }
+    fileData = { ...fileData, ...newData };
+    console.log({ fileData })
+    writeFileSync(filePath, JSON.stringify(fileData, null, 2));
   }
 
   public async getInterface(contractName: string) {
