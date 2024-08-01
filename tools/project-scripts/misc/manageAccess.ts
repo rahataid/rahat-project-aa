@@ -1,5 +1,5 @@
 import readline from 'readline';
-import { ContractLib } from './_common';
+import { ContractLib } from '../local-setup/_common';
 
 
 

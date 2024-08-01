@@ -4,7 +4,7 @@ import * as fs from 'fs/promises'
     const rootPath = process.argv[2]
     const rootEnv = `${rootPath}/.env`
     const projectID = await getProjectID(rootEnv)
-    const contractAddressesPath = `${rootPath}/tools/project-scripts/deployments/${projectID}.json`
+    const contractAddressesPath = `${rootPath}/tools/project-scripts/local-setup/deployments/${projectID}.json`
     const networksFilePath = `${rootPath}/apps/graph/networks.json`
     modifyNetworksFile(contractAddressesPath, networksFilePath)
 

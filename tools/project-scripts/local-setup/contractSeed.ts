@@ -118,6 +118,7 @@ class ContractSeed extends ContractLib {
   }
 
   public async addContractSettings() {
+    console.log("Adding contract settings")
     const contracts = await this.getDeployedContractDetails(this.projectUUID, contractName);
     const data = {
       name: 'CONTRACT',
@@ -132,7 +133,7 @@ export default ContractSeed;
 async function main() {
   const contractSeed = new ContractSeed();
   await contractSeed.deployAAContracts();
-  //  await contractSeed.addContractSettings();
+  await contractSeed.addContractSettings();
 
   process.exit(0);
 }

@@ -46,7 +46,7 @@ export class ContractLib {
 
   public getContractArtifacts(contractName: string): ContractArtifacts {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const contract = require(`../contracts/deployments/${contractName}.json`);
+    const contract = require(`../contracts/${contractName}.json`);
     return contract;
   }
 
