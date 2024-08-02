@@ -6,7 +6,7 @@ tmp
 /out-tsc
 config/
 /tools/project-scripts/local-setup/deployments
-
+.env.prod
 
 # dependencies
 node_modules

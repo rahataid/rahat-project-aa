@@ -61,20 +61,20 @@ export class ContractLib {
     const factory = new ContractFactory(abi, bytecode, signer);
     const contract = await factory.deploy(...args);
     const address = await contract.getAddress();
-    const t = await contract.waitForDeployment();
-    await this.delay(500);
+    const txBlock = await contract.deploymentTransaction()?.getBlock();
+    await this.delay(2000);
 
     const data = {
       contractName,
       address,
       contract: new ethers.Contract(address, abi, this.provider),
       abi,
-      startBlock: contract.deploymentTransaction()?.blockNumber || 1,
+      startBlock: txBlock?.number || 1,
     };
 
 
     return {
-      blockNumber: contract.deploymentTransaction()?.blockNumber || 1,
+      blockNumber: txBlock?.number || 1,
       contract: new ethers.Contract(address, abi, this.provider),
     };
   }

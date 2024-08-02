@@ -6,6 +6,7 @@ import { uuidV4, Addressable } from 'ethers';
 import { writeFileSync } from 'fs';
 import { ContractLib } from './_common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { DeployedContract } from '../types/blockchain';
 dotenv.config();
 
 
@@ -21,11 +22,6 @@ const contractName = [
   'RahatDonor',
   'RahatToken'
 ];
-
-interface DeployedContract {
-  address: string | Addressable;
-  startBlock: number;
-}
 
 class ContractSeed extends ContractLib {
   projectUUID: string;

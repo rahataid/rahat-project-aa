@@ -42,4 +42,84 @@ export class AppService {
   async resetAll() {
     return "ok"
   }
+
+  //TODO: optimize for multiple dynamic settings
+  async setupProjectSettings(payload: any) {
+
+    const settings = [];
+
+    // Process contracts
+    if (payload.CONTRACTS) {
+      settings.push({
+        name: 'CONTRACTS',
+        value: payload.CONTRACTS,
+        dataType: 'OBJECT',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: false
+      });
+    }
+
+    // Process chainSettings
+    if (payload.BLOCKCHAIN) {
+      settings.push({
+        name: 'BLOCKCHAIN',
+        value: payload.BLOCKCHAIN,
+        dataType: 'OBJECT',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: false
+      });
+    }
+
+    // Process subgraphUrl
+    if (payload.SUBGRAPH_URL) {
+      settings.push({
+        name: 'SUBGRAPH_URL',
+        value: payload.SUBGRAPH_URL,
+        dataType: 'OBJECT',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: false
+      });
+    }
+
+    //process ADMIN
+    if (payload.RAHAT_ADMIN_PRIVATE_KEY) {
+      settings.push({
+        name: 'RAHAT_ADMIN_PRIVATE_KEY',
+        value: payload.RAHAT_ADMIN_PRIVATE_KEY,
+        dataType: 'STRING',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: true
+      });
+    }
+
+    if (payload.DEPLOYER_PRIVATE_KEY) {
+      settings.push({
+        name: 'DEPLOYER_PRIVATE_KEY',
+        value: payload.DEPLOYER_PRIVATE_KEY,
+        dataType: 'STRING',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: false
+      });
+    }
+
+    if (payload.ADMIN) {
+      settings.push({
+        name: 'ADMIN',
+        value: payload.ADMIN,
+        dataType: 'OBJECT',
+        requiredFields: [],
+        isReadOnly: false,
+        isPrivate: false
+      });
+    }
+
+
+    await this.settingService.bulkCreate(settings);
+    return { message: 'Project Setup Successfully' };
+  }
 }
