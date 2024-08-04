@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
@@ -20,6 +20,7 @@ import { UUID } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
 import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
+import { CommsClient } from '../comms/comms.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -33,7 +34,9 @@ export class ActivitiesService {
     private configService: ConfigService,
     private readonly stakeholdersService: StakeholdersService,
     private readonly beneficiaryService: BeneficiaryService,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    @Inject("COMMS_CLIENT")
+    private commsClient: CommsClient
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),

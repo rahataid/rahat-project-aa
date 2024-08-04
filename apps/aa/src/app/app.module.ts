@@ -17,6 +17,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { StatsModule } from '../stats';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { ListenersModule } from '../listeners/listeners.module';
+import { CommsModule } from '../comms/comms.module';
 
 @Module({
   imports: [
@@ -45,7 +46,8 @@ import { ListenersModule } from '../listeners/listeners.module';
     ScheduleModule.forRoot(),
     StatsModule,
     DailyMonitoringModule,
-    ListenersModule
+    ListenersModule,
+    CommsModule.forRoot()
   ],
   controllers: [AppController],
   providers: [AppService],
