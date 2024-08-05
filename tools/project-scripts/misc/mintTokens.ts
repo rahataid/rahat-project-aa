@@ -1,4 +1,4 @@
-import { ContractLib } from "./_common";
+import { ContractLib } from "../_common";
 
 class ProjectFundManagemet extends ContractLib {
     projectUUID: string;

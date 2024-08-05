@@ -32,4 +32,10 @@ export class AppController {
   resetAll() {
     return this.appService.resetAll()
   }
+
+  //Setup Settings
+  @MessagePattern({ cmd: JOBS.PROJECT.SETUP, uuid: process.env.PROJECT_ID })
+  setupProjectSettings(payload: any) {
+    return this.appService.setupProjectSettings(payload);
+  }
 }

@@ -7,13 +7,13 @@ import '@rahataid/contracts/src/rahat-app/libraries/AbstractTokenActions.sol';
 import '../interfaces/IAAProject.sol';
 import '../interfaces/IRahatDonor.sol';
 import '../interfaces/IRahatTreasury.sol';
-import '../interfaces/IAccessManager.sol';
+import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
 /// @title Donor contract to create tokens
 /// @author Rumsan Associates
 /// @notice You can use this contract to manage Rahat tokens and projects
 /// @dev All function calls are only executed by contract owner
-contract RahatDonor is AbstractTokenActions, ERC165 {
+contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
   event TokenCreated(address indexed tokenAddress);
   event TokenMintedAndApproved(
     address indexed tokenAddress,
@@ -30,11 +30,12 @@ contract RahatDonor is AbstractTokenActions, ERC165 {
   mapping(address => bool) public _registeredProject;
 
   IRahatTreasury public RahatTreasury;
-  IAccessManager public AccessManager;
 
-  constructor(address _admin, address _accessManager) {
+  constructor(
+    address _admin,
+    address _accessManager
+  ) AccessManaged(_accessManager) {
     _addOwner(_admin);
-    AccessManager = IAccessManager(_accessManager);
     // RahatTreasury = IRahatTreasury(_treasury);
     // tokenToDollarValue[1] = averageDollarValue;
   }
@@ -50,11 +51,6 @@ contract RahatDonor is AbstractTokenActions, ERC165 {
   //   emit TokenCreated(_tokenAddress);
   //   return _tokenAddress;
   // }
-
-  modifier onlyDonor() {
-    require(AccessManager.isDonor(msg.sender), 'Caller is not a donor');
-    _;
-  }
 
   function mintToken(address _token, uint256 _amount) public {
     RahatToken(_token).mint(address(this), _amount);
