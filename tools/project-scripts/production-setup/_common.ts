@@ -67,4 +67,39 @@ export class commonLib {
         writeFileSync(filePath, JSON.stringify(fileData, null, 2));
     }
 
+    public async getInterface(contractName: string) {
+        const abi = (await this.getContractArtifacts(contractName)).abi;
+        const iface = new ethers.Interface(abi);
+        return iface;
+    }
+
+
+    public async generateMultiCallData(contractName: string, functionName: string, callData: any) {
+        const iface = await this.getInterface(contractName);
+        const encodedData: any = [];
+        if (callData) {
+            for (const callD of callData) {
+                const encodedD = iface.encodeFunctionData(functionName, [...callD]);
+                encodedData.push(encodedD);
+            }
+        }
+        return encodedData;
+    }
+
+
+    public async getContracts(contractName: string, contractAddress: string, privateKey: string) {
+        const abi = (await this.getContractArtifacts(contractName)).abi;
+
+        const wallet = new ethers.Wallet(privateKey, this.provider);
+
+
+        const contract = new ethers.Contract(
+            contractAddress,
+            abi,
+            wallet
+        )
+        return contract;
+
+    }
+
 }

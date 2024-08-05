@@ -21,6 +21,8 @@ const rahatTokenDetails = {
 class DeploymentSetup extends commonLib {
     contracts: Record<string, DeployedContract>;
     deployerAccount: Wallet;
+    rahatAccessManagerAddress: string = '';
+    forwarderAddress: string = '';
 
     constructor() {
         super();
@@ -33,9 +35,9 @@ class DeploymentSetup extends commonLib {
         const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
         const { data } = await axios.get(url);
         const contracts = data?.data?.value;
-        const RahatAccessManagerAddress = contracts.RAHATACCESSMANAGER.ADDRESS
-        const RahatTreasuryAddress = contracts.RAHATTREASURY.ADDRESS
-        const forwarderAddress = contracts.ERC2771FORWARDER.ADDRESS
+        this.rahatAccessManagerAddress = contracts.RAHATACCESSMANAGER.ADDRESS
+        const rahatTreasuryAddress = contracts.RAHATTREASURY.ADDRESS
+        this.forwarderAddress = contracts.ERC2771FORWARDER.ADDRESS
 
         console.log('----------Depolying Trigger Manager-------------------');
         const TriggerManager = await this.deployContract('TriggerManager', [2]);
@@ -44,7 +46,7 @@ class DeploymentSetup extends commonLib {
             startBlock: TriggerManager.blockNumber
         };
         console.log('----------Depolying Rahat Donor-------------------');
-        const RahatDonor = await this.deployContract('RahatDonor', [this.deployerAccount, RahatAccessManagerAddress]);
+        const RahatDonor = await this.deployContract('RahatDonor', [this.deployerAccount, this.rahatAccessManagerAddress]);
         this.contracts['RahatDonor'] = {
             address: RahatDonor.contract.target,
             startBlock: RahatDonor.blockNumber
@@ -54,7 +56,7 @@ class DeploymentSetup extends commonLib {
         const RahatToken = await this.deployContract(
             'RahatToken',
             [
-                forwarderAddress, "RahatToken", "RHT", RahatDonor.contract.target, 0
+                this.forwarderAddress, "RahatToken", "RHT", RahatDonor.contract.target, 0
             ]
         );
         this.contracts['RahatToken'] = {
@@ -66,8 +68,8 @@ class DeploymentSetup extends commonLib {
         const AAProjectContract = await this.deployContract('AAProject', [
             "AAProject",
             RahatToken.contract.target,
-            forwarderAddress,
-            RahatAccessManagerAddress,
+            this.forwarderAddress,
+            this.rahatAccessManagerAddress,
             TriggerManager.contract.target
         ]);
         this.contracts['AAProject'] = {
@@ -120,6 +122,24 @@ class DeploymentSetup extends commonLib {
             })
     }
 
+    public async addAdminToAA(addresses: any, deployerKey: string) {
+        const adminValues = addresses.map((address: any) => [0, address, 0]);
+        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
+        const contracts = await this.getContracts('RahatAccessManager', this.rahatAccessManagerAddress, deployerKey);
+        const res = await contracts.multicall(multicallData);
+        await this.sleep(2000)
+        console.log(`Added Admins ${addresses} to AccessManager`)
+    }
+
+    public async addDonor(addresses: any, deployerKey: string) {
+        const adminValues = addresses.map((address: any) => [0, address, 0]);
+        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
+        const contracts = await this.getContracts('RahatAccessManager', this.rahatAccessManagerAddress, deployerKey);
+        const res = await contracts.multicall(multicallData);
+        await this.sleep(2000)
+        console.log(`Added Donor ${addresses} to  Project`)
+    }
+
 }
 
 async function main() {
@@ -127,6 +147,12 @@ async function main() {
     await deploymentSetup.setupRahatAAContracts();
     await deploymentSetup.setupBlockchainNetowrk();
     await deploymentSetup.setupAdminKeys();
+
+    //Make Contract call to make admins
+    //addAdminToAA
+    //addDonorAsAdmin
+    await deploymentSetup.addAdminToAA([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
+    await deploymentSetup.addDonor([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
 
 }
 main().catch((error) => {
