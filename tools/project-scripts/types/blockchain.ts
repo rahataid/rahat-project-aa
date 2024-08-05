@@ -1,3 +1,5 @@
+import { Addressable } from 'ethers';
+
 export type ITokenDeploymentData = {
   communityName: string;
   projectName: string;
@@ -12,3 +14,8 @@ export type INetworkKeys = {
   publicKey?: string;
   address?: string;
 };
+
+export interface DeployedContract {
+  address: string | Addressable;
+  startBlock: number;
+}
