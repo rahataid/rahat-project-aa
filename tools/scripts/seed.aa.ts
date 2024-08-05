@@ -6,6 +6,10 @@ const prisma = new PrismaClient({
     datasourceUrl: process.env.CORE_DATABASE_URL as string
 });
 
+const projectPrisma = new PrismaClient({
+    datasourceUrl: process.env.DATABASE_URL as string
+})
+
 const rootPath = process.argv[2]
 const rootEnv = `${rootPath}/.env`
 
@@ -26,11 +30,11 @@ async function main() {
 
     const prvKey = devSettings.value.privateKey
 
-    await modifyEnv(uuid, prvKey)
+    await modifyEnvAndSettings(uuid, prvKey)
 
 }
 
-async function modifyEnv(uuid: string, prvKey: string) {
+async function modifyEnvAndSettings(uuid: string, prvKey: string) {
     try {
         let data = await fs.readFile(rootEnv, 'utf8');
         const lines = data.split('\n') as string[];
@@ -39,21 +43,30 @@ async function modifyEnv(uuid: string, prvKey: string) {
             if (line.startsWith('PROJECT_ID')) {
                 return `PROJECT_ID=${uuid}`;
             }
-            if (line.startsWith('RAHAT_ADMIN_PRIVATE_KEY')) {
-                return `RAHAT_ADMIN_PRIVATE_KEY=${prvKey}`;
-            }
-            if (line.startsWith('DEPLOYER_PRIVATE_KEY')) {
-                return `DEPLOYER_PRIVATE_KEY=${prvKey}`;
-            }
-            if (line.startsWith('OTP_SERVER_PRIVATE_KEY')) {
-                return `OTP_SERVER_PRIVATE_KEY=${prvKey}`;
-            }
             return line;
         });
 
         const newData = newLines.join('\n');
 
         await fs.writeFile(rootEnv, newData, 'utf8');
+
+        await projectPrisma.setting.create({
+            data: {
+                name: 'DEPLOYER_PRIVATE_KEY',
+                value: prvKey,
+                dataType: "STRING",
+                isPrivate: true
+            }
+        })
+
+        await projectPrisma.setting.create({
+            data: {
+                name: 'RAHAT_ADMIN_PRIVATE_KEY',
+                value: prvKey,
+                dataType: "STRING",
+                isPrivate: true
+            }
+        })
 
         console.log(rootEnv)
         console.log('File updated.');
