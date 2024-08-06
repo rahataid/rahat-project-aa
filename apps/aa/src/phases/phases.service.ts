@@ -10,7 +10,7 @@ import { TriggersService } from '../triggers/triggers.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 20;
 
 @Injectable()
 export class PhasesService {
@@ -25,7 +25,7 @@ export class PhasesService {
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION)
     private readonly communicationQueue: Queue
-  ) {}
+  ) { }
 
   async getAll() {
     return this.prisma.phases.findMany();
