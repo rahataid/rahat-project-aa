@@ -1,0 +1,48 @@
+{
+  "CONTRACTS": {
+    "TriggerManager": {
+      "address": "0x40eAa0fc6516c243E19c8f6933b2e94A051eCaF8",
+      "startBlock": 13546434
+    },
+    "RahatDonor": {
+      "address": "0xec2A31EBF41592ce6e3aD4E84a700dF691B2AB9C",
+      "startBlock": 13546438
+    },
+    "RahatToken": {
+      "address": "0x6bB196E408CC0DB502f54df60da2F11E99762bDf",
+      "startBlock": 13546442
+    },
+    "AAProject": {
+      "address": "0x2d40Cb29127C60d39B22913D5EB789Cbae3491f6",
+      "startBlock": 13546446
+    }
+  },
+  "RahatToken": {
+    "contractAddress": "0x6bB196E408CC0DB502f54df60da2F11E99762bDf",
+    "name": "RHT Coin",
+    "symbol": "RHT",
+    "description": "RHT Coin",
+    "decimals": 0,
+    "initialSupply": "100000",
+    "fromBlock": 13546442,
+    "transactionHash": "0x15a920b220e9db4b063e60a4b91ac903f02a0846de6b401d6a448af3d1046b72",
+    "type": "CREATED"
+  },
+  "BLOCKCHAIN": {
+    "rpcUrl": "https://base-sepolia.g.alchemy.com/v2/bnfGi0PVbNMijQJFjFng2De86z-QvOMR",
+    "chainName": "base-sepolia",
+    "nativeCurrency": {
+      "name": "ETH",
+      "symbol": "ETH"
+    }
+  },
+  "SUBGRAPH_URL": {
+    "URL": "https://api.studio.thegraph.com/query/42205/aa-prod-tikapur-base/version/latest"
+  },
+  "projectUUID": "b01e5150-2636-4cdd-b77b-bc67eefd433b",
+  "ADMIN": {
+    "ADDRESS": "0x6D812C6e79C5b506712F586769d4e950623BE28a"
+  },
+  "RAHAT_ADMIN_PRIVATE_KEY": "0xdbc4c4bd941a2d322efdbf44f8022449046888c5c4aa2ce5cfa3c126ff931701",
+  "DEPLOYER_PRIVATE_KEY": "0xdbc4c4bd941a2d322efdbf44f8022449046888c5c4aa2ce5cfa3c126ff931701"
+}

@@ -1,0 +1,48 @@
+{
+  "CONTRACTS": {
+    "TriggerManager": {
+      "address": "0x6022DB97d0Db74aa22BDd34695a7f6e6e7073c1e",
+      "startBlock": 13583590
+    },
+    "RahatDonor": {
+      "address": "0xCb3e1bABe416bd6031bF21FbB91c82b3aC4d1Cb2",
+      "startBlock": 13583594
+    },
+    "RahatToken": {
+      "address": "0x4b1f9163c226b71e5f9daB5f3489fDB862Bc86Ec",
+      "startBlock": 13583598
+    },
+    "AAProject": {
+      "address": "0xb75170Cd37e4edd467b6532E391c392C3D1F8004",
+      "startBlock": 13583602
+    }
+  },
+  "RahatToken": {
+    "contractAddress": "0x4b1f9163c226b71e5f9daB5f3489fDB862Bc86Ec",
+    "name": "RHT Coin",
+    "symbol": "RHT",
+    "description": "RHT Coin",
+    "decimals": 0,
+    "initialSupply": "100000",
+    "fromBlock": 13583598,
+    "transactionHash": "0x0694c3b78ed1859106f77d996b9bb7a7e7c052159982137821602bff4ebcd370",
+    "type": "CREATED"
+  },
+  "BLOCKCHAIN": {
+    "rpcUrl": "https://base-sepolia.g.alchemy.com/v2/bnfGi0PVbNMijQJFjFng2De86z-QvOMR",
+    "chainName": "base-sepolia",
+    "nativeCurrency": {
+      "name": "ETH",
+      "symbol": "ETH"
+    }
+  },
+  "SUBGRAPH_URL": {
+    "URL": "https://api.studio.thegraph.com/query/72688/aa-prod-barbardiya-base/version/latest"
+  },
+  "projectUUID": "0faccd68-aa5c-44e2-9d1f-1ce40a3999f6",
+  "ADMIN": {
+    "ADDRESS": "0x6D812C6e79C5b506712F586769d4e950623BE28a"
+  },
+  "RAHAT_ADMIN_PRIVATE_KEY": "0xdbc4c4bd941a2d322efdbf44f8022449046888c5c4aa2ce5cfa3c126ff931701",
+  "DEPLOYER_PRIVATE_KEY": "0xdbc4c4bd941a2d322efdbf44f8022449046888c5c4aa2ce5cfa3c126ff931701"
+}
