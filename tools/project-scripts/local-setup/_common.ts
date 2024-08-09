@@ -1,38 +1,29 @@
 import { Contract, ContractFactory, JsonRpcProvider, ethers } from 'ethers';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 
-import { Config } from './types/config';
-import { ContractArtifacts, DeployedContractsData } from './types/contract';
+import { Config } from '../types/config';
+import { ContractArtifacts, DeployedContractsData } from '../types/contract';
 
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const privateKeys = {
-  deployer: process.env.DEPLOYER_PRIVATE_KEY,
-  admin: process.env.RAHAT_ADMIN_PRIVATE_KEY,
-};
-
 export class ContractLib {
   private provider: JsonRpcProvider;
   private networkSettings: Config['blockchain'];
   public deployedContracts: DeployedContractsData;
-  public deployerAddress: any;
-  public adminAddress: any;
 
   constructor() {
-    const network = process.env.NETWORK_PROVIDER || 'http://127.0.0.1:8888';
+    const network = 'http://127.0.0.1:8888';
     this.networkSettings = {
       rpcUrl: network,
-      chainName: process.env.CHAIN_NAME || 'matic',
-      chainId: Number(process.env.CHAIN_ID) || 8888,
+      chainName: 'localhost',
+      chainId: 8888,
       blockExplorerUrls: [
-        process.env.BLOCK_EXPLORER_URL ||
-        'https://explorer-mumbai.maticvigil.com/',
+        'http://local-explorer.com/',
       ],
     };
     this.provider = new JsonRpcProvider(network);
-    this.deployerAddress = privateKeys.deployer;
     this.deployedContracts = {};
   }
 
@@ -55,35 +46,35 @@ export class ContractLib {
 
   public getContractArtifacts(contractName: string): ContractArtifacts {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const contract = require(`./contracts/${contractName}.json`);
+    const contract = require(`../contracts/${contractName}.json`);
     return contract;
   }
 
   public async deployContract(
     contractName: string,
     args: any[],
-    depolyedContractName: string
+    deployerKey: string
   ) {
-    const signer = new ethers.Wallet(privateKeys.deployer || '', this.provider);
+    const signer = new ethers.Wallet(deployerKey || '', this.provider);
 
     const { abi, bytecode } = this.getContractArtifacts(contractName);
     const factory = new ContractFactory(abi, bytecode, signer);
     const contract = await factory.deploy(...args);
     const address = await contract.getAddress();
-    const t = await contract.waitForDeployment();
-    await this.delay(500);
+    const txBlock = await contract.deploymentTransaction()?.getBlock();
+    await this.delay(2000);
 
     const data = {
       contractName,
       address,
       contract: new ethers.Contract(address, abi, this.provider),
       abi,
-      startBlock: contract.deploymentTransaction()?.blockNumber || 1,
+      startBlock: txBlock?.number || 1,
     };
 
 
     return {
-      blockNumber: contract.deploymentTransaction()?.blockNumber || 1,
+      blockNumber: txBlock?.number || 1,
       contract: new ethers.Contract(address, abi, this.provider),
     };
   }
@@ -100,11 +91,10 @@ export class ContractLib {
     contractName: string,
     methodName: string,
     args: any[],
-    deployedContractName: string,
-    contractAddressFile: string,
+    contractAddress: string,
     signer?: ethers.Signer,
   ) {
-    const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
+    //const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
     const abi = this.getContractArtifacts(contractName).abi;
     // const contractData = this.deployedContracts[contractName];
     if (!contractAddress) {
@@ -130,9 +120,11 @@ export class ContractLib {
   }
 
   public getDeployedAddress(contractAddressFile: string, contractName: string) {
-    const fileData = readFileSync(`${__dirname}/${contractAddressFile}.json`, 'utf8');
+    const fileData = readFileSync(`${__dirname}/deployments/${contractAddressFile}.json`, 'utf8');
 
     const data = JSON.parse(fileData);
+    console.log({ data })
+    console.log({ contractName })
     return data[contractName].address;
   }
 
@@ -167,16 +159,34 @@ export class ContractLib {
     return contractDetails;
   }
 
+  public async writeToDeploymentFile(fileName: string, newData: any) {
+    const dirPath = `${__dirname}/deployments`;
+    const filePath = `${dirPath}/${fileName}.json`;
+
+    // Ensure the directory exists
+    if (!existsSync(dirPath)) {
+      mkdirSync(dirPath);
+    }
+
+    let fileData = {};
+    if (existsSync(filePath)) {
+      // Read and parse the existing file if it exists
+      const existingData = readFileSync(filePath, { encoding: 'utf8' });
+      if (existingData) fileData = JSON.parse(existingData);
+    }
+    fileData = { ...fileData, ...newData };
+    console.log({ fileData })
+    writeFileSync(filePath, JSON.stringify(fileData, null, 2));
+  }
+
   public async getInterface(contractName: string) {
     const abi = this.getContractArtifacts(contractName).abi;
     const iface = new ethers.Interface(abi);
     return iface;
   }
 
-  public async getContracts(contractName: string, contractAddressFile: string, deployedContractName: string, signer?: ethers.Signer) {
-    const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
+  public async getContracts(contractName: string, contractAddress: string, privateKey: string) {
     const abi = this.getContractArtifacts(contractName).abi;
-    const privateKey = process.env.RAHAT_ADMIN_PRIVATE_KEY || '';
 
     const wallet = new ethers.Wallet(privateKey, this.provider);
 

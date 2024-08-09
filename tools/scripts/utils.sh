@@ -13,9 +13,9 @@ create_env() {
 }
 
 setup() {
-    pnpm seed:aa $current_dir
     pnpm migrate
-    pnpm seed:project
+    pnpm seed:aa $current_dir
+    pnpm seed:contract
     pnpm seed:networks $current_dir
     pnpm seed:all
 }

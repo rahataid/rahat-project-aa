@@ -30,6 +30,15 @@ export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
+
+  PROJECT: {
+    SETUP: 'rahat.jobs.project.setup',
+    CREATE: 'rahat.jobs.project.create',
+    LIST: 'rahat.jobs.project.list',
+    GET: 'rahat.jobs.project.get',
+    UPDATE: 'rahat.jobs.project.update',
+    UPDATE_ADMIN: 'rahat.jobs.project.add_admin',
+  },
   BENEFICIARY: {
     CREATE: 'rahat.jobs.beneficiary.create',
     LIST: 'rahat.jobs.beneficiary.list',
