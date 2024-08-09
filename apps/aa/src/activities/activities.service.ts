@@ -16,7 +16,7 @@ import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { ActivitiesStatus } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
-import { UUID } from 'crypto';
+import { randomUUID, UUID } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
 import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
@@ -35,7 +35,7 @@ export class ActivitiesService {
     private readonly stakeholdersService: StakeholdersService,
     private readonly beneficiaryService: BeneficiaryService,
     private eventEmitter: EventEmitter2,
-    @Inject("COMMS_CLIENT")
+    @Inject('COMMS_CLIENT')
     private commsClient: CommsClient
   ) {
     this.communicationService = new CommunicationService({
@@ -64,34 +64,16 @@ export class ActivitiesService {
       const createActivityCommunicationPayload = [];
       const createActivityPayoutPayload = [];
       const docs = activityDocuments || [];
-      let campaignId: number;
 
       if (activityCommunication?.length) {
         for (const comms of activityCommunication) {
-          switch (comms.groupType) {
-            case 'STAKEHOLDERS':
-              campaignId = await this.processStakeholdersCommunication(
-                comms,
-                title
-              );
-              createActivityCommunicationPayload.push({
-                ...comms,
-                campaignId,
-              });
-              break;
-            case 'BENEFICIARY':
-              campaignId = await this.processBeneficiaryCommunication(
-                comms,
-                title
-              );
-              createActivityCommunicationPayload.push({
-                ...comms,
-                campaignId,
-              });
-              break;
-            default:
-              break;
-          }
+          const communicationId = randomUUID()
+
+          createActivityCommunicationPayload.push({
+            ...comms,
+            communicationId,
+          });
+
         }
       }
 
@@ -109,7 +91,9 @@ export class ActivitiesService {
           phase: {
             connect: { uuid: phaseId },
           },
-          activityCommunication: createActivityCommunicationPayload,
+          activityCommunication: JSON.parse(
+            JSON.stringify(createActivityCommunicationPayload)
+          ),
           activityPayout: createActivityPayoutPayload,
           activityDocuments: JSON.parse(JSON.stringify(docs)),
         },
@@ -311,67 +295,60 @@ export class ActivitiesService {
   }
 
   async getOne(payload: GetOneActivity) {
-    try {
-      const { uuid } = payload;
-      const { activityCommunication: aComm, ...activityData } =
-        await this.prisma.activities.findUnique({
-          where: {
-            uuid: uuid,
-          },
-          include: {
-            category: true,
-            phase: true,
-          },
-        });
+    const { uuid } = payload;
+    const { activityCommunication: aComm, ...activityData } =
+      await this.prisma.activities.findUnique({
+        where: {
+          uuid: uuid,
+        },
+        include: {
+          category: true,
+          phase: true,
+        },
+      });
 
-      const activityCommunication = [];
-      const activityPayout = [];
+    const activityCommunication = [];
+    const activityPayout = [];
 
-      if (Array.isArray(aComm) && aComm.length) {
-        for (const comm of aComm) {
-          const communication = JSON.parse(
-            JSON.stringify(comm)
-          ) as ActivityCommunicationData & { campaignId: number };
-          let campaignData = null;
-          try {
-            const { data } =
-              await this.communicationService.communication.getCampaign(
-                communication.campaignId
-              );
-            campaignData = data;
-          } catch (err) {
-            this.logger.error('Error fetching campagin details.');
-          }
-          let group: any;
-          let groupName: string;
+    if (Array.isArray(aComm) && aComm.length) {
+      for (const comm of aComm) {
+        const communication = JSON.parse(
+          JSON.stringify(comm)
+        ) as ActivityCommunicationData & { transportId: string };
+        const transport = await this.commsClient.transport.get(
+          communication.transportId
+        );
+        const transportName = transport.data.name;
 
-          switch (communication.groupType) {
-            case 'STAKEHOLDERS':
-              group = await this.prisma.stakeholdersGroups.findUnique({
-                where: {
-                  uuid: communication.groupId,
-                },
-              });
-              groupName = group.name;
-              break;
-            case 'BENEFICIARY':
-              group = await this.prisma.beneficiaryGroups.findUnique({
-                where: {
-                  uuid: communication.groupId,
-                },
-              });
-              groupName = group.name;
-              break;
-            default:
-              break;
-          }
+        let group: any;
+        let groupName: string;
 
-          activityCommunication.push({
-            ...communication,
-            groupName: groupName,
-            campaignData: campaignData,
-          });
+        switch (communication.groupType) {
+          case 'STAKEHOLDERS':
+            group = await this.prisma.stakeholdersGroups.findUnique({
+              where: {
+                uuid: communication.groupId,
+              },
+            });
+            groupName = group.name;
+            break;
+          case 'BENEFICIARY':
+            group = await this.prisma.beneficiaryGroups.findUnique({
+              where: {
+                uuid: communication.groupId,
+              },
+            });
+            groupName = group.name;
+            break;
+          default:
+            break;
         }
+
+        activityCommunication.push({
+          ...communication,
+          groupName: groupName,
+          transportName: transportName,
+        });
       }
 
       return {
@@ -379,8 +356,6 @@ export class ActivitiesService {
         activityCommunication,
         activityPayout,
       };
-    } catch (err) {
-      console.log(err);
     }
   }
 
