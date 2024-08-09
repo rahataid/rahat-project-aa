@@ -1,25 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ClientProxy } from "@nestjs/microservices";
 import { lastValueFrom } from "rxjs";
-import { getClient, ApiClient, SessionClient, BroadcastClient, BroadcastLogClient, TransportClient } from "@rumsan/connect/src/clients"
-import { AxiosHeaderValue } from "axios";
+import { getClient } from "@rumsan/connect/src/clients"
 
 const GET_COMMUNICATION_SETTINGS = "appJobs.communication.getSettings"
 
-export type CommsClient = {
-    apiClient: ApiClient;
-    setAppId: (appId: string) => string;
-    setAccessToken: (token: string) => string;
-    setHeaders: (headers: {
-        [key: string]: AxiosHeaderValue;
-    }) => {
-        [key: string]: AxiosHeaderValue;
-    };
-    session: SessionClient;
-    broadcast: BroadcastClient;
-    broadcastLog: BroadcastLogClient;
-    transport: TransportClient;
-}
+export type CommsClient = ReturnType<typeof getClient>
 
 @Injectable()
 export class CommsService {
