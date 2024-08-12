@@ -21,7 +21,11 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
 import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 import { CommsClient } from '../comms/comms.service';
-import { SessionStatus, TriggerType } from '@rumsan/connect/src/types';
+import {
+  SessionStatus,
+  TriggerType,
+  ValidationAddress,
+} from '@rumsan/connect/src/types';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -456,10 +460,18 @@ export class ActivitiesService {
     if (!Object.keys(selectedCommunication).length)
       throw new RpcException('Selected communication not found.');
 
+    const transportDetails = await this.commsClient.transport.get(
+      selectedCommunication.transportId
+    );
+
     const addresses = await this.getAddresses(
       selectedCommunication.groupType,
-      selectedCommunication.groupId
+      selectedCommunication.groupId,
+      transportDetails.data.validationAddress as ValidationAddress
     );
+
+    console.log(addresses);
+    return;
 
     const broadcast = await this.commsClient.broadcast.create({
       addresses: addresses,
@@ -496,7 +508,8 @@ export class ActivitiesService {
 
   async getAddresses(
     groupType: 'STAKEHOLDERS' | 'BENEFICIARY',
-    groupId: string
+    groupId: string,
+    validationAddress: ValidationAddress
   ) {
     const addresses = [];
     switch (groupType) {
@@ -510,12 +523,23 @@ export class ActivitiesService {
           },
         });
         if (!group) throw new RpcException('Stakeholders group not found.');
-        group.stakeholders.forEach((stakeholder) => {
-          if (stakeholder.email) {
-            addresses.push(stakeholder.email);
+        return group.stakeholders.map((stakeholder) => {
+          if (validationAddress === ValidationAddress.EMAIL) {
+            return stakeholder?.email || null;
+          } else if (
+            validationAddress === ValidationAddress.PHONE &&
+            stakeholder.phone
+          ) {
+            return stakeholder.phone.substring(+stakeholder.phone.length - 10);
+          } else if (validationAddress === ValidationAddress.ANY) {
+            if (stakeholder.phone) {
+              return stakeholder.phone
+                ? stakeholder.phone.substring(stakeholder.phone.length - 10)
+                : null;
+            }
           }
-        });
-        break;
+          return null
+        }).filter(Boolean);
       case 'BENEFICIARY':
         // todo
         break;
