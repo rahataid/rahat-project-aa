@@ -21,6 +21,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS } from '../constants';
 import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDifference';
 import { CommsClient } from '../comms/comms.service';
+import { SessionStatus, TriggerType } from '@rumsan/connect/src/types';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -67,13 +68,12 @@ export class ActivitiesService {
 
       if (activityCommunication?.length) {
         for (const comms of activityCommunication) {
-          const communicationId = randomUUID()
+          const communicationId = randomUUID();
 
           createActivityCommunicationPayload.push({
             ...comms,
             communicationId,
           });
-
         }
       }
 
@@ -314,10 +314,20 @@ export class ActivitiesService {
       for (const comm of aComm) {
         const communication = JSON.parse(
           JSON.stringify(comm)
-        ) as ActivityCommunicationData & { transportId: string };
+        ) as ActivityCommunicationData & {
+          transportId: string;
+          sessionId: string;
+        };
+
+        let sessionStatus = SessionStatus.NEW;
+        if (communication.sessionId) {
+          const s = await this.commsClient.session.get(communication.sessionId);
+          sessionStatus = s.data.status;
+        }
         const transport = await this.commsClient.transport.get(
           communication.transportId
         );
+
         const transportName = transport.data.name;
 
         let group: any;
@@ -348,15 +358,16 @@ export class ActivitiesService {
           ...communication,
           groupName: groupName,
           transportName: transportName,
+          sessionStatus,
         });
       }
-
-      return {
-        ...activityData,
-        activityCommunication,
-        activityPayout,
-      };
     }
+
+    return {
+      ...activityData,
+      activityCommunication,
+      activityPayout,
+    };
   }
 
   async getAll(payload: GetActivitiesDto) {
@@ -415,11 +426,103 @@ export class ActivitiesService {
     return deletedActivity;
   }
 
-  async triggerCommunication(campaignId: string) {
-    const cId = Number(campaignId);
-    const triggerResponse =
-      await this.communicationService.communication.triggerCampaign(cId);
-    return triggerResponse.data;
+  async triggerCommunication(payload: {
+    communicationId: string;
+    activityId: string;
+  }) {
+    const activity = await this.prisma.activities.findUnique({
+      where: {
+        uuid: payload.activityId,
+      },
+    });
+    if (!activity) throw new RpcException('Activity communication not found.');
+    const { activityCommunication } = activity;
+
+    const parsedCommunications = JSON.parse(
+      JSON.stringify(activityCommunication)
+    ) as Array<{
+      groupId: string;
+      message: string;
+      audioURL: Record<string, string>;
+      groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
+      transportId: string;
+      communicationId: string;
+    }>;
+
+    const selectedCommunication = parsedCommunications.find(
+      (c) => c?.communicationId === payload.communicationId
+    );
+
+    if (!Object.keys(selectedCommunication).length)
+      throw new RpcException('Selected communication not found.');
+
+    const addresses = await this.getAddresses(
+      selectedCommunication.groupType,
+      selectedCommunication.groupId
+    );
+
+    const broadcast = await this.commsClient.broadcast.create({
+      addresses: addresses,
+      maxAttempts: 1,
+      message: {
+        content: selectedCommunication.message,
+      },
+      options: {},
+      transport: selectedCommunication.transportId,
+      trigger: TriggerType.IMMEDIATE,
+    });
+
+    const updatedCommunicationsData = parsedCommunications.map((c) => {
+      if (c?.communicationId === payload.communicationId) {
+        return {
+          ...c,
+          sessionId: broadcast.data.cuid,
+        };
+      }
+      return c;
+    });
+
+    await this.prisma.activities.update({
+      where: {
+        uuid: payload.activityId,
+      },
+      data: {
+        activityCommunication: updatedCommunicationsData,
+      },
+    });
+
+    return broadcast.data;
+  }
+
+  async getAddresses(
+    groupType: 'STAKEHOLDERS' | 'BENEFICIARY',
+    groupId: string
+  ) {
+    const addresses = [];
+    switch (groupType) {
+      case 'STAKEHOLDERS':
+        const group = await this.prisma.stakeholdersGroups.findUnique({
+          where: {
+            uuid: groupId,
+          },
+          include: {
+            stakeholders: true,
+          },
+        });
+        if (!group) throw new RpcException('Stakeholders group not found.');
+        group.stakeholders.forEach((stakeholder) => {
+          if (stakeholder.email) {
+            addresses.push(stakeholder.email);
+          }
+        });
+        break;
+      case 'BENEFICIARY':
+        // todo
+        break;
+      default:
+        break;
+    }
+    return addresses;
   }
 
   async updateStatus(payload: {
