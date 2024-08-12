@@ -12,7 +12,11 @@ export class BeneficiaryStatService {
   ) {}
 
   async totalBeneficiaries() {
-    return { count: await this.prisma.beneficiary.count() };
+    return {
+      count: await this.prisma.beneficiary.count({
+        where: { deletedAt: null },
+      }),
+    };
   }
 
   async calculateGenderStats() {
