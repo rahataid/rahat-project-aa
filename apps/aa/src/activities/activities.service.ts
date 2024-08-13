@@ -464,16 +464,15 @@ export class ActivitiesService {
       selectedCommunication.transportId
     );
 
+    if(!transportDetails.data) throw new RpcException('Selected transport not found.')
+
     const addresses = await this.getAddresses(
       selectedCommunication.groupType,
       selectedCommunication.groupId,
       transportDetails.data.validationAddress as ValidationAddress
     );
 
-    console.log(addresses);
-    return;
-
-    const broadcast = await this.commsClient.broadcast.create({
+    const sessionData = await this.commsClient.broadcast.create({
       addresses: addresses,
       maxAttempts: 1,
       message: {
@@ -488,7 +487,7 @@ export class ActivitiesService {
       if (c?.communicationId === payload.communicationId) {
         return {
           ...c,
-          sessionId: broadcast.data.cuid,
+          sessionId: sessionData.data.cuid,
         };
       }
       return c;
@@ -503,7 +502,7 @@ export class ActivitiesService {
       },
     });
 
-    return broadcast.data;
+    return sessionData.data;
   }
 
   async getAddresses(
@@ -511,7 +510,6 @@ export class ActivitiesService {
     groupId: string,
     validationAddress: ValidationAddress
   ) {
-    const addresses = [];
     switch (groupType) {
       case 'STAKEHOLDERS':
         const group = await this.prisma.stakeholdersGroups.findUnique({
@@ -534,19 +532,38 @@ export class ActivitiesService {
           } else if (validationAddress === ValidationAddress.ANY) {
             if (stakeholder.phone) {
               return stakeholder.phone
-                ? stakeholder.phone.substring(stakeholder.phone.length - 10)
+                ? stakeholder.phone.substring(+stakeholder.phone.length - 10)
                 : null;
             }
           }
           return null
         }).filter(Boolean);
       case 'BENEFICIARY':
-        // todo
-        break;
+        const beneficiaryGroup = await this.beneficiaryService.getOneGroup(
+          groupId as UUID
+        );
+        if(!beneficiaryGroup) throw new RpcException('Beneficiary group not found.');
+        const groupedBeneficiaries = beneficiaryGroup.groupedBeneficiaries;
+        return groupedBeneficiaries?.map((beneficiary) => {
+          if (validationAddress === ValidationAddress.EMAIL) {
+            return beneficiary.Beneficiary?.pii?.email || null;
+          } else if (
+            validationAddress === ValidationAddress.PHONE &&
+            beneficiary.Beneficiary?.pii?.phone
+          ) {
+            return beneficiary.Beneficiary?.pii?.phone.substring(+beneficiary.Beneficiary?.pii?.phone?.length - 10);
+          } else if (validationAddress === ValidationAddress.ANY) {
+            if (beneficiary.Beneficiary?.pii?.phone) {
+              return beneficiary.Beneficiary?.pii?.phone
+                ? beneficiary.Beneficiary?.pii?.phone.substring(+beneficiary.Beneficiary?.pii?.phone.length - 10)
+                : null;
+            }
+          }
+          return null
+        }).filter(Boolean);
       default:
-        break;
+        return []
     }
-    return addresses;
   }
 
   async updateStatus(payload: {
