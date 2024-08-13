@@ -8,9 +8,10 @@ import { PrismaService } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
 import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
+import { ActivitiesModule } from '../activities/activites.module';
 
 @Module({
-  imports: [DataSourceModule, PhasesModule, BeneficiaryModule],
+  imports: [DataSourceModule, PhasesModule, BeneficiaryModule, ActivitiesModule],
   providers: [
     ScheduleProcessor,
     TriggerProcessor,
