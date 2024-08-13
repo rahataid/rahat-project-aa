@@ -649,82 +649,18 @@ export class ActivitiesService {
 
     if (activityCommunication?.length) {
       for (const comms of activityCommunication) {
-        let campaignId: number;
-        switch (comms.groupType) {
-          case 'STAKEHOLDERS':
-            if (comms.campaignId) {
-              const campaginDetails =
-                await this.communicationService.communication.getCampaign(
-                  Number(comms.campaignId)
-                );
-              const audienceIds = campaginDetails.data?.audiences?.map(
-                (d) => d.id
-              );
-
-              await this.communicationService.communication.updateCampaign(
-                comms.campaignId,
-                {
-                  audienceIds: audienceIds,
-                  details: JSON.parse(
-                    JSON.stringify({ message: comms.message })
-                  ),
-                  name: title || activity.title,
-                }
-              );
-
-              updateActivityCommunicationPayload.push(comms);
-              break;
-            }
-            campaignId = await this.processStakeholdersCommunication(
-              comms,
-              title || activity.title
-            );
-
-            updateActivityCommunicationPayload.push({
-              ...comms,
-              campaignId,
-            });
-            break;
-          case 'BENEFICIARY':
-            if (comms.campaignId) {
-              const campaginDetails =
-                await this.communicationService.communication.getCampaign(
-                  Number(comms.campaignId)
-                );
-              const audienceIds = campaginDetails.data?.audiences?.map(
-                (d) => d.id
-              );
-
-              await this.communicationService.communication.updateCampaign(
-                comms.campaignId,
-                {
-                  audienceIds: audienceIds,
-                  details: JSON.parse(
-                    JSON.stringify({ message: comms.message })
-                  ),
-                  name: title || activity.title,
-                }
-              );
-
-              updateActivityCommunicationPayload.push(comms);
-              break;
-            }
-            campaignId = await this.processBeneficiaryCommunication(
-              comms,
-              title || activity.title
-            );
-
-            updateActivityCommunicationPayload.push({
-              ...comms,
-              campaignId,
-            });
-            break;
-          default:
-            break;
+        if(comms?.communicationId){
+          updateActivityCommunicationPayload.push(comms)
+        }else{
+          const communicationId = randomUUID();
+          updateActivityCommunicationPayload.push({
+            ...comms,
+            communicationId
+          })
         }
+        
       }
     }
-
     return await this.prisma.activities.update({
       where: {
         uuid: uuid,
