@@ -206,8 +206,24 @@ export class BeneficiaryService {
   }
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
-    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved, user } =
-      payload;
+    const {
+      beneficiaryGroupId,
+      numberOfTokens,
+      title,
+      totalTokensReserved,
+      user,
+    } = payload;
+
+    if (beneficiaryGroupId) {
+      const isAlreadyReserved =
+        await this.prisma.beneficiaryGroupTokens.findUnique({
+          where: { groupId: beneficiaryGroupId },
+        });
+
+      if (isAlreadyReserved) {
+        throw new RpcException('Token already reserved.');
+      }
+    }
 
     return this.prisma.$transaction(async () => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
@@ -250,7 +266,7 @@ export class BeneficiaryService {
           title,
           groupId: beneficiaryGroupId,
           numberOfTokens: totalTokensReserved,
-          createdBy: user?.name
+          createdBy: user?.name,
         },
       });
 
