@@ -85,6 +85,7 @@ export const JOBS = {
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
     GET_ALL: 'aa.jobs.activities.getAll',
+    GET_HAVING_COMMS: 'aa.jobs.activities.getHavingComms',
     ADD: 'aa.jobs.activities.add',
     REMOVE: 'aa.jobs.activities.remove',
     UPDATE: 'aa.jobs.activities.update',

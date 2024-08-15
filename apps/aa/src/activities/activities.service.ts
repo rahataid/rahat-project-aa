@@ -227,6 +227,28 @@ export class ActivitiesService {
     });
   }
 
+  async getHavingComms(payload: GetActivitiesDto) {
+    const { page, perPage } = payload;
+
+    const query = {
+      where: {
+        isDeleted: false,
+        activityCommunication: { not: [] },
+      },
+      include: {
+        phase: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    };
+
+    return paginate(this.prisma.activities, query, {
+      page,
+      perPage,
+    });
+  }
+
   async remove(payload: RemoveActivityData) {
     const deletedActivity = await this.prisma.activities.update({
       where: {
@@ -276,7 +298,8 @@ export class ActivitiesService {
       selectedCommunication.transportId
     );
 
-    if(!transportDetails.data) throw new RpcException('Selected transport not found.')
+    if (!transportDetails.data)
+      throw new RpcException('Selected transport not found.');
 
     const addresses = await this.getAddresses(
       selectedCommunication.groupType,
@@ -333,48 +356,59 @@ export class ActivitiesService {
           },
         });
         if (!group) throw new RpcException('Stakeholders group not found.');
-        return group.stakeholders.map((stakeholder) => {
-          if (validationAddress === ValidationAddress.EMAIL) {
-            return stakeholder?.email || null;
-          } else if (
-            validationAddress === ValidationAddress.PHONE &&
-            stakeholder.phone
-          ) {
-            return stakeholder.phone.substring(+stakeholder.phone.length - 10);
-          } else if (validationAddress === ValidationAddress.ANY) {
-            if (stakeholder.phone) {
-              return stakeholder.phone
-                ? stakeholder.phone.substring(+stakeholder.phone.length - 10)
-                : null;
+        return group.stakeholders
+          .map((stakeholder) => {
+            if (validationAddress === ValidationAddress.EMAIL) {
+              return stakeholder?.email || null;
+            } else if (
+              validationAddress === ValidationAddress.PHONE &&
+              stakeholder.phone
+            ) {
+              return stakeholder.phone.substring(
+                +stakeholder.phone.length - 10
+              );
+            } else if (validationAddress === ValidationAddress.ANY) {
+              if (stakeholder.phone) {
+                return stakeholder.phone
+                  ? stakeholder.phone.substring(+stakeholder.phone.length - 10)
+                  : null;
+              }
             }
-          }
-          return null
-        }).filter(Boolean);
+            return null;
+          })
+          .filter(Boolean);
       case 'BENEFICIARY':
         const beneficiaryGroup = await this.beneficiaryService.getOneGroup(
           groupId as UUID
         );
-        if(!beneficiaryGroup) throw new RpcException('Beneficiary group not found.');
+        if (!beneficiaryGroup)
+          throw new RpcException('Beneficiary group not found.');
         const groupedBeneficiaries = beneficiaryGroup.groupedBeneficiaries;
-        return groupedBeneficiaries?.map((beneficiary) => {
-          if (validationAddress === ValidationAddress.EMAIL) {
-            return beneficiary.Beneficiary?.pii?.email || null;
-          } else if (
-            validationAddress === ValidationAddress.PHONE &&
-            beneficiary.Beneficiary?.pii?.phone
-          ) {
-            return beneficiary.Beneficiary?.pii?.phone.substring(+beneficiary.Beneficiary?.pii?.phone?.length - 10);
-          } else if (validationAddress === ValidationAddress.ANY) {
-            if (beneficiary.Beneficiary?.pii?.phone) {
-              return beneficiary.Beneficiary?.pii?.phone
-                ? beneficiary.Beneficiary?.pii?.phone.substring(+beneficiary.Beneficiary?.pii?.phone.length - 10)
-                : null;
+        return groupedBeneficiaries
+          ?.map((beneficiary) => {
+            if (validationAddress === ValidationAddress.EMAIL) {
+              return beneficiary.Beneficiary?.pii?.email || null;
+            } else if (
+              validationAddress === ValidationAddress.PHONE &&
+              beneficiary.Beneficiary?.pii?.phone
+            ) {
+              return beneficiary.Beneficiary?.pii?.phone.substring(
+                +beneficiary.Beneficiary?.pii?.phone?.length - 10
+              );
+            } else if (validationAddress === ValidationAddress.ANY) {
+              if (beneficiary.Beneficiary?.pii?.phone) {
+                return beneficiary.Beneficiary?.pii?.phone
+                  ? beneficiary.Beneficiary?.pii?.phone.substring(
+                      +beneficiary.Beneficiary?.pii?.phone.length - 10
+                    )
+                  : null;
+              }
             }
-          }
-          return null
-        }).filter(Boolean);
+            return null;
+          })
+          .filter(Boolean);
       default:
-        return []
+        return [];
     }
   }
 
@@ -461,16 +495,15 @@ export class ActivitiesService {
 
     if (activityCommunication?.length) {
       for (const comms of activityCommunication) {
-        if(comms?.communicationId){
-          updateActivityCommunicationPayload.push(comms)
-        }else{
+        if (comms?.communicationId) {
+          updateActivityCommunicationPayload.push(comms);
+        } else {
           const communicationId = randomUUID();
           updateActivityCommunicationPayload.push({
             ...comms,
-            communicationId
-          })
+            communicationId,
+          });
         }
-        
       }
     }
     return await this.prisma.activities.update({
