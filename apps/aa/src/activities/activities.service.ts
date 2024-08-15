@@ -175,6 +175,9 @@ export class ActivitiesService {
           groupName: groupName,
           transportName: transportName,
           sessionStatus,
+          ...(communication.sessionId && {
+            sessionId: communication.sessionId,
+          }),
         });
       }
     }
