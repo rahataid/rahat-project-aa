@@ -1,0 +1,51 @@
+{
+  "name": "aa",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/aa/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "dependsOn": ["mainBuild"],
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cp -r prisma/ dist/apps/aa/prisma && cp -r tools dist/apps/aa/tools && cp dhm-*.json dist/apps/aa && node apps/aa/src/modify-package.js"
+        ]
+      }
+    },
+    "mainBuild": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "target": "node",
+        "compiler": "tsc",
+        "generatePackageJson": true,
+        "outputPath": "dist/apps/aa",
+        "main": "apps/aa/src/main.ts",
+        "tsConfig": "apps/aa/tsconfig.app.json",
+        "assets": [],
+        "webpackConfig": "apps/aa/webpack.config.js"
+      },
+      "configurations": {
+        "devaaopment": {},
+        "production": {}
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "devaaopment",
+      "options": {
+        "buildTarget": "aa:build"
+      },
+      "configurations": {
+        "devaaopment": {
+          "buildTarget": "aa:build:devaaopment"
+        },
+        "production": {
+          "buildTarget": "aa:build:production"
+        }
+      }
+    }
+  },
+  "tags": []
+}

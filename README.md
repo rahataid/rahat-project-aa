@@ -18,3 +18,8 @@ Step4: Copy paste project specific schema to schema.prisma and run migration
 ```bash
 npx prisma migrate dev
 ```
+
+Step4: Run project
+```bash
+pnpm serve:aa
+```

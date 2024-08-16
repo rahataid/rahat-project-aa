@@ -1,0 +1,117 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AAProject
+    network: base-sepolia
+    source:
+      abi: AAProject
+      address: "0x0E0e2Df15944c6c6f72981C365907f73782235eF"
+      startBlock: 13401361
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - BenTokensAssigned
+        - BeneficiaryAdded
+        - BeneficiaryRemoved
+        - ClaimAssigned
+        - TokenBudgetDecrease
+        - TokenBudgetIncrease
+        - TokenReceived
+        - TokenRegistered
+        - TokenTransfer
+        - VendorUpdated
+      abis:
+        - name: AAProject
+          file: ./abis/AAProject.json
+      eventHandlers:
+        - event: BenTokensAssigned(indexed address,indexed uint256)
+          handler: handleBenTokensAssigned
+        - event: BeneficiaryAdded(indexed address)
+          handler: handleBeneficiaryAdded
+        - event: BeneficiaryRemoved(indexed address)
+          handler: handleBeneficiaryRemoved
+        - event: ClaimAssigned(indexed address,indexed address,indexed address)
+          handler: handleClaimAssigned
+        - event: TokenBudgetDecrease(indexed address,uint256)
+          handler: handleTokenBudgetDecrease
+        - event: TokenBudgetIncrease(indexed address,uint256)
+          handler: handleTokenBudgetIncrease
+        - event: TokenReceived(indexed address,indexed address,uint256)
+          handler: handleTokenReceived
+        - event: TokenRegistered(indexed address)
+          handler: handleTokenRegistered
+        - event: TokenTransfer(indexed address,indexed address,uint256)
+          handler: handleTokenTransfer
+        - event: VendorUpdated(indexed address,bool)
+          handler: handleVendorUpdated
+      file: ./src/aa-project.ts
+  - kind: ethereum
+    name: RahatToken
+    network: base-sepolia
+    source:
+      abi: RahatToken
+      address: "0x702968C16A0496e41272e723e4Fde16807472d32"
+      startBlock: 13401356
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Approval
+        - OwnerAdded
+        - OwnerRemoved
+        - Transfer
+        - UpdatedDescription
+        - UpdatedTokenParams
+      abis:
+        - name: RahatToken
+          file: ./abis/RahatToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: OwnerAdded(indexed address)
+          handler: handleOwnerAdded
+        - event: OwnerRemoved(indexed address)
+          handler: handleOwnerRemoved
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: UpdatedDescription(address,string)
+          handler: handleUpdatedDescription
+        - event: UpdatedTokenParams(string,uint256)
+          handler: handleUpdatedTokenParams
+      file: ./src/rahat-token.ts
+  - kind: ethereum
+    name: RahatDonor
+    network: base-sepolia
+    source:
+      abi: RahatDonor
+      address: "0xB8949420C77471471341666c64E07Fd8FDdEddEd"
+      startBlock: 13401352
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RahatDonorOwnerAdded
+        - RahatDonorOwnerRemoved
+        - TokenCreated
+        - TokenMintedAndApproved
+      abis:
+        - name: RahatDonor
+          file: ./abis/RahatDonor.json
+      eventHandlers:
+        - event: OwnerAdded(indexed address)
+          handler: handleOwnerAdded
+        - event: OwnerRemoved(indexed address)
+          handler: handleOwnerRemoved
+        - event: TokenCreated(indexed address)
+          handler: handleTokenCreated
+        - event: TokenMintedAndApproved(indexed address,indexed address,uint256)
+          handler: handleTokenMintedAndApproved
+      file: ./src/rahat-donor.ts

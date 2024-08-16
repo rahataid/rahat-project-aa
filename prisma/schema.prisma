@@ -1,0 +1,296 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Phase {
+  PREPAREDNESS
+  READINESS
+  ACTIVATION
+}
+
+enum DataSource {
+  DHM
+  GLOFAS
+  MANUAL
+}
+
+enum ActivitiesStatus {
+  NOT_STARTED
+  WORK_IN_PROGRESS
+  COMPLETED
+  DELAYED
+}
+
+enum ActivityTypes {
+  GENERAL
+  AUTOMATED
+}
+
+enum SettingDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  OBJECT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+// ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
+
+model Beneficiary {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @db.Uuid()
+
+  walletAddress String?
+  gender        Gender  @default(UNKNOWN)
+  extras        Json?
+  benTokens     Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_beneficiaries")
+}
+
+model BeneficiaryGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  tokensReserved BeneficiaryGroupTokens?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_beneficiaries_groups")
+}
+
+model BeneficiaryGroupTokens {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  title          String
+  numberOfTokens Int    @default(0)
+
+  groupId          String            @unique
+  benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+
+  createdBy String?
+
+  @@map("tbl_beneficiaries_groups_tokens")
+}
+
+// ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
+
+// ++++++++++++++++++ START: @rumsan/settings +++++++++++++++++++++++++++
+model Setting {
+  name           String          @id @unique
+  value          Json
+  dataType       SettingDataType
+  requiredFields String[]
+  isReadOnly     Boolean         @default(false)
+  isPrivate      Boolean         @default(true)
+
+  @@map("tbl_settings")
+}
+
+// ++++++++++++++++++ END: @rumsan/settings +++++++++++++++++++++++++++
+
+model Stakeholders {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name         String
+  email        String?
+  phone        String? @unique 
+  designation  String
+  organization String
+  district     String
+  municipality String
+
+  stakeholdersGroups StakeholdersGroups[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders")
+}
+
+model StakeholdersGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  stakeholders Stakeholders[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders_groups")
+}
+
+model Phases {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name Phase @unique
+
+  activities Activities[]
+  triggers   Triggers[]
+
+  requiredMandatoryTriggers Int? @default(0)
+  requiredOptionalTriggers  Int? @default(0)
+
+  receivedMandatoryTriggers Int? @default(0)
+  receivedOptionalTriggers  Int? @default(0)
+
+  canRevert        Boolean @default(false)
+  canTriggerPayout Boolean @default(false)
+  isActive         Boolean @default(false)
+
+  activatedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_phases")
+}
+
+model ActivityCategories {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       String
+  activities Activities[]
+
+  isDeleted Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activity_categories")
+}
+
+model Activities {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  title          String
+  phase          Phases?             @relation(fields: [phaseId], references: [uuid])
+  phaseId        String
+  category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
+  categoryId     String
+  leadTime       String
+  responsibility String
+  source         String
+  description    String?
+  notes          String?
+
+  status ActivitiesStatus @default(NOT_STARTED)
+
+  isAutomated Boolean
+
+  activityDocuments     Json? @db.JsonB()
+  activityCommunication Json? @db.JsonB()
+  activityPayout        Json? @db.JsonB()
+
+  isDeleted Boolean @default(false)
+
+  completedBy String?
+  completedAt DateTime? 
+
+  differenceInTriggerAndActivityCompletion String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activities")
+}
+
+model Triggers {
+  id        Int    @id @default(autoincrement())
+  uuid      String @unique
+  repeatKey String @unique
+
+  title            String?
+  dataSource       DataSource
+  location         String?
+  repeatEvery      String?
+  triggerStatement Json?      @db.JsonB()
+
+  triggerDocuments Json?   @db.JsonB()
+  notes            String?
+
+  phase   Phases? @relation(fields: [phaseId], references: [uuid])
+  phaseId String?
+
+  isMandatory Boolean @default(false)
+  isTriggered Boolean @default(false)
+  isDeleted   Boolean @default(false)
+
+  triggeredBy String? 
+
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
+
+  @@map("tbl_triggers")
+}
+
+model SourcesData {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  source   String?
+  location String?
+  data     Json    @db.JsonB()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_sources_data")
+}
+
+model Stats {
+  name  String  @id @unique
+  data  Json
+  group String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stats")
+}
+
+model DailyMonitoring {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  dataEntryBy String
+  source      String?
+  location    String?
+  data        Json    @db.JsonB()
+
+  createdBy String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_daily_monitoring")
+}

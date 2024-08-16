@@ -4,6 +4,9 @@
 dist
 tmp
 /out-tsc
+config/
+/tools/project-scripts/local-setup/deployments
+.env.prod
 
 # dependencies
 node_modules
@@ -41,7 +44,9 @@ Thumbs.db
 .nx/cache
 
 .npmrc
-# ENV
 .env
+.env.bak
 .env.*
 !.env.example
+
+DB-Refresh
