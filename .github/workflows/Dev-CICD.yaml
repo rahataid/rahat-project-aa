@@ -27,19 +27,11 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-<<<<<<< HEAD
-          node-version: 18
-
-      - name: install dependencies and build apps
-        run: |
-          npm install -g pnpm only-allow
-=======
           node-version: 20.10.0
 
       - name: install dependencies and build apps
         run: |
           npm install -g pnpm@8.14.1 only-allow
->>>>>>> 5f873940024a75f608385a617b8b87eaa0b92e58
           pnpm install
           npx nx reset
           pnpm prisma:generate
