@@ -45,4 +45,8 @@ Thumbs.db
 
 .npmrc
 .env
+.env.*
+!.env.example
 .env.bak
+
+DB-Refresh

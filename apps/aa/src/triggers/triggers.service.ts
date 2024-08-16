@@ -25,7 +25,7 @@ export class TriggersService {
     private readonly phasesService: PhasesService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue
-  ) {}
+  ) { }
 
   // dev only
   async dev(payload: AddTriggerStatement) {
@@ -217,7 +217,7 @@ export class TriggersService {
       {
         jobId: uuid,
         attempts: 3,
-        removeOnComplete: false,
+        removeOnComplete: true,
         backoff: {
           type: 'exponential',
           delay: 1000,
@@ -225,6 +225,7 @@ export class TriggersService {
         repeat: {
           every: Number(payload.repeatEvery),
         },
+        removeOnFail: true,
       }
     );
 
