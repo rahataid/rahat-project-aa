@@ -48,3 +48,5 @@ Thumbs.db
 .env.bak
 .env.*
 !.env.example
+
+DB-Refresh
