@@ -8,7 +8,6 @@ import {
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { ProjectContants } from '@rahataid/sdk';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { EVENTS } from '../constants';
@@ -30,7 +29,7 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject(ProjectContants.ELClient) private readonly client: ClientProxy,
+    @Inject("RAHAT_CORE_PROJECT_CLIENT") private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
@@ -206,8 +205,24 @@ export class BeneficiaryService {
   }
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {
-    const { beneficiaryGroupId, numberOfTokens, title, totalTokensReserved, user } =
-      payload;
+    const {
+      beneficiaryGroupId,
+      numberOfTokens,
+      title,
+      totalTokensReserved,
+      user,
+    } = payload;
+
+    if (beneficiaryGroupId) {
+      const isAlreadyReserved =
+        await this.prisma.beneficiaryGroupTokens.findUnique({
+          where: { groupId: beneficiaryGroupId },
+        });
+
+      if (isAlreadyReserved) {
+        throw new RpcException('Token already reserved.');
+      }
+    }
 
     return this.prisma.$transaction(async () => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
@@ -250,7 +265,7 @@ export class BeneficiaryService {
           title,
           groupId: beneficiaryGroupId,
           numberOfTokens: totalTokensReserved,
-          createdBy: user?.name
+          createdBy: user?.name,
         },
       });
 

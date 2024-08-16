@@ -1,11 +1,11 @@
-name: Dev CI/CD
+name: Main CI/CD
 on:
   push:
     branches:
-      - "dev"
+      - 'main'
   pull_request:
     branches:
-      - "dev"
+      - 'main'
   workflow_dispatch:
 
 env:
@@ -54,4 +54,4 @@ jobs:
           context: .
           file: Dockerfile.aa
           push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-          tags: esatya/rahat-project-aa:dev
+          tags: esatya/rahat-project-aa:main
