@@ -90,6 +90,9 @@ export class StakeholdersService {
       include: {
         stakeholdersGroups: true,
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
     };
 
     return paginate(this.prisma.stakeholders, query, {
