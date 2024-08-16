@@ -47,9 +47,6 @@ importers:
       '@rahataid/contracts':
         specifier: ^0.0.1
         version: 0.0.1
-      '@rahataid/sdk':
-        specifier: 0.0.34
-        version: 0.0.34
       '@rumsan/communication':
         specifier: 0.0.17
         version: 0.0.17
@@ -1700,9 +1697,6 @@ packages:
 
   '@rahataid/contracts@0.0.1':
     resolution: {integrity: sha512-qHZVdLI2TU0CGPQXVG639KA+YMH2l3dIgTl+79PISPalF4PWAlWKcFovRBKt/ftR7sJ9XAjIJnSMDavUxDUNRg==, tarball: https://npm.pkg.github.com/download/@rahataid/contracts/0.0.1/d6893180bc14d753201ef4cd1e741e39faa43c32}
-
-  '@rahataid/sdk@0.0.34':
-    resolution: {integrity: sha512-9Wl0SXr/o5Zjaa99XUAcoEJNZr+ULoHsk1h5HvHr6LqDtndM5gjK+zL3hDp1Su49UfhtFjHeDv7niZ/YDnMApA==}
 
   '@rumsan/communication@0.0.17':
     resolution: {integrity: sha512-bqkJVzonn78LAaZlSwQ/WVuLEkS4DuPJRVA+z35LzWKImDS8jA1RzJMA6r7nP8LXsg+r0nJms6bj0L9L1Lm/jQ==, tarball: https://npm.pkg.github.com/download/@rumsan/communication/0.0.17/7ae8bd62a30349860de4ec5d38647add940e6cff}
@@ -8579,8 +8573,6 @@ snapshots:
       '@prisma/debug': 5.10.2
 
   '@rahataid/contracts@0.0.1': {}
-
-  '@rahataid/sdk@0.0.34': {}
 
   '@rumsan/communication@0.0.17': {}
 

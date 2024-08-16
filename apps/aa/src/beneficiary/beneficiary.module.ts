@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ProjectContants } from '@rahataid/sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
@@ -11,7 +10,7 @@ import { BeneficiaryStatService } from './beneficiaryStat.service';
   imports: [
     ClientsModule.register([
       {
-        name: ProjectContants.ELClient,
+        name: "RAHAT_CORE_PROJECT_CLIENT",
         transport: Transport.REDIS,
         options: {
           host: process.env.REDIS_HOST,
