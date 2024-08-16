@@ -8,7 +8,6 @@ import {
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { ProjectContants } from '@rahataid/sdk';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { EVENTS } from '../constants';
@@ -30,7 +29,7 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject(ProjectContants.ELClient) private readonly client: ClientProxy,
+    @Inject("RAHAT_CORE_PROJECT_CLIENT") private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
