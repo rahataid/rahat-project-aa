@@ -23,6 +23,7 @@ import { getTriggerAndActivityCompletionTimeDifference } from '../utils/timeDiff
 import { CommsClient } from '../comms/comms.service';
 import {
   SessionStatus,
+  TransportType,
   TriggerType,
   ValidationAddress,
 } from '@rumsan/connect/src/types';
@@ -283,8 +284,10 @@ export class ActivitiesService {
       JSON.stringify(activityCommunication)
     ) as Array<{
       groupId: string;
-      message: string;
-      audioURL: Record<string, string>;
+      message: string | {
+        mediaURL: string;
+        fileName: string;
+      }
       groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
       transportId: string;
       communicationId: string;
@@ -310,11 +313,22 @@ export class ActivitiesService {
       transportDetails.data.validationAddress as ValidationAddress
     );
 
+    let messageContent: string;
+    if(transportDetails.data.type === TransportType.VOICE){
+      const msg = selectedCommunication.message as {
+        mediaURL: string;
+        fileName: string;
+      }
+      messageContent = msg.mediaURL
+    }else{
+      messageContent = selectedCommunication.message as string
+    }
+
     const sessionData = await this.commsClient.broadcast.create({
       addresses: addresses,
-      maxAttempts: 1,
+      maxAttempts: 3,
       message: {
-        content: selectedCommunication.message,
+        content: messageContent,
       },
       options: {},
       transport: selectedCommunication.transportId,
