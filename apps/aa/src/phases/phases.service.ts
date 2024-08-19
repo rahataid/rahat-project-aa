@@ -106,7 +106,7 @@ export class PhasesService {
       );
       for (const comm of activityComms) {
         this.communicationQueue.add(
-          JOBS.COMMUNICATION.TRIGGER,
+          JOBS.ACTIVITIES.COMMUNICATION.TRIGGER,
           {
             communicationId: comm?.communicationId,
             activityId: activity?.uuid

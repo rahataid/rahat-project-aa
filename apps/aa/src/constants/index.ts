@@ -90,11 +90,10 @@ export const JOBS = {
     REMOVE: 'aa.jobs.activities.remove',
     UPDATE: 'aa.jobs.activities.update',
     UPDATE_STATUS: 'aa.jobs.activities.updateStatus',
-  },
-  COMMUNICATION: {
-    ADD: 'aa.jobs.activity.communication.add',
-    TRIGGER: 'aa.jobs.activity.communication.trigger',
-    COMMUNICATION_LOGS: 'aa.jobs.communication.getCommunicationLogs',
+    COMMUNICATION: {
+      TRIGGER: 'aa.jobs.activity.communication.trigger',
+      SESSION_LOGS: 'aa.jobs.activities.communication.sessionLogs',
+    },
   },
   ACTIVITY_CATEGORIES: {
     GET_ALL: 'aa.jobs.activityCategories.getAll',
@@ -132,7 +131,6 @@ export const JOBS = {
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
     GET_ONE: 'aa.jobs.stats.getOne',
-    GET_COMMS: 'aa.jobs.stats.getComms',
   },
   DAILY_MONITORING: {
     ADD: 'aa.jobs.dailyMonitoring.add',

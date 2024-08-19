@@ -9,7 +9,7 @@ export class CommunicationProcessor {
   private readonly logger = new Logger(CommunicationProcessor.name);
   constructor(private readonly activitiesService: ActivitiesService) {}
 
-  @Process(JOBS.COMMUNICATION.TRIGGER)
+  @Process(JOBS.ACTIVITIES.COMMUNICATION.TRIGGER)
   async processCommunicationTrigger(job: Job) {
     const payload = job.data
     await this.activitiesService.triggerCommunication({

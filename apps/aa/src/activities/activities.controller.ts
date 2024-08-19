@@ -57,7 +57,7 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
-    cmd: JOBS.COMMUNICATION.TRIGGER,
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
   async triggerCommunication(payload: {
@@ -68,11 +68,11 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
-    cmd: JOBS.COMMUNICATION.COMMUNICATION_LOGS,
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.SESSION_LOGS,
     uuid: process.env.PROJECT_ID,
   })
-  async communicationLogs() {
-    return this.activitiesService.getCommunicationLogs();
+  async communicationLogs(payload: {communicationId: string, activityId: string}) {
+    return this.activitiesService.getSessionLogs(payload);
   }
 
   @MessagePattern({

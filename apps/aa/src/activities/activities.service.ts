@@ -147,29 +147,10 @@ export class ActivitiesService {
 
         const transportName = transport.data.name;
 
-        let group: any;
-        let groupName: string;
-
-        switch (communication.groupType) {
-          case 'STAKEHOLDERS':
-            group = await this.prisma.stakeholdersGroups.findUnique({
-              where: {
-                uuid: communication.groupId,
-              },
-            });
-            groupName = group.name;
-            break;
-          case 'BENEFICIARY':
-            group = await this.prisma.beneficiaryGroups.findUnique({
-              where: {
-                uuid: communication.groupId,
-              },
-            });
-            groupName = group.name;
-            break;
-          default:
-            break;
-        }
+        const { group, groupName } = await this.getGroupDetails(
+          communication.groupType,
+          communication.groupId
+        );
 
         activityCommunication.push({
           ...communication,
@@ -284,10 +265,12 @@ export class ActivitiesService {
       JSON.stringify(activityCommunication)
     ) as Array<{
       groupId: string;
-      message: string | {
-        mediaURL: string;
-        fileName: string;
-      }
+      message:
+        | string
+        | {
+            mediaURL: string;
+            fileName: string;
+          };
       groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
       transportId: string;
       communicationId: string;
@@ -314,14 +297,14 @@ export class ActivitiesService {
     );
 
     let messageContent: string;
-    if(transportDetails.data.type === TransportType.VOICE){
+    if (transportDetails.data.type === TransportType.VOICE) {
       const msg = selectedCommunication.message as {
         mediaURL: string;
         fileName: string;
-      }
-      messageContent = msg.mediaURL
-    }else{
-      messageContent = selectedCommunication.message as string
+      };
+      messageContent = msg.mediaURL;
+    } else {
+      messageContent = selectedCommunication.message as string;
     }
 
     const sessionData = await this.commsClient.broadcast.create({
@@ -552,9 +535,100 @@ export class ActivitiesService {
     });
   }
 
-  async getCommunicationLogs() {
-    const commsLogs =
-      await this.communicationService.communication.getCommunicationLogs();
-    return commsLogs.data;
+  async getSessionLogs(payload: {
+    communicationId: string;
+    activityId: string;
+  }) {
+    const { communicationId, activityId } = payload;
+
+    const { selectedCommunication } =
+      await this.getActivityCommunicationDetails(communicationId, activityId);
+
+    const { groupName } = await this.getGroupDetails(
+      selectedCommunication.groupType,
+      selectedCommunication.groupId
+    );
+
+    const sessionDetails = (
+      await this.commsClient.session.get(selectedCommunication.sessionId)
+    ).data;
+    const sessionLogs = (
+      await this.commsClient.session.listBroadcasts(selectedCommunication.sessionId)
+    ).data;
+
+    return {
+      sessionDetails,
+      sessionLogs,
+      communicationDetail: selectedCommunication,
+      groupName,
+      totalAudience: sessionLogs.length
+    };
+  }
+
+  async getActivityCommunicationDetails(
+    communicationId: string,
+    activityId: string
+  ) {
+    const activity = await this.prisma.activities.findUnique({
+      where: {
+        uuid: activityId,
+      },
+    });
+    if (!activity) throw new RpcException('Activity communication not found.');
+    const { activityCommunication } = activity;
+
+    const parsedCommunications = JSON.parse(
+      JSON.stringify(activityCommunication)
+    ) as Array<{
+      groupId: string;
+      message:
+        | string
+        | {
+            mediaURL: string;
+            fileName: string;
+          };
+      groupType: 'STAKEHOLDERS' | 'BENEFICIARY';
+      transportId: string;
+      communicationId: string;
+      sessionId?: string;
+    }>;
+
+    const selectedCommunication = parsedCommunications.find(
+      (c) => c?.communicationId === communicationId
+    );
+
+    if (!Object.keys(selectedCommunication).length)
+      throw new RpcException('Selected communication not found.');
+
+    return { selectedCommunication, activity };
+  }
+
+  async getGroupDetails(
+    groupType: 'STAKEHOLDERS' | 'BENEFICIARY',
+    groupId: string
+  ) {
+    let group: any;
+    let groupName: string;
+    switch (groupType) {
+      case 'STAKEHOLDERS':
+        group = await this.prisma.stakeholdersGroups.findUnique({
+          where: {
+            uuid: groupId,
+          },
+        });
+        groupName = group.name;
+        break;
+      case 'BENEFICIARY':
+        group = await this.prisma.beneficiaryGroups.findUnique({
+          where: {
+            uuid: groupId,
+          },
+        });
+        groupName = group.name;
+        break;
+      default:
+        break;
+    }
+    return { group, groupName };
   }
 }
