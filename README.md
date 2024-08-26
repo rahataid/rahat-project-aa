@@ -1,4 +1,4 @@
-# Rahat AA
+# Rahat Anticipatory Action
 
 ## Prerequisite
 -Postgres Database OR docker compose
@@ -10,7 +10,7 @@
 
 Step1: Clone project
 Step2: Go to the project directory and install the dependencies
-```bash
+  ```bash
   pnpm install
 ```
 Step3: Create .env files with details as in .env sample file

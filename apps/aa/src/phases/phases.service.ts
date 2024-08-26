@@ -93,6 +93,7 @@ export class PhasesService {
             status: {
               not: 'COMPLETED',
             },
+            isDeleted: false
           },
         },
       },
@@ -105,8 +106,11 @@ export class PhasesService {
       );
       for (const comm of activityComms) {
         this.communicationQueue.add(
-          JOBS.COMMUNICATION.TRIGGER,
-          comm?.campaignId,
+          JOBS.ACTIVITIES.COMMUNICATION.TRIGGER,
+          {
+            communicationId: comm?.communicationId,
+            activityId: activity?.uuid
+          },
           {
             attempts: 3,
             removeOnComplete: true,
@@ -126,7 +130,7 @@ export class PhasesService {
         },
       });
     }
-
+    
     if (phaseDetails.canTriggerPayout) {
       const allBenfs = await this.beneficiaryService.getCount();
       const batches = this.createBatches(allBenfs, BATCH_SIZE);
