@@ -20,6 +20,8 @@ export class CommsService {
             this.coreClient.send({ cmd: GET_COMMUNICATION_SETTINGS }, {})
         )
 
+        console.log(communicationSettings)
+
         if (!communicationSettings) {
             this.logger.error("Communication Settings not found.")
             process.exit(1)
