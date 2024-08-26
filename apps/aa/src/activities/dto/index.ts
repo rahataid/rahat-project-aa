@@ -38,7 +38,7 @@ export interface UpdateActivityData {
   source?: string;
   description?: string;
   activityCommunication?: Array<
-    ActivityCommunicationData & { campaignId: string }
+    ActivityCommunicationData & { sessionId?: string, communicationId?: string }
   >;
   activityPayout?: Array<Record<string, any>>;
   activityDocuments?: Array<ActivityDocs>;
