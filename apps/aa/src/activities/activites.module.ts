@@ -9,5 +9,6 @@ import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
   imports: [PrismaModule, StakeholdersModule, BeneficiaryModule],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],
+  exports: [ActivitiesService]
 })
 export class ActivitiesModule { }

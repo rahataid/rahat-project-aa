@@ -46,11 +46,11 @@ const addStakeholders = async (config: ApiAuth, activity: any): Promise<void> =>
 
 // //Rahat Demo Training
 const sheetId = '1CQjNvvEpjx9VXzUffm5UwnrWSVjpKhlhmm0snmqCm7k';
-const sheetName = 'stakeholders_list';
-const accessToken = ''
-const baseUrl = 'https://api.drc.aa.np.rahat.io/v1';
+const sheetName = 'employees';
+const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcklkIjoxLCJ1dWlkIjoiZWZiYThlZDctNmYzYi00NGY0LTg0ZjgtMDVlYTg4YmUzMGM1IiwibmFtZSI6IlJ1bXNhbiBBZG1pbiIsImVtYWlsIjoicnVtc2FuQG1haWxpbmF0b3IuY29tIiwicGhvbmUiOm51bGwsIndhbGxldCI6IjB4NzVmNTk4ODc0REMzOUUzNjQ4NDZkNTc3Q0VkZTQ4ZDUwMzc4YUM0MCIsInJvbGVzIjpbIkFkbWluIl0sInBlcm1pc3Npb25zIjpbeyJhY3Rpb24iOiJtYW5hZ2UiLCJzdWJqZWN0IjoiYWxsIiwiaW52ZXJ0ZWQiOmZhbHNlLCJjb25kaXRpb25zIjpudWxsfV0sImlhdCI6MTcyMzgwMTkzOCwiZXhwIjoxNzIzODg4MzM4fQ.ZtJgaqWd2-_Kx0W9QBmgixLAzmdrURp9Fa_Dyvfgee4'
+const baseUrl = 'http://localhost:5500/v1';
 const projectActionUrl = (projectId: string): string => `${baseUrl}/projects/${projectId}/actions`;
-const projectId = '39314b3b-de0c-4ada-ac87-7d4457be51a4';
+const projectId = 'dd4b0d22-e83a-48d9-ba64-94d148f101ce';
 
 (async () => {
     const apiConfig = {
@@ -71,6 +71,7 @@ const projectId = '39314b3b-de0c-4ada-ac87-7d4457be51a4';
             municipality: stakeholder.get('Municipality')
         }
         if (!s.phone) continue;
+        // console.log(stakeholder.get('Name'),stakeholder.get('Mobile'))
         await addStakeholders(apiConfig, s);
     }
 

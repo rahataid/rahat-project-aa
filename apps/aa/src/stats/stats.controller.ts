@@ -16,9 +16,4 @@ export class StatsController {
   findOne(payload) {
     return this.statsService.findOne(payload);
   }
-
-  @MessagePattern({ cmd: JOBS.STATS.GET_COMMS, uuid: process.env.PROJECT_ID })
-  getComms() {
-    return this.statsService.getCommsStats();
-  }
 }

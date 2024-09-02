@@ -57,9 +57,4 @@ export class StatsService {
     });
   }
 
-  async getCommsStats() {
-    return (
-      await this.communicationService.communication.getCommunicationStats()
-    ).data;
-  }
 }

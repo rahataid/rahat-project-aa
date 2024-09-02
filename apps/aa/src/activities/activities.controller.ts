@@ -33,6 +33,14 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
+    cmd: JOBS.ACTIVITIES.GET_HAVING_COMMS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getHavingComms(payload: GetActivitiesDto) {
+    return this.activitiesService.getHavingComms(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.ACTIVITIES.GET_ONE,
     uuid: process.env.PROJECT_ID,
   })
@@ -49,19 +57,22 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
-    cmd: JOBS.COMMUNICATION.TRIGGER,
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
-  async triggerCommunication(payload: { campaignId: string }) {
-    return this.activitiesService.triggerCommunication(payload.campaignId);
+  async triggerCommunication(payload: {
+    communicationId: string;
+    activityId: string;
+  }) {
+    return this.activitiesService.triggerCommunication(payload);
   }
 
   @MessagePattern({
-    cmd: JOBS.COMMUNICATION.COMMUNICATION_LOGS,
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.SESSION_LOGS,
     uuid: process.env.PROJECT_ID,
   })
-  async communicationLogs() {
-    return this.activitiesService.getCommunicationLogs();
+  async communicationLogs(payload: {communicationId: string, activityId: string}) {
+    return this.activitiesService.getSessionLogs(payload);
   }
 
   @MessagePattern({
