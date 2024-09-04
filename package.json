@@ -61,7 +61,7 @@
     "@prisma/client": "5.10.2",
     "@rahataid/contracts": "^0.0.1",
     "@rumsan/communication": "0.0.17",
-    "@rumsan/connect": "^0.0.3",
+    "@rumsan/connect": "1.0.0",
     "@rumsan/prisma": "1.0.130",
     "@rumsan/settings": "^0.0.108",
     "axios": "^1.7.2",

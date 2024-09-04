@@ -51,8 +51,8 @@ importers:
         specifier: 0.0.17
         version: 0.0.17
       '@rumsan/connect':
-        specifier: ^0.0.3
-        version: 0.0.3
+        specifier: 1.0.0
+        version: 1.0.0
       '@rumsan/prisma':
         specifier: 1.0.130
         version: 1.0.130(class-transformer@0.5.1)(class-validator@0.14.1)(prisma@5.10.2)(reflect-metadata@0.1.14)(rxjs@7.8.1)
@@ -1704,8 +1704,8 @@ packages:
   '@rumsan/communication@0.0.17':
     resolution: {integrity: sha512-bqkJVzonn78LAaZlSwQ/WVuLEkS4DuPJRVA+z35LzWKImDS8jA1RzJMA6r7nP8LXsg+r0nJms6bj0L9L1Lm/jQ==, tarball: https://npm.pkg.github.com/download/@rumsan/communication/0.0.17/7ae8bd62a30349860de4ec5d38647add940e6cff}
 
-  '@rumsan/connect@0.0.3':
-    resolution: {integrity: sha512-cUQfk3vO+FSzIuRB74TejfjsCwHW+eGc9cbg5qJHHl74+TgRNkUVGyBKcLMmI/SzxuzKO52fb4uAlEJbpBbLdQ==, tarball: https://npm.pkg.github.com/download/@rumsan/connect/0.0.3/9f754d80de35bd6974376a087fa187b4a989107b}
+  '@rumsan/connect@1.0.0':
+    resolution: {integrity: sha512-zmItGc4vruGL2SSaOOTB0g1tME1Ss3MjwKRxC5rwh5pIW4oskAZAXHhnaPUTcyAw3S/wwStNYjImJJf3HO1TtQ==, tarball: https://npm.pkg.github.com/download/@rumsan/connect/1.0.0/024fb0bb3e60c1fa56a0317a12b093755bea7436}
 
   '@rumsan/core@3.0.116':
     resolution: {integrity: sha512-BMpikkcSDSqTr3TSpFjfPyg0g9r2cYchqySi5XNOuf4wwAExSdx5b9UNCrMpN8iBaUNs13B8T29Z7CsDDo/yMA==, tarball: https://npm.pkg.github.com/download/@rumsan/core/3.0.116/ffe97a6a5986d871820d517b2ddb82d7936c0b01}
@@ -8582,7 +8582,7 @@ snapshots:
 
   '@rumsan/communication@0.0.17': {}
 
-  '@rumsan/connect@0.0.3':
+  '@rumsan/connect@1.0.0':
     dependencies:
       tslib: 2.6.2
 
