@@ -555,18 +555,13 @@ export class ActivitiesService {
     const sessionDetails = (
       await this.commsClient.session.get(selectedCommunication.sessionId)
     ).data;
-    const sessionLogs = (
-      await this.commsClient.session.listBroadcasts(
-        selectedCommunication.sessionId
-      )
-    ).data;
+  
+    const {addresses, ...rest} = sessionDetails
 
     return {
-      sessionDetails,
-      sessionLogs,
+      sessionDetails: rest,
       communicationDetail: selectedCommunication,
       groupName,
-      totalAudience: sessionLogs.length,
     };
   }
 
