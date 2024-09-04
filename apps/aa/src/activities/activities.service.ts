@@ -312,6 +312,9 @@ export class ActivitiesService {
       maxAttempts: 3,
       message: {
         content: messageContent,
+        meta: {
+          subject: 'INFO',
+        },
       },
       options: {},
       transport: selectedCommunication.transportId,
@@ -552,17 +555,28 @@ export class ActivitiesService {
     const sessionDetails = (
       await this.commsClient.session.get(selectedCommunication.sessionId)
     ).data;
-    const sessionLogs = (
-      await this.commsClient.session.listBroadcasts(selectedCommunication.sessionId)
-    ).data;
+  
+    const {addresses, ...rest} = sessionDetails
 
     return {
-      sessionDetails,
-      sessionLogs,
+      sessionDetails: rest,
       communicationDetail: selectedCommunication,
       groupName,
-      totalAudience: sessionLogs.length
     };
+  }
+
+  async retryFailedBroadcast(payload: {
+    communicationId: string;
+    activityId: string;
+  }) {
+    const { communicationId, activityId } = payload;
+
+    const { selectedCommunication } =
+      await this.getActivityCommunicationDetails(communicationId, activityId);
+
+    const retryResponse = (await this.commsClient.session.retryIncomplete(selectedCommunication.sessionId)).data
+
+    return retryResponse
   }
 
   async getActivityCommunicationDetails(

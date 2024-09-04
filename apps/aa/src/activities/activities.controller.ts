@@ -76,6 +76,14 @@ export class ActivitiesController {
   }
 
   @MessagePattern({
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.RETRY_FAILED,
+    uuid: process.env.PROJECT_ID,
+  })
+  async retryFailedBroadcast(payload: {communicationId: string, activityId: string}) {
+    return this.activitiesService.retryFailedBroadcast(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.ACTIVITIES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
