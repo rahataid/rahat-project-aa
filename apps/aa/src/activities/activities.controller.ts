@@ -104,4 +104,13 @@ export class ActivitiesController {
   async update(payload: UpdateActivityData) {
     return this.activitiesService.update(payload);
   }
+
+  @MessagePattern({
+    cmd: JOBS.ACTIVITIES.COMMUNICATION.GET_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getCommsStats() {
+    return this.activitiesService.getCommsStats();
+  }
+
 }

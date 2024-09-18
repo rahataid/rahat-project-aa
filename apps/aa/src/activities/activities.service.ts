@@ -555,8 +555,8 @@ export class ActivitiesService {
     const sessionDetails = (
       await this.commsClient.session.get(selectedCommunication.sessionId)
     ).data;
-  
-    const {addresses, ...rest} = sessionDetails
+
+    const { addresses, ...rest } = sessionDetails;
 
     return {
       sessionDetails: rest,
@@ -574,9 +574,13 @@ export class ActivitiesService {
     const { selectedCommunication } =
       await this.getActivityCommunicationDetails(communicationId, activityId);
 
-    const retryResponse = (await this.commsClient.session.retryIncomplete(selectedCommunication.sessionId)).data
+    const retryResponse = (
+      await this.commsClient.session.retryIncomplete(
+        selectedCommunication.sessionId
+      )
+    ).data;
 
-    return retryResponse
+    return retryResponse;
   }
 
   async getActivityCommunicationDetails(
@@ -644,5 +648,33 @@ export class ActivitiesService {
         break;
     }
     return { group, groupName };
+  }
+
+  async getCommsStats() {
+    const activitiesHavingComms = await this.prisma.activities.findMany({
+      where: {
+        isDeleted: false,
+        activityCommunication: { not: [] },
+      },
+      select: {
+        uuid: true,
+        activityCommunication: true,
+        title: true
+      },
+    });
+
+    let totalCommsProject = 0
+
+    for(const activity of activitiesHavingComms){
+      for (const comm of JSON.parse(JSON.stringify(activity.activityCommunication))){
+        if(comm?.sessionId){
+          totalCommsProject++
+        }
+      }
+    }
+
+    return {
+      totalCommsProject
+    }
   }
 }
