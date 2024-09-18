@@ -1,13 +1,15 @@
-import { Process, Processor } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
-import { BQUEUE, JOBS } from '../constants';
-import { Job } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
+import { log } from 'console';
+import * as dotenv from 'dotenv';
+dotenv.config();
 import { JsonRpcProvider, ethers } from 'ethers';
-import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+
+const prisma = new PrismaService();
 
 type IStringArr = string[];
 type ICallData = IStringArr[];
+
+type Batch = { size: number; start: number; end: number };
 
 const ABI = [
   {
@@ -662,139 +664,181 @@ const ABI = [
   },
 ];
 
-@Processor(BQUEUE.CONTRACT)
-export class ContractProcessor {
-  private readonly logger = new Logger(ContractProcessor.name);
+function createBatches(total: number, batchSize: number, start = 1) {
+  const batches: { size: number, start: number, end: number }[] = [];
+  let elementsRemaining = total; // Track remaining elements to batch
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly beneficiaryService: BeneficiaryService
-  ) {}
+  while (elementsRemaining > 0) {
+    const end = start + Math.min(batchSize, elementsRemaining) - 1;
+    const currentBatchSize = end - start + 1;
 
-  @Process({
-    name: JOBS.PAYOUT.ASSIGN_TOKEN,
-  })
-  async processPayoutAssignToken(job: Job) {
-    try {
-      const payload = job.data as {
-        size: number;
-        start: number;
-        end: number;
-      };
-
-      const benfs = await this.beneficiaryService.getBenfBetweenIds(
-        payload.start,
-        payload.end
-      );
-
-      const multicallTxnPayload = [];
-      for (const benf of benfs) {
-        if (benf.benTokens) {
-          multicallTxnPayload.push([benf.walletAddress, benf.benTokens]);
-        }
-      }
-
-      const {
-        contract: aaContract,
-      } = await this.createContractInstanceSign('AAPROJECT');
-    
-      const txn = await this.multiSend(
-        aaContract,
-        'assignTokenToBeneficiary',
-        multicallTxnPayload
-      );
-      // await txn.wait();
-
-      this.logger.log('contract called with txn hash:', txn.hash);
-      return 'ok';
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async createContractInstanceSign(contractName: any) {
-    //  get RPC URL
-    const res = await this.prisma.setting.findFirstOrThrow({
-      where: {
-        name: 'BLOCKCHAIN',
-      },
-      select: {
-        name: true,
-        value: true,
-      },
+    batches.push({
+      size: currentBatchSize,
+      start: start,
+      end: end,
     });
-    const blockChainSetting = JSON.parse(JSON.stringify(res));
 
-    //  create wallet from private key
-    const provider = new JsonRpcProvider(blockChainSetting?.value?.RPCURL);
-    const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-
-    const wallet = new ethers.Wallet(privateKey, provider);
-
-    const address = await this.getContractByName(contractName);
-
-    const c = new ethers.Contract(address.ADDRESS, ABI, wallet);
-
-    return {
-      contract: c,
-      provider,
-      wallet,
-    };
+    elementsRemaining -= currentBatchSize; // Subtract batched elements
+    start = end + 1; // Move start to the next element
   }
 
-  async getContractByName(contractName: string) {
-    const addresses = await this.prisma.setting.findMany({
-      where: { name: 'CONTRACT' },
-    });
-    const address = this.findValueByKey(addresses, contractName);
-    if (!address) {
-      throw new Error('Contract not found');
-    }
-    return address;
-  }
-
-  findValueByKey(data, keyToFind) {
-    // Iterate through the array of objects
-    for (const obj of data) {
-      // Check if the current object has a value property and if it contains the key we're looking for
-      if (obj.value && obj.value.hasOwnProperty(keyToFind)) {
-        // Return the value associated with the key
-        return obj.value[keyToFind];
-      }
-    }
-    // If the key is not found in any of the objects, return undefined
-    return undefined;
-  }
-
-  private generateMultiCallData(
-    contract: ethers.Contract,
-    functionName: string,
-    callData: ICallData
-  ) {
-    const encodedData = [];
-    if (callData) {
-      for (const callD of callData) {
-        const encodedD = contract.interface.encodeFunctionData(functionName, [
-          ...callD,
-        ]);
-        encodedData.push(encodedD);
-      }
-    }
-    return encodedData;
-  }
-
-  private async multiSend(
-    contract: ethers.Contract,
-    functionName: string,
-    callData?: ICallData
-  ) {
-    const encodedData = this.generateMultiCallData(
-      contract,
-      functionName,
-      callData
-    );
-    const tx = await contract.multicall(encodedData);
-    const result = await tx.wait();
-    return result;
-  }
+  return batches;
 }
+
+const main = async () => {
+  const benfCount = await prisma.beneficiary.count({
+    where: {
+      deletedAt: null,
+    },
+  });
+
+
+  const batches = createBatches(benfCount, 20, 547);
+
+  // console.log(batches.length)
+
+  // return 
+
+  let counter = 0;
+
+  for (const batch of batches) {
+    const benfs = await prisma.beneficiary.findMany({
+      where: {
+        id: {
+          gte: batch.start,
+          lte: batch.end,
+        },
+      },
+    });
+    // console.log(batch, benfs);
+    // process.exit(1);
+
+    // const multicallTxnPayload = [];
+
+    const multicallTxnPayload: any[] = [];
+
+    for (const benf of benfs) {
+      //   console.log(benf.walletAddress, benf.benTokens);
+
+      if (benf.benTokens) {
+        multicallTxnPayload.push([benf.walletAddress, benf.benTokens]);
+      }
+    }
+
+    const { contract: aaContract } = await createContractInstanceSign(
+      'AAPROJECT'
+    );
+
+    const txn = await multiSend(
+      aaContract,
+      'assignTokenToBeneficiary',
+      multicallTxnPayload
+    );
+
+    console.log('contract called with txn hash:', txn);
+    counter++
+    console.log(counter)
+  }
+};
+
+async function createContractInstanceSign(contractName: any) {
+  //  get RPC URL
+  const res = await prisma.setting.findFirstOrThrow({
+    where: {
+      name: 'BLOCKCHAIN',
+    },
+    select: {
+      name: true,
+      value: true,
+    },
+  });
+  const blockChainSetting = JSON.parse(JSON.stringify(res));
+
+  //  create wallet from private key
+  const provider = new JsonRpcProvider(blockChainSetting?.value?.RPCURL);
+  const privateKey = process.env.DEPLOYER_PRIVATE_KEY as string;
+
+  const wallet = new ethers.Wallet(privateKey, provider);
+
+  const address = await getContractByName(contractName);
+
+  const c = new ethers.Contract(address.ADDRESS, ABI, wallet);
+  return {
+    contract: c,
+    provider,
+    wallet,
+  };
+}
+
+async function generateMultiCallData(
+  contract: ethers.Contract,
+  functionName: string,
+  callData: ICallData
+) {
+  const encodedData: string[] = [];
+  if (callData) {
+    for (const callD of callData) {
+      const encodedD = contract.interface.encodeFunctionData(functionName, [
+        ...callD,
+      ]);
+      encodedData.push(encodedD);
+    }
+  }
+  return encodedData;
+}
+
+async function multiSend(
+  contract: ethers.Contract,
+  functionName: string,
+  callData: ICallData
+) {
+  const encodedData = await generateMultiCallData(
+    contract,
+    functionName,
+    callData
+  );
+
+  //   console.log('encoded data', encodedData);
+
+  const tx = await contract.multicall(encodedData);
+  const result = await tx.wait();
+
+  return result;
+
+  //   return 'ok';
+}
+
+async function getContractByName(contractName: string) {
+  const addresses = await prisma.setting.findMany({
+    where: { name: 'CONTRACT' },
+  });
+
+  const address = findValueByKey(addresses, contractName);
+
+  if (!address) {
+    throw new Error('Contract not found');
+  }
+  return address;
+}
+
+function findValueByKey(data: any, keyToFind: any) {
+  // Iterate through the array of objects
+  for (const obj of data) {
+    // Check if the current object has a value property and if it contains the key we're looking for
+    if (obj.value && obj.value.hasOwnProperty(keyToFind)) {
+      // Return the value associated with the key
+      return obj.value[keyToFind];
+    }
+  }
+  // If the key is not found in any of the objects, return undefined
+  return undefined;
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
