@@ -178,6 +178,12 @@ const main = async () => {
         value: "River Flood",
         isPrivate: false
     })
+
+    await settings.create({
+        name:'SCB',
+        value: {baseUrl: 'https://scb.np.rahat.io/v1',accessToken: '62284a27-a8f8-4ba7-8f62-f3a9153551bc' },
+        isPrivate: false
+    })
     // ***** seed settings complete ***
 }
 
