@@ -25,7 +25,7 @@ export class TriggersService {
     private readonly phasesService: PhasesService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue
-  ) { }
+  ) {}
 
   // dev only
   async dev(payload: AddTriggerStatement) {
@@ -61,6 +61,9 @@ export class TriggersService {
         },
         include: {
           phase: true,
+        },
+        orderBy: {
+          updatedAt: 'desc',
         },
       },
       {
@@ -271,7 +274,7 @@ export class TriggersService {
   }
 
   async activateTrigger(payload: UpdateTriggerStatement) {
-    const { user } = payload;
+    const { user, triggerDocuments } = payload;
 
     const trigger = await this.prisma.triggers.findUnique({
       where: {
@@ -285,9 +288,9 @@ export class TriggersService {
     if (trigger.dataSource !== DATA_SOURCES.MANUAL)
       throw new RpcException('Cannot activate an automated trigger.');
 
-    const triggerDocs = payload?.triggerDocuments
-      ? JSON.parse(JSON.stringify(payload.triggerDocuments))
-      : [];
+    const triggerDocs = triggerDocuments?.length
+      ? triggerDocuments
+      : trigger?.triggerDocuments || [];
 
     const updatedTrigger = await this.prisma.triggers.update({
       where: {
@@ -296,9 +299,9 @@ export class TriggersService {
       data: {
         isTriggered: true,
         triggeredAt: new Date(),
-        triggerDocuments: triggerDocs,
+        triggerDocuments: JSON.parse(JSON.stringify(triggerDocs)),
         notes: payload?.notes || '',
-        triggeredBy: user?.name
+        triggeredBy: user?.name,
       },
     });
 

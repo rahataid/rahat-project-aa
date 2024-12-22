@@ -424,7 +424,15 @@ export class ActivitiesService {
   }) {
     const { status, uuid, notes, activityDocuments, user } = payload;
 
-    const docs = activityDocuments || [];
+    const activity = await this.prisma.activities.findUnique({
+      where: {
+        uuid: uuid,
+      },
+    });
+
+    const docs = activityDocuments?.length
+      ? activityDocuments
+      : activity?.activityDocuments || [];
 
     if (status === 'COMPLETED') {
       this.eventEmitter.emit(EVENTS.ACTIVITY_COMPLETED, {});
@@ -659,22 +667,24 @@ export class ActivitiesService {
       select: {
         uuid: true,
         activityCommunication: true,
-        title: true
+        title: true,
       },
     });
 
-    let totalCommsProject = 0
+    let totalCommsProject = 0;
 
-    for(const activity of activitiesHavingComms){
-      for (const comm of JSON.parse(JSON.stringify(activity.activityCommunication))){
-        if(comm?.sessionId){
-          totalCommsProject++
+    for (const activity of activitiesHavingComms) {
+      for (const comm of JSON.parse(
+        JSON.stringify(activity.activityCommunication)
+      )) {
+        if (comm?.sessionId) {
+          totalCommsProject++;
         }
       }
     }
 
     return {
-      totalCommsProject
-    }
+      totalCommsProject,
+    };
   }
 }
