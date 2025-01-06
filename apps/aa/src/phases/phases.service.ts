@@ -25,7 +25,7 @@ export class PhasesService {
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.COMMUNICATION)
     private readonly communicationQueue: Queue
-  ) { }
+  ) {}
 
   async getAll() {
     return this.prisma.phases.findMany();
@@ -44,6 +44,9 @@ export class PhasesService {
           },
           include: {
             phase: true,
+          },
+          orderBy: {
+            updatedAt: 'desc',
           },
         },
         activities: true,
@@ -93,7 +96,7 @@ export class PhasesService {
             status: {
               not: 'COMPLETED',
             },
-            isDeleted: false
+            isDeleted: false,
           },
         },
       },
@@ -109,7 +112,7 @@ export class PhasesService {
           JOBS.ACTIVITIES.COMMUNICATION.TRIGGER,
           {
             communicationId: comm?.communicationId,
-            activityId: activity?.uuid
+            activityId: activity?.uuid,
           },
           {
             attempts: 3,
@@ -130,7 +133,7 @@ export class PhasesService {
         },
       });
     }
-    
+
     if (phaseDetails.canTriggerPayout) {
       const allBenfs = await this.beneficiaryService.getCount();
       const batches = this.createBatches(allBenfs, BATCH_SIZE);
@@ -323,24 +326,23 @@ export class PhasesService {
   }
 
   createBatches(total: number, batchSize: number, start = 1) {
-    const batches: { size: number, start: number, end: number }[] = [];
+    const batches: { size: number; start: number; end: number }[] = [];
     let elementsRemaining = total; // Track remaining elements to batch
-  
+
     while (elementsRemaining > 0) {
       const end = start + Math.min(batchSize, elementsRemaining) - 1;
       const currentBatchSize = end - start + 1;
-  
+
       batches.push({
         size: currentBatchSize,
         start: start,
         end: end,
       });
-  
+
       elementsRemaining -= currentBatchSize; // Subtract batched elements
       start = end + 1; // Move start to the next element
     }
-  
+
     return batches;
   }
-  
 }
