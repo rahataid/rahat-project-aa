@@ -44,6 +44,9 @@ dependencies:
   '@rahataid/contracts':
     specifier: ^0.0.1
     version: 0.0.1
+  '@rahataid/sdk':
+    specifier: ^0.0.20
+    version: 0.0.20
   '@rumsan/communication':
     specifier: 0.0.17
     version: 0.0.17
@@ -3704,6 +3707,16 @@ packages:
     resolution: {integrity: sha512-ZNMJ48lCTq8e8cMsNWEJw7g4EE1N/2abTfGi1nzwnImfgvukA1qznMPPa4NXBi1C/fMaU/yDEHW8pT54aVpxzg==}
     dev: false
 
+  /@rahataid/sdk@0.0.20:
+    resolution: {integrity: sha512-yfahkRKJh8cyeXMS9S4JIqwJ22ormLIaVrj6ljt2/A60IS1qrQ4mNRXVDOt/z/2doRqsvdJblv7Wm80XZ1asbA==}
+    dependencies:
+      '@rumsan/sdk': 0.0.41
+      axios: 1.7.9
+      tslib: 2.5.0
+    transitivePeerDependencies:
+      - debug
+    dev: false
+
   /@rumsan/communication@0.0.17:
     resolution: {integrity: sha512-LYZlfjyiOzpvp73bOie3Okx9uepvUO95D6PI+MDxIHnZnfsTOCcYBYtNzoJ4W+05zD1QPc+QyfAvUs8iA1oZHg==}
     dev: false
@@ -3783,6 +3796,15 @@ packages:
       - debug
       - prisma
       - reflect-metadata
+    dev: false
+
+  /@rumsan/sdk@0.0.41:
+    resolution: {integrity: sha512-5JfUoPPnU/lMi+ohBGA0uuafNaD9R3Ktuno9vPjEEKrfxLqcVoE5lutDbgFm44Oz0mLujRrJGX8suWuwtX0y0g==}
+    dependencies:
+      axios: 1.7.9
+      tslib: 2.6.2
+    transitivePeerDependencies:
+      - debug
     dev: false
 
   /@rumsan/sdk@0.0.42:

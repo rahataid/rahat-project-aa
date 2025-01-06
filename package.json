@@ -60,6 +60,7 @@
     "@nestjs/swagger": "^7.3.1",
     "@prisma/client": "5.10.2",
     "@rahataid/contracts": "^0.0.1",
+    "@rahataid/sdk": "^0.0.20",
     "@rumsan/communication": "0.0.17",
     "@rumsan/connect": "1.0.0",
     "@rumsan/prisma": "1.0.130",
