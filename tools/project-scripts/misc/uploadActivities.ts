@@ -127,12 +127,20 @@ const updateIdInGSheet = async (
 // const projectId = '369e043e-bc2e-42e5-9222-e2f9ac29962a';
 
 // //Rahat Demo Training
+// const sheetId = '1sMLv7S_WgpQgbX_HHqeA6ZRyt5K-W-xdT2oZSsDAKmY';
+// const sheetName = 'activities';
+// const accessToken = ''
+// const baseUrl = 'https://api.aa-rumsan.drc.np.rahat.io/v1';
+// const projectActionUrl = (projectId: string): string => `${baseUrl}/projects/${projectId}/actions`;
+// const projectId = '4c51c884-6c84-41fe-a4b9-149c70e667f2';
+
+//Rahat Demo unicef
 const sheetId = '1sMLv7S_WgpQgbX_HHqeA6ZRyt5K-W-xdT2oZSsDAKmY';
 const sheetName = 'activities';
-const accessToken = ''
-const baseUrl = 'https://api.aa-rumsan.drc.np.rahat.io/v1';
+const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcklkIjoxLCJ1dWlkIjoiM2FhNjZmNGEtNWEzMi00ZmNiLWE5MDMtZWUwMmUyNDc0YzI1IiwibmFtZSI6IlJ1bXNhbiBBZG1pbiIsImVtYWlsIjoicnVtc2FuQG1haWxpbmF0b3IuY29tIiwicGhvbmUiOm51bGwsIndhbGxldCI6IjB4NzVmNTk4ODc0REMzOUUzNjQ4NDZkNTc3Q0VkZTQ4ZDUwMzc4YUM0MCIsInJvbGVzIjpbIkFkbWluIl0sInBlcm1pc3Npb25zIjpbeyJhY3Rpb24iOiJtYW5hZ2UiLCJzdWJqZWN0IjoiYWxsIiwiaW52ZXJ0ZWQiOmZhbHNlLCJjb25kaXRpb25zIjpudWxsfV0sImlhdCI6MTcyNjgyMzQ4NywiZXhwIjoxNzI3NDI4Mjg3fQ.xmJK0B1YiwlufTHwsdXJ9Ed6gdhZdmncDd9R29pB7eE'
+const baseUrl = 'https://api.aa.demo.rahat.io/v1';
 const projectActionUrl = (projectId: string): string => `${baseUrl}/projects/${projectId}/actions`;
-const projectId = '4c51c884-6c84-41fe-a4b9-149c70e667f2';
+const projectId = '481b8630-7520-45aa-8ad9-3b82793cff28';
 
 (async () => {
     const apiConfig = {
