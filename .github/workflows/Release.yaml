@@ -1,0 +1,64 @@
+name: AA Release CI/CD
+on:
+  workflow_dispatch:
+
+env:
+  CI: false
+  env_npmrc: ${{ secrets.ENV_NPMRC }}
+
+jobs:
+  deploy:
+    name: build && push image to Docker hub
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref_name, 'release/') && github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: import env file
+        run: |
+          touch ./.npmrc && echo "$env_npmrc" >> ./.npmrc
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20.10.0
+
+      - name: install dependencies and build apps
+        run: |
+          npm install -g pnpm@8.14.1 only-allow
+          pnpm install
+          npx nx reset
+          pnpm prisma:generate
+          pnpm build:all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract version from package.json
+        id: extract_version
+        run: echo "VERSION=$(jq -r '.version' package.json)" >> $GITHUB_ENV
+
+      - name: Extract Timestamp
+        id: extract-timestamp
+        run: |
+          TIMESTAMP=$(date "+%Y-%m-%d_%H-%M-%S")
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_ENV
+
+      # AA Image
+      - name: build && push aa
+        id: build-push-aa
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.aa
+          push: ${{ github.event_name == 'workflow_dispatch' }}
+          tags: |
+            esatya/rahat-project-aa:aa-release
+            esatya/rahat-project-aa:aa-release-${{ env.VERSION }}
+            esatya/rahat-project-aa:aa-release-${{ env.VERSION }}-${{ env.timestamp }}
