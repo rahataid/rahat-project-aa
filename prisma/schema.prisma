@@ -39,27 +39,23 @@ enum SettingDataType {
   OBJECT
 }
 
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-  UNKNOWN
-}
-
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
-  id   Int    @id @default(autoincrement()) @db.Integer()
-  uuid String @unique @db.Uuid()
+  id        Int     @id @default(autoincrement()) @db.Integer()
+  uuid      String  @unique @db.Uuid()
+  gender    Gender? @default(UNKNOWN)
+  benTokens Int?    @default(0)
 
-  walletAddress String?
-  gender        Gender  @default(UNKNOWN)
+  walletAddress String @unique
   extras        Json?
-  benTokens     Int     @default(0)
+  // gender        Gender @default(UNKNOWN)
+  // benTokens     Int    @default(0)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
-  deletedAt DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime?           @updatedAt()
+  deletedAt         DateTime?
+  BeneficiaryRedeem BeneficiaryRedeem[]
 
   @@map("tbl_beneficiaries")
 }
@@ -116,7 +112,7 @@ model Stakeholders {
 
   name         String
   email        String?
-  phone        String? @unique 
+  phone        String? @unique
   designation  String
   organization String
   district     String
@@ -166,8 +162,8 @@ model Phases {
   isActive         Boolean @default(false)
 
   activatedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
 
   @@map("tbl_phases")
 }
@@ -213,7 +209,7 @@ model Activities {
   isDeleted Boolean @default(false)
 
   completedBy String?
-  completedAt DateTime? 
+  completedAt DateTime?
 
   differenceInTriggerAndActivityCompletion String?
 
@@ -244,7 +240,7 @@ model Triggers {
   isTriggered Boolean @default(false)
   isDeleted   Boolean @default(false)
 
-  triggeredBy String? 
+  triggeredBy String?
 
   triggeredAt DateTime?
   createdAt   DateTime  @default(now())
@@ -293,4 +289,134 @@ model DailyMonitoring {
   updatedAt DateTime? @updatedAt()
 
   @@map("tbl_daily_monitoring")
+}
+
+model Vendor {
+  id            Int     @id @default(autoincrement())
+  uuid          String  @unique @db.Uuid()
+  name          String
+  phone         String?
+  walletAddress String  @unique
+  location      String?
+  extras        Json?
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  VendorReimbursment VendorReimbursment[]
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  OfflineBeneficiary OfflineBeneficiary[]
+
+  @@map("tbl_vendors")
+}
+
+// ============== OTHER CORE CVA SCHEMAS================
+enum DisbursementStatus {
+  SYNCING_OFFLINE
+  SYNCED_OFFLINE
+  ONLINE
+}
+
+enum ReedemStatus {
+  REQUESTED
+  APPROVED
+}
+
+enum OfflineBeneficiaryStatus {
+  PROCESSED
+  PENDING
+  SYNCED
+}
+
+model Disbursement {
+  id            Int                @id @default(autoincrement())
+  uuid          String             @unique @default(uuid()) @db.Uuid()
+  amount        Float              @default(0)
+  walletAddress String             @unique
+  planUid       String             @db.Uuid()
+  status        DisbursementStatus @default(ONLINE)
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime?           @updatedAt()
+  deletedAt          DateTime?
+  OfflineBeneficiary OfflineBeneficiary?
+
+  @@map("tbl_disbursement")
+}
+
+model VendorReimbursment {
+  id            Int          @id @default(autoincrement())
+  uuid          String       @unique @default(uuid()) @db.Uuid()
+  tokenAddress  String
+  voucherAmount Int
+  status        ReedemStatus @default(REQUESTED)
+
+  vendorUid String @db.Uuid()
+  vendor    Vendor @relation(fields: [vendorUid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_vendor_reimbursment")
+}
+
+model BeneficiaryRedeem {
+  id                       Int     @id @default(autoincrement())
+  uuid                     String  @unique @default(uuid())
+  beneficiaryWalletAddress String
+  hasRedeemed              Boolean @default(false)
+
+  Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  vendorUid   String      @db.Uuid()
+  Vendor      Vendor      @relation(fields: [vendorUid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiary_redeem")
+}
+
+model BeneficiaryOTP {
+  id                       Int    @id @default(autoincrement())
+  uuid                     String @unique @default(uuid())
+  otp                      String
+  otpHash                  String
+  beneficiaryWalletAddress String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tbl_beneficiary_otp")
+}
+
+model OfflineBeneficiary {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  otpHash String
+  txHash  String
+
+  vendorId       Int
+  disbursementId Int    @unique
+  amount         String
+
+  Vendor       Vendor                   @relation(fields: [vendorId], references: [id])
+  Disbursement Disbursement?            @relation(fields: [disbursementId], references: [id])
+  status       OfflineBeneficiaryStatus @default(PENDING)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map(name: "tbl_offline_beneficiaries")
+}
+
+// ============== END CORE CVA SCHEMAS================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
 }
