@@ -26,10 +26,14 @@ export class CvaBeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    console.log('Create from cva!', dto);
-    return 'Success!';
+    const { uuid, walletAddress, extras, ...rest } = dto;
     const row = await this.rsprisma.beneficiary.create({
-      data: dto,
+      data: {
+        uuid,
+        walletAddress,
+        extras: extras || {},
+        ...rest,
+      },
     });
     this.eventEmitter.emit(CVA_EVENTS.BENEFICIARY.CREATED);
     return row;

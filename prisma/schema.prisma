@@ -46,6 +46,7 @@ model Beneficiary {
   uuid      String  @unique @db.Uuid()
   gender    Gender? @default(UNKNOWN)
   benTokens Int?    @default(0)
+  location  String
 
   walletAddress String @unique
   extras        Json?

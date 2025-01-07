@@ -1,21 +1,6 @@
+import { Beneficiary } from '@prisma/client';
 import { IsNotEmpty, IsString } from 'class-validator';
-
-export class BaseDTO<T = {}> {
-  constructor() {
-    this.walletAddress = '';
-    this.uuid = '';
-  }
-
-  @IsString()
-  @IsNotEmpty()
-  uuid: string;
-
-  @IsString()
-  @IsNotEmpty()
-  walletAddress!: string;
-
-  [key: string]: any;
-}
+import { RequiredAndOptionalKeys } from '..';
 
 export class GetBeneficiaryDto {
   @IsString()
@@ -23,4 +8,7 @@ export class GetBeneficiaryDto {
   uuid!: string;
 }
 
-export class CreateBeneficiaryDto extends BaseDTO {}
+export type CreateBeneficiaryDto = RequiredAndOptionalKeys<
+  Beneficiary,
+  'uuid' | 'walletAddress'
+>;
