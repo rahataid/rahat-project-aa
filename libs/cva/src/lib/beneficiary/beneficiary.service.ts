@@ -26,6 +26,8 @@ export class CvaBeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
+    console.log('Create from cva!', dto);
+    return 'Success!';
     const row = await this.rsprisma.beneficiary.create({
       data: dto,
     });

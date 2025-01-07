@@ -29,7 +29,7 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject("RAHAT_CORE_PROJECT_CLIENT") private readonly client: ClientProxy,
+    @Inject('RAHAT_CLIENT') private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
@@ -59,8 +59,13 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
+    const { uuid, walletAddress, extras } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: dto,
+      data: {
+        uuid,
+        walletAddress,
+        extras,
+      },
     });
 
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);

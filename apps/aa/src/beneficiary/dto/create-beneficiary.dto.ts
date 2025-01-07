@@ -2,7 +2,7 @@ import { UUID } from 'crypto';
 
 export class CreateBeneficiaryDto {
   uuid: UUID;
-  walletAddress?: string;
+  walletAddress: string;
   extras?: any;
 }
 
@@ -10,7 +10,7 @@ export interface AddBeneficiaryGroups {
   name: string;
   beneficiaries: Array<{
     uuid: string;
-  }>
+  }>;
 }
 
 export interface AddTokenToGroup {
@@ -26,5 +26,5 @@ export interface AssignBenfGroupToProject {
     id: number;
     uuid: string;
     name: string;
-  }
+  };
 }
