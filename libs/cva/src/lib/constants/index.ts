@@ -1,9 +1,12 @@
 export const CVA_JOBS = {
   BENEFICIARY: {
+    ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
     CREATE: 'rahat.jobs.beneficiary.create',
     LIST: 'rahat.jobs.beneficiary.list',
     GET: 'rahat.jobs.beneficiary.get',
+    GET_PROJECT_SPECIFIC: 'rahat.jobs.beneficiary.get_project_specific',
     LIST_BY_PROJECT: 'rahat.jobs.beneficiary.list_by_project',
+    LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
   },
   VENDOR: {
     GET: 'rahat.jobs.vendor.get',

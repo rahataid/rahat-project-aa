@@ -26,13 +26,13 @@ export class CvaBeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { uuid, walletAddress, extras, ...rest } = dto;
+    console.log('Create from CVA:', dto);
+    const { uuid, walletAddress, extras } = dto;
     const row = await this.rsprisma.beneficiary.create({
       data: {
         uuid,
         walletAddress,
         extras: extras || {},
-        ...rest,
       },
     });
     this.eventEmitter.emit(CVA_EVENTS.BENEFICIARY.CREATED);
@@ -40,14 +40,16 @@ export class CvaBeneficiaryService {
   }
 
   async findOne(payload: GetBeneficiaryDto) {
-    return this.rsprisma.beneficiary.findUnique({
-      where: {
-        uuid: payload.uuid,
-      },
+    const { uuid, data } = payload;
+    const projectBendata = await this.rsprisma.beneficiary.findUnique({
+      where: { uuid },
     });
+    if (!data) return projectBendata;
+    return { ...data, ...projectBendata };
   }
 
   async listWithPii(query: PaginationBaseDto) {
+    console.log('List with PII:', query);
     const { page, perPage } = query;
     const conditions = { deletedAt: null };
     const beneficiaries = await paginate(

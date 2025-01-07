@@ -31,6 +31,7 @@ CREATE TABLE "tbl_beneficiaries" (
     "uuid" UUID NOT NULL,
     "gender" "Gender" DEFAULT 'UNKNOWN',
     "benTokens" INTEGER DEFAULT 0,
+    "location" TEXT NOT NULL,
     "walletAddress" TEXT NOT NULL,
     "extras" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

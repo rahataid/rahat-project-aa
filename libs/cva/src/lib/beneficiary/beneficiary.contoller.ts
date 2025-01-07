@@ -14,12 +14,11 @@ export class CVaBeneficiaryController {
   constructor(private readonly benService: CvaBeneficiaryService) {}
 
   @MessagePattern({
-    cmd: CVA_JOBS.BENEFICIARY.CREATE,
+    cmd: CVA_JOBS.BENEFICIARY.ADD_TO_PROJECT,
     uuid: process.env['PROJECT_ID'],
   })
-  create(dto: CreateBeneficiaryDto) {
-    console.log('Create from cva!');
-    return this.benService.create(dto);
+  create(data: CreateBeneficiaryDto) {
+    return this.benService.create(data);
   }
 
   @MessagePattern({
@@ -27,7 +26,6 @@ export class CVaBeneficiaryController {
     uuid: process.env['PROJECT_ID'],
   })
   listBeneficiary(query: PaginationBaseDto) {
-    console.log('List from cva!');
     return this.benService.listWithPii(query);
   }
 
