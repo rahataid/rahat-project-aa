@@ -4,7 +4,8 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { CVA_EVENTS } from '../constants';
-import { CreateVendorDto, GetVendorDto, PaginationBaseDto } from '../dtos';
+import { CreateVendorDto, GetVendorDto } from '../dtos';
+import { PaginationBaseDto } from '../dtos/common';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 

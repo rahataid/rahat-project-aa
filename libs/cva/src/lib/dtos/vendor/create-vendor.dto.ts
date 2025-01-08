@@ -1,4 +1,4 @@
-import { RequiredAndOptionalKeys } from '..';
+import { RequiredAndOptionalKeys } from '../common';
 
 interface IVendor {
   uuid: string;

@@ -4,12 +4,9 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { timeout } from 'rxjs';
-import {
-  CreateBeneficiaryDto,
-  GetBeneficiaryDto,
-  PaginationBaseDto,
-} from '../dtos';
+import { CreateBeneficiaryDto, GetBeneficiaryDto } from '../dtos';
 import { CVA_EVENTS, CVA_JOBS } from '../constants';
+import { PaginationBaseDto } from '../dtos/common';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -26,7 +23,7 @@ export class CvaBeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    console.log('Create from CVA:', dto);
+    console.log('Create benef from CVA:', dto);
     const { uuid, walletAddress, extras } = dto;
     const row = await this.rsprisma.beneficiary.create({
       data: {

@@ -331,7 +331,7 @@ model Disbursement {
   uuid          String             @unique @default(uuid()) @db.Uuid()
   amount        Float              @default(0)
   walletAddress String             @unique
-  planUid       String             @db.Uuid()
+  planUid       String?            @db.Uuid()
   status        DisbursementStatus @default(ONLINE)
 
   createdAt          DateTime            @default(now())

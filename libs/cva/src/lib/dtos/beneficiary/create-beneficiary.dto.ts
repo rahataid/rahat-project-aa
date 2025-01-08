@@ -1,6 +1,16 @@
-import { Beneficiary } from '@prisma/client';
 import { IsNotEmpty, IsObject, IsString } from 'class-validator';
-import { RequiredAndOptionalKeys } from '..';
+import { RequiredAndOptionalKeys } from '../common';
+
+interface IBeneficiary {
+  uuid: string;
+  walletAddress: string;
+  extras?: Record<string, any>;
+}
+
+export type CreateBeneficiaryDto = RequiredAndOptionalKeys<
+  IBeneficiary,
+  'uuid' | 'walletAddress'
+>;
 
 export class GetBeneficiaryDto {
   @IsString()
@@ -10,8 +20,3 @@ export class GetBeneficiaryDto {
   @IsObject()
   data?: Record<string, any>;
 }
-
-export type CreateBeneficiaryDto = RequiredAndOptionalKeys<
-  Beneficiary,
-  'uuid' | 'walletAddress'
->;

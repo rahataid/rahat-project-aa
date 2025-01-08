@@ -2,8 +2,9 @@ import { Controller } from '@nestjs/common';
 
 import { MessagePattern } from '@nestjs/microservices';
 import { CVA_JOBS } from '../constants';
-import { CreateVendorDto, GetVendorDto, PaginationBaseDto } from '../dtos';
+import { CreateVendorDto, GetVendorDto } from '../dtos';
 import { CvaVendorService } from './vendor.service';
+import { PaginationBaseDto } from '../dtos/common';
 
 @Controller()
 export class CVaVendorController {
