@@ -33,3 +33,9 @@ export class CreateDisbursementDto {
   @IsEnum(DisbursementStatus)
   status?: DisbursementStatus;
 }
+
+export class GetDisbursementDto {
+  @IsNotEmpty()
+  @IsString()
+  uuid!: string;
+}

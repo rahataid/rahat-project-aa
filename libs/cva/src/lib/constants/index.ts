@@ -1,4 +1,9 @@
 export const CVA_JOBS = {
+  DISBURSEMENT: {
+    CREATE: 'rahat.jobs.disbursement.create',
+    LIST: 'rahat.jobs.disbursement.list',
+    GET: 'rahat.jobs.disbursement.get',
+  },
   BENEFICIARY: {
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
     CREATE: 'rahat.jobs.beneficiary.create',

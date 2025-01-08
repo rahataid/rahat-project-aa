@@ -1,3 +1,4 @@
+import { IsObject, IsString } from 'class-validator';
 import { RequiredAndOptionalKeys } from '../common';
 
 interface IVendor {
@@ -14,6 +15,14 @@ export type CreateVendorDto = RequiredAndOptionalKeys<
   IVendor,
   'uuid' | 'name' | 'walletAddress'
 >;
+
+export class GetVendorDto {
+  @IsString()
+  uuid!: string;
+
+  @IsObject()
+  data?: Record<string, any>;
+}
 
 // export class CreateVendorDto {
 //   @IsString()

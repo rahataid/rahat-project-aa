@@ -1,8 +1,13 @@
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import { CvaBeneficiaryModule } from './beneficiary/beneficiary.module';
 import { CvaVendorModule } from './vendor/vendor.module';
+import { CvaDisbursementModule } from './disbursement/disbursement.module';
 
-const DEFAULT_MODULES = [CvaBeneficiaryModule, CvaVendorModule];
+const DEFAULT_MODULES = [
+  CvaBeneficiaryModule,
+  CvaVendorModule,
+  CvaDisbursementModule,
+];
 
 @Global()
 @Module({})

@@ -1,9 +1,11 @@
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
-import { CreateDisbursementDto } from '../dtos';
+import { CreateDisbursementDto, GetDisbursementDto } from '../dtos';
 import { PaginationBaseDto } from '../dtos/common';
+import { Injectable } from '@nestjs/common';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
+@Injectable()
 export class CvaDisbursementService {
   public rsprisma: typeof this.prisma.rsclient;
 
@@ -18,7 +20,7 @@ export class CvaDisbursementService {
     return row;
   }
 
-  async listWithPii(query: PaginationBaseDto) {
+  async list(query: PaginationBaseDto) {
     const { page, perPage } = query;
     const conditions = { deletedAt: null };
     return paginate(
@@ -33,9 +35,9 @@ export class CvaDisbursementService {
     );
   }
 
-  async findOne(uuid: string) {
+  async findOne(dto: GetDisbursementDto) {
     return this.rsprisma.disbursement.findUnique({
-      where: { uuid },
+      where: { uuid: dto.uuid },
     });
   }
 }
