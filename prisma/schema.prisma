@@ -293,8 +293,8 @@ model Vendor {
   id            Int     @id @default(autoincrement())
   uuid          String  @unique @db.Uuid()
   name          String
-  phone         String?
   walletAddress String  @unique
+  phone         String?
   location      String?
   extras        Json?
 

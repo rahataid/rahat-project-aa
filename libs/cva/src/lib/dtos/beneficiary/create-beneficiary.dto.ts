@@ -8,7 +8,7 @@ export class GetBeneficiaryDto {
   uuid!: string;
 
   @IsObject()
-  data?: any;
+  data?: Record<string, any>;
 }
 
 export type CreateBeneficiaryDto = RequiredAndOptionalKeys<

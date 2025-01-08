@@ -14,7 +14,6 @@ export class CVaVendorController {
     uuid: process.env['PROJECT_ID'],
   })
   create(dto: CreateVendorDto) {
-    console.log('Create from cva!');
     return this.vendorService.create(dto);
   }
 
@@ -22,8 +21,8 @@ export class CVaVendorController {
     cmd: CVA_JOBS.VENDOR.LIST,
     uuid: process.env['PROJECT_ID'],
   })
-  list(payload: any) {
-    return payload;
+  list(data: any) {
+    return data;
   }
 
   @MessagePattern({

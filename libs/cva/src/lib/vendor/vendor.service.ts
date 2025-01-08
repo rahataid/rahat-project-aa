@@ -24,9 +24,10 @@ export class CvaVendorService {
     const payload = {
       uuid: dto.uuid,
       walletAddress: dto.walletAddress,
-      name: dto.vendor['name'],
-      phone: dto.vendor['phone'] || '',
-      extras: dto.vendor['extras'] || {},
+      name: dto.vendor?.['name'],
+      phone: dto?.vendor?.['phone'] || '',
+      location: dto?.vendor?.['location'] || '',
+      extras: dto?.vendor?.['extras'] || {},
     };
     const row = await this.rsprisma.vendor.create({
       data: payload,
@@ -49,10 +50,11 @@ export class CvaVendorService {
   }
 
   async findOne(payload: GetVendorDto) {
-    return this.rsprisma.vendor.findUnique({
-      where: {
-        uuid: payload.uuid,
-      },
+    const { uuid, data } = payload;
+    const projectData = await this.rsprisma.vendor.findUnique({
+      where: { uuid },
     });
+    if (!data) return projectData;
+    return { ...data, ...projectData };
   }
 }
