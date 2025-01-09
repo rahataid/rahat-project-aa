@@ -27,6 +27,12 @@ export class CvaBeneficiaryService {
     const row = await this.rsprisma.beneficiary.create({
       data: dto,
     });
+    // if (dto['allowDisbursement']) {
+    //   this.eventEmitter.emit(CVA_EVENTS.DISBURSEMENT.INITIATED, {
+    //     amount: 50,
+    //     walletAddress: row.walletAddress,
+    //   });
+    // }
     this.eventEmitter.emit(CVA_EVENTS.BENEFICIARY.CREATED);
     return row;
   }

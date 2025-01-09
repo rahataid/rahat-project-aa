@@ -1,16 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
+import { lastValueFrom } from 'rxjs';
+import { EVENTS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
-import { EVENTS } from '../constants';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 

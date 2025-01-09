@@ -14,7 +14,7 @@ enum DisbursementStatus {
 
 export class CreateDisbursementDto {
   @IsString()
-  uuid!: string;
+  uuid?: string;
 
   @IsNumber()
   @IsNotEmpty()

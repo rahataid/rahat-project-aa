@@ -5,6 +5,7 @@ import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
+import { CvaDisbursementService } from '@rahat-project/cva';
 
 @Module({
   imports: [
@@ -22,7 +23,12 @@ import { BeneficiaryStatService } from './beneficiaryStat.service';
     StatsModule,
   ],
   controllers: [BeneficiaryController],
-  providers: [BeneficiaryService, PrismaService, BeneficiaryStatService],
+  providers: [
+    BeneficiaryService,
+    PrismaService,
+    BeneficiaryStatService,
+    CvaDisbursementService,
+  ],
   exports: [BeneficiaryService],
 })
 export class BeneficiaryModule {}

@@ -23,6 +23,9 @@ export const CVA_JOBS = {
 };
 
 export const CVA_EVENTS = {
+  DISBURSEMENT: {
+    INITIATED: 'events.disbursement.initiated',
+  },
   BENEFICIARY: {
     CREATED: 'events.beneficiary.created',
   },

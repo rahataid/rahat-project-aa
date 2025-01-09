@@ -2,7 +2,7 @@ import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 // TODOS:
 // Extendable DTOs: DONE
-// Import lib service into project
+// Import lib service into project : DONE
 // Support schema changes Create dynamically: DONE
 export class BaseBeneficiaryDto {
   constructor(data: BaseBeneficiaryDto) {
