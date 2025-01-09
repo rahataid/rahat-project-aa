@@ -1,16 +1,35 @@
 import { IsNotEmpty, IsObject, IsString } from 'class-validator';
-import { RequiredAndOptionalKeys } from '../common';
 
-interface IBeneficiary {
+// TODOS:
+// Extendable DTOs
+// Import lib service into project
+// Support schema changes Create dynamically:DONE
+export class BaseBeneficiaryDto {
+  constructor(data: BaseBeneficiaryDto) {
+    this.uuid = data.uuid;
+    this.walletAddress = data.walletAddress;
+    this.extras = data['extras'];
+  }
+
+  @IsString()
+  @IsNotEmpty()
   uuid: string;
+
+  @IsString()
+  @IsNotEmpty()
   walletAddress: string;
-  extras?: Record<string, any>;
+
+  @IsObject()
+  extras?: Record<string, unknown>;
+
+  [key: string]: any;
 }
 
-export type CreateBeneficiaryDto = RequiredAndOptionalKeys<
-  IBeneficiary,
-  'uuid' | 'walletAddress'
->;
+export class CreateBeneficiaryDto extends BaseBeneficiaryDto {
+  constructor(data: CreateBeneficiaryDto) {
+    super(data);
+  }
+}
 
 export class GetBeneficiaryDto {
   @IsString()

@@ -50,6 +50,8 @@ model Beneficiary {
   benTokens Int?    @default(0)
   extras    Json?
 
+  isVerified Boolean @default(false)
+
   createdAt         DateTime            @default(now())
   updatedAt         DateTime?           @updatedAt()
   deletedAt         DateTime?
