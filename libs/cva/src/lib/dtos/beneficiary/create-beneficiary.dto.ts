@@ -1,9 +1,9 @@
 import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 // TODOS:
-// Extendable DTOs
+// Extendable DTOs: DONE
 // Import lib service into project
-// Support schema changes Create dynamically:DONE
+// Support schema changes Create dynamically: DONE
 export class BaseBeneficiaryDto {
   constructor(data: BaseBeneficiaryDto) {
     this.uuid = data.uuid;

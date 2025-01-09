@@ -59,13 +59,8 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { uuid, walletAddress, extras } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: {
-        uuid,
-        walletAddress,
-        extras,
-      },
+      data: dto,
     });
 
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
