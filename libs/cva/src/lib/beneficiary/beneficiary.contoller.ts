@@ -7,7 +7,7 @@ import { CVA_JOBS } from '../constants';
 import { PaginationBaseDto } from '../dtos/common';
 
 @Controller()
-export class CVaBeneficiaryController {
+export class CvaBeneficiaryController {
   constructor(private readonly benService: CvaBeneficiaryService) {}
 
   @MessagePattern({

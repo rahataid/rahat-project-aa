@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { PrismaService } from '@rumsan/prisma';
-import { CVaBeneficiaryController } from './beneficiary.contoller';
+import { CvaBeneficiaryController } from './beneficiary.contoller';
 import { CvaBeneficiaryService } from './beneficiary.service';
 
 const DEFAULT_PROVIDERS = [CvaBeneficiaryService, PrismaService];
@@ -21,7 +21,7 @@ const DEFAULT_PROVIDERS = [CvaBeneficiaryService, PrismaService];
       },
     ]),
   ],
-  controllers: [CVaBeneficiaryController],
+  controllers: [CvaBeneficiaryController],
   providers: [...DEFAULT_PROVIDERS],
 })
 export class CvaBeneficiaryModule {}

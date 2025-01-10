@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { CvaVendorService } from './vendor.service';
-import { CVaVendorController } from './vendor.controller';
+import { CvaVendorController } from './vendor.controller';
 
 @Module({
   imports: [
@@ -18,7 +18,7 @@ import { CVaVendorController } from './vendor.controller';
       },
     ]),
   ],
-  controllers: [CVaVendorController],
+  controllers: [CvaVendorController],
   providers: [CvaVendorService],
 })
 export class CvaVendorModule {}

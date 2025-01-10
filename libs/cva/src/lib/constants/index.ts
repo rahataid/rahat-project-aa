@@ -14,6 +14,11 @@ export const CVA_JOBS = {
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
   },
   VENDOR: {
+    REIMBURSE: {
+      CREATE: 'rahat.jobs.vendor.reimburse.create',
+      LIST: 'rahat.jobs.vendor.reimburse.list',
+      GET: 'rahat.jobs.vendor.reimburse.get',
+    },
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',

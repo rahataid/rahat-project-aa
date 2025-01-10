@@ -7,7 +7,7 @@ import { CvaVendorService } from './vendor.service';
 import { PaginationBaseDto } from '../dtos/common';
 
 @Controller()
-export class CVaVendorController {
+export class CvaVendorController {
   constructor(private readonly vendorService: CvaVendorService) {}
 
   @MessagePattern({
