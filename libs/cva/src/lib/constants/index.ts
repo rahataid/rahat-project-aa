@@ -17,6 +17,10 @@ export const CVA_JOBS = {
       LIST: 'rahat.jobs.beneficiary.redeem.list',
       GET: 'rahat.jobs.beneficiary.redeem.get',
     },
+    OTP: {
+      CREATE: 'rahat.jobs.beneficiary.otp.create',
+      GET: 'rahat.jobs.beneficiary.otp.get',
+    },
   },
   VENDOR: {
     REIMBURSE: {
