@@ -397,12 +397,12 @@ model OfflineBeneficiary {
   otpHash String
   txHash  String
 
-  vendorId       Int
-  disbursementId Int    @unique
-  amount         String
+  vendorId       String @db.Uuid()
+  disbursementId String @unique @db.Uuid()
+  amount         Float
 
-  Vendor       Vendor                   @relation(fields: [vendorId], references: [id])
-  Disbursement Disbursement?            @relation(fields: [disbursementId], references: [id])
+  Vendor       Vendor                   @relation(fields: [vendorId], references: [uuid])
+  Disbursement Disbursement?            @relation(fields: [disbursementId], references: [uuid])
   status       OfflineBeneficiaryStatus @default(PENDING)
 
   createdAt DateTime  @default(now())

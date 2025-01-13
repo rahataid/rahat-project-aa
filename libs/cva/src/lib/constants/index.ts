@@ -5,6 +5,11 @@ export const CVA_JOBS = {
     GET: 'rahat.jobs.disbursement.get',
   },
   BENEFICIARY: {
+    OFFLINE: {
+      CREATE: 'rahat.jobs.beneficiary.offline.create',
+      LIST: 'rahat.jobs.beneficiary.offline.list',
+      GET: 'rahat.jobs.beneficiary.offline.get',
+    },
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
     CREATE: 'rahat.jobs.beneficiary.create',
     LIST: 'rahat.jobs.beneficiary.list',

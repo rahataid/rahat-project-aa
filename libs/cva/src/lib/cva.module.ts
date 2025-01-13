@@ -5,6 +5,7 @@ import { CvaDisbursementModule } from './disbursement/disbursement.module';
 import { CvaVendorReimbursementModule } from './vendor-reimbursement/vendor-reimbursement.module';
 import { CvaBeneficiaryRedeemModule } from './beneficiary-redeem/beneficiary-redeem.module';
 import { CvaBeneficiaryOtpModule } from './beneficiary-otp/beneficiary-otp.module';
+import { CvaOfflineBeneficiaryModule } from './offline-beneficiary/offline-beneficiary.module';
 
 const DEFAULT_MODULES = [
   CvaBeneficiaryModule,
@@ -13,6 +14,7 @@ const DEFAULT_MODULES = [
   CvaVendorReimbursementModule,
   CvaBeneficiaryRedeemModule,
   CvaBeneficiaryOtpModule,
+  CvaOfflineBeneficiaryModule,
 ];
 
 @Global()
