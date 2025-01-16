@@ -51,8 +51,8 @@ dependencies:
     specifier: 0.0.17
     version: 0.0.17
   '@rumsan/connect':
-    specifier: 1.0.0
-    version: 1.0.0
+    specifier: ^1.0.4
+    version: 1.0.4
   '@rumsan/prisma':
     specifier: 1.0.130
     version: 1.0.130(class-validator@0.14.1)(prisma@5.10.2)(reflect-metadata@0.1.14)(rxjs@7.8.1)
@@ -3721,8 +3721,8 @@ packages:
     resolution: {integrity: sha512-LYZlfjyiOzpvp73bOie3Okx9uepvUO95D6PI+MDxIHnZnfsTOCcYBYtNzoJ4W+05zD1QPc+QyfAvUs8iA1oZHg==}
     dev: false
 
-  /@rumsan/connect@1.0.0:
-    resolution: {integrity: sha512-zmItGc4vruGL2SSaOOTB0g1tME1Ss3MjwKRxC5rwh5pIW4oskAZAXHhnaPUTcyAw3S/wwStNYjImJJf3HO1TtQ==}
+  /@rumsan/connect@1.0.4:
+    resolution: {integrity: sha512-HgbJ6FUDkKiMoiPJmXHs2UKvuBE/LcLd9P9WbnZAunCR4nJmnzJy/P6no/jQqMpyJWWgzzoQsaWDN0N0kxzCsA==}
     dependencies:
       tslib: 2.8.1
     dev: false

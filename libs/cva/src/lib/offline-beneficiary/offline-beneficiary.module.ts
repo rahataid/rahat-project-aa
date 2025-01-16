@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { CvaOfflineBeneficiaryController } from './offline-beneficiary.controller';
 import { CvaOfflineBeneficiaryService } from './offline-beneficiary.service';
 
-console.log('CvaOfflineBeneficiaryModule');
 @Module({
   imports: [],
   controllers: [CvaOfflineBeneficiaryController],

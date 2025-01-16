@@ -328,6 +328,22 @@ enum OfflineBeneficiaryStatus {
   SYNCED
 }
 
+model Communication {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String
+  message     String
+  transportId String
+  groupUID    String? @db.Uuid()
+  sessionId   String? // If sessionID is null, it means the message is not sent 
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_communications")
+}
+
 model Disbursement {
   id            Int                @id @default(autoincrement())
   uuid          String             @unique @default(uuid()) @db.Uuid()
