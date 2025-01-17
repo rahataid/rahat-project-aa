@@ -32,22 +32,16 @@ export class CvaCommunicationService {
   }
 
   async listBenefByGroup(groupUID: string) {
-    return [];
-    // const rows = await this.prisma.beneficiaryGroup.findMany({
-    //   where: {
-    //     groupUID,
-    //   },
-    //   include: {
-    //     beneficiary: {
-    //       select: {
-    //         email: true,
-    //         phone: true,
-    //       },
-    //     },
-    //   },
-    // });
-    // if (!rows.length) throw new Error('No beneficiaries found in the group');
-    // return rows.map((row) => row.beneficiary);
+    const rows = await this.prisma.beneficiaryGroup.findMany({
+      where: {
+        groupUID,
+      },
+      include: {
+        beneficiary: true,
+      },
+    });
+    if (!rows.length) throw new Error('No beneficiaries found in the group');
+    return rows.map((row) => row.beneficiary);
   }
 
   pickPhoneOrEmail(beneficiaries: any[], type: string) {
