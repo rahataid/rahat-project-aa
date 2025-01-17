@@ -5,7 +5,7 @@ export const CVA_JOBS = {
     GET: 'rahat.jobs.group.get',
   },
   BENEFICIARY_GROUP: {
-    CREATE: 'rahat.jobs.beneficiary_group.create',
+    BULK_ASSIGN: 'rahat.jobs.beneficiary_group.bulk_assign',
     LIST: 'rahat.jobs.beneficiary_group.list',
     LIST_BY_GROUP: 'rahat.jobs.beneficiary_group.lis_by_group',
   },

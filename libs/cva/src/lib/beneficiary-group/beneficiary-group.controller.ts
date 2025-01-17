@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { CVA_JOBS } from '../constants';
-import { CreateBeneficiaryGroupDto, ListBeneficiaryByGroupDto } from '../dtos';
+import { AddBeneficiariesToGroupDto, ListBeneficiaryByGroupDto } from '../dtos';
 import { PaginationBaseDto } from '../dtos/common';
 import { CvaBeneficiaryGroupService } from './beneficiary-group.service';
 
@@ -10,11 +10,11 @@ export class CvaBeneficiaryGroupController {
   constructor(private readonly benGroupService: CvaBeneficiaryGroupService) {}
 
   @MessagePattern({
-    cmd: CVA_JOBS.BENEFICIARY_GROUP.CREATE,
+    cmd: CVA_JOBS.BENEFICIARY_GROUP.BULK_ASSIGN,
     uuid: process.env['PROJECT_ID'],
   })
-  create(dto: CreateBeneficiaryGroupDto) {
-    return this.benGroupService.create(dto);
+  create(dto: AddBeneficiariesToGroupDto) {
+    return this.benGroupService.addBeneficiariesToGroup(dto);
   }
 
   @MessagePattern({

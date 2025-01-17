@@ -1,15 +1,15 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsArray, IsNotEmpty, IsString } from 'class-validator';
 import { PaginationBaseDto } from '../common';
 
-export class CreateBeneficiaryGroupDto {
-  constructor(data: CreateBeneficiaryGroupDto) {
-    this.beneficiaryUID = data.beneficiaryUID;
+export class AddBeneficiariesToGroupDto {
+  constructor(data: AddBeneficiariesToGroupDto) {
+    this.beneficiaries = data.beneficiaries;
     this.groupUID = data.groupUID;
   }
 
-  @IsString()
+  @IsArray()
   @IsNotEmpty()
-  beneficiaryUID: string;
+  beneficiaries: string[];
 
   @IsString()
   @IsNotEmpty()

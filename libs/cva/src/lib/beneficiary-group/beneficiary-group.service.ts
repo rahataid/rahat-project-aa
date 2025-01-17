@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
-import { CreateBeneficiaryGroupDto, ListBeneficiaryByGroupDto } from '../dtos';
+import { AddBeneficiariesToGroupDto, ListBeneficiaryByGroupDto } from '../dtos';
 import { PaginationBaseDto } from '../dtos/common';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -13,11 +13,17 @@ export class CvaBeneficiaryGroupService {
     this.rsprisma = prisma.rsclient;
   }
 
-  async create(dto: CreateBeneficiaryGroupDto) {
-    const row = await this.rsprisma.beneficiaryGroup.create({
-      data: dto,
+  async addBeneficiariesToGroup(dto: AddBeneficiariesToGroupDto) {
+    const { beneficiaries, groupUID } = dto;
+    const data = beneficiaries.map((beneficiaryUID) => ({
+      beneficiaryUID,
+      groupUID,
+    }));
+    const rows = await this.rsprisma.beneficiaryGroup.createMany({
+      data,
+      skipDuplicates: true,
     });
-    return row;
+    return rows;
   }
 
   async list(query: PaginationBaseDto) {
@@ -43,6 +49,20 @@ export class CvaBeneficiaryGroupService {
       this.prisma.beneficiaryGroup,
       {
         where: conditions,
+        include: {
+          beneficiary: {
+            select: {
+              uuid: true,
+              walletAddress: true,
+            },
+          },
+          group: {
+            select: {
+              uuid: true,
+              name: true,
+            },
+          },
+        },
       },
       {
         page,
