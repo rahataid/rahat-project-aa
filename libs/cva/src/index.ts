@@ -5,4 +5,6 @@ export * from './lib/disbursement/disbursement.service';
 export * from './lib/beneficiary/beneficiary.service';
 export * from './lib/vendor/vendor.service';
 export * from './lib/communication/communication.service';
+export * from './lib/group/group.service';
+export * from './lib/beneficiary-group/beneficiary-group.service';
 export * from './lib/constants';

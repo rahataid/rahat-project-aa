@@ -4,6 +4,11 @@ export const CVA_JOBS = {
     LIST: 'rahat.jobs.group.list',
     GET: 'rahat.jobs.group.get',
   },
+  BENEFICIARY_GROUP: {
+    CREATE: 'rahat.jobs.beneficiary_group.create',
+    LIST: 'rahat.jobs.beneficiary_group.list',
+    LIST_BY_GROUP: 'rahat.jobs.beneficiary_group.lis_by_group',
+  },
   DISBURSEMENT: {
     CREATE: 'rahat.jobs.disbursement.create',
     LIST: 'rahat.jobs.disbursement.list',
