@@ -56,6 +56,7 @@ model Beneficiary {
   updatedAt         DateTime?           @updatedAt()
   deletedAt         DateTime?
   BeneficiaryRedeem BeneficiaryRedeem[]
+  BeneficiaryGroup  BeneficiaryGroup[]
 
   @@map("tbl_beneficiaries")
 }
@@ -326,6 +327,36 @@ enum OfflineBeneficiaryStatus {
   PROCESSED
   PENDING
   SYNCED
+}
+
+model Group {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String  @unique
+  isSystem    Boolean @default(false) // Non deleteable
+  autoCreated Boolean @default(false)
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime?          @updatedAt()
+  createdBy        String?
+  BeneficiaryGroup BeneficiaryGroup[]
+
+  @@map("tbl_groups")
+}
+
+model BeneficiaryGroup {
+  id             Int         @id @default(autoincrement()) @db.Integer()
+  uuid           String      @unique @default(uuid()) @db.Uuid()
+  beneficiary    Beneficiary @relation(fields: [beneficiaryUID], references: [uuid])
+  beneficiaryUID String      @db.Uuid()
+  group          Group       @relation(fields: [groupUID], references: [uuid])
+  groupUID       String      @db.Uuid()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([beneficiaryUID, groupUID], name: "benefGroupIdentifier")
+  @@map("tbl_beneficiary_groups")
 }
 
 model Communication {

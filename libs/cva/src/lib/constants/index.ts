@@ -1,4 +1,9 @@
 export const CVA_JOBS = {
+  GROUP: {
+    CREATE: 'rahat.jobs.group.create',
+    LIST: 'rahat.jobs.group.list',
+    GET: 'rahat.jobs.group.get',
+  },
   DISBURSEMENT: {
     CREATE: 'rahat.jobs.disbursement.create',
     LIST: 'rahat.jobs.disbursement.list',
