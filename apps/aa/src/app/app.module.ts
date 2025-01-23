@@ -19,6 +19,7 @@ import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.modu
 import { ListenersModule } from '../listeners/listeners.module';
 import { CommsModule } from '../comms/comms.module';
 import { RahatCvaModule } from '@rahat-project/cva';
+import { DisbursementModule } from '../disbursement/disbursement.modue';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { RahatCvaModule } from '@rahat-project/cva';
       }),
       inject: [ConfigService],
     }),
+    DisbursementModule,
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
