@@ -14,7 +14,8 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@rahat-project/cva": ["libs/cva/src/index.ts"]
+      "@rahat-project/cva": ["libs/cva/src/index.ts"],
+      "@rahat-project/stellar-sdk": ["libs/stellar-sdk/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

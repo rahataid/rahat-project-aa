@@ -5,6 +5,7 @@
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
     "start": "nx serve aa",
+    "dev": "nx serve aa --watch --verbose",
     "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
     "trigger-readiness": "ts-node tools/scripts/trigger-readiness.ts",
     "bootstrap": "bash ./tools/scripts/bootstrap.sh",
@@ -61,6 +62,7 @@
     "@prisma/client": "5.10.2",
     "@rahataid/contracts": "^0.0.1",
     "@rahataid/sdk": "^0.0.20",
+    "@stellar/stellar-sdk": "^12.2.0",
     "@rumsan/communication": "0.0.17",
     "@rumsan/connect": "^1.0.4",
     "@rumsan/prisma": "1.0.130",
