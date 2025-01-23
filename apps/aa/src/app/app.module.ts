@@ -20,6 +20,7 @@ import { ListenersModule } from '../listeners/listeners.module';
 import { CommsModule } from '../comms/comms.module';
 import { RahatCvaModule } from '@rahat-project/cva';
 import { DisbursementModule } from '../disbursement/disbursement.modue';
+import { DepositModule } from '../deposit/deposit.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { DisbursementModule } from '../disbursement/disbursement.modue';
       inject: [ConfigService],
     }),
     DisbursementModule,
+    DepositModule,
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
