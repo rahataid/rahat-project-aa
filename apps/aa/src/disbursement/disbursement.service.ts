@@ -4,7 +4,8 @@ import { CreateDisbursementDto } from './dto';
 
 @Injectable()
 export class DisbursementService {
-  async create_disbursement(file: File, dto: CreateDisbursementDto) {
+  async createDisbursement(file: File, dto: CreateDisbursementDto) {
+    console.log(file, 'File');
     console.log(dto.email, 'Email');
     console.log(dto.password, 'Password');
     console.log(dto.tenant_name, 'Tenant name');

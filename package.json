@@ -63,7 +63,7 @@
     "@rahataid/contracts": "^0.0.1",
     "@rahataid/sdk": "^0.0.20",
     "@rumsan/communication": "0.0.17",
-    "@rumsan/connect": "^1.0.4",
+    "@rumsan/connect": "^1.0.0",
     "@rumsan/prisma": "1.0.130",
     "@rumsan/settings": "^0.0.108",
     "@stellar/stellar-sdk": "^12.2.0",

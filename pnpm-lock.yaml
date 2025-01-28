@@ -51,7 +51,7 @@ dependencies:
     specifier: 0.0.17
     version: 0.0.17
   '@rumsan/connect':
-    specifier: ^1.0.4
+    specifier: ^1.0.0
     version: 1.0.4
   '@rumsan/prisma':
     specifier: 1.0.130

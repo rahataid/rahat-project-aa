@@ -1,26 +1,25 @@
+import { BullModule } from '@nestjs/bull';
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { RahatCvaModule } from '@rahat-project/cva';
+import { SettingsModule } from '@rumsan/settings';
+import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
+import { DataSourceModule } from '../datasource/datasource.module';
+import { DepositModule } from '../deposit/deposit.module';
+import { DisbursementModule } from '../disbursement/disbursement.modue';
+import { ListenersModule } from '../listeners/listeners.module';
+import { PhasesModule } from '../phases/phases.module';
+import { ProcessorsModule } from '../processors/processors.module';
+import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { StatsModule } from '../stats';
 import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { BullModule } from '@nestjs/bull';
-import { ProcessorsModule } from '../processors/processors.module';
-import { DataSourceModule } from '../datasource/datasource.module';
-import { ActivitiesModule } from '../activities/activites.module';
-import { PhasesModule } from '../phases/phases.module';
-import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
-import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { StakeholdersModule } from '../stakeholders/stakeholders.module';
-import { SettingsModule } from '@rumsan/settings';
-import { ScheduleModule } from '@nestjs/schedule';
-import { StatsModule } from '../stats';
-import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
-import { ListenersModule } from '../listeners/listeners.module';
 import { CommsModule } from '../comms/comms.module';
-import { RahatCvaModule } from '@rahat-project/cva';
-import { DisbursementModule } from '../disbursement/disbursement.modue';
-import { DepositModule } from '../deposit/deposit.module';
 
 @Module({
   imports: [
@@ -42,8 +41,8 @@ import { DepositModule } from '../deposit/deposit.module';
     DepositModule,
     TriggersModule,
     DataSourceModule,
-    ProcessorsModule,
-    ActivitiesModule,
+    // ProcessorsModule,
+    // ActivitiesModule,
     PhasesModule,
     ActivityCategoriesModule,
     BeneficiaryModule,
@@ -53,7 +52,7 @@ import { DepositModule } from '../deposit/deposit.module';
     StatsModule,
     DailyMonitoringModule,
     ListenersModule,
-    CommsModule.forRoot(),
+    // CommsModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,13 +9,13 @@ import { Controller } from '@nestjs/common';
 export class CvaDisbursementController {
   constructor(private readonly disbService: CvaDisbursementService) {}
 
-  @MessagePattern({
-    cmd: CVA_JOBS.DISBURSEMENT.CREATE,
-    uuid: process.env['PROJECT_ID'],
-  })
-  create(dto: CreateDisbursementDto) {
-    return this.disbService.create(dto);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.DISBURSEMENT.CREATE,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // create(dto: CreateDisbursementDto) {
+  //   return this.disbService.create(dto);
+  // }
 
   @MessagePattern({
     cmd: CVA_JOBS.DISBURSEMENT.LIST,

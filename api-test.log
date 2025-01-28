@@ -1,0 +1,6 @@
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-01-27 20:18:50"}
+{"level":"error","message":"Login failed: AxiosError: Request failed with status code 400","timestamp":"2025-01-27 20:18:57"}
+{"level":"error","message":"Error creating disbursement: Error: Login failed: AxiosError: Request failed with status code 400","timestamp":"2025-01-27 20:18:57"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-01-27 20:19:37"}
+{"level":"error","message":"Login failed: AxiosError: Request failed with status code 400","timestamp":"2025-01-27 20:19:38"}
+{"level":"error","message":"Error creating disbursement: Error: Login failed: AxiosError: Request failed with status code 400","timestamp":"2025-01-27 20:19:38"}
