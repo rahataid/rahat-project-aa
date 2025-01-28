@@ -20,6 +20,7 @@ import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
+import { ActivitiesModule } from '../activities/activites.module';
 
 @Module({
   imports: [
@@ -41,8 +42,8 @@ import { CommsModule } from '../comms/comms.module';
     DepositModule,
     TriggersModule,
     DataSourceModule,
-    // ProcessorsModule,
-    // ActivitiesModule,
+    ProcessorsModule,
+    ActivitiesModule,
     PhasesModule,
     ActivityCategoriesModule,
     BeneficiaryModule,
@@ -52,7 +53,7 @@ import { CommsModule } from '../comms/comms.module';
     StatsModule,
     DailyMonitoringModule,
     ListenersModule,
-    // CommsModule.forRoot(),
+    CommsModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

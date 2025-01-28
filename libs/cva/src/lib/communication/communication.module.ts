@@ -23,5 +23,6 @@ const PROVIDERS = [
       inject: [ConnectCommunicationService],
     },
   ],
+  exports: ['COMMS_CLIENT'],
 })
 export class CvaCommunicationModule {}
