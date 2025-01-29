@@ -17,20 +17,18 @@ export class CommsService {
   ) {}
 
   async init() {
-    const [communicationSettings] = await lastValueFrom(
-      this.coreClient.send({ cmd: GET_COMMUNICATION_SETTINGS }, {})
-    );
-    console.log('Comm Settings from Core: ', communicationSettings);
-
-    if (!communicationSettings) {
-      this.logger.error('Communication Settings not found.');
-      //   process.exit(1);
-      return;
-    }
-    this.client = getClient({
-      baseURL: communicationSettings.value['URL'],
-    });
-    this.client.setAppId(communicationSettings.value['APP_ID']);
+    // const [communicationSettings] = await lastValueFrom(
+    //   this.coreClient.send({ cmd: GET_COMMUNICATION_SETTINGS }, {})
+    // );
+    // console.log('Comm Settings from Core: ', communicationSettings);
+    // if (!communicationSettings) {
+    //   this.logger.error('Communication Settings not found.');
+    //   // process.exit(1);
+    // }
+    // this.client = getClient({
+    //   baseURL: communicationSettings.value['URL'] || '',
+    // });
+    // this.client.setAppId(communicationSettings.value['APP_ID']);
   }
 
   async getClient() {
