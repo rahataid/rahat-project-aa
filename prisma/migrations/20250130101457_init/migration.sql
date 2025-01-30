@@ -29,11 +29,12 @@ CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER', 'UNKNOWN');
 CREATE TABLE "tbl_beneficiaries" (
     "id" SERIAL NOT NULL,
     "uuid" UUID NOT NULL,
+    "walletAddress" TEXT NOT NULL,
+    "phone" TEXT,
     "gender" "Gender" DEFAULT 'UNKNOWN',
     "benTokens" INTEGER DEFAULT 0,
-    "location" TEXT NOT NULL,
-    "walletAddress" TEXT NOT NULL,
     "extras" JSONB,
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
     "deletedAt" TIMESTAMP(3),
@@ -234,8 +235,8 @@ CREATE TABLE "tbl_vendors" (
     "id" SERIAL NOT NULL,
     "uuid" UUID NOT NULL,
     "name" TEXT NOT NULL,
-    "phone" TEXT,
     "walletAddress" TEXT NOT NULL,
+    "phone" TEXT,
     "location" TEXT,
     "extras" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -246,12 +247,54 @@ CREATE TABLE "tbl_vendors" (
 );
 
 -- CreateTable
+CREATE TABLE "tbl_groups" (
+    "id" SERIAL NOT NULL,
+    "uuid" UUID NOT NULL,
+    "name" TEXT NOT NULL,
+    "isSystem" BOOLEAN NOT NULL DEFAULT false,
+    "autoCreated" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+    "createdBy" TEXT,
+
+    CONSTRAINT "tbl_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_beneficiary_groups" (
+    "id" SERIAL NOT NULL,
+    "uuid" UUID NOT NULL,
+    "beneficiaryUID" UUID NOT NULL,
+    "groupUID" UUID NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_beneficiary_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_communications" (
+    "id" SERIAL NOT NULL,
+    "uuid" UUID NOT NULL,
+    "name" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "transportId" TEXT NOT NULL,
+    "groupUID" UUID,
+    "sessionId" TEXT,
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "tbl_communications_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "tbl_disbursement" (
     "id" SERIAL NOT NULL,
     "uuid" UUID NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "walletAddress" TEXT NOT NULL,
-    "planUid" UUID NOT NULL,
+    "planUid" UUID,
     "status" "DisbursementStatus" NOT NULL DEFAULT 'ONLINE',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
@@ -307,9 +350,9 @@ CREATE TABLE "tbl_offline_beneficiaries" (
     "uuid" TEXT NOT NULL,
     "otpHash" TEXT NOT NULL,
     "txHash" TEXT NOT NULL,
-    "vendorId" INTEGER NOT NULL,
-    "disbursementId" INTEGER NOT NULL,
-    "amount" TEXT NOT NULL,
+    "vendorId" UUID NOT NULL,
+    "disbursementId" UUID NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
     "status" "OfflineBeneficiaryStatus" NOT NULL DEFAULT 'PENDING',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -385,6 +428,21 @@ CREATE UNIQUE INDEX "tbl_vendors_uuid_key" ON "tbl_vendors"("uuid");
 CREATE UNIQUE INDEX "tbl_vendors_walletAddress_key" ON "tbl_vendors"("walletAddress");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "tbl_groups_uuid_key" ON "tbl_groups"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_groups_name_key" ON "tbl_groups"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_beneficiary_groups_uuid_key" ON "tbl_beneficiary_groups"("uuid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_beneficiary_groups_beneficiaryUID_groupUID_key" ON "tbl_beneficiary_groups"("beneficiaryUID", "groupUID");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tbl_communications_uuid_key" ON "tbl_communications"("uuid");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tbl_disbursement_uuid_key" ON "tbl_disbursement"("uuid");
 
 -- CreateIndex
@@ -424,6 +482,12 @@ ALTER TABLE "tbl_activities" ADD CONSTRAINT "tbl_activities_categoryId_fkey" FOR
 ALTER TABLE "tbl_triggers" ADD CONSTRAINT "tbl_triggers_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "tbl_phases"("uuid") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "tbl_beneficiary_groups" ADD CONSTRAINT "tbl_beneficiary_groups_beneficiaryUID_fkey" FOREIGN KEY ("beneficiaryUID") REFERENCES "tbl_beneficiaries"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tbl_beneficiary_groups" ADD CONSTRAINT "tbl_beneficiary_groups_groupUID_fkey" FOREIGN KEY ("groupUID") REFERENCES "tbl_groups"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "tbl_vendor_reimbursment" ADD CONSTRAINT "tbl_vendor_reimbursment_vendorUid_fkey" FOREIGN KEY ("vendorUid") REFERENCES "tbl_vendors"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -433,10 +497,10 @@ ALTER TABLE "tbl_beneficiary_redeem" ADD CONSTRAINT "tbl_beneficiary_redeem_bene
 ALTER TABLE "tbl_beneficiary_redeem" ADD CONSTRAINT "tbl_beneficiary_redeem_vendorUid_fkey" FOREIGN KEY ("vendorUid") REFERENCES "tbl_vendors"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_offline_beneficiaries" ADD CONSTRAINT "tbl_offline_beneficiaries_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "tbl_vendors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_offline_beneficiaries" ADD CONSTRAINT "tbl_offline_beneficiaries_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "tbl_vendors"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tbl_offline_beneficiaries" ADD CONSTRAINT "tbl_offline_beneficiaries_disbursementId_fkey" FOREIGN KEY ("disbursementId") REFERENCES "tbl_disbursement"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "tbl_offline_beneficiaries" ADD CONSTRAINT "tbl_offline_beneficiaries_disbursementId_fkey" FOREIGN KEY ("disbursementId") REFERENCES "tbl_disbursement"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_StakeholdersToStakeholdersGroups" ADD CONSTRAINT "_StakeholdersToStakeholdersGroups_A_fkey" FOREIGN KEY ("A") REFERENCES "tbl_stakeholders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

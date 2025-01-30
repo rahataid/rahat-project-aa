@@ -42,9 +42,10 @@ enum SettingDataType {
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
-  id            Int    @id @default(autoincrement()) @db.Integer()
-  uuid          String @unique @db.Uuid()
-  walletAddress String @unique
+  id            Int     @id @default(autoincrement()) @db.Integer()
+  uuid          String  @unique @db.Uuid()
+  walletAddress String  @unique
+  phone         String?
 
   gender    Gender? @default(UNKNOWN)
   benTokens Int?    @default(0)
