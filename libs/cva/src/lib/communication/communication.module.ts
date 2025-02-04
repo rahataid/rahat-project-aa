@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { ConnectCommunicationService } from './connect.communication';
 import { CvaCommunicationService } from './communication.service';
+import { CvaCommunicationController } from './communication.controller';
 
 const PROVIDERS = [
   ConnectCommunicationService,
@@ -11,7 +12,7 @@ const PROVIDERS = [
 
 @Module({
   imports: [],
-  controllers: [],
+  controllers: [CvaCommunicationController],
   providers: [
     ...PROVIDERS,
     {
