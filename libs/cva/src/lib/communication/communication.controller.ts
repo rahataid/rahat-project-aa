@@ -16,4 +16,12 @@ export class CvaCommunicationController {
   createCampaign(dto: CreateCommunicationDto) {
     return this.cvaCommService.createCampaign(dto);
   }
+
+  @MessagePattern({
+    cmd: 'trigger.job',
+    uuid: process.env['PROJECT_ID'],
+  })
+  triggerCampaing(dto: CreateCommunicationDto) {
+    return 'Not implemented';
+  }
 }
