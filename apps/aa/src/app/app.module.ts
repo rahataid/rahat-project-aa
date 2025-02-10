@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { RahatCvaModule } from '@rahat-project/cva';
+import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
@@ -21,6 +21,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ActivitiesModule } from '../activities/activites.module';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
   imports: [
@@ -38,6 +39,20 @@ import { ActivitiesModule } from '../activities/activites.module';
       }),
       inject: [ConfigService],
     }),
+
+    ClientsModule.register([
+      {
+        name: MS_TRIGGER_CLIENTS.RAHAT,
+        transport: Transport.REDIS,
+        options: {
+          host: process.env['REDIS_HOST'],
+          port: process.env['REDIS_PORT']
+            ? parseInt(process.env['REDIS_PORT'])
+            : 6379,
+          password: process.env['REDIS_PASSWORD'],
+        },
+      },
+    ]),
     DisbursementModule,
     DepositModule,
     TriggersModule,

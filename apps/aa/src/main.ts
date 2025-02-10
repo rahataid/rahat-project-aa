@@ -11,15 +11,16 @@ async function bootstrap() {
         transport: Transport.REDIS,
         options: {
           host: process.env.REDIS_HOST,
-          port: Number(process.env.REDIS_PORT),
+          port: parseInt(process.env.REDIS_PORT),
           password: process.env.REDIS_PASSWORD,
         },
       }
     );
-    await app.init();
+    await app.listen();
   } catch (err) {
     console.log(err);
   }
   Logger.log(`🚀 Anticipatory action MS is running!`);
 }
+
 bootstrap();

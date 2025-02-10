@@ -1,8 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { TransportType, TriggerType } from '@rumsan/connect';
 import { PrismaService } from '@rumsan/prisma';
-import { CreateCommunicationDto } from '../dtos/communication/create-communication.dto';
+import {
+  CreateCommunicationDto,
+  TriggerCommunicationDto,
+} from '../dtos/communication/create-communication.dto';
 import { CommsClient } from './connect.communication';
+import { RpcException } from '@nestjs/microservices';
 
 interface BroadCastMessage {
   uuid: string;
@@ -49,22 +53,22 @@ export class CvaCommunicationService {
     else return beneficiaries.map((b) => b.phone);
   }
 
-  async triggerCommunication(uuid: string) {
-    const comm = await this.findOne(uuid);
-    if (!comm) throw new Error('Communication not found');
+  async triggerCommunication(dto: TriggerCommunicationDto) {
+    const comm = await this.findOne(dto.communicationId);
+    if (!comm) throw new RpcException('Communication not found');
     const { sessionId, transportId, groupUID, message } = comm;
-    if (!groupUID) throw new Error('Group not found');
-    if (sessionId) throw new Error('Communication already triggered');
+    if (!groupUID) throw new RpcException('Group not found');
+    if (sessionId) throw new RpcException('Communication already triggered');
     const transport = await this.commsClient.transport.get(transportId);
-    if (!transport) throw new Error('Transport not found');
+    if (!transport) throw new RpcException('Transport not found');
     const beneficiaries = await this.listBenefByGroup(groupUID);
     const addresses = this.pickPhoneOrEmail(
       beneficiaries,
       transport.data?.type
     );
-    if (!addresses.length) throw new Error('No valid addresses found!');
+    if (!addresses.length) throw new RpcException('No valid addresses found!');
     return this.broadcastMessages({
-      uuid,
+      uuid: dto.communicationId,
       addresses,
       msgContent: message,
       transportId,
@@ -101,6 +105,7 @@ export class CvaCommunicationService {
       trigger: TriggerType.IMMEDIATE,
     });
     const session = sessionData.data;
+
     return this.updateCommSession(uuid, session.cuid);
   }
 

@@ -12,7 +12,7 @@ export type CommsClient = ReturnType<typeof getClient>;
 
 @Injectable()
 export class ConnectCommunicationService {
-  private client: CommsClient;
+  private client!: CommsClient;
 
   constructor(private prisma: PrismaService) {}
 

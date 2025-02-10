@@ -3,6 +3,10 @@ import { PrismaService } from '@rumsan/prisma';
 import { ConnectCommunicationService } from './connect.communication';
 import { CvaCommunicationService } from './communication.service';
 import { CvaCommunicationController } from './communication.controller';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { MS_TRIGGER_CLIENTS } from '../constants';
+import { BullModule } from '@nestjs/bull';
+import { ProjectContants } from '@rahataid/sdk';
 
 const PROVIDERS = [
   ConnectCommunicationService,
@@ -11,7 +15,9 @@ const PROVIDERS = [
 ];
 
 @Module({
-  imports: [],
+  imports: [
+
+  ],
   controllers: [CvaCommunicationController],
   providers: [
     ...PROVIDERS,

@@ -1,6 +1,7 @@
 export const CVA_JOBS = {
   COMMUNICATION: {
     CREATE: 'rahat.jobs.communication.create',
+    TRIGGER_CAMPAIGN: 'rahat.jobs.communication.trigger_campaign',
   },
   GROUP: {
     CREATE: 'rahat.jobs.group.create',
@@ -64,4 +65,8 @@ export const CVA_EVENTS = {
   VENDOR: {
     CREATED: 'events.vendor.created',
   },
+};
+
+export const MS_TRIGGER_CLIENTS = {
+  RAHAT: 'RAHAT_TRIGGER_CLIENT',
 };

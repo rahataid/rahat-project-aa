@@ -30,3 +30,8 @@ export class GetCommunicationDto {
   @IsString()
   uuid!: string;
 }
+
+export class TriggerCommunicationDto {
+  @IsString()
+  communicationId!: string;
+}

@@ -1,7 +1,10 @@
 import { Controller } from '@nestjs/common';
 
 import { MessagePattern } from '@nestjs/microservices';
-import { CreateCommunicationDto } from '../dtos/communication/create-communication.dto';
+import {
+  CreateCommunicationDto,
+  TriggerCommunicationDto,
+} from '../dtos/communication/create-communication.dto';
 import { CvaCommunicationService } from './communication.service';
 import { CVA_JOBS } from '../constants';
 
@@ -18,10 +21,11 @@ export class CvaCommunicationController {
   }
 
   @MessagePattern({
-    cmd: 'trigger.job',
-    uuid: process.env['PROJECT_ID'],
+    cmd: CVA_JOBS.COMMUNICATION.TRIGGER_CAMPAIGN,
+    // uuid: process.env['PROJECT_ID'],
   })
-  triggerCampaing(dto: CreateCommunicationDto) {
-    return 'Not implemented';
+  triggerCampaing(dto: TriggerCommunicationDto) {
+    console.log(dto);
+    return this.cvaCommService.triggerCommunication(dto);
   }
 }
