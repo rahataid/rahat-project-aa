@@ -9,6 +9,7 @@ import {
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
+import { CVA_JOBS } from '@rahat-project/cva';
 
 @Controller()
 export class BeneficiaryController {
@@ -121,4 +122,11 @@ export class BeneficiaryController {
   }
 
   // ***** groups fund mgmt end ********** //
+  @MessagePattern({
+    cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN,
+    // uuid: process.env['PROJECT_ID'],
+  })
+  assignToken() {
+    return this.beneficiaryService.assignToken();
+  }
 }

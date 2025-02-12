@@ -53,6 +53,10 @@ export const CVA_JOBS = {
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
   },
+
+  PAYOUT: {
+    ASSIGN_TOKEN: 'rahat.jobs.payout.assign_token',
+  },
 };
 
 export const CVA_EVENTS = {

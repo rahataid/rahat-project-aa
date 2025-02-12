@@ -6,6 +6,8 @@ import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { CvaDisbursementService } from '@rahat-project/cva';
+import { BullModule } from '@nestjs/bull';
+import { BQUEUE } from '../constants';
 
 @Module({
   imports: [
@@ -21,6 +23,9 @@ import { CvaDisbursementService } from '@rahat-project/cva';
       },
     ]),
     StatsModule,
+    BullModule.registerQueue({
+      name: BQUEUE.CONTRACT,
+    }),
   ],
   controllers: [BeneficiaryController],
   providers: [
