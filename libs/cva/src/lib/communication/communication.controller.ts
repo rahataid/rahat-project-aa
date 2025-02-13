@@ -22,7 +22,7 @@ export class CvaCommunicationController {
 
   @MessagePattern({
     cmd: CVA_JOBS.COMMUNICATION.TRIGGER_CAMPAIGN,
-    // uuid: process.env['PROJECT_ID'],
+    location: process.env['PROJECT_LOCATION'],
   })
   triggerCampaing(dto: TriggerCommunicationDto) {
     console.log(dto);

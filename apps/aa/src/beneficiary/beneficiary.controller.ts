@@ -124,7 +124,7 @@ export class BeneficiaryController {
   // ***** groups fund mgmt end ********** //
   @MessagePattern({
     cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN,
-    // uuid: process.env['PROJECT_ID'],
+    location: process.env['PROJECT_LOCATION'],
   })
   assignToken() {
     return this.beneficiaryService.assignToken();
