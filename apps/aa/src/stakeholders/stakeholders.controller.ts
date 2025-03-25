@@ -49,6 +49,14 @@ export class StakeholdersController {
   async update(payload: RemoveStakeholdersData) {
     return this.stakeholdersService.update(payload);
   }
+
+  @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.GET_ONE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getOneStakeholder(payload: { uuid: string }) {
+    return this.stakeholdersService.getOne(payload);
+  }
   // ***** stakeholders end ********** //
 
   // ***** stakeholders groups start ********** //
