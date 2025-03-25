@@ -53,6 +53,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.beneficiary.list',
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
+    GET_ONE_BENEFICIARY: 'rahat.jobs.beneficiary.find_one_beneficiary',
     UPDATE: 'rahat.jobs.beneficiary.update',
     REFER: 'rahat.jobs.beneficiary.get_referred',
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
