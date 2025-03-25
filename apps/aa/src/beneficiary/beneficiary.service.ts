@@ -144,6 +144,16 @@ export class BeneficiaryService {
     return projectBendata;
   }
 
+  async findOneBeneficiary(payload) {
+    const { uuid, data } = payload;
+    const projectBendata = await this.rsprisma.beneficiary.findUnique({
+      where: { uuid },
+    });
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.find_one_beneficiary' },
+      projectBendata
+    );
+  }
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
     const rdata = await this.rsprisma.beneficiary.update({
       where: { id: id },

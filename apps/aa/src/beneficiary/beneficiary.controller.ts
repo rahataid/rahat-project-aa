@@ -34,6 +34,13 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY,
+    uuid: process.env.PROJECT_ID,
+  })
+  findOneBeneficiary(payload) {
+    return this.beneficiaryService.findOneBeneficiary(payload);
+  }
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
     uuid: process.env.PROJECT_ID,
   })
