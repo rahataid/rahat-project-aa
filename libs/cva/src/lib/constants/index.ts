@@ -2,6 +2,9 @@ export const CVA_JOBS = {
   COMMUNICATION: {
     CREATE: 'rahat.jobs.communication.create',
     TRIGGER_CAMPAIGN: 'rahat.jobs.communication.trigger_campaign',
+    GET_SESSION_DETAILS: 'rahat.jobs.communication.session',
+    GET_TRANSPORT_DETAILS: 'rahat.jobs.communication.transport_details ',
+    BROAD_CAST_CREATE: 'rahat.jobs.communication.broad_cast_create',
   },
   GROUP: {
     CREATE: 'rahat.jobs.group.create',
