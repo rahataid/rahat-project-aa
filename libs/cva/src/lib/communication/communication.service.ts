@@ -7,13 +7,7 @@ import {
 } from '../dtos/communication/create-communication.dto';
 import { CommsClient } from './connect.communication';
 import { RpcException } from '@nestjs/microservices';
-
-interface BroadCastMessage {
-  uuid: string;
-  addresses: string[];
-  msgContent: string;
-  transportId: string;
-}
+import { BroadCastMessage } from '../constants/types';
 
 @Injectable()
 export class CvaCommunicationService {
@@ -116,5 +110,16 @@ export class CvaCommunicationService {
         sessionId,
       },
     });
+  }
+
+  async getsession(payload: { sessionId: string }) {
+    const sessionDetails = (
+      await this.commsClient.session.get(payload.sessionId)
+    ).data;
+    return sessionDetails;
+  }
+
+  getTransportDetails(payload: { transportId: string }): any {
+    return this.commsClient.transport.get(payload.transportId);
   }
 }
