@@ -29,7 +29,7 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject("RAHAT_CORE_PROJECT_CLIENT") private readonly client: ClientProxy,
+    @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
