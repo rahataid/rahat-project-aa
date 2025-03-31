@@ -1,5 +1,9 @@
 export interface IDisbursementService {
-  createDisbursementProcess(): Promise<any>;
+  createDisbursementProcess(
+    disbursementName: string,
+    fileBuffer: Buffer,
+    fileName: string
+  ): Promise<any>;
 }
 
 export interface IReceiveService {

@@ -78,6 +78,7 @@ export const JOBS = {
     ACTIVATE: 'aa.jobs.triggers.activate',
     REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
+    TEST: 'aa.jobs.test.disburse',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',

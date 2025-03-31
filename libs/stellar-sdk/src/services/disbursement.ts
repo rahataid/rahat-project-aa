@@ -19,14 +19,16 @@ export class DisbursementServices implements IDisbursementService {
   constructor(
     private email: string,
     private password: string,
-    private tenantName: string,
-    private disbursementName: string,
-    private file: File
+    private tenantName: string
   ) {
     this.walletType = DISBURSEMENT.WalletType;
   }
 
-  public async createDisbursementProcess(): Promise<any> {
+  public async createDisbursementProcess(
+    disbursementName: string,
+    fileBuffer: Buffer,
+    fileName: string
+  ): Promise<any> {
     const authService = new AuthService(
       this.tenantName,
       this.email,
@@ -34,7 +36,7 @@ export class DisbursementServices implements IDisbursementService {
     );
     token = (await authService.getToken()) as string;
     await this.custom_asset();
-    return this.disbursement(this.file);
+    return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 
   // Creates custom asset and fund disbursement account
@@ -51,17 +53,21 @@ export class DisbursementServices implements IDisbursementService {
   }
 
   // Create disbursement and update status
-  private async disbursement(file: File) {
+  private async disbursement(
+    fileBuffer: Buffer,
+    fileName: string,
+    disbursementName: string
+  ) {
     const disbursement = await createDisbursement({
       walletType: this.walletType,
       verification: DISBURSEMENT.VERIFICATION,
       assetCodes: ASSET.NAME,
-      disbursement_name: this.disbursementName,
+      disbursement_name: disbursementName,
     });
 
     const disbursementID = disbursement?.disbursementID;
 
-    await uploadDisbursementFile(disbursementID, file);
+    await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
     await updateDisbursementStatus(disbursementID);
 
     return disbursement;

@@ -25,6 +25,7 @@ export const createDisbursement = async ({
   const { id: wallet_id } = walletRes.data.find(
     (wallet: any) => wallet.name === walletType
   );
+
   const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
   const { id: asset_id } = asset_res.data.find(
     (asset: any) => asset.code === assetCodes
@@ -34,9 +35,9 @@ export const createDisbursement = async ({
     name: disbursement_name,
     wallet_id,
     asset_id,
-    countryCode,
+    country_code: countryCode,
     verification_field: verification,
-    smsRegistrationMessageTemplate,
+    receiver_registration_message_template: smsRegistrationMessageTemplate,
   });
 
   logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
@@ -54,13 +55,15 @@ export const updateDisbursementStatus = async (disbursementId: string) => {
 
 export const uploadDisbursementFile = async (
   disbursementID: string,
-  file: any
+  fileBuffer: Buffer,
+  fileName: string
 ) => {
   const formData = new FormData();
-  formData.append('file', file.buffer, file.originalname);
+  formData.append('file', fileBuffer, fileName);
   await axiosInstance.post(DISBURSEMENT.UPLOAD(disbursementID), formData, {
     headers: {
       ...formData.getHeaders(),
     },
   });
+  logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
 };

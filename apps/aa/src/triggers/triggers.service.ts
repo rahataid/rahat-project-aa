@@ -12,6 +12,8 @@ import { randomUUID } from 'crypto';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { GetOneTrigger, GetTriggers } from './dto';
 import { PhasesService } from '../phases/phases.service';
+import { TriggersUtilsService } from './triggers.utils.service';
+import { DisbursementServices } from '@rahataid/stellar';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -23,6 +25,7 @@ export class TriggersService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => PhasesService))
     private readonly phasesService: PhasesService,
+    private readonly triggerUtils: TriggersUtilsService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.TRIGGER) private readonly triggerQueue: Queue
   ) {}
@@ -341,6 +344,26 @@ export class TriggersService {
     });
 
     return updatedTrigger;
+  }
+
+  async disburse() {
+    // Get list of beneficiares to disburse
+    // Mock data
+    const bens = [{ phone: '+9779868823984', amount: '10', id: 1 }];
+    // Get CSV file
+    const csvBuffer = await this.triggerUtils.generateCSV(bens);
+    // Call disburse function from stellar sdk
+    const disbursementService = new DisbursementServices(
+      'owner@sandab.stellar.rahat.io',
+      'Password123!',
+      'sandab'
+    );
+
+    const disburse = disbursementService.createDisbursementProcess(
+      'aaTessst2',
+      csvBuffer,
+      'disbursement'
+    );
   }
 
   isValidDataSource(value: string) {
