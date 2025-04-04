@@ -14,6 +14,7 @@ export const getAuthToken = async (
     },
   });
   const sign = await as.post(RECEIVER.SIGN, account.data);
+
   return ar.post(RECEIVER.AUTH, {
     transaction: sign.data.transaction,
   });

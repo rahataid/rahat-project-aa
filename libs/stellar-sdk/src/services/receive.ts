@@ -32,7 +32,6 @@ export class ReceiveService implements IReceiveService {
       this.assetIssuer,
       this.assetCode
     );
-    await this.faucetService(keypair.publicKey);
     return keypair;
   }
 
@@ -42,6 +41,7 @@ export class ReceiveService implements IReceiveService {
     phoneNumber: string
   ): Promise<any> {
     const auth = await getAuthToken(tenantName, receiverPublicKey);
+    console.log(auth);
     const interactive = await interactive_url(
       receiverPublicKey,
       auth?.data.token
@@ -74,9 +74,18 @@ export class ReceiveService implements IReceiveService {
     );
   }
 
-  private async faucetService(walletAddress: string) {
+  public async faucetAndTrustlineService(
+    walletAddress: string,
+    secretKey: string
+  ) {
     await axios.get(
       `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
+    );
+    await add_trustline(
+      walletAddress,
+      secretKey,
+      this.assetIssuer,
+      this.assetCode
     );
     return { message: 'Funded successfully' };
   }

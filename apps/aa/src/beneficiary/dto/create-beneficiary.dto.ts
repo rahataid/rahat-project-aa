@@ -4,6 +4,7 @@ export class CreateBeneficiaryDto {
   uuid: UUID;
   walletAddress?: string;
   extras?: any;
+  isVerified?: boolean;
 }
 
 export interface AddBeneficiaryGroups {

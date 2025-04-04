@@ -64,14 +64,4 @@ export class TriggersController {
   async activate(payload: UpdateTriggerStatement) {
     return this.triggersService.activateTrigger(payload);
   }
-
-  // Disbursement Test
-  @MessagePattern({
-    cmd: JOBS.TRIGGERS.TEST,
-    uuid: process.env.PROJECT_ID,
-  })
-  async disburse() {
-    console.log('Disbursement reached');
-    return this.triggersService.disburse();
-  }
 }

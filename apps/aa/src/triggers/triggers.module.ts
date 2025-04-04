@@ -7,7 +7,6 @@ import { BQUEUE } from '../constants';
 import { PrismaModule } from '@rumsan/prisma';
 import { DataSourceModule } from '../datasource/datasource.module';
 import { PhasesModule } from '../phases/phases.module';
-import { TriggersUtilsService } from './triggers.utils.service';
 
 @Module({
   imports: [
@@ -25,8 +24,8 @@ import { TriggersUtilsService } from './triggers.utils.service';
     // PhasesModule
     forwardRef(() => PhasesModule),
   ],
-  providers: [TriggersService, TriggersUtilsService],
+  providers: [TriggersService],
   controllers: [TriggersController],
-  exports: [TriggersService, TriggersUtilsService],
+  exports: [TriggersService],
 })
 export class TriggersModule {}

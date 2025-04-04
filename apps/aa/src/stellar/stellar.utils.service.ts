@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TriggersService } from './triggers.service';
-import { BeneficiaryCSVData } from './dto/beneficiaryCSVData.dto';
+import { TriggersService } from '../triggers/triggers.service';
+import { BeneficiaryCSVData } from '../triggers/dto/beneficiaryCSVData.dto';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class TriggersUtilsService {
+export class StellarUtilsService {
   constructor(private configService: ConfigService) {}
 
   async generateCSV(benData: BeneficiaryCSVData[]): Promise<Buffer> {

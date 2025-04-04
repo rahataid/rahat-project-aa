@@ -11,6 +11,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { EVENTS } from '../constants';
+import { StellarService } from '../stellar/stellar.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -29,6 +30,7 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
+    private readonly stellarService: StellarService,
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
@@ -59,11 +61,24 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
+    delete dto.isVerified;
     const rdata = await this.rsprisma.beneficiary.create({
       data: dto,
     });
 
-    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    const keys = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
+        { walletAddress: dto.walletAddress, chain: 'STELLAR' }
+      )
+    );
+
+    await this.stellarService.faucetAndTrustlineService({
+      walletAddress: keys.address,
+      secretKey: keys.privateKey,
+    });
+
+    await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
     return rdata;
   }

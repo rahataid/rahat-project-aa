@@ -1,0 +1,9 @@
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-03 16:00:26"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-03 16:02:23"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-03 16:02:49"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-03 16:02:50"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-03 16:02:50"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-03 16:02:56"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-03 16:02:57"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-03 16:02:58"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-04-03 17:48:14"}

@@ -5,24 +5,33 @@ import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
+import { StellarModule } from '../stellar/stellar.module';
+import { StellarService } from '../stellar/stellar.service';
+import { StellarUtilsService } from '../stellar/stellar.utils.service';
 
 @Module({
   imports: [
     ClientsModule.register([
       {
-        name: "RAHAT_CORE_PROJECT_CLIENT",
+        name: 'RAHAT_CORE_PROJECT_CLIENT',
         transport: Transport.REDIS,
         options: {
           host: process.env.REDIS_HOST,
           port: +process.env.REDIS_PORT,
           password: process.env.REDIS_PASSWORD,
-        }
-      }
+        },
+      },
     ]),
-    StatsModule
+    StatsModule,
   ],
   controllers: [BeneficiaryController],
-  providers: [BeneficiaryService, PrismaService,BeneficiaryStatService],
-  exports: [BeneficiaryService]
+  providers: [
+    BeneficiaryService,
+    PrismaService,
+    BeneficiaryStatService,
+    StellarService,
+    StellarUtilsService,
+  ],
+  exports: [BeneficiaryService],
 })
-export class BeneficiaryModule { }
+export class BeneficiaryModule {}

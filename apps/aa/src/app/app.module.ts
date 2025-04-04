@@ -12,12 +12,13 @@ import { PhasesModule } from '../phases/phases.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
-import { SettingsModule } from "@rumsan/settings"
+import { SettingsModule } from '@rumsan/settings';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StatsModule } from '../stats';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { ListenersModule } from '../listeners/listeners.module';
 import { CommsModule } from '../comms/comms.module';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
@@ -45,11 +46,12 @@ import { CommsModule } from '../comms/comms.module';
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
+    StellarModule,
     DailyMonitoringModule,
     ListenersModule,
-    CommsModule.forRoot()
+    CommsModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
