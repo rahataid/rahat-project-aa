@@ -5,12 +5,13 @@ import { DISBURSEMENT } from '../constants/routes';
 import {
   countryCode,
   smsRegistrationMessageTemplate,
+  VERIFICATION,
 } from '../constants/constant';
 const FormData = require('form-data');
 
 type DisbursementProp = {
   walletType: 'Demo Wallet' | 'Vibrant Wallet';
-  verification: 'PIN' | 'DOB';
+  verification: VERIFICATION;
   assetCodes: string;
   disbursement_name: string;
 };
@@ -30,6 +31,15 @@ export const createDisbursement = async ({
   const { id: asset_id } = asset_res.data.find(
     (asset: any) => asset.code === assetCodes
   );
+
+  await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
+    name: disbursement_name,
+    wallet_id,
+    asset_id,
+    country_code: countryCode,
+    verification_field: verification,
+    receiver_registration_message_template: smsRegistrationMessageTemplate,
+  });
 
   const res: any = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
     name: disbursement_name,

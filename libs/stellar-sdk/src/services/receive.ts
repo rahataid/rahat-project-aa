@@ -41,14 +41,19 @@ export class ReceiveService implements IReceiveService {
     phoneNumber: string
   ): Promise<any> {
     const auth = await getAuthToken(tenantName, receiverPublicKey);
-    console.log(auth);
+
     const interactive = await interactive_url(
       receiverPublicKey,
       auth?.data.token
     );
-    await send_otp(phoneNumber, auth?.data.token);
     const url = new URL(interactive?.data.url);
     const verifyToken = url.searchParams.get('token') as string;
+    try {
+      await send_otp(phoneNumber, auth?.data.token);
+    } catch (error) {
+      console.log(error);
+    }
+
     return { verifyToken };
   }
 
@@ -58,20 +63,24 @@ export class ReceiveService implements IReceiveService {
     otp: string,
     verification: string
   ): Promise<any> {
-    return ag.post(
+    console.log(auth, phoneNumber, otp, verification);
+
+    const res = ag.post(
       RECEIVER.VERIFY_OTP,
       {
-        phoneNumber,
+        phone_number: phoneNumber,
         otp,
         verification,
         verification_type: DISBURSEMENT.VERIFICATION,
       },
       {
         headers: {
-          Authorization: auth,
+          Authorization: `Bearer ${auth}`,
         },
       }
     );
+
+    return 'Success';
   }
 
   public async faucetAndTrustlineService(

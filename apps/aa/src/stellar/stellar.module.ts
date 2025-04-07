@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StellarService } from './stellar.service';
 import { StellarController } from './stellar.controller';
-import { StellarUtilsService } from './stellar.utils.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
@@ -19,6 +18,6 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     ]),
   ],
   controllers: [StellarController],
-  providers: [StellarService, StellarUtilsService],
+  providers: [StellarService],
 })
 export class StellarModule {}

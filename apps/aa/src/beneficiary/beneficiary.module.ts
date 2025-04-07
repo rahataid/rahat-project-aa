@@ -5,9 +5,7 @@ import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
-import { StellarModule } from '../stellar/stellar.module';
 import { StellarService } from '../stellar/stellar.service';
-import { StellarUtilsService } from '../stellar/stellar.utils.service';
 
 @Module({
   imports: [
@@ -30,7 +28,6 @@ import { StellarUtilsService } from '../stellar/stellar.utils.service';
     PrismaService,
     BeneficiaryStatService,
     StellarService,
-    StellarUtilsService,
   ],
   exports: [BeneficiaryService],
 })
