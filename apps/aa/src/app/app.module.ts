@@ -9,8 +9,6 @@ import { ActivityCategoriesModule } from '../activity-categories/activity-catego
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { DataSourceModule } from '../datasource/datasource.module';
-import { DepositModule } from '../deposit/deposit.module';
-import { DisbursementModule } from '../disbursement/disbursement.modue';
 import { ListenersModule } from '../listeners/listeners.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ProcessorsModule } from '../processors/processors.module';
@@ -54,8 +52,6 @@ import { StellarModule } from '../stellar/stellar.module';
         },
       },
     ]),
-    DisbursementModule,
-    DepositModule,
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,

@@ -32,14 +32,6 @@ export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
-  STELLAR: {
-    SEND_OTP: 'rahat.jobs.stellar.sendOTP',
-    VERIFY_OTP: 'rahat.jobs.stellar.verifyOTP',
-    CREATE_DISBURSEMENT: 'rahat.jobs.stellar.createDisbursement',
-    GET_BALANCE: 'rahat.jobs.stellar.getBalance',
-    FAUCET: 'rahat.jobs.stellar.faucet',
-    TRANSACTIONS: 'rahat.jobs.stellar.transactions',
-  },
   PROJECT: {
     SETUP: 'rahat.jobs.project.setup',
     CREATE: 'rahat.jobs.project.create',
