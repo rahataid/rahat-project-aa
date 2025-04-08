@@ -8,6 +8,7 @@ import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { CvaDisbursementService } from '@rahat-project/cva';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE } from '../constants';
+import { StellarService } from '../stellar/stellar.service';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { BQUEUE } from '../constants';
     PrismaService,
     BeneficiaryStatService,
     CvaDisbursementService,
+    StellarService,
   ],
   exports: [BeneficiaryService],
 })

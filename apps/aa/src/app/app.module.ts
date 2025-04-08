@@ -22,6 +22,7 @@ import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ActivitiesModule } from '../activities/activites.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
+    StellarModule,
     DailyMonitoringModule,
     ListenersModule,
     CommsModule.forRoot(),

@@ -89,6 +89,12 @@ export const JOBS = {
     REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
   },
+  STELLAR: {
+    DISBURSE: 'aa.jobs.stellar.disburse',
+    SEND_OTP: 'aa.jobs.stellar.sendOtp',
+    VERIFY_OTP: 'aa.jobs.stellar.verifyOtp',
+    FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
+  },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
   },
