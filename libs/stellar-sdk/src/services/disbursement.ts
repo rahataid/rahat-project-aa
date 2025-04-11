@@ -58,18 +58,23 @@ export class DisbursementServices implements IDisbursementService {
     fileName: string,
     disbursementName: string
   ) {
-    const disbursement = await createDisbursement({
-      walletType: this.walletType,
-      verification: DISBURSEMENT.VERIFICATION,
-      assetCodes: ASSET.NAME,
-      disbursement_name: disbursementName,
-    });
+    try {
+      const disbursement = await createDisbursement({
+        walletType: this.walletType,
+        verification: DISBURSEMENT.VERIFICATION,
+        assetCodes: ASSET.NAME,
+        disbursement_name: disbursementName,
+      });
 
-    const disbursementID = disbursement?.disbursementID;
+      const disbursementID = disbursement?.disbursementID;
 
-    await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
-    await updateDisbursementStatus(disbursementID);
+      await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
+      await updateDisbursementStatus(disbursementID);
 
-    return disbursement;
+      return disbursement;
+    } catch (error) {
+      console.log(error);
+      return error;
+    }
   }
 }

@@ -86,3 +86,74 @@
 {"level":"info","message":"Login successful, token received.","timestamp":"2025-04-07 17:09:35"}
 {"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-07 17:09:36"}
 {"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-07 17:09:41"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:20:07"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:20:08"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:20:08"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:20:14"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:23:37"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:23:38"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:23:39"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:23:45"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:24:03"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:24:03"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:24:04"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:24:10"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:24:41"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:24:42"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:24:42"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:24:50"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:27:06"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:27:06"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:27:07"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:27:15"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:31:08"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:31:10"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:31:10"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:31:15"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:32:09"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:32:10"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:32:10"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:32:15"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:32:35"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:32:36"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:32:36"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:32:40"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:35:13"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:35:13"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:35:14"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:35:20"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:35:39"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:35:40"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:35:40"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:35:45"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:35:46"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:37:28"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:37:29"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:37:30"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:37:36"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:38:01"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:38:03"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:38:03"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:38:11"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:38:12"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:39:24"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:39:25"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:39:25"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:39:31"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:39:32"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:39:58"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:39:59"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:40:00"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:40:06"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:40:07"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:41:15"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:41:16"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:41:16"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:41:21"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:41:22"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-09 12:42:43"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-09 12:42:44"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-09 12:42:44"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:42:51"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:42:52"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:42:52"}

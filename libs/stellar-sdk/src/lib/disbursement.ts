@@ -32,15 +32,6 @@ export const createDisbursement = async ({
     (asset: any) => asset.code === assetCodes
   );
 
-  await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
-    name: disbursement_name,
-    wallet_id,
-    asset_id,
-    country_code: countryCode,
-    verification_field: verification,
-    receiver_registration_message_template: smsRegistrationMessageTemplate,
-  });
-
   const res: any = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
     name: disbursement_name,
     wallet_id,
