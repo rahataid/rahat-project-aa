@@ -26,7 +26,9 @@ import {
 export class StellarService {
   tenantName = 'sandab';
   server = new StellarRpc.Server('https://soroban-testnet.stellar.org');
-  keypair = Keypair.fromSecret('SECRET_KEY');
+  keypair = Keypair.fromSecret(
+    'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU'
+  );
 
   constructor(
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
