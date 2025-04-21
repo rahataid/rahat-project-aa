@@ -2,7 +2,12 @@ import { Controller } from '@nestjs/common';
 import { StellarService } from './stellar.service';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { FundAccountDto, SendOtpDto, VerifyOtpDto } from './dto/send-otp.dto';
+import {
+  AddTriggerDto,
+  FundAccountDto,
+  SendAssetDto,
+  SendOtpDto,
+} from './dto/send-otp.dto';
 import { DisburseDto } from './dto/disburse.dto';
 
 @Controller('stellar')
@@ -18,19 +23,11 @@ export class StellarController {
   }
 
   @MessagePattern({
-    cmd: JOBS.STELLAR.SEND_OTP,
+    cmd: JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
     uuid: process.env.PROJECT_ID,
   })
-  async sendOtp(sendOtpDto: SendOtpDto) {
-    return this.stellarService.sendOtp(sendOtpDto);
-  }
-
-  @MessagePattern({
-    cmd: JOBS.STELLAR.VERIFY_OTP,
-    uuid: process.env.PROJECT_ID,
-  })
-  async verifyOtp(sendOtpDto: VerifyOtpDto) {
-    return this.stellarService.verifyOtp(sendOtpDto);
+  async sendAssetToVendor(sendAssetDto: SendAssetDto) {
+    return this.stellarService.sendAssetToVendor(sendAssetDto);
   }
 
   @MessagePattern({
@@ -39,5 +36,13 @@ export class StellarController {
   })
   async fundStellarAccount(account: FundAccountDto) {
     return this.stellarService.faucetAndTrustlineService(account);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.STELLAR.FUND_STELLAR_ACCOUNT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async addTriggerOnChain(trigger: AddTriggerDto) {
+    return this.stellarService.addTriggerOnChain(trigger);
   }
 }

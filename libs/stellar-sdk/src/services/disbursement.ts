@@ -61,14 +61,15 @@ export class DisbursementServices implements IDisbursementService {
     try {
       const disbursement = await createDisbursement({
         walletType: this.walletType,
-        verification: DISBURSEMENT.VERIFICATION,
         assetCodes: ASSET.NAME,
         disbursement_name: disbursementName,
+        fileBuffer,
+        fileName,
       });
 
       const disbursementID = disbursement?.disbursementID;
 
-      await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
+      // await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
       await updateDisbursementStatus(disbursementID);
 
       return disbursement;

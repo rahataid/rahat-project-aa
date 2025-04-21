@@ -4,25 +4,28 @@ export const generateCSV = async (
   benData: BeneficiaryCSVData[],
   verificationNumber: string
 ): Promise<Buffer> => {
-  const header = 'phone,id,amount,verification,paymentID\n';
+  const header = 'phone,walletAddress,walletAddressMemo,id,amount,paymentID\n';
 
-  const randomNumber = Math.floor(Math.random() * 100000);
-
+  console.log(benData);
   const rows = benData
     .map((beneficiary) => {
+      const randomNumber = Math.floor(Math.random() * 100000);
       const reciverId = `RECEIVER_${beneficiary.id}`;
       const paymentId = `PAY_${beneficiary.id}_${randomNumber}`;
       const phone = `+977${beneficiary.phone.replace(/"/g, '""')}`;
       const id = reciverId.replace(/"/g, '""');
       const amount = beneficiary.amount.replace(/"/g, '""');
-      const verification = verificationNumber.replace(/"/g, '""');
       const paymentID = paymentId.replace(/"/g, '""');
 
-      return `"${phone}","${id}","${amount}","${verification}","${paymentID}"`;
+      const walletAddress = beneficiary.walletAddress.replace(/"/g, '""');
+
+      return `"${phone}","${walletAddress}","${beneficiary.phone}","${id}","${amount}","${paymentID}"`;
     })
     .join('\n');
 
   const csvFile = header + rows;
+
+  console.log(csvFile);
 
   return Buffer.from(csvFile, 'utf8');
 };

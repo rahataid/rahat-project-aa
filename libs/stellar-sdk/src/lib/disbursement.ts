@@ -11,34 +11,48 @@ const FormData = require('form-data');
 
 type DisbursementProp = {
   walletType: 'Demo Wallet' | 'Vibrant Wallet';
-  verification: VERIFICATION;
   assetCodes: string;
   disbursement_name: string;
+  fileBuffer: Buffer;
+  fileName: string;
 };
 
 export const createDisbursement = async ({
   walletType,
-  verification,
   assetCodes,
   disbursement_name,
+  fileBuffer,
+  fileName,
 }: DisbursementProp) => {
   const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
-  const { id: wallet_id } = walletRes.data.find(
-    (wallet: any) => wallet.name === walletType
-  );
 
   const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
   const { id: asset_id } = asset_res.data.find(
     (asset: any) => asset.code === assetCodes
   );
 
-  const res: any = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
+  const formDataObject = {
     name: disbursement_name,
-    wallet_id,
-    asset_id,
-    country_code: countryCode,
-    verification_field: verification,
-    receiver_registration_message_template: smsRegistrationMessageTemplate,
+    wallet_id: '',
+    asset_id: asset_id,
+    registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
+    verification_field: '',
+    receiver_registration_message_template: '',
+  };
+
+  const formDataString = JSON.stringify(formDataObject);
+
+  const formData = new FormData();
+  formData.append('data', formDataString);
+  formData.append('file', fileBuffer, {
+    filename: 'beneficiaries.csv',
+    contentType: 'text/csv',
+  });
+
+  const res = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, formData, {
+    headers: {
+      ...formData.getHeaders(),
+    },
   });
 
   logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);

@@ -157,3 +157,125 @@
 {"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-09 12:42:51"}
 {"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:42:52"}
 {"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-09 12:42:52"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 14:17:44"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 14:48:22"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 14:48:22"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 14:48:24"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 14:48:29"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 14:52:48"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 14:52:48"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 14:52:50"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 14:52:55"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 14:53:59"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 14:53:59"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 14:54:00"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 14:54:05"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 14:54:48"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 14:54:48"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 14:54:49"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 14:54:55"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:02:20"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:02:20"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:02:22"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:02:25"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:05:12"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:05:12"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:05:13"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:05:23"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:05:58"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:05:58"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:05:59"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:06:06"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:06:42"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:06:42"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:06:42"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:06:51"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:18:02"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:18:02"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:18:03"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:18:07"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:28:44"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:28:44"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:28:45"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:28:52"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:40:57"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:40:57"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:40:58"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:41:03"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:41:45"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:41:45"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:41:46"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:41:53"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:42:36"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:42:36"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:42:36"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:42:43"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:43:10"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:43:10"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:43:10"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:43:14"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:45:47"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:45:47"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:45:49"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:45:54"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:47:29"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:47:29"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:47:30"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:47:34"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:57:32"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:57:32"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:57:39"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:57:45"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 15:58:08"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 15:58:08"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 15:58:08"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 15:58:15"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-11 15:58:15"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:17:49"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:17:49"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:17:56"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:18:01"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:18:54"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:18:54"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:18:54"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:19:01"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-11 16:19:01"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:40:12"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:42:25"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:42:25"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:42:26"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:42:33"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:42:40"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:42:40"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:42:41"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:42:48"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:43:40"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:43:40"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:43:41"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:43:48"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:51:42"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:51:42"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:51:49"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:51:54"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-11 16:51:54"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:52:12"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:52:12"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:52:13"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:52:19"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 16:52:50"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 16:52:50"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 16:52:50"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 16:52:54"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-11 16:52:54"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-04-11 17:26:22"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-11 17:30:12"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-11 17:30:12"}
+{"level":"info","message":"Fetching distribution address for tenant: redcorp","timestamp":"2025-04-11 17:30:13"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-11 17:30:17"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-11 17:30:17"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-15 17:13:24"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-04-15 17:15:01"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-04-15 17:15:02"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-04-15 17:15:04"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-04-15 17:15:09"}
+{"level":"warn","message":"Successfully created disbursement","timestamp":"2025-04-15 17:15:10"}

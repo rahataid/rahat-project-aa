@@ -84,7 +84,7 @@ export const JOBS = {
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
-    VERIFY_OTP: 'aa.jobs.stellar.verifyOtp',
+    SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
   },
   PAYOUT: {

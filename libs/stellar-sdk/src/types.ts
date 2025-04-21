@@ -19,6 +19,7 @@ export interface IReceiveService {
     otp: string,
     verification: string
   ): Promise<any>;
+  sendAsset(senderSk: string, receiverPk: string, amount: string): Promise<any>;
 }
 
 export interface ITransactionService {
