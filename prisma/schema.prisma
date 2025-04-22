@@ -39,6 +39,15 @@ enum SettingDataType {
   OBJECT
 }
 
+enum PayoutType {
+  FSP
+  CVA
+}
+
+enum PayoutMode {
+  ONLINE
+  OFFLINE
+}
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -87,9 +96,28 @@ model BeneficiaryGroupTokens {
   groupId          String            @unique
   benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
+  payouts Payouts[]
   createdBy String?
 
   @@map("tbl_beneficiaries_groups_tokens")
+}
+
+model Payouts {
+  int   Int    @id @default(autoincrement()) @db.Integer()
+  uuid  String @unique @default(uuid())
+
+  type             PayoutType
+  mode             PayoutMode
+  status           String?
+  extras           Json?
+
+  groupId          String            @unique
+  benefefiaryGroup BeneficiaryGroupTokens @relation(fields: [groupId], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups_payouts")
 }
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
@@ -367,7 +395,7 @@ model Communication {
   message     String
   transportId String
   groupUID    String? @db.Uuid()
-  sessionId   String? // If sessionID is null, it means the message is not sent 
+  sessionId   String? // If sessionID is null, it means the message is not sent
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
