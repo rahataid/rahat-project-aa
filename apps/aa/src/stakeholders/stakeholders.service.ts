@@ -101,6 +101,16 @@ export class StakeholdersService {
     });
   }
 
+  async getOne(payload: { uuid: string }) {
+    return this.prisma.stakeholders.findUnique({
+      where: {
+        uuid: payload.uuid,
+      },
+      include: {
+        stakeholdersGroups: true,
+      },
+    });
+  }
   async remove(payload: RemoveStakeholdersData) {
     return await this.prisma.stakeholders.update({
       where: {
@@ -232,7 +242,7 @@ export class StakeholdersService {
 
   async getOneGroup(payload: GetOneGroup) {
     const { uuid } = payload;
-    return await this.prisma.stakeholdersGroups.findUnique({
+    return this.prisma.stakeholdersGroups.findUnique({
       where: {
         uuid: uuid,
       },

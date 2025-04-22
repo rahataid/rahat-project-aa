@@ -1,17 +1,34 @@
-import { UUID } from 'crypto';
+import { BaseBeneficiaryDto } from '@rahat-project/cva';
+import { Enums } from '@rahataid/sdk';
+import { IsEnum, IsNumber, IsOptional } from 'class-validator';
 
-export class CreateBeneficiaryDto {
-  uuid: UUID;
-  walletAddress?: string;
-  extras?: any;
+interface optionalBeneficiaryFields {
+  benTokens?: number;
+  gender?: Enums.Gender;
   isVerified?: boolean;
+}
+
+export class CreateBeneficiaryDto extends BaseBeneficiaryDto {
+  constructor(data: CreateBeneficiaryDto & optionalBeneficiaryFields) {
+    super(data);
+    this.gender = data.gender;
+    this.benTokens = data.benTokens;
+  }
+
+  @IsOptional()
+  @IsNumber()
+  benTokens?: number;
+
+  @IsOptional()
+  @IsEnum(Enums.Gender)
+  gender?: Enums.Gender;
 }
 
 export interface AddBeneficiaryGroups {
   name: string;
   beneficiaries: Array<{
     uuid: string;
-  }>
+  }>;
 }
 
 export interface AddTokenToGroup {
@@ -27,5 +44,5 @@ export interface AssignBenfGroupToProject {
     id: number;
     uuid: string;
     name: string;
-  }
+  };
 }
