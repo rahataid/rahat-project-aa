@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { DisbursementServices, ReceiveService } from '@rahataid/stellar';
+import { DisbursementServices, ReceiveService } from '@rahataid/stellar-sdk';
 import {
   AddTriggerDto,
   FundAccountDto,
