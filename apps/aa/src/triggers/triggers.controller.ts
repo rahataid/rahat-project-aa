@@ -2,16 +2,20 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { TriggersService } from './triggers.service';
-import { AddTriggerStatement, RemoveTriggerStatement, UpdateTriggerStatement } from '../dto';
+import {
+  AddTriggerStatement,
+  RemoveTriggerStatement,
+  UpdateTriggerStatement,
+} from '../dto';
 import { GetOneTrigger, GetTriggers } from './dto';
 
 @Controller()
 export class TriggersController {
-  constructor(private readonly triggersService: TriggersService) { }
+  constructor(private readonly triggersService: TriggersService) {}
 
   /***********************
-  * Development Only
-  *************************/
+   * Development Only
+   *************************/
   @MessagePattern({
     cmd: JOBS.TRIGGERS.DEV_ONLY,
     uuid: process.env.PROJECT_ID,
@@ -28,7 +32,6 @@ export class TriggersController {
   async getOne(payload: GetOneTrigger): Promise<any> {
     return this.triggersService.getOne(payload);
   }
-
 
   @MessagePattern({
     cmd: JOBS.TRIGGERS.GET_ALL,

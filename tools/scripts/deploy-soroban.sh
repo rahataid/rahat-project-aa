@@ -1,8 +1,8 @@
 CURRENT_DIR="$PWD"
-SOROBAN_DIR="$CURRENT_DIR/contract/trigger"
-WASM_OUTPUT="$CURRENT_DIR/contract/trigger/target/wasm32-unknown-unknown/release/hello_world.wasm"
+SOROBAN_DIR="$CURRENT_DIR/soroban/trigger"
+WASM_OUTPUT="$CURRENT_DIR/soroban/trigger/target/wasm32-unknown-unknown/release/hello_world.wasm"
 DEPLOY_ALIAS="deployed_contract"
-ENTITY="alice"
+ENTITY="manjik"
 
 check_soroban_cli() {
     if ! command -v stellar &> /dev/null; then

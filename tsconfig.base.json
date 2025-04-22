@@ -7,14 +7,18 @@
     "moduleResolution": "node",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    // "importHelpers": true,
     "target": "es2015",
     "module": "esnext",
     "lib": ["es2020", "dom"],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
-    "paths": {}
+    "paths": {
+      "@rahat-project/cva": ["libs/cva/src/index.ts"],
+      "@rahat-project/stellar-sdk": ["libs/stellar-sdk/src/index.ts"],
+      "@rahataid/wallet": ["libs/wallet/src/index.ts"],
+      "@rahataid/stellar": ["libs/stellar-sdk/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "tmp"]
 }

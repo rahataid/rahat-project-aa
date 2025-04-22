@@ -1,0 +1,1 @@
+export const horizon_server = 'https://horizon-testnet.stellar.org';

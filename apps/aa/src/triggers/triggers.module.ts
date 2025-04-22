@@ -18,14 +18,14 @@ import { PhasesModule } from '../phases/phases.module';
         name: BQUEUE.SCHEDULE,
       },
       {
-        name: BQUEUE.TRIGGER
+        name: BQUEUE.TRIGGER,
       }
     ),
     // PhasesModule
-    forwardRef(() => PhasesModule)
+    forwardRef(() => PhasesModule),
   ],
   providers: [TriggersService],
   controllers: [TriggersController],
-  exports: [TriggersService]
+  exports: [TriggersService],
 })
-export class TriggersModule { }
+export class TriggersModule {}

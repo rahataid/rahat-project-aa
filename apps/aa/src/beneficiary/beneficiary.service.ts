@@ -1,19 +1,22 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
+import { lastValueFrom } from 'rxjs';
+import { BQUEUE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
-import { EVENTS } from '../constants';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { StellarService } from '../stellar/stellar.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
-
+const BATCH_SIZE = 50;
 interface DataItem {
   groupId: UUID;
   [key: string]: any;
@@ -29,8 +32,11 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject("RAHAT_CORE_PROJECT_CLIENT") private readonly client: ClientProxy,
-    private eventEmitter: EventEmitter2
+    @Inject('RAHAT_CLIENT') private readonly client: ClientProxy,
+    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    private eventEmitter: EventEmitter2,
+    private readonly stellarService: StellarService,
+
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -59,11 +65,24 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
+    delete dto.isVerified;
     const rdata = await this.rsprisma.beneficiary.create({
       data: dto,
     });
 
-    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    const keys = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
+        { walletAddress: dto.walletAddress, chain: 'STELLAR' }
+      )
+    );
+
+    await this.stellarService.faucetAndTrustlineService({
+      walletAddress: keys.address,
+      secretKey: keys.privateKey,
+    });
+
+    await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
     return rdata;
   }
@@ -141,6 +160,16 @@ export class BeneficiaryService {
     return projectBendata;
   }
 
+  async findOneBeneficiary(payload) {
+    const { uuid, data } = payload;
+    const projectBendata = await this.rsprisma.beneficiary.findUnique({
+      where: { uuid },
+    });
+    return this.client.send(
+      { cmd: 'rahat.jobs.beneficiary.find_one_beneficiary' },
+      projectBendata
+    );
+  }
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
     const rdata = await this.rsprisma.beneficiary.update({
       where: { id: id },
@@ -335,5 +364,44 @@ export class BeneficiaryService {
     return {
       totalReservedTokens,
     };
+  }
+
+  async assignToken() {
+    const allBenfs = await this.getCount();
+    const batches = this.createBatches(allBenfs, BATCH_SIZE);
+
+    if (batches.length) {
+      batches?.forEach((batch) => {
+        this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
+      });
+    }
+  }
+
+  createBatches(total: number, batchSize: number, start = 1) {
+    const batches: { size: number; start: number; end: number }[] = [];
+    let elementsRemaining = total; // Track remaining elements to batch
+
+    while (elementsRemaining > 0) {
+      const end = start + Math.min(batchSize, elementsRemaining) - 1;
+      const currentBatchSize = end - start + 1;
+
+      batches.push({
+        size: currentBatchSize,
+        start: start,
+        end: end,
+      });
+
+      elementsRemaining -= currentBatchSize; // Subtract batched elements
+      start = end + 1; // Move start to the next element
+    }
+
+    return batches;
   }
 }

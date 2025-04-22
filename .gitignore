@@ -8,6 +8,7 @@ tmp
 config/
 /tools/project-scripts/local-setup/deployments
 .env.prod
+api-test.log
 
 # dependencies
 node_modules
@@ -52,3 +53,8 @@ Thumbs.db
 
 DB-Refresh
 prod-data/
+play/
+.qodo
+
+** Soroban **
+/soroban/trigger/target

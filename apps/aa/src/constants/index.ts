@@ -1,5 +1,7 @@
 export const NAMESPACE = 'rahat.projects';
 
+export const STELLER_UID = 'stellar';
+
 export const DATA_SOURCES = {
   DHM: 'DHM',
   MANUAL: 'MANUAL',
@@ -30,7 +32,14 @@ export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
-
+  STELLAR: {
+    SEND_OTP: 'rahat.jobs.stellar.sendOTP',
+    VERIFY_OTP: 'rahat.jobs.stellar.verifyOTP',
+    CREATE_DISBURSEMENT: 'rahat.jobs.stellar.createDisbursement',
+    GET_BALANCE: 'rahat.jobs.stellar.getBalance',
+    FAUCET: 'rahat.jobs.stellar.faucet',
+    TRANSACTIONS: 'rahat.jobs.stellar.transactions',
+  },
   PROJECT: {
     SETUP: 'rahat.jobs.project.setup',
     CREATE: 'rahat.jobs.project.create',
@@ -44,6 +53,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.beneficiary.list',
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
+    GET_ONE_BENEFICIARY: 'rahat.jobs.beneficiary.find_one_beneficiary',
     UPDATE: 'rahat.jobs.beneficiary.update',
     REFER: 'rahat.jobs.beneficiary.get_referred',
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
@@ -79,6 +89,12 @@ export const JOBS = {
     REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
   },
+  STELLAR: {
+    DISBURSE: 'aa.jobs.stellar.disburse',
+    SEND_OTP: 'aa.jobs.stellar.sendOtp',
+    VERIFY_OTP: 'aa.jobs.stellar.verifyOtp',
+    FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
+  },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
   },
@@ -111,6 +127,7 @@ export const JOBS = {
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
+    GET_ONE: 'aa.jobs.stakeholders.getOne',
     ADD: 'aa.jobs.stakeholders.add',
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
