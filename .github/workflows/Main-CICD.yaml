@@ -10,7 +10,6 @@ on:
 
 env:
   CI: false
-  env_npmrc: ${{ secrets.ENV_NPMRC }}
 
 jobs:
   deploy:
@@ -21,9 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: import env file
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.0
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            github/data/general/docker/esatya username | DOCKERHUB_USERNAME ;
+            github/data/general/docker/esatya password | DOCKERHUB_TOKEN ;
+            github/data/general/npmrc env  | NPMRC ;
+
+      - name: create environment file
         run: |
-          touch ./.npmrc && echo "$env_npmrc" >> ./.npmrc
+          tee ./.npmrc <<<"$NPMRC"
 
       - uses: actions/setup-node@v3
         with:
@@ -43,8 +52,8 @@ jobs:
       - name: docker login
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       # AA Image
       - name: build && push aa
