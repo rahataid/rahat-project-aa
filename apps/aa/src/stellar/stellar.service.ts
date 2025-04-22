@@ -39,7 +39,7 @@ export class StellarService {
   async disburse(disburseDto: DisburseDto) {
     const verificationPin = this.configService.get('SDP_VERIFICATION_PIN');
     const bens = await this.getBeneficiaryTokenBalance(disburseDto.groups);
-    const csvBuffer = await generateCSV(bens, verificationPin);
+    const csvBuffer = await generateCSV(bens);
 
     const disbursementService = new DisbursementServices(
       `owner@${this.tenantName}.stellar.rahat.io`,

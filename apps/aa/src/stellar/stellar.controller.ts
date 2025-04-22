@@ -23,6 +23,14 @@ export class StellarController {
   }
 
   @MessagePattern({
+    cmd: JOBS.STELLAR.SEND_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async sendOtp(sendAssetDto: SendAssetDto) {
+    return this.stellarService.sendAssetToVendor(sendAssetDto);
+  }
+
+  @MessagePattern({
     cmd: JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
     uuid: process.env.PROJECT_ID,
   })

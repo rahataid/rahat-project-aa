@@ -68,14 +68,11 @@ export class DisbursementServices implements IDisbursementService {
       });
 
       const disbursementID = disbursement?.disbursementID;
-
-      // await uploadDisbursementFile(disbursementID, fileBuffer, fileName);
       await updateDisbursementStatus(disbursementID);
-
       return disbursement;
     } catch (error) {
       console.log(error);
-      return error;
+      throw new Error(`Error creating disbursement: ${error}`);
     }
   }
 }

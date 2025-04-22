@@ -1,31 +1,33 @@
 import { BeneficiaryCSVData } from '../../triggers/dto/beneficiaryCSVData.dto';
 
 export const generateCSV = async (
-  benData: BeneficiaryCSVData[],
-  verificationNumber: string
+  benData: BeneficiaryCSVData[]
 ): Promise<Buffer> => {
   const header = 'phone,walletAddress,walletAddressMemo,id,amount,paymentID\n';
 
-  console.log(benData);
   const rows = benData
     .map((beneficiary) => {
+      const phone = `+977${beneficiary.phone.replace(/"/g, '""')}`;
+      const amount = parseFloat(beneficiary.amount);
+      if (isNaN(amount) || amount <= 1) {
+        throw new Error(
+          `Invalid amount for beneficiary ${beneficiary.id}: must be greater than 1`
+        );
+      }
+
       const randomNumber = Math.floor(Math.random() * 100000);
       const reciverId = `RECEIVER_${beneficiary.id}`;
       const paymentId = `PAY_${beneficiary.id}_${randomNumber}`;
-      const phone = `+977${beneficiary.phone.replace(/"/g, '""')}`;
       const id = reciverId.replace(/"/g, '""');
-      const amount = beneficiary.amount.replace(/"/g, '""');
+      const formattedAmount = beneficiary.amount.replace(/"/g, '""');
       const paymentID = paymentId.replace(/"/g, '""');
-
       const walletAddress = beneficiary.walletAddress.replace(/"/g, '""');
 
-      return `"${phone}","${walletAddress}","${beneficiary.phone}","${id}","${amount}","${paymentID}"`;
+      return `"${phone}","${walletAddress}","${beneficiary.phone}","${id}","${formattedAmount}","${paymentID}"`;
     })
     .join('\n');
 
   const csvFile = header + rows;
-
-  console.log(csvFile);
 
   return Buffer.from(csvFile, 'utf8');
 };
