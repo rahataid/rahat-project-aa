@@ -6,7 +6,7 @@ import {
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
 import { generateCSV } from './utils/stellar.utils.service';
@@ -34,24 +34,29 @@ export class StellarService {
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     private configService: ConfigService
-  ) {}
+  ) { }
   receiveService = new ReceiveService();
   async disburse(disburseDto: DisburseDto) {
-    const verificationPin = this.configService.get('SDP_VERIFICATION_PIN');
-    const bens = await this.getBeneficiaryTokenBalance(disburseDto.groups);
-    const csvBuffer = await generateCSV(bens);
+    try {
+      const verificationPin = this.configService.get('SDP_VERIFICATION_PIN');
+      const bens = await this.getBeneficiaryTokenBalance(disburseDto.groups);
+      const csvBuffer = await generateCSV(bens);
 
-    const disbursementService = new DisbursementServices(
-      `owner@${this.tenantName}.stellar.rahat.io`,
-      'Password123!',
-      this.tenantName
-    );
+      const disbursementService = new DisbursementServices(
+        `owner@${this.tenantName}.stellar.rahat.io`,
+        'Password123!',
+        this.tenantName
+      );
 
-    return disbursementService.createDisbursementProcess(
-      disburseDto.dName,
-      csvBuffer,
-      'disbursement'
-    );
+      return disbursementService.createDisbursementProcess(
+        disburseDto.dName,
+        csvBuffer,
+        'disbursement'
+      );
+
+    } catch (error) {
+      throw new RpcException(error.message || 'Something went wrong while generating CSV');
+    }
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {

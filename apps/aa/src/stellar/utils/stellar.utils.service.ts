@@ -1,8 +1,10 @@
+import { RpcException } from '@nestjs/microservices';
 import { BeneficiaryCSVData } from '../../triggers/dto/beneficiaryCSVData.dto';
 
 export const generateCSV = async (
   benData: BeneficiaryCSVData[]
 ): Promise<Buffer> => {
+  try {
   const header = 'phone,walletAddress,walletAddressMemo,id,amount,paymentID\n';
 
   const rows = benData
@@ -30,4 +32,8 @@ export const generateCSV = async (
   const csvFile = header + rows;
 
   return Buffer.from(csvFile, 'utf8');
+
+  } catch (error) {
+    throw new RpcException(error.message || 'Something went wrong while generating CSV');
+  }
 };
