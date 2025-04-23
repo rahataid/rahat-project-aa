@@ -2,8 +2,15 @@ import { getAuthToken, interactive_url } from '../lib/getTokens';
 import { send_otp } from '../lib/sendOtp';
 import { ag } from '../lib/axios/axiosGuest';
 import { RECEIVER } from '../constants/routes';
-import { ASSET, DISBURSEMENT } from '../constants/constant';
-import { Keypair } from '@stellar/stellar-sdk';
+import { ASSET, DISBURSEMENT, horizonServer } from '../constants/constant';
+import {
+  Asset,
+  Horizon,
+  Keypair,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk';
 import { add_trustline } from '../lib/addTrustline';
 import axios from 'axios';
 import { IReceiveService } from '../types';
@@ -63,8 +70,6 @@ export class ReceiveService implements IReceiveService {
     otp: string,
     verification: string
   ): Promise<any> {
-    console.log(auth, phoneNumber, otp, verification);
-
     const res = ag.post(
       RECEIVER.VERIFY_OTP,
       {
@@ -97,5 +102,35 @@ export class ReceiveService implements IReceiveService {
       this.assetCode
     );
     return { message: 'Funded successfully' };
+  }
+
+  public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
+    const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
+    const server = new Horizon.Server(horizonServer);
+
+    const senderKeypair = Keypair.fromSecret(senderSk);
+    const senderAccount = await server.loadAccount(senderKeypair.publicKey());
+
+    console.log(senderAccount, 'sender account');
+
+    const transaction = new TransactionBuilder(senderAccount, {
+      fee: (await server.fetchBaseFee()).toString(),
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        Operation.payment({
+          destination: receiverPk,
+          asset,
+          amount,
+        })
+      )
+      .setTimeout(30)
+      .build();
+
+    transaction.sign(Keypair.fromSecret(senderSk));
+
+    await server.submitTransaction(transaction);
+
+    return { success: 'tokens sent to vendor' };
   }
 }
