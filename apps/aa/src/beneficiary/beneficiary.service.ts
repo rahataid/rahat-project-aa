@@ -211,15 +211,33 @@ export class BeneficiaryService {
         uuid: uuid,
         deletedAt: null,
       },
+      include: {
+        tokensReserved: true,
+      }
     });
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    return lastValueFrom(
+    const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
         benfGroup.uuid
       )
     );
+
+    data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
+      let token = null;
+
+      if(benfGroup.tokensReserved) {
+        token = benfGroup.tokensReserved.numberOfTokens;
+      }
+
+      return {
+        ...benf,
+        tokensReserved: token,
+      }
+    });
+
+    return data;
   }
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
