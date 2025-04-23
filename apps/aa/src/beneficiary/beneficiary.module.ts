@@ -14,7 +14,7 @@ import { StellarService } from '../stellar/stellar.service';
   imports: [
     ClientsModule.register([
       {
-        name: 'RAHAT_CLIENT',
+        name: 'RAHAT_CORE_PROJECT_CLIENT',
         transport: Transport.REDIS,
         options: {
           host: process.env.REDIS_HOST,

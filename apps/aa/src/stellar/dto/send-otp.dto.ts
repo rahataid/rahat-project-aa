@@ -2,14 +2,17 @@ export class SendOtpDto {
   phoneNumber: string;
 }
 
-export class VerifyOtpDto {
-  auth: string;
+export class SendAssetDto {
+  amount: string;
   phoneNumber: string;
-  otp: string;
-  verification: string;
+  receiverAddress: string;
 }
 
 export class FundAccountDto {
   walletAddress: string;
   secretKey: string;
+}
+
+export class AddTriggerDto {
+  id: string;
 }

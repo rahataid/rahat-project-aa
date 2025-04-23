@@ -20,13 +20,13 @@ export class BeneficiaryController {
   //   return this.beneficiaryService.findAll(data);
   // }
 
-  // @MessagePattern({
-  //   cmd: JOBS.BENEFICIARY.ADD_TO_PROJECT,
-  //   uuid: process.env.PROJECT_ID,
-  // })
-  // create(data: CreateBeneficiaryDto) {
-  //   return this.beneficiaryService.create(data);
-  // }
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ADD_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  create(data: CreateBeneficiaryDto) {
+    return this.beneficiaryService.create(data);
+  }
 
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {

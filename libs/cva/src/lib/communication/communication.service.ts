@@ -75,6 +75,7 @@ export class CvaCommunicationService {
   }
 
   async boradCastCountsStats(): Promise<unknown> {
+    // @ts-ignore
     const commsData = await this.commsClient.broadcast.getStatusCount();
     return commsData?.response;
   }
