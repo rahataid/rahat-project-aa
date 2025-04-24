@@ -6,7 +6,7 @@ import {
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
 import { generateCSV } from './utils/stellar.utils.service';

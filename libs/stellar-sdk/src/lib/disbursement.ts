@@ -24,6 +24,7 @@ export const createDisbursement = async ({
   fileBuffer,
   fileName,
 }: DisbursementProp) => {
+  try {
   const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
 
   const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
@@ -60,6 +61,23 @@ export const createDisbursement = async ({
     disbursementID: res.data.id,
     assetIssuer: walletRes.data[0].assets[0].issuer,
   };
+
+  } catch (error: any) {
+  if (error.response?.data) {
+      const { error: errorMessage, extras } = error.response.data;
+      let formattedError = errorMessage;
+
+      if (extras && typeof extras === 'object') {
+      const extraMessages = Object.entries(extras)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('; ');
+      formattedError += ` - Details: ${extraMessages}`;
+      }
+      throw Error(formattedError)
+    } else {
+      throw Error(error.message)
+    }
+  }
 };
 
 export const updateDisbursementStatus = async (disbursementId: string) => {
