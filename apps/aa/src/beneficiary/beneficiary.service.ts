@@ -121,7 +121,7 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage, sort, order } = dto;
+    const { page, perPage, sort, order, tokenAssigned } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -130,6 +130,14 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
+          ...(tokenAssigned
+            ? {
+                tokensReserved: {
+                  isNot: null,
+                },
+              }
+            : {}),
+
           deletedAt: null,
         },
         orderBy,
@@ -213,7 +221,7 @@ export class BeneficiaryService {
       },
       include: {
         tokensReserved: true,
-      }
+      },
     });
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
@@ -227,14 +235,14 @@ export class BeneficiaryService {
     data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
       let token = null;
 
-      if(benfGroup.tokensReserved) {
+      if (benfGroup.tokensReserved) {
         token = benfGroup.tokensReserved.numberOfTokens;
       }
 
       return {
         ...benf,
         tokensReserved: token,
-      }
+      };
     });
 
     return data;
