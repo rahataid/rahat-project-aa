@@ -39,9 +39,13 @@ export class StellarService {
   receiveService = new ReceiveService();
   async disburse(disburseDto: DisburseDto) {
     const groups =
-      disburseDto.groups.length > 0
+      (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
         : await this.getGroupsUuids();
+
+    console.log(groups.length);
+
+    return;
 
     const bens = await this.getBeneficiaryTokenBalance(groups);
     const csvBuffer = await generateCSV(bens);
