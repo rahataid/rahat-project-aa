@@ -2,7 +2,8 @@ export interface IDisbursementService {
   createDisbursementProcess(
     disbursementName: string,
     fileBuffer: Buffer,
-    fileName: string
+    fileName: string,
+    amount: string
   ): Promise<any>;
 }
 
@@ -20,6 +21,7 @@ export interface IReceiveService {
     verification: string
   ): Promise<any>;
   sendAsset(senderSk: string, receiverPk: string, amount: string): Promise<any>;
+  getAccountBalance(wallet: string): Promise<any>;
 }
 
 export interface ITransactionService {

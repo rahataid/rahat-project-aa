@@ -1,4 +1,9 @@
+import { IsOptional, IsString } from 'class-validator';
+
 export class DisburseDto {
+  @IsString()
   dName: string;
-  groups: string[];
+
+  @IsOptional()
+  groups?: string[];
 }
