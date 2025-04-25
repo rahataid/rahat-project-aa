@@ -33,7 +33,7 @@ export class StellarService {
   receiveService = new ReceiveService();
   async disburse(disburseDto: DisburseDto) {
     const groups =
-      disburseDto.groups.length > 0
+      (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
         : await this.getGroupsUuids();
 
