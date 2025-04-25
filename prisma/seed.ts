@@ -186,6 +186,20 @@ const main = async () => {
     isPrivate: false,
   });
   // ***** seed settings complete ***
+
+  const stellarValue = {
+    tenantName: 'sandab',
+    server: 'https://soroban-testnet.stellar.org',
+    keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
+    email: 'owner@sandab.stellar.rahat.io',
+    password: 'Password123!',
+  };
+
+  await settings.create({
+    name: 'STELLAR_SETTINGS',
+    value: stellarValue,
+    isPrivate: false,
+  });
 };
 
 main()

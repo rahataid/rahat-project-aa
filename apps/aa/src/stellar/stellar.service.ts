@@ -6,7 +6,7 @@ import {
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
 import { generateCSV } from './utils/stellar.utils.service';
@@ -21,19 +21,13 @@ import {
   xdr,
 } from '@stellar/stellar-sdk';
 import bcrypt from 'bcryptjs';
+import { SettingsService } from '@rumsan/settings';
 
 @Injectable()
 export class StellarService {
-  tenantName = 'sandab';
-  server = new StellarRpc.Server('https://soroban-testnet.stellar.org');
-  keypair = Keypair.fromSecret(
-    'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU'
-  );
-  email = `owner@${this.tenantName}.stellar.rahat.io`;
-  password = 'Password123!';
-
   constructor(
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
+    private readonly settingService: SettingsService,
     private readonly prisma: PrismaService
   ) {}
   receiveService = new ReceiveService();
@@ -47,9 +41,9 @@ export class StellarService {
     const csvBuffer = await generateCSV(bens);
 
     const disbursementService = new DisbursementServices(
-      this.email,
-      this.password,
-      this.tenantName
+      await this.getFromSettings('EMAIL'),
+      await this.getFromSettings('PASSWORD'),
+      await this.getFromSettings('TENANTNAME')
     );
 
     let totalTokens: number;
@@ -66,6 +60,8 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
+    const email = await this.getFromSettings('EMAIL');
+
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
     const res = await lastValueFrom(
@@ -182,8 +178,10 @@ export class StellarService {
   }
 
   private async createTransaction(triggerId: string) {
-    const publicKey = this.keypair.publicKey();
-    const sourceAccount = await this.server.getAccount(publicKey);
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const publicKey = keypair.publicKey();
+    const sourceAccount = await server.getAccount(publicKey);
     const CONTRACT_ID =
       'CCBMWNAW3MXSIG55EM2FPNLDU5OX2O3KJCQB4TTAUUBR54NXKMJ6CFUY';
 
@@ -214,12 +212,12 @@ export class StellarService {
   }
 
   private async prepareSignAndSend(transaction) {
-    const preparedTransaction = await this.server.prepareTransaction(
-      transaction
-    );
-    preparedTransaction.sign(this.keypair);
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const preparedTransaction = await server.prepareTransaction(transaction);
+    preparedTransaction.sign(keypair);
 
-    return this.server.sendTransaction(preparedTransaction);
+    return server.sendTransaction(preparedTransaction);
   }
 
   private async getBenTotal(phoneNumber: string) {
@@ -294,5 +292,10 @@ export class StellarService {
       select: { uuid: true },
     });
     return benGroups.map((group) => group.uuid);
+  }
+
+  private async getFromSettings(key: string) {
+    const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
+    return settings?.value[key];
   }
 }
