@@ -6,11 +6,10 @@ import {
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
 import { generateCSV } from './utils/stellar.utils.service';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@rumsan/prisma';
 import {
   Keypair,
@@ -21,70 +20,79 @@ import {
   Contract,
   xdr,
 } from '@stellar/stellar-sdk';
+import bcrypt from 'bcryptjs';
+import { SettingsService } from '@rumsan/settings';
 
 @Injectable()
 export class StellarService {
-  tenantName = 'sandab';
-  server = new StellarRpc.Server('https://soroban-testnet.stellar.org');
-  keypair = Keypair.fromSecret(
-    'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU'
-  );
-
   constructor(
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
-    private readonly prisma: PrismaService,
-    private configService: ConfigService
-  ) { }
+    private readonly settingService: SettingsService,
+    private readonly prisma: PrismaService
+  ) {}
   receiveService = new ReceiveService();
   async disburse(disburseDto: DisburseDto) {
-    try {
-      const verificationPin = this.configService.get('SDP_VERIFICATION_PIN');
-      const bens = await this.getBeneficiaryTokenBalance(disburseDto.groups);
-      const csvBuffer = await generateCSV(bens);
+    const groups =
+      (disburseDto?.groups && disburseDto?.groups.length) > 0
+        ? disburseDto.groups
+        : await this.getGroupsUuids();
 
-      const disbursementService = new DisbursementServices(
-        `owner@${this.tenantName}.stellar.rahat.io`,
-        'Password123!',
-        this.tenantName
-      );
+    const bens = await this.getBeneficiaryTokenBalance(groups);
+    const csvBuffer = await generateCSV(bens);
 
-      return disbursementService.createDisbursementProcess(
-        disburseDto.dName,
-        csvBuffer,
-        'disbursement'
-      );
+    const disbursementService = new DisbursementServices(
+      await this.getFromSettings('EMAIL'),
+      await this.getFromSettings('PASSWORD'),
+      await this.getFromSettings('TENANTNAME')
+    );
 
-    } catch (error) {
-      throw new RpcException(error.message || 'Something went wrong while generating CSV');
-    }
+    let totalTokens: number;
+    bens.forEach((ben) => {
+      totalTokens += Number(ben.amount);
+    });
+
+    return disbursementService.createDisbursementProcess(
+      disburseDto.dName,
+      csvBuffer,
+      `${disburseDto.dName}_file`,
+      totalTokens.toString()
+    );
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    const walletAddress = await lastValueFrom(
+    const email = await this.getFromSettings('EMAIL');
+
+    const amount =
+      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+    const res = await lastValueFrom(
       this.client.send(
-        { cmd: 'rahat.jobs.wallet.getWalletByphone' },
-        { phoneNumber: sendOtpDto.phoneNumber }
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: sendOtpDto.phoneNumber, amount }
       )
     );
 
-    return this.receiveService.sendOTP(
-      this.tenantName,
-      walletAddress,
-      `+977${sendOtpDto.phoneNumber}`
-    );
+    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
-    const keys = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
-        { phoneNumber: verifyOtpDto.phoneNumber, chain: 'stellar' }
-      )
-    );
+    try {
+      await this.verifyOTP(
+        verifyOtpDto.otp,
+        verifyOtpDto.phoneNumber,
+        verifyOtpDto.amount as number
+      );
+    } catch (error) {
+      console.log(error);
+      throw new Error(
+        error instanceof Error ? error.message : 'OTP verification failed'
+      );
+    }
+
+    const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
     return this.receiveService.sendAsset(
       keys.privateKey,
       verifyOtpDto.receiverAddress,
-      verifyOtpDto.amount
+      verifyOtpDto.amount as string
     );
   }
 
@@ -170,8 +178,10 @@ export class StellarService {
   }
 
   private async createTransaction(triggerId: string) {
-    const publicKey = this.keypair.publicKey();
-    const sourceAccount = await this.server.getAccount(publicKey);
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const publicKey = keypair.publicKey();
+    const sourceAccount = await server.getAccount(publicKey);
     const CONTRACT_ID =
       'CCBMWNAW3MXSIG55EM2FPNLDU5OX2O3KJCQB4TTAUUBR54NXKMJ6CFUY';
 
@@ -202,11 +212,90 @@ export class StellarService {
   }
 
   private async prepareSignAndSend(transaction) {
-    const preparedTransaction = await this.server.prepareTransaction(
-      transaction
-    );
-    preparedTransaction.sign(this.keypair);
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const preparedTransaction = await server.prepareTransaction(transaction);
+    preparedTransaction.sign(keypair);
 
-    return this.server.sendTransaction(preparedTransaction);
+    return server.sendTransaction(preparedTransaction);
+  }
+
+  private async getBenTotal(phoneNumber: string) {
+    const keys = await this.getSecretByPhone(phoneNumber);
+    const accountBalances = await this.receiveService.getAccountBalance(
+      keys.address
+    );
+    const rahatAsset = accountBalances?.find(
+      (bal: any) => bal.asset_code === 'RAHAT'
+    );
+    return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+  }
+
+  private async getSecretByPhone(phoneNumber: string) {
+    return lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
+        { phoneNumber: phoneNumber, chain: 'stellar' }
+      )
+    );
+  }
+
+  private async storeOTP(otp: string, phoneNumber: string, amount: number) {
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+
+    return await this.prisma.otp.upsert({
+      where: {
+        phoneNumber,
+      },
+      update: {
+        otpHash,
+        amount,
+        expiresAt,
+        updatedAt: new Date(),
+      },
+      create: {
+        phoneNumber,
+        otpHash,
+        amount,
+        expiresAt,
+      },
+    });
+  }
+
+  private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber },
+    });
+
+    if (!record) {
+      throw new Error('OTP record not found');
+    }
+
+    const now = new Date();
+    if (record.expiresAt < now) {
+      throw new Error('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    if (!isValid) {
+      throw new Error('Invalid OTP or amount mismatch');
+    }
+
+    return true;
+  }
+
+  private async getGroupsUuids() {
+    const benGroups = await this.prisma.beneficiaryGroups.findMany({
+      select: { uuid: true },
+    });
+    return benGroups.map((group) => group.uuid);
+  }
+
+  private async getFromSettings(key: string) {
+    const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
+    return settings?.value[key];
   }
 }

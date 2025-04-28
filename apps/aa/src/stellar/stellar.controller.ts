@@ -26,8 +26,8 @@ export class StellarController {
     cmd: JOBS.STELLAR.SEND_OTP,
     uuid: process.env.PROJECT_ID,
   })
-  async sendOtp(sendAssetDto: SendAssetDto) {
-    return this.stellarService.sendAssetToVendor(sendAssetDto);
+  async sendOtp(sendAssetDto: SendOtpDto) {
+    return this.stellarService.sendOtp(sendAssetDto);
   }
 
   @MessagePattern({

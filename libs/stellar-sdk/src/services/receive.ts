@@ -111,8 +111,6 @@ export class ReceiveService implements IReceiveService {
     const senderKeypair = Keypair.fromSecret(senderSk);
     const senderAccount = await server.loadAccount(senderKeypair.publicKey());
 
-    console.log(senderAccount, 'sender account');
-
     const transaction = new TransactionBuilder(senderAccount, {
       fee: (await server.fetchBaseFee()).toString(),
       networkPassphrase: Networks.TESTNET,
@@ -132,5 +130,11 @@ export class ReceiveService implements IReceiveService {
     await server.submitTransaction(transaction);
 
     return { success: 'tokens sent to vendor' };
+  }
+
+  public async getAccountBalance(wallet: string) {
+    const server = new Horizon.Server(horizonServer);
+    const account = await server.accounts().accountId(wallet).call();
+    return account.balances;
   }
 }
