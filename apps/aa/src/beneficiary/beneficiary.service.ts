@@ -148,6 +148,7 @@ export class BeneficiaryService {
       }
     );
 
+    console.log(benfGroups);
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
       benfGroups

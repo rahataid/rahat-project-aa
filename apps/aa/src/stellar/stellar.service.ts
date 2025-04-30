@@ -1,5 +1,9 @@
+import {
+  DisbursementServices,
+  ReceiveService,
+  TransactionService,
+} from '@rahataid/stellar-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { DisbursementServices, ReceiveService } from '@rahataid/stellar-sdk';
 import {
   AddTriggerDto,
   FundAccountDto,
@@ -30,8 +34,14 @@ export class StellarService {
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService
-  ) {}
+  ) {
+    this.initializeDisbursementService();
+  }
+
+  private disbursementService: DisbursementServices;
   receiveService = new ReceiveService();
+  transactionService = new TransactionService();
+
   async disburse(disburseDto: DisburseDto) {
     this.logger.log('disburseDto', disburseDto);
     const groups =
@@ -41,17 +51,12 @@ export class StellarService {
 
     this.logger.log('Token Disburse for: ', groups);
     const bens = await this.getBeneficiaryTokenBalance(groups);
-    this.logger.log(`Beneficiary Token Balance: ${bens.length}`)
+    this.logger.log(`Beneficiary Token Balance: ${bens.length}`);
 
     const csvBuffer = await generateCSV(bens);
 
-    const disbursementService = new DisbursementServices( await this.getFromSettings('EMAIL'),
-      await this.getFromSettings('PASSWORD'),
-      await this.getFromSettings('TENANTNAME')
-    );
-
     let totalTokens: number;
-    if(!bens){
+    if (!bens) {
       throw new RpcException('Beneficiary Token Balance not found');
     }
 
@@ -59,9 +64,7 @@ export class StellarService {
       totalTokens += Number(ben.amount);
     });
 
-    this.logger.log(`Total Tokens: ${totalTokens}`);
-
-    return disbursementService.createDisbursementProcess(
+    return this.disbursementService.createDisbursementProcess(
       disburseDto.dName,
       csvBuffer,
       `${disburseDto.dName}_file`,
@@ -70,8 +73,6 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    const email = await this.getFromSettings('EMAIL');
-
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
     const res = await lastValueFrom(
@@ -86,13 +87,16 @@ export class StellarService {
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
+      const amount =
+        verifyOtpDto?.amount ||
+        (await this.getBenTotal(verifyOtpDto?.phoneNumber));
+
       await this.verifyOTP(
         verifyOtpDto.otp,
         verifyOtpDto.phoneNumber,
-        verifyOtpDto.amount as number
+        amount as number
       );
     } catch (error) {
-      console.log(error);
       throw new Error(
         error instanceof Error ? error.message : 'OTP verification failed'
       );
@@ -120,7 +124,7 @@ export class StellarService {
       this.fetchGroupedBeneficiaries(groupUuids),
       this.fetchGroupTokenAmounts(groupUuids),
     ]);
-    
+
     this.logger.log(`Found ${groups.length} groups`);
     this.logger.log(`Found ${tokens.length} tokens`);
 
@@ -132,6 +136,36 @@ export class StellarService {
     return this.prepareSignAndSend(transaction);
   }
 
+  async getDisbursementStats() {
+    // Disbursement Account balance
+    const disbursementBalance = await this.getRahatBalance(
+      await this.disbursementService.getDistributionAddress(
+        await this.getFromSettings('TENANTNAME')
+      )
+    );
+
+    // Vendor address balance
+    const disbursedBalance = await this.getRahatBalance(
+      await this.getFromSettings('VENDORADDRESS')
+    );
+
+    return {
+      tokenStats: [
+        {
+          name: 'Disbursement Balance',
+          amount: disbursementBalance.toLocaleString(),
+        },
+        {
+          name: 'Disbursed Balance',
+          amount: disbursedBalance.toLocaleString(),
+        },
+        { name: 'Token Price', amount: 'Rs 10' },
+      ],
+      transactionStats: await this.getRecentTransaction(),
+    };
+  }
+
+  // ---------- Private functions ----------------
   private async fetchGroupedBeneficiaries(groupUuids: string[]) {
     const response = await lastValueFrom(
       this.client.send(
@@ -195,8 +229,7 @@ export class StellarService {
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
     const publicKey = keypair.publicKey();
     const sourceAccount = await server.getAccount(publicKey);
-    const CONTRACT_ID =
-      'CCBMWNAW3MXSIG55EM2FPNLDU5OX2O3KJCQB4TTAUUBR54NXKMJ6CFUY';
+    const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
 
     const contract = new Contract(CONTRACT_ID);
     let transaction = new TransactionBuilder(sourceAccount, {
@@ -228,6 +261,7 @@ export class StellarService {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
     const preparedTransaction = await server.prepareTransaction(transaction);
+
     preparedTransaction.sign(keypair);
 
     return server.sendTransaction(preparedTransaction);
@@ -235,13 +269,7 @@ export class StellarService {
 
   private async getBenTotal(phoneNumber: string) {
     const keys = await this.getSecretByPhone(phoneNumber);
-    const accountBalances = await this.receiveService.getAccountBalance(
-      keys.address
-    );
-    const rahatAsset = accountBalances?.find(
-      (bal: any) => bal.asset_code === 'RAHAT'
-    );
-    return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+    return this.getRahatBalance(keys.address);
   }
 
   private async getSecretByPhone(phoneNumber: string) {
@@ -304,11 +332,10 @@ export class StellarService {
     const benGroups = await this.prisma.beneficiaryGroups.findMany({
       where: {
         tokensReserved: {
-        numberOfTokens: {
-          gt: 0,
+          numberOfTokens: {
+            gt: 0,
+          },
         },
-        }
-
       },
       select: { uuid: true },
     });
@@ -318,5 +345,47 @@ export class StellarService {
   private async getFromSettings(key: string) {
     const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
     return settings?.value[key];
+  }
+
+  private async getRahatBalance(keys) {
+    const accountBalances = await this.receiveService.getAccountBalance(keys);
+    const rahatAsset = accountBalances?.find(
+      (bal: any) => bal.asset_code === 'RAHAT'
+    );
+
+    return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+  }
+
+  private async initializeDisbursementService() {
+    const [email, password, tenantName] = await Promise.all([
+      this.getFromSettings('EMAIL'),
+      this.getFromSettings('PASSWORD'),
+      this.getFromSettings('TENANTNAME'),
+    ]);
+    this.disbursementService = new DisbursementServices(
+      email,
+      password,
+      tenantName
+    );
+  }
+
+  private async getRecentTransaction() {
+    const transactions = await this.transactionService.getTransaction(
+      await this.disbursementService.getDistributionAddress(
+        await this.getFromSettings('TENANTNAME')
+      ),
+      10,
+      'desc'
+    );
+
+    return transactions.map((txn) => {
+      return {
+        title: txn.asset,
+        subtitle: txn.source,
+        date: txn.created_at,
+        amount: Number(txn.amount).toFixed(0),
+        amtColor: txn.amtColor,
+      };
+    });
   }
 }

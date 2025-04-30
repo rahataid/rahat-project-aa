@@ -11,8 +11,7 @@ stellar contract build
 # Step 2
 
 Create a testnet account for entity alssice and fund:
-stellar keys generate --global alice --network testnet --fund
-s
+stellar keys generate --global sushant --network testnet --fund
 
 # Step 3
 
@@ -26,6 +25,6 @@ This will deploy from compiled file hello_world.wasm
 
 stellar contract deploy \
  --wasm target/wasm32-unknown-unknown/release/hello_world.wasm \
- --source alice \
+ --source sushant \
  --network testnet \
  --alias deployed_contract

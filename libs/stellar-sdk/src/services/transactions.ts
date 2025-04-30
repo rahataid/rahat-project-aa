@@ -26,12 +26,17 @@ export class TransactionService implements ITransactionService {
         //@ts-ignore
         amount,
         source_account,
+        //@ts-ignore
+        from,
+        //@ts-ignore
+        to,
       }) => ({
         asset: asset_code || 'XLM',
         created_at,
         hash: transaction_hash,
         amount: amount || '0',
         source: source_account,
+        amtColor: from === pk ? 'red' : to === pk ? 'green' : 'blue',
       })
     );
   }

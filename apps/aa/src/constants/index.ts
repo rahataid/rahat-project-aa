@@ -86,6 +86,9 @@ export const JOBS = {
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
+    ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
+    GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
+    GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',

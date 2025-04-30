@@ -5,6 +5,7 @@ export interface IDisbursementService {
     fileName: string,
     amount: string
   ): Promise<any>;
+  getDistributionAddress(tenantName: string): Promise<any>;
 }
 
 export interface IReceiveService {

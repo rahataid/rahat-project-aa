@@ -17,7 +17,7 @@ export const getDistributionAddress = async (name: string): Promise<string> => {
 
   if (!tenant) {
     logger.warn(LOGS.ERROR.DISBURSEMENT_ADDDRESS_NOT_FOUND(name));
-    return LOGS.ERROR.DISBURSEMENT_ADDDRESS_NOT_FOUND(name);
+    throw new Error(LOGS.ERROR.DISBURSEMENT_ADDDRESS_NOT_FOUND(name));
   }
 
   return tenant.distribution_account_address;

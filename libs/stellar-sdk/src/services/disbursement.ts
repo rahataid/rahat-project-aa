@@ -40,6 +40,10 @@ export class DisbursementServices implements IDisbursementService {
     return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 
+  public async getDistributionAddress(tenantName: string) {
+    return await getDistributionAddress(tenantName);
+  }
+
   // Creates custom asset and fund disbursement account
   private async custom_asset(amount: string) {
     const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
@@ -50,7 +54,7 @@ export class DisbursementServices implements IDisbursementService {
       issuer: ASSET.ISSUER,
     });
     const disbursementAddress = await getDistributionAddress(this.tenantName);
-    await transfer_asset(disbursementAddress, asset);
+    await transfer_asset(disbursementAddress, asset, amount);
   }
 
   // Create disbursement and update status
