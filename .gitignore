@@ -53,8 +53,6 @@ Thumbs.db
 
 DB-Refresh
 prod-data/
-play/
 .qodo
-
-** Soroban **
 /soroban/trigger/target
+play/

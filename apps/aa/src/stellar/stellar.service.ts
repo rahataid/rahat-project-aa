@@ -1,16 +1,16 @@
-import { Inject, Injectable } from '@nestjs/common';
 import {
   DisbursementServices,
   ReceiveService,
   TransactionService,
 } from '@rahataid/stellar-sdk';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AddTriggerDto,
   FundAccountDto,
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
 import { generateCSV } from './utils/stellar.utils.service';
@@ -29,6 +29,7 @@ import { SettingsService } from '@rumsan/settings';
 
 @Injectable()
 export class StellarService {
+  private readonly logger = new Logger(StellarService.name);
   constructor(
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
@@ -42,16 +43,24 @@ export class StellarService {
   transactionService = new TransactionService();
 
   async disburse(disburseDto: DisburseDto) {
+    this.logger.log('disburseDto', disburseDto);
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
         : await this.getGroupsUuids();
 
+    this.logger.log('Token Disburse for: ', groups);
     const bens = await this.getBeneficiaryTokenBalance(groups);
+    this.logger.log(`Beneficiary Token Balance: ${bens.length}`);
+
     const csvBuffer = await generateCSV(bens);
 
     let totalTokens: number;
-    bens.forEach((ben) => {
+    if (!bens) {
+      throw new RpcException('Beneficiary Token Balance not found');
+    }
+
+    bens?.forEach((ben) => {
       totalTokens += Number(ben.amount);
     });
 
@@ -115,6 +124,9 @@ export class StellarService {
       this.fetchGroupedBeneficiaries(groupUuids),
       this.fetchGroupTokenAmounts(groupUuids),
     ]);
+
+    this.logger.log(`Found ${groups.length} groups`);
+    this.logger.log(`Found ${tokens.length} tokens`);
 
     return this.computeBeneficiaryTokenDistribution(groups, tokens);
   }
@@ -181,6 +193,7 @@ export class StellarService {
       { phone: string; amount: string; id: string; walletAddress: string }
     > = {};
 
+    this.logger.log(`Computing beneficiary token distribution`);
     groups.forEach((group) => {
       const groupToken = tokens.find((t) => t.groupId === group.uuid);
       const totalTokens = groupToken?.numberOfTokens ?? 0;
@@ -317,6 +330,13 @@ export class StellarService {
 
   private async getGroupsUuids() {
     const benGroups = await this.prisma.beneficiaryGroups.findMany({
+      where: {
+        tokensReserved: {
+          numberOfTokens: {
+            gt: 0,
+          },
+        },
+      },
       select: { uuid: true },
     });
     return benGroups.map((group) => group.uuid);

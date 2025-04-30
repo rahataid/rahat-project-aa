@@ -64,9 +64,9 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    delete dto.isVerified;
+    const { isVerified, ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: dto,
+      data: rest,
     });
 
     const keys = await lastValueFrom(
@@ -121,7 +121,7 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage, sort, order } = dto;
+    const { page, perPage, sort, order, tokenAssigned } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -130,6 +130,14 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
+          ...(tokenAssigned
+            ? {
+                tokensReserved: {
+                  isNot: null,
+                },
+              }
+            : {}),
+
           deletedAt: null,
         },
         orderBy,
@@ -212,15 +220,33 @@ export class BeneficiaryService {
         uuid: uuid,
         deletedAt: null,
       },
+      include: {
+        tokensReserved: true,
+      },
     });
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    return lastValueFrom(
+    const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
         benfGroup.uuid
       )
     );
+
+    data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
+      let token = null;
+
+      if (benfGroup.tokensReserved) {
+        token = benfGroup.tokensReserved.numberOfTokens;
+      }
+
+      return {
+        ...benf,
+        tokensReserved: token,
+      };
+    });
+
+    return data;
   }
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
