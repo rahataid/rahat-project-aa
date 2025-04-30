@@ -13,7 +13,8 @@ import { LOGS } from '../constants/logger';
 
 export const transfer_asset = async (
   destination_address: string,
-  asset: Asset
+  asset: Asset,
+  amount: string
 ) => {
   const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
 
@@ -28,7 +29,7 @@ export const transfer_asset = async (
       Operation.payment({
         destination: destination_address,
         asset,
-        amount: ASSET.AMOUNT,
+        amount,
       })
     )
     .setTimeout(30)
