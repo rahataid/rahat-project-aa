@@ -48,12 +48,28 @@ export class CvaBeneficiaryService {
 
   async listWithPii(query: PaginationBaseDto) {
     console.log('List with PII:', query);
-    const { page, perPage } = query;
-    const conditions = { deletedAt: null };
+    const { page, perPage, search, order, sort } = query;
+
+    const conditions = {
+      deletedAt: null,
+      ...(search
+        && {
+        OR: [
+          { walletAddress: { contains: search } },
+        ],
+      }
+      ),
+    };
+
     const beneficiaries = await paginate(
       this.prisma.beneficiary,
       {
         where: conditions,
+      ...(order && sort && {
+        orderBy: {
+          [sort]: order
+        },
+      })
       },
       {
         page,
