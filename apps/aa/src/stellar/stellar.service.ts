@@ -43,7 +43,6 @@ export class StellarService {
   transactionService = new TransactionService();
 
   async disburse(disburseDto: DisburseDto) {
-    this.logger.log('disburseDto', disburseDto);
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
@@ -55,13 +54,14 @@ export class StellarService {
 
     const csvBuffer = await generateCSV(bens);
 
-    let totalTokens: number;
+    let totalTokens: number = 0;
     if (!bens) {
       throw new RpcException('Beneficiary Token Balance not found');
     }
 
     bens?.forEach((ben) => {
-      totalTokens += Number(ben.amount);
+      console.log(Number(+ben.amount), 'is the ben amount', totalTokens);
+      totalTokens += Number(+ben.amount);
     });
 
     return this.disbursementService.createDisbursementProcess(

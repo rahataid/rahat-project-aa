@@ -23,7 +23,7 @@ export const add_trustline = async (
 ) => {
   try {
     const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
-    const server = new Horizon.Server(horizonServer);
+    const server = new Horizon.Server('https://soroban-testnet.stellar.org');
     const account = await server.loadAccount(publicKey);
 
     const transaction = new TransactionBuilder(account, {

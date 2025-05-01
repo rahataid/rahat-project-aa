@@ -25,57 +25,56 @@ export const createDisbursement = async ({
   fileName,
 }: DisbursementProp) => {
   try {
-  const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
+    const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
 
-  const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
-  const { id: asset_id } = asset_res.data.find(
-    (asset: any) => asset.code === assetCodes
-  );
+    const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
+    const { id: asset_id } = asset_res.data.find(
+      (asset: any) => asset.code === assetCodes
+    );
 
-  const formDataObject = {
-    name: disbursement_name,
-    wallet_id: '',
-    asset_id: asset_id,
-    registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
-    verification_field: '',
-    receiver_registration_message_template: '',
-  };
+    const formDataObject = {
+      name: disbursement_name,
+      wallet_id: '',
+      asset_id: asset_id,
+      registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
+      verification_field: '',
+      receiver_registration_message_template: '',
+    };
 
-  const formDataString = JSON.stringify(formDataObject);
+    const formDataString = JSON.stringify(formDataObject);
 
-  const formData = new FormData();
-  formData.append('data', formDataString);
-  formData.append('file', fileBuffer, {
-    filename: 'beneficiaries.csv',
-    contentType: 'text/csv',
-  });
+    const formData = new FormData();
+    formData.append('data', formDataString);
+    formData.append('file', fileBuffer, {
+      filename: 'beneficiaries.csv',
+      contentType: 'text/csv',
+    });
 
-  const res = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, formData, {
-    headers: {
-      ...formData.getHeaders(),
-    },
-  });
+    const res = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+    });
 
-  logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
-  return {
-    disbursementID: res.data.id,
-    assetIssuer: walletRes.data[0].assets[0].issuer,
-  };
-
+    logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
+    return {
+      disbursementID: res.data.id,
+      assetIssuer: walletRes.data[0].assets[0].issuer,
+    };
   } catch (error: any) {
-  if (error.response?.data) {
+    if (error.response?.data) {
       const { error: errorMessage, extras } = error.response.data;
       let formattedError = errorMessage;
 
       if (extras && typeof extras === 'object') {
-      const extraMessages = Object.entries(extras)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('; ');
-      formattedError += ` - Details: ${extraMessages}`;
+        const extraMessages = Object.entries(extras)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('; ');
+        formattedError += ` - Details: ${extraMessages}`;
       }
-      throw Error(formattedError)
+      throw Error(formattedError);
     } else {
-      throw Error(error.message)
+      throw Error(error.message);
     }
   }
 };

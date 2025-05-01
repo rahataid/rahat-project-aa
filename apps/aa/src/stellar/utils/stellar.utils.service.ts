@@ -34,6 +34,8 @@ export const generateCSV = async (
 
     const csvFile = header + rows;
 
+    console.log(csvFile);
+
     return Buffer.from(csvFile, 'utf8');
   } catch (error) {
     throw new RpcException(

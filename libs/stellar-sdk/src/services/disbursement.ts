@@ -35,8 +35,11 @@ export class DisbursementServices implements IDisbursementService {
       this.email,
       this.password
     );
+
     token = (await authService.getToken()) as string;
-    await this.custom_asset(amount);
+
+    await this.custom_asset(amount.toString());
+    console.log('creating custom asset 2');
     return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 
@@ -48,6 +51,8 @@ export class DisbursementServices implements IDisbursementService {
   private async custom_asset(amount: string) {
     const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
     const asset = new Asset(ASSET.NAME, issuerKeypair.publicKey());
+
+    console.log(amount, 'is the amount');
 
     await axiosInstance.post(STELLAR.ASSET, {
       code: ASSET.NAME,
