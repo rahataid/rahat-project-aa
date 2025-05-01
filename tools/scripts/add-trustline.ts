@@ -10,9 +10,9 @@ import axios from 'axios';
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 
-// Constants for the asset (e.g., USDC on testnet)
-const ASSET_CODE = 'USDC';
-const ASSET_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'; // Testnet USDC issuer
+// Constants for the asset (e.g., Rahat on testnet)
+const ASSET_CODE = 'RAHAT';
+const ASSET_ISSUER = 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE'; // Testnet Rahat issuer
 
 // Function to add trustline
 export const add_trustline = async (
@@ -22,8 +22,10 @@ export const add_trustline = async (
   ASSET_code: string
 ) => {
   try {
+    // console.log('Public Key:', publicKey);
+    // await axios.get(`https://friendbot.stellar.org/?addr=${publicKey}`);
     const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
-    const server = new Horizon.Server('https://soroban-testnet.stellar.org');
+    const server = new Horizon.Server('https://horizon-testnet.stellar.org');
     const account = await server.loadAccount(publicKey);
 
     const transaction = new TransactionBuilder(account, {
@@ -42,7 +44,7 @@ export const add_trustline = async (
 
     await server.submitTransaction(transaction);
     console.log('Added trustline successfully.');
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Failed to add trustline: ${error.message}`);
     throw error;
   }
@@ -56,20 +58,23 @@ const main = async () => {
     // Prompt for secret key
     const secretKey = await rl.question('Enter your Stellar secret key: ');
 
-    // Derive public key from secret key
     const keypair = Keypair.fromSecret(secretKey);
     const publicKey = keypair.publicKey();
-
+    console.log('Public Key:', publicKey);
     // Fund account using Friendbot
-    const friendbotUrl = `https://friendbot.stellar.org?addr=${publicKey}`;
-    await axios.get(friendbotUrl);
-    console.log(`Account ${publicKey} funded via Friendbot.`);
+    try {
+      const friendbotUrl = `https://friendbot.stellar.org?addr=${publicKey}`;
+      await axios.get(friendbotUrl);
+      console.log(`Account ${publicKey} funded via Friendbot.`);
+    } catch (error) {
+      console.log('Account already funded, skipping funding.');
+    }
 
     // Add trustline for USDC
     await add_trustline(publicKey, secretKey, ASSET_ISSUER, ASSET_CODE);
 
     console.log('Trustline for USDC added successfully.');
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error: ${error.message}`);
   } finally {
     rl.close();

@@ -60,7 +60,6 @@ export class StellarService {
     }
 
     bens?.forEach((ben) => {
-      console.log(Number(+ben.amount), 'is the ben amount', totalTokens);
       totalTokens += Number(+ben.amount);
     });
 
