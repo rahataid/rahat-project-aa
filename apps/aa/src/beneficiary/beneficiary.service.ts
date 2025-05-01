@@ -251,6 +251,9 @@ export class BeneficiaryService {
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
+    console.log(beneficiaryGroupData);
+    // Get beneficiary uuid array from the group
+    // Add trustline to all the beneficiaries in the group
     return this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,
