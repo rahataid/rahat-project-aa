@@ -624,3 +624,9 @@
 {"level":"info","message":"Login successful, token received.","timestamp":"2025-05-01 15:38:29"}
 {"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-05-01 15:38:29"}
 {"level":"warn","message":"Asset transfer successful","timestamp":"2025-05-01 15:38:36"}
+{"level":"info","message":"No token found, attempting to login...","timestamp":"2025-05-01 17:35:05"}
+{"level":"info","message":"Login successful, token received.","timestamp":"2025-05-01 17:35:06"}
+{"level":"info","message":"Fetching distribution address for tenant: sandab","timestamp":"2025-05-01 17:35:07"}
+{"level":"warn","message":"Asset transfer successful","timestamp":"2025-05-01 17:35:12"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-05-01 18:40:01"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-05-01 18:40:01"}

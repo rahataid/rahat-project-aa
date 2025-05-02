@@ -17,6 +17,7 @@ setup() {
     pnpm seed:aa $current_dir
     pnpm seed:contract
     pnpm seed:networks $current_dir
+    pnpm seed:stellar
     pnpm seed:all
 }
 

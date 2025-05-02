@@ -26,6 +26,7 @@
     "seed:chain": "ts-node ./tools/project-scripts/local-setup/deploymentsettingsSeed",
     "manageaccess": "ts-node ./tools/project-scripts/manageAccess",
     "seed:all": "ts-node prisma/seed.ts",
+    "seed:stellar": "ts-node prisma/seed-stellar.ts",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "prisma:generate:watch": "prisma generate --watch",
