@@ -130,21 +130,17 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
-          ...(tokenAssigned
-            ? {
-                tokensReserved: {
-                  isNot: null,
-                },
-              }
-            : {}),
-          ...(search
-            && {
-                name: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
-              }
-            ),
+          ...(tokenAssigned === true
+            ? { tokensReserved: { isNot: null } } // only assigned
+            : tokenAssigned === false
+            ? { tokensReserved: null } // only unassigned
+            : {}), // both
+          ...(search && {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          }),
 
           deletedAt: null,
         },
