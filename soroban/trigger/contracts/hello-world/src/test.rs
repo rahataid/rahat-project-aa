@@ -1,135 +1,147 @@
 #![cfg(test)]
 
-extern crate std; // For std types in tests
+extern crate std;
 
 use super::*;
-use soroban_sdk::{ Env, String };
-use std::format;  // 👈 Fix here: Explicitly import format!
+use soroban_sdk::{testutils::{Events as _}, Env, String, Symbol, symbol_short, Vec};
 
-fn create_mock_trigger(env: &Env) -> (String, String, String, String, String, u32, u32, u32, bool) {
+fn create_mock_trigger(env: &Env) -> (String, String, String, String, String, String, bool) {
     (
         String::from_str(env, "manual"),
         String::from_str(env, "readiness"),
         String::from_str(env, "Test Trigger"),
         String::from_str(env, "glofas"),
         String::from_str(env, "Narayani"),
-        3,
-        7,
-        85,
+        String::from_str(env, "7b34b13d2a2e1020efdea8bcba7719b288a11f82d83467d6de2227c145c56cdb"), // Mock params_hash
         true,
     )
 }
 
 #[test]
-fn test_hello() {
-    let env = Env::default();
-    let name = String::from_str(&env, "Sushant");
-    let result = Contract::hello(env.clone(), name.clone());
-
-    assert_eq!(result, vec![&env, String::from_str(&env, "Hello"), name]);
-}
-
-#[test]
-fn test_increment() {
-    let env = Env::default();
-
-    let value1 = Contract::increment(env.clone());
-    let value2 = Contract::increment(env.clone());
-
-    assert_eq!(value1, 1);
-    assert_eq!(value2, 2);
-}
-
-#[test]
 fn test_add_and_get_trigger() {
     let env = Env::default();
+    let contract = Contract {};
 
-    let (trigger_type, phase, title, source, river_basin, min_lead, max_lead, probability, is_mandatory) =
-        create_mock_trigger(&env);
+    let (trigger_type, phase, title, source, river_basin, params_hash, is_mandatory) = create_mock_trigger(&env);
+    let trigger_id = symbol_short!("trigger1");
 
-    let trigger_id = Contract::add_trigger(
+    // Call add_trigger
+    contract.add_trigger(
         env.clone(),
+        trigger_id,
         trigger_type.clone(),
         phase.clone(),
         title.clone(),
         source.clone(),
         river_basin.clone(),
-        min_lead,
-        max_lead,
-        probability,
+        params_hash.clone(),
         is_mandatory,
     );
 
-    let all_triggers = Contract::get_triggers(env.clone());
-    assert!(all_triggers.contains_key(trigger_id.clone()));
-
-    let retrieved_trigger = Contract::get_trigger(env.clone(), trigger_id.clone());
+    // Verify the trigger was stored
+    let retrieved_trigger = contract.get_trigger(env.clone(), trigger_id);
     assert!(retrieved_trigger.is_some());
-
     let trigger = retrieved_trigger.unwrap();
     assert_eq!(trigger.trigger_type, trigger_type);
     assert_eq!(trigger.phase, phase);
     assert_eq!(trigger.title, title);
     assert_eq!(trigger.source, source);
     assert_eq!(trigger.river_basin, river_basin);
-    assert_eq!(trigger.min_lead_time_delay, min_lead);
-    assert_eq!(trigger.max_lead_time_delay, max_lead);
-    assert_eq!(trigger.forecast_probability, probability);
+    assert_eq!(trigger.params_hash, params_hash);
     assert_eq!(trigger.is_mandatory, is_mandatory);
     assert_eq!(trigger.is_triggered, false);
+
+    // Verify the Added event
+    let events = env.events().all();
+    assert_eq!(events.len(), 1);
+    let event = events.get(0).unwrap();
+    assert_eq!(event.topics, vec![String::from_str(&env, "TriggerEvent"), String::from_str(&env, "Added")]);
+    if let TriggerEvent::Added(id, trigger) = event.data {
+        assert_eq!(id, trigger_id);
+        assert_eq!(trigger.trigger_type, trigger_type);
+        assert_eq!(trigger.params_hash, params_hash);
+    } else {
+        panic!("Expected TriggerEvent::Added");
+    }
 }
 
 #[test]
-fn test_update_trigger_status() {
+fn test_update_trigger_to_triggered() {
     let env = Env::default();
+    let contract = Contract {};
 
-    let (trigger_type, phase, title, source, river_basin, min_lead, max_lead, probability, is_mandatory) =
-        create_mock_trigger(&env);
+    let (trigger_type, phase, title, source, river_basin, params_hash, is_mandatory) = create_mock_trigger(&env);
+    let trigger_id = symbol_short!("trigger1");
 
-    let trigger_id = Contract::add_trigger(
+    // Add a trigger
+    contract.add_trigger(
         env.clone(),
+        trigger_id,
         trigger_type,
         phase,
         title,
         source,
         river_basin,
-        min_lead,
-        max_lead,
-        probability,
+        params_hash,
         is_mandatory,
     );
 
-    let initial_trigger = Contract::get_trigger(env.clone(), trigger_id.clone()).unwrap();
+    // Verify initial state
+    let initial_trigger = contract.get_trigger(env.clone(), trigger_id).unwrap();
     assert_eq!(initial_trigger.is_triggered, false);
 
-    Contract::update_trigger_status(env.clone(), trigger_id.clone(), true);
+    // Update to triggered
+    contract.update_trigger_to_triggered(env.clone(), trigger_id);
 
-    let updated_trigger = Contract::get_trigger(env.clone(), trigger_id.clone()).unwrap();
+    // Verify updated state
+    let updated_trigger = contract.get_trigger(env.clone(), trigger_id).unwrap();
     assert_eq!(updated_trigger.is_triggered, true);
+
+    // Verify the Triggered event
+    let events = env.events().all();
+    assert_eq!(events.len(), 2); // Added + Triggered
+    let event = events.get(1).unwrap();
+    assert_eq!(event.topics, vec![String::from_str(&env, "TriggerEvent"), String::from_str(&env, "Triggered")]);
+    if let TriggerEvent::Triggered(id, trigger) = event.data {
+        assert_eq!(id, trigger_id);
+        assert_eq!(trigger.is_triggered, true);
+    } else {
+        panic!("Expected TriggerEvent::Triggered");
+    }
 }
 
 #[test]
 fn test_add_multiple_triggers() {
     let env = Env::default();
+    let contract = Contract {};
 
     for i in 0..5 {
-        let trigger_id = Contract::add_trigger(
+        let trigger_id = symbol_short!(&format!("trigger{}", i));
+        let (trigger_type, phase, title, source, river_basin, params_hash, is_mandatory) = create_mock_trigger(&env);
+        let unique_title = String::from_str(&env, &format!("Trigger {}", i));
+
+        contract.add_trigger(
             env.clone(),
-            String::from_str(&env, "manual"),
-            String::from_str(&env, "readiness"),
-            String::from_str(&env, &format!("Trigger {}", i)),
-            String::from_str(&env, "glofas"),
-            String::from_str(&env, "Narayani"),
-            3,
-            7,
-            85,
-            true,
+            trigger_id,
+            trigger_type.clone(),
+            phase,
+            unique_title.clone(),
+            source,
+            river_basin,
+            params_hash,
+            is_mandatory,
         );
 
-        let trigger = Contract::get_trigger(env.clone(), trigger_id).unwrap();
-        assert_eq!(trigger.title, String::from_str(&env, &format!("Trigger {}", i)));
+        let trigger = contract.get_trigger(env.clone(), trigger_id).unwrap();
+        assert_eq!(trigger.title, unique_title);
     }
 
-    let all_triggers = Contract::get_triggers(env.clone());
-    assert_eq!(all_triggers.len(), 5);
+    // Verify all triggers are stored
+    let trigger_key = symbol_short!("triggers");
+    let triggers: Map<Symbol, Trigger> = env
+        .storage()
+        .persistent()
+        .get(&trigger_key)
+        .unwrap_or(Map::new(&env));
+    assert_eq!(triggers.len(), 5);
 }
