@@ -60,8 +60,11 @@ export class StellarService {
     }
 
     bens?.forEach((ben) => {
-      totalTokens += Number(+ben.amount);
+      this.logger.log(`Beneficiary: ${ben.walletAddress} has ${ben.amount}`);
+      totalTokens += parseInt(ben.amount);
     });
+
+    this.logger.log(`Total Tokens: ${totalTokens}`);
 
     return this.disbursementService.createDisbursementProcess(
       disburseDto.dName,

@@ -121,7 +121,7 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage, sort, order, tokenAssigned } = dto;
+    const { page, perPage, sort, order, tokenAssigned, search } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -130,13 +130,17 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
-          ...(tokenAssigned
-            ? {
-                tokensReserved: {
-                  isNot: null,
-                },
-              }
-            : {}),
+          ...(tokenAssigned === true
+            ? { tokensReserved: { isNot: null } } // only assigned
+            : tokenAssigned === false
+            ? { tokensReserved: null } // only unassigned
+            : {}), // both
+          ...(search && {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          }),
 
           deletedAt: null,
         },
