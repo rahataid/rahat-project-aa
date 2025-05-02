@@ -19,9 +19,7 @@ pub struct Trigger {
     title: String,
     source: String,
     river_basin: String,
-    min_lead_time_delay: u32,
-    max_lead_time_delay: u32,
-    forecast_probability: u32,
+    params_hash: String,
     is_mandatory: bool,
     is_triggered: bool,
 }
@@ -43,9 +41,7 @@ impl Contract {
         title: String,
         source: String,
         river_basin: String,
-        min_lead_time_delay: u32,
-        max_lead_time_delay: u32,
-        forecast_probability: u32,
+        params_hash: String,
         is_mandatory: bool,
     ) {
         let trigger_key = symbol_short!("triggers");
@@ -62,9 +58,7 @@ impl Contract {
             title,
             source,
             river_basin,
-            min_lead_time_delay,
-            max_lead_time_delay,
-            forecast_probability,
+            params_hash, // Store the hash
             is_mandatory,
             is_triggered: false,
         };

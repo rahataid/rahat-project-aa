@@ -13,7 +13,7 @@ import {
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
-import { generateCSV } from './utils/stellar.utils.service';
+import { generateCSV, generateParamsHash } from './utils/stellar.utils.service';
 import { PrismaService } from '@rumsan/prisma';
 import {
   Keypair,
@@ -131,7 +131,7 @@ export class StellarService {
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto) {
-    const transaction = await this.createTransaction(trigger.id);
+    const transaction = await this.createTransaction(trigger);
     return this.prepareSignAndSend(transaction);
   }
 
@@ -223,12 +223,14 @@ export class StellarService {
     return Object.values(csvData);
   }
 
-  private async createTransaction(triggerId: string) {
+  private async createTransaction(triggerId: AddTriggerDto) {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
     const publicKey = keypair.publicKey();
     const sourceAccount = await server.getAccount(publicKey);
     const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
+
+    const paramsHash = generateParamsHash(triggerId.params);
 
     const contract = new Contract(CONTRACT_ID);
     let transaction = new TransactionBuilder(sourceAccount, {
@@ -238,16 +240,14 @@ export class StellarService {
       .addOperation(
         contract.call(
           'add_trigger',
-          xdr.ScVal.scvSymbol(triggerId || 'trigger1'),
-          xdr.ScVal.scvString('manual'),
-          xdr.ScVal.scvString('readiness'),
-          xdr.ScVal.scvString('Flood Warning'),
-          xdr.ScVal.scvString('glofas'),
-          xdr.ScVal.scvString('Gandaki'),
-          xdr.ScVal.scvU32(24),
-          xdr.ScVal.scvU32(72),
-          xdr.ScVal.scvU32(80),
-          xdr.ScVal.scvBool(true)
+          xdr.ScVal.scvSymbol(triggerId.id),
+          xdr.ScVal.scvString(triggerId.trigger_type),
+          xdr.ScVal.scvString(triggerId.phase),
+          xdr.ScVal.scvString(triggerId.title),
+          xdr.ScVal.scvString(triggerId.source),
+          xdr.ScVal.scvString(triggerId.river_basin),
+          xdr.ScVal.scvString(paramsHash),
+          xdr.ScVal.scvBool(triggerId.is_mandatory)
         )
       )
       .setTimeout(30)
@@ -257,13 +257,24 @@ export class StellarService {
   }
 
   private async prepareSignAndSend(transaction) {
-    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
-    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-    const preparedTransaction = await server.prepareTransaction(transaction);
-
-    preparedTransaction.sign(keypair);
-
-    return server.sendTransaction(preparedTransaction);
+    try {
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const preparedTransaction = await server.prepareTransaction(transaction);
+      this.logger.log('Prepared transaction');
+      preparedTransaction.sign(keypair);
+      this.logger.log('Signed transaction');
+      const txn = server.sendTransaction(preparedTransaction);
+      this.logger.log('Transaction successfully sent');
+      return txn;
+    } catch (error) {
+      this.logger.error('Error in transaction:', error);
+      throw new RpcException(
+        error instanceof Error ? error.message : 'Transaction failed'
+      );
+    }
   }
 
   private async getBenTotal(phoneNumber: string) {

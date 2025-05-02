@@ -1,5 +1,6 @@
 import { RpcException } from '@nestjs/microservices';
 import { BeneficiaryCSVData } from '../../triggers/dto/beneficiaryCSVData.dto';
+import * as crypto from 'crypto';
 
 export const generateCSV = async (
   benData: BeneficiaryCSVData[]
@@ -42,4 +43,18 @@ export const generateCSV = async (
       error.message || 'Something went wrong while generating CSV'
     );
   }
+};
+
+export const generateParamsHash = (params) => {
+  const SALT = 'hash_salt';
+  const sortedParams = {};
+  Object.keys(params)
+    .sort()
+    .forEach((key) => {
+      sortedParams[key] = params[key];
+    });
+  const serialized = JSON.stringify(sortedParams);
+  const dataToHash = `${SALT}:${serialized}`;
+  const hash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+  return hash;
 };

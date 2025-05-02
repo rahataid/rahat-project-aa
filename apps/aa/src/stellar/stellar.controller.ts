@@ -2,7 +2,12 @@ import { Controller } from '@nestjs/common';
 import { StellarService } from './stellar.service';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
+import {
+  AddTriggerDto,
+  FundAccountDto,
+  SendAssetDto,
+  SendOtpDto,
+} from './dto/send-otp.dto';
 import { DisburseDto } from './dto/disburse.dto';
 
 @Controller('stellar')
@@ -50,7 +55,7 @@ export class StellarController {
     cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
-  async addTriggerOnChain(trigger: any) {
+  async addTriggerOnChain(trigger: AddTriggerDto) {
     return this.stellarService.addTriggerOnChain(trigger);
   }
 

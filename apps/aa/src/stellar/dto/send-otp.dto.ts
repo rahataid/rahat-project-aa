@@ -21,4 +21,11 @@ export class FundAccountDto {
 
 export class AddTriggerDto {
   id: string;
+  trigger_type: string;
+  phase: string;
+  title: string;
+  source: string;
+  river_basin: string;
+  params: JSON;
+  is_mandatory: boolean;
 }
