@@ -1,12 +1,10 @@
 #![no_std]
 
-extern crate alloc;
-
+use soroban_sdk::{contract, contractimpl, contracttype, Env, String, Symbol, Map, symbol_short};
 use wee_alloc::WeeAlloc;
+
 #[global_allocator]
 static ALLOC: WeeAlloc = WeeAlloc::INIT;
-
-use soroban_sdk::{contract, contractimpl, contracttype, Env, String, Symbol, Map, symbol_short};
 
 #[contract]
 pub struct Contract;
@@ -99,3 +97,6 @@ impl Contract {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
