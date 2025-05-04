@@ -134,6 +134,12 @@ export class StellarService {
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto) {
+    const triggerRes = await this.prisma.triggers.findUnique({
+      where: { uuid: trigger.id },
+    });
+    if (triggerRes) {
+      throw new RpcException('Trigger already exists');
+    }
     const transaction = await this.createTransaction(trigger);
     return this.prepareSignAndSend(transaction);
   }
