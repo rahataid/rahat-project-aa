@@ -233,36 +233,45 @@ export class StellarService {
   }
 
   private async createTransaction(triggerId: AddTriggerDto) {
-    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
-    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-    const publicKey = keypair.publicKey();
-    const sourceAccount = await server.getAccount(publicKey);
-    const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
+    try {
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const publicKey = keypair.publicKey();
+      const sourceAccount = await server.getAccount(publicKey);
+      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
 
-    const paramsHash = generateParamsHash(triggerId.params);
+      const paramsHash = generateParamsHash(triggerId.params);
 
-    const contract = new Contract(CONTRACT_ID);
-    let transaction = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        contract.call(
-          'add_trigger',
-          xdr.ScVal.scvSymbol(triggerId.id),
-          xdr.ScVal.scvString(triggerId.trigger_type),
-          xdr.ScVal.scvString(triggerId.phase),
-          xdr.ScVal.scvString(triggerId.title),
-          xdr.ScVal.scvString(triggerId.source),
-          xdr.ScVal.scvString(triggerId.river_basin),
-          xdr.ScVal.scvString(paramsHash),
-          xdr.ScVal.scvBool(triggerId.is_mandatory)
+      const contract = new Contract(CONTRACT_ID);
+      let transaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call(
+            'add_trigger',
+            xdr.ScVal.scvSymbol(triggerId.id),
+            xdr.ScVal.scvString(triggerId.trigger_type),
+            xdr.ScVal.scvString(triggerId.phase),
+            xdr.ScVal.scvString(triggerId.title),
+            xdr.ScVal.scvString(triggerId.source),
+            xdr.ScVal.scvString(triggerId.river_basin),
+            xdr.ScVal.scvString(paramsHash),
+            xdr.ScVal.scvBool(triggerId.is_mandatory)
+          )
         )
-      )
-      .setTimeout(30)
-      .build();
+        .setTimeout(30)
+        .build();
 
-    return transaction;
+      return transaction;
+    } catch (error) {
+      console.log('Error in transaction:', error);
+      throw new RpcException(
+        error instanceof Error ? error.message : 'Transaction failed'
+      );
+    }
   }
 
   private async prepareSignAndSend(transaction) {
