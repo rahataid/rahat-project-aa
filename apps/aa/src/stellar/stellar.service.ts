@@ -156,14 +156,8 @@ export class StellarService {
 
   async getTriggerWithID(trigger: GetTriggerDto) {
     try {
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-      const publicKey = keypair.publicKey();
-      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
-      const sourceAccount = await server.getAccount(publicKey);
-      const contract = new Contract(CONTRACT_ID);
+      const { server, sourceAccount, contract } =
+        await this.getStellarObjects();
 
       let transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
@@ -267,6 +261,24 @@ export class StellarService {
   }
 
   // ---------- Private functions ----------------
+  private async getStellarObjects() {
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const publicKey = keypair.publicKey();
+    const contractId = await this.getFromSettings('CONTRACTID');
+    const sourceAccount = await server.getAccount(publicKey);
+    const contract = new Contract(contractId);
+
+    return {
+      server,
+      keypair,
+      publicKey,
+      contractId,
+      sourceAccount,
+      contract,
+    };
+  }
+
   private async fetchGroupedBeneficiaries(groupUuids: string[]) {
     const response = await lastValueFrom(
       this.client.send(

@@ -48,6 +48,10 @@ export class UpdateTriggerParamsDto {
   @IsOptional()
   source?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  isTriggered?: boolean;
+
   @IsObject()
   @IsOptional()
   params?: Record<string, any>;

@@ -141,19 +141,30 @@ export class StellarProcessor {
   }
 
   // Private functions
+  private async getStellarObjects() {
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const publicKey = keypair.publicKey();
+    const contractId = await this.getFromSettings('CONTRACTID');
+    const sourceAccount = await server.getAccount(publicKey);
+    const contract = new Contract(contractId);
+
+    return {
+      server,
+      keypair,
+      publicKey,
+      contractId,
+      sourceAccount,
+      contract,
+    };
+  }
+
   private async createTransaction(trigger: AddTriggerDto) {
     try {
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-      const publicKey = keypair.publicKey();
-      const sourceAccount = await server.getAccount(publicKey);
-      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
-
+      const { sourceAccount, contract } = await this.getStellarObjects();
+      
       const paramsHash = generateParamsHash(trigger.params);
 
-      const contract = new Contract(CONTRACT_ID);
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
@@ -193,20 +204,13 @@ export class StellarProcessor {
         throw new Error('Trigger ID is required');
       }
 
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-      const publicKey = keypair.publicKey();
-      const sourceAccount = await server.getAccount(publicKey);
-      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
+      const { sourceAccount, contract } = await this.getStellarObjects();
 
       let paramsHash: string | undefined = undefined;
       if (triggerUpdate.params) {
         paramsHash = generateParamsHash(triggerUpdate.params);
       }
 
-      const contract = new Contract(CONTRACT_ID);
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
@@ -216,7 +220,10 @@ export class StellarProcessor {
             'update_trigger_params',
             xdr.ScVal.scvSymbol(triggerUpdate.id),
             this.toOptionalScVal(paramsHash),
-            this.toOptionalScVal(triggerUpdate.source)
+            this.toOptionalScVal(triggerUpdate.source),
+            triggerUpdate.isTriggered !== undefined
+              ? xdr.ScVal.scvBool(triggerUpdate.isTriggered)
+              : xdr.ScVal.scvVoid()
           )
         )
         .setTimeout(30)
@@ -242,10 +249,7 @@ export class StellarProcessor {
 
   private async prepareSignAndSend(transaction: any) {
     try {
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const { server, keypair } = await this.getStellarObjects();
 
       this.logger.log('Preparing transaction...', StellarProcessor.name);
       const preparedTransaction = await server.prepareTransaction(transaction);
