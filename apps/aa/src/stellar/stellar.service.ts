@@ -155,33 +155,35 @@ export class StellarService {
   }
 
   async getTriggerWithID(trigger: GetTriggerDto) {
-    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
-    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-    const publicKey = keypair.publicKey();
-    const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
-    const sourceAccount = await server.getAccount(publicKey);
-    const contract = new Contract(CONTRACT_ID);
-
-    let transaction = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        contract.call('get_trigger', xdr.ScVal.scvSymbol(trigger.id))
-      )
-      .setTimeout(30)
-      .build();
-
-    const preparedTransaction = await server.prepareTransaction(transaction);
-    const sim = await server.simulateTransaction(preparedTransaction);
-
-    //@ts-ignore
-    if (!sim.result?.retval) {
-      throw new Error('No result returned from contract simulation');
-    }
     try {
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const publicKey = keypair.publicKey();
+      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
+      const sourceAccount = await server.getAccount(publicKey);
+      const contract = new Contract(CONTRACT_ID);
+
+      let transaction = new TransactionBuilder(sourceAccount, {
+        fee: BASE_FEE,
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call('get_trigger', xdr.ScVal.scvSymbol(trigger.id))
+        )
+        .setTimeout(30)
+        .build();
+
+      const preparedTransaction = await server.prepareTransaction(transaction);
+      const sim = await server.simulateTransaction(preparedTransaction);
+
       //@ts-ignore
       const nativeResult = scValToNative(sim.result.retval);
+
+      if (!nativeResult) {
+        throw new RpcException(`Contract with id ${trigger.id} not found`);
+      }
       let result = {};
       if (Array.isArray(nativeResult)) {
         nativeResult.forEach((item) => {
@@ -214,7 +216,9 @@ export class StellarService {
       return result;
     } catch (error) {
       this.logger.error('Error processing contract result:', error);
-      throw new Error(`Failed to process contract result: ${error.message}`);
+      throw new RpcException(
+        `Failed to process contract result: ${error.message}`
+      );
     }
   }
 
