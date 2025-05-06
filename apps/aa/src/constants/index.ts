@@ -153,6 +153,18 @@ export const JOBS = {
     UPDATE: 'aa.jobs.dailyMonitoring.update',
     REMOVE: 'aa.jobs.dailyMonitoring.remove',
   },
+  VENDOR: {
+    REIMBURSE: {
+      CREATE: 'rahat.jobs.vendor.reimburse.create',
+      LIST: 'rahat.jobs.vendor.reimburse.list',
+      GET: 'rahat.jobs.vendor.reimburse.get',
+    },
+    GET: 'rahat.jobs.vendor.get',
+    LIST: 'rahat.jobs.vendor.list',
+    LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    CREATE: 'rahat.jobs.vendor.create',
+    ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+  },
 };
 
 export const EVENTS = {
