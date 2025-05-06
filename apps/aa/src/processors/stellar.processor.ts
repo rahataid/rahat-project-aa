@@ -44,6 +44,7 @@ export class StellarProcessor {
 
     const maxRetries = job?.opts.attempts || 3;
     let attempt = 1;
+    let lastError: any = null;
 
     while (attempt <= maxRetries) {
       try {
@@ -54,27 +55,24 @@ export class StellarProcessor {
         const transaction = await this.createTransaction(trigger);
         const result = await this.prepareSignAndSend(transaction);
         this.logger.log(
-          'Transaction successfully processed',
+          `Transaction successfully processed - ID: ${result}`,
           StellarProcessor.name
         );
         return result;
       } catch (error) {
+        lastError = error;
         this.logger.error(
-          `Attempt ${attempt} failed: ${error.message}`,
+          `Attempt ${attempt} failed with error: ${error.message}`,
           error.stack,
           StellarProcessor.name
         );
 
         if (attempt === maxRetries) {
           this.logger.error(
-            `All ${maxRetries} attempts failed for trigger ${trigger.id}`,
+            `All ${maxRetries} attempts failed for trigger ${trigger.id}. Final error: ${error.message}`,
             StellarProcessor.name
           );
-          throw new RpcException(
-            error instanceof Error
-              ? error.message
-              : 'Failed to process trigger after retries'
-          );
+          throw error;
         }
 
         this.logger.log(
@@ -100,6 +98,7 @@ export class StellarProcessor {
 
     const maxRetries = job?.opts.attempts || 3;
     let attempt = 1;
+    let lastError: any = null;
 
     while (attempt <= maxRetries) {
       try {
@@ -112,27 +111,24 @@ export class StellarProcessor {
         );
         const result = await this.prepareSignAndSend(transaction);
         this.logger.log(
-          'Transaction successfully processed',
+          `Transaction successfully processed - ID: ${result}`,
           StellarProcessor.name
         );
         return result;
       } catch (error) {
+        lastError = error;
         this.logger.error(
-          `Attempt ${attempt} failed: ${error.message}`,
+          `Attempt ${attempt} failed with error: ${error.message}`,
           error.stack,
           StellarProcessor.name
         );
 
         if (attempt === maxRetries) {
           this.logger.error(
-            `All ${maxRetries} attempts failed for trigger ${triggerUpdate.id}`,
+            `All ${maxRetries} attempts failed for trigger ${triggerUpdate.id}. Final error: ${error.message}`,
             StellarProcessor.name
           );
-          throw new RpcException(
-            error instanceof Error
-              ? error.message
-              : 'Failed to process trigger params update after retries'
-          );
+          throw error;
         }
 
         this.logger.log(
@@ -185,9 +181,7 @@ export class StellarProcessor {
         error.stack,
         StellarProcessor.name
       );
-      throw new RpcException(
-        error instanceof Error ? error.message : 'Transaction creation failed'
-      );
+      throw new RpcException(error.message || 'Transaction creation failed');
     }
   }
 
@@ -241,18 +235,9 @@ export class StellarProcessor {
         StellarProcessor.name
       );
       throw new RpcException(
-        error instanceof Error
-          ? error.message
-          : 'Update trigger params transaction creation failed'
+        error.message || 'Update trigger params transaction creation failed'
       );
     }
-  }
-
-  // Private Functions
-  private toOptionalScVal(value: string | null | undefined): xdr.ScVal {
-    return value !== null && value !== undefined
-      ? xdr.ScVal.scvString(value)
-      : xdr.ScVal.scvVoid();
   }
 
   private async prepareSignAndSend(transaction: any) {
@@ -261,23 +246,57 @@ export class StellarProcessor {
         await this.getFromSettings('SERVER')
       );
       const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+
+      this.logger.log('Preparing transaction...', StellarProcessor.name);
       const preparedTransaction = await server.prepareTransaction(transaction);
-      this.logger.log('Prepared transaction', StellarProcessor.name);
+
       preparedTransaction.sign(keypair);
-      this.logger.log('Signed transaction', StellarProcessor.name);
+
+      this.logger.log(
+        'Sending transaction to network...',
+        StellarProcessor.name
+      );
       const txn = await server.sendTransaction(preparedTransaction);
-      this.logger.log('Transaction successfully sent', StellarProcessor.name);
+
+      // Check for contract-specific errors in the response
+      if (txn.status === 'ERROR') {
+        if (txn.errorResult) {
+          // This would contain Soroban contract errors
+          this.logger.error(
+            `Contract error: ${JSON.stringify(txn.errorResult)}`,
+            StellarProcessor.name
+          );
+        }
+      }
+
       return txn;
     } catch (error) {
+      // Extract contract error codes if available
+      let errorMessage = error.message || 'Transaction failed';
+
+      // Check for TriggerNotFound or TriggerAlreadyExists errors
+      if (error.message?.includes('ContractError')) {
+        this.logger.error(
+          `Contract error details: ${error.message}`,
+          StellarProcessor.name
+        );
+      }
+
+      // Also log the raw error for debugging
       this.logger.error(
-        `Error in transaction: ${error.message}`,
+        `Transaction error: ${JSON.stringify(error)}`,
         error.stack,
         StellarProcessor.name
       );
-      throw new RpcException(
-        error instanceof Error ? error.message : 'Transaction failed'
-      );
+
+      throw new RpcException(errorMessage);
     }
+  }
+
+  private toOptionalScVal(value: string | null | undefined): xdr.ScVal {
+    return value !== null && value !== undefined
+      ? xdr.ScVal.scvString(value)
+      : xdr.ScVal.scvVoid();
   }
 
   private async getFromSettings(key: string) {

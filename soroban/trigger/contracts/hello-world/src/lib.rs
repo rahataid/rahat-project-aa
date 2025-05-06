@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Env, String, Symbol, Map, symbol_short};
+use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Env, String, Symbol, Map, symbol_short};
 use wee_alloc::WeeAlloc;
 
 #[global_allocator]
@@ -26,7 +26,14 @@ pub struct Trigger {
 pub enum TriggerEvent {
     Added(Symbol, Trigger),
     Triggered(Symbol, Trigger),
-    Updated(Symbol, Trigger), // New event type for parameter updates
+    Updated(Symbol, Trigger), // Event type for parameter updates
+}
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum TriggerError {
+    TriggerAlreadyExists = 1,
+    TriggerNotFound = 2,
 }
 
 #[contractimpl]
@@ -41,7 +48,7 @@ impl Contract {
         river_basin: String,
         params_hash: String,
         is_mandatory: bool,
-    ) {
+    ) -> Result<(), TriggerError> {
         let trigger_key = symbol_short!("triggers");
 
         let mut triggers: Map<Symbol, Trigger> = env
@@ -49,6 +56,10 @@ impl Contract {
             .persistent()
             .get(&trigger_key)
             .unwrap_or(Map::new(&env));
+
+        if triggers.contains_key(id.clone()) {
+            return Err(TriggerError::TriggerAlreadyExists);
+        }
 
         let trigger = Trigger {
             trigger_type,
@@ -65,6 +76,8 @@ impl Contract {
         env.storage().persistent().set(&trigger_key, &triggers);
 
         env.events().publish(("TriggerEvent", "Added"), TriggerEvent::Added(id, trigger));
+        
+        Ok(())
     }
 
     pub fn get_trigger(env: Env, id: Symbol) -> Option<Trigger> {
@@ -78,7 +91,7 @@ impl Contract {
         triggers.get(id)
     }
 
-    pub fn update_trigger_to_triggered(env: Env, id: Symbol) {
+    pub fn update_trigger_to_triggered(env: Env, id: Symbol) -> Result<(), TriggerError> {
         let trigger_key = symbol_short!("triggers");
         let mut triggers: Map<Symbol, Trigger> = env
             .storage()
@@ -92,11 +105,13 @@ impl Contract {
             env.storage().persistent().set(&trigger_key, &triggers);
 
             env.events().publish(("TriggerEvent", "Triggered"), TriggerEvent::Triggered(id, trigger));
+            Ok(())
+        } else {
+            Err(TriggerError::TriggerNotFound)
         }
     }
 
-    // Function to update params_hash and/or source
-    pub fn update_trigger_params(env: Env, id: Symbol, new_params_hash: Option<String>, new_source: Option<String>) {
+    pub fn update_trigger_params(env: Env, id: Symbol, new_params_hash: Option<String>, new_source: Option<String>) -> Result<(), TriggerError> {
         let trigger_key = symbol_short!("triggers");
         let mut triggers: Map<Symbol, Trigger> = env
             .storage()
@@ -105,12 +120,9 @@ impl Contract {
             .unwrap_or(Map::new(&env));
 
         if let Some(mut trigger) = triggers.get(id.clone()) {
-            // Only update params_hash if provided
             if let Some(params_hash) = new_params_hash {
                 trigger.params_hash = params_hash;
             }
-            
-            // Only update source if provided
             if let Some(source) = new_source {
                 trigger.source = source;
             }
@@ -120,6 +132,9 @@ impl Contract {
 
             // Emit event with updated Trigger
             env.events().publish(("TriggerEvent", "Updated"), TriggerEvent::Updated(id, trigger));
+            Ok(())
+        } else {
+            Err(TriggerError::TriggerNotFound)
         }
     }
 }
