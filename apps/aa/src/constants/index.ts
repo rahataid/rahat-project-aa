@@ -1,3 +1,5 @@
+import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
+
 export const NAMESPACE = 'rahat.projects';
 
 export const STELLER_UID = 'stellar';
@@ -87,6 +89,11 @@ export const JOBS = {
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
+    UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
+    ADD_ONCHAIN_TRIGGER_QUEUE: 'aa.jobs.stellar.getTriggerOnChainQueue',
+    UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE:
+      'aa.jobs.stellar.updateTriggerParamsOnChainQueue',
+    GET_ONCHAIN_TRIGGER: 'aa.jobs.stellar.getTriggerOnChain',
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
   },
@@ -173,6 +180,7 @@ export const BQUEUE = {
   TRIGGER: 'TRIGGER',
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
+  STELLAR: 'STELLAR',
 };
 
 export const VULNERABILITY_FIELD = {

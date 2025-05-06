@@ -22,11 +22,11 @@ pub struct Trigger {
     is_triggered: bool,
 }
 
-// Define event types with full Trigger struct
 #[contracttype]
 pub enum TriggerEvent {
-    Added(Symbol, Trigger),    // Emitted when a trigger is added, with ID and full Trigger
-    Triggered(Symbol, Trigger), // Emitted when a trigger is marked as triggered, with ID and updated Trigger
+    Added(Symbol, Trigger),
+    Triggered(Symbol, Trigger),
+    Updated(Symbol, Trigger), // New event type for parameter updates
 }
 
 #[contractimpl]
@@ -56,15 +56,14 @@ impl Contract {
             title,
             source,
             river_basin,
-            params_hash, // Store the hash
+            params_hash,
             is_mandatory,
             is_triggered: false,
         };
 
-        triggers.set(id.clone(), trigger.clone()); // Clone trigger for storage
+        triggers.set(id.clone(), trigger.clone());
         env.storage().persistent().set(&trigger_key, &triggers);
 
-        // Emit event with full Trigger
         env.events().publish(("TriggerEvent", "Added"), TriggerEvent::Added(id, trigger));
     }
 
@@ -89,11 +88,38 @@ impl Contract {
 
         if let Some(mut trigger) = triggers.get(id.clone()) {
             trigger.is_triggered = true;
-            triggers.set(id.clone(), trigger.clone()); // Clone updated trigger for storage
+            triggers.set(id.clone(), trigger.clone());
             env.storage().persistent().set(&trigger_key, &triggers);
 
-            // Emit event with full updated Trigger
             env.events().publish(("TriggerEvent", "Triggered"), TriggerEvent::Triggered(id, trigger));
+        }
+    }
+
+    // Function to update params_hash and/or source
+    pub fn update_trigger_params(env: Env, id: Symbol, new_params_hash: Option<String>, new_source: Option<String>) {
+        let trigger_key = symbol_short!("triggers");
+        let mut triggers: Map<Symbol, Trigger> = env
+            .storage()
+            .persistent()
+            .get(&trigger_key)
+            .unwrap_or(Map::new(&env));
+
+        if let Some(mut trigger) = triggers.get(id.clone()) {
+            // Only update params_hash if provided
+            if let Some(params_hash) = new_params_hash {
+                trigger.params_hash = params_hash;
+            }
+            
+            // Only update source if provided
+            if let Some(source) = new_source {
+                trigger.source = source;
+            }
+            
+            triggers.set(id.clone(), trigger.clone());
+            env.storage().persistent().set(&trigger_key, &triggers);
+
+            // Emit event with updated Trigger
+            env.events().publish(("TriggerEvent", "Updated"), TriggerEvent::Updated(id, trigger));
         }
     }
 }

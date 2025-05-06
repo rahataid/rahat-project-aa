@@ -27,6 +27,9 @@ import { StellarService } from '../stellar/stellar.service';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
   ],
   controllers: [BeneficiaryController],
   providers: [

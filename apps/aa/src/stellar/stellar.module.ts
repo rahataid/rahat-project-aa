@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { StellarService } from './stellar.service';
 import { StellarController } from './stellar.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { StellarProcessor } from '../processors/stellar.processor';
+import { BullModule } from '@nestjs/bull';
+import { BQUEUE } from '../constants';
 
 @Module({
   imports: [
@@ -16,6 +19,9 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
   ],
   controllers: [StellarController],
   providers: [StellarService],

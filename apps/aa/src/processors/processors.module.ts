@@ -9,9 +9,16 @@ import { ContractProcessor } from './contract.processor';
 import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
+import { StellarModule } from '../stellar/stellar.module';
+import { StellarProcessor } from './stellar.processor';
 
 @Module({
-  imports: [DataSourceModule, PhasesModule, BeneficiaryModule, ActivitiesModule],
+  imports: [
+    DataSourceModule,
+    PhasesModule,
+    BeneficiaryModule,
+    ActivitiesModule,
+  ],
   providers: [
     ScheduleProcessor,
     TriggerProcessor,
@@ -19,6 +26,7 @@ import { ActivitiesModule } from '../activities/activites.module';
     ContractProcessor,
     CommunicationProcessor,
     StatsProcessor,
+    StellarProcessor,
   ],
 })
 export class ProcessorsModule {}

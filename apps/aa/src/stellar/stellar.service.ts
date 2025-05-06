@@ -4,16 +4,11 @@ import {
   TransactionService,
 } from '@rahataid/stellar-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  AddTriggerDto,
-  FundAccountDto,
-  SendAssetDto,
-  SendOtpDto,
-} from './dto/send-otp.dto';
+import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
-import { generateCSV, generateParamsHash } from './utils/stellar.utils.service';
+import { generateCSV } from './utils/stellar.utils.service';
 import { PrismaService } from '@rumsan/prisma';
 import {
   Keypair,
@@ -23,9 +18,18 @@ import {
   rpc as StellarRpc,
   Contract,
   xdr,
+  scValToNative,
 } from '@stellar/stellar-sdk';
 import bcrypt from 'bcryptjs';
 import { SettingsService } from '@rumsan/settings';
+import { InjectQueue } from '@nestjs/bull';
+import { BQUEUE, JOBS } from '../constants';
+import { Queue } from 'bull';
+import {
+  AddTriggerDto,
+  GetTriggerDto,
+  UpdateTriggerParamsDto,
+} from './dto/trigger.dto';
 
 @Injectable()
 export class StellarService {
@@ -33,7 +37,9 @@ export class StellarService {
   constructor(
     @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @InjectQueue(BQUEUE.STELLAR)
+    private readonly stellarQueue: Queue
   ) {
     this.initializeDisbursementService();
   }
@@ -134,14 +140,97 @@ export class StellarService {
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto) {
-    const triggerRes = await this.prisma.triggers.findUnique({
-      where: { uuid: trigger.id },
-    });
-    if (triggerRes) {
-      throw new RpcException('Trigger already exists');
+    return this.stellarQueue.add(
+      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
+      trigger,
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+  }
+
+  async getTriggerWithID(trigger: GetTriggerDto) {
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+    const publicKey = keypair.publicKey();
+    const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
+    const sourceAccount = await server.getAccount(publicKey);
+    const contract = new Contract(CONTRACT_ID);
+
+    let transaction = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        contract.call('get_trigger', xdr.ScVal.scvSymbol(trigger.id))
+      )
+      .setTimeout(30)
+      .build();
+
+    const preparedTransaction = await server.prepareTransaction(transaction);
+    const sim = await server.simulateTransaction(preparedTransaction);
+
+    //@ts-ignore
+    if (!sim.result?.retval) {
+      throw new Error('No result returned from contract simulation');
     }
-    const transaction = await this.createTransaction(trigger);
-    return this.prepareSignAndSend(transaction);
+    try {
+      //@ts-ignore
+      const nativeResult = scValToNative(sim.result.retval);
+      let result = {};
+      if (Array.isArray(nativeResult)) {
+        nativeResult.forEach((item) => {
+          if (item && typeof item === 'object' && item._attributes) {
+            try {
+              const key =
+                typeof item._attributes.key._value === 'object'
+                  ? JSON.stringify(item._attributes.key._value)
+                  : String(item._attributes.key._value);
+
+              const value =
+                typeof item._attributes.val._value === 'object'
+                  ? JSON.stringify(item._attributes.val._value)
+                  : String(item._attributes.val._value);
+
+              result[key] = value;
+            } catch (e) {
+              this.logger.warn(
+                `Could not process item: ${JSON.stringify(item)}`
+              );
+            }
+          }
+        });
+      } else if (nativeResult && typeof nativeResult === 'object') {
+        result = nativeResult;
+      } else {
+        result = { value: nativeResult };
+      }
+      this.logger.log('Contract result:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error processing contract result:', error);
+      throw new Error(`Failed to process contract result: ${error.message}`);
+    }
+  }
+
+  async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
+      trigger,
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
   }
 
   async getDisbursementStats() {
@@ -230,69 +319,6 @@ export class StellarService {
     });
 
     return Object.values(csvData);
-  }
-
-  private async createTransaction(triggerId: AddTriggerDto) {
-    try {
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-      const publicKey = keypair.publicKey();
-      const sourceAccount = await server.getAccount(publicKey);
-      const CONTRACT_ID = await this.getFromSettings('CONTRACTID');
-
-      const paramsHash = generateParamsHash(triggerId.params);
-
-      const contract = new Contract(CONTRACT_ID);
-      let transaction = new TransactionBuilder(sourceAccount, {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          contract.call(
-            'add_trigger',
-            xdr.ScVal.scvSymbol(triggerId.id),
-            xdr.ScVal.scvString(triggerId.trigger_type),
-            xdr.ScVal.scvString(triggerId.phase),
-            xdr.ScVal.scvString(triggerId.title),
-            xdr.ScVal.scvString(triggerId.source),
-            xdr.ScVal.scvString(triggerId.river_basin),
-            xdr.ScVal.scvString(paramsHash),
-            xdr.ScVal.scvBool(triggerId.is_mandatory)
-          )
-        )
-        .setTimeout(30)
-        .build();
-
-      return transaction;
-    } catch (error) {
-      console.log('Error in transaction:', error);
-      throw new RpcException(
-        error instanceof Error ? error.message : 'Transaction failed'
-      );
-    }
-  }
-
-  private async prepareSignAndSend(transaction) {
-    try {
-      const server = new StellarRpc.Server(
-        await this.getFromSettings('SERVER')
-      );
-      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-      const preparedTransaction = await server.prepareTransaction(transaction);
-      this.logger.log('Prepared transaction');
-      preparedTransaction.sign(keypair);
-      this.logger.log('Signed transaction');
-      const txn = server.sendTransaction(preparedTransaction);
-      this.logger.log('Transaction successfully sent');
-      return txn;
-    } catch (error) {
-      this.logger.error('Error in transaction:', error);
-      throw new RpcException(
-        error instanceof Error ? error.message : 'Transaction failed'
-      );
-    }
   }
 
   private async getBenTotal(phoneNumber: string) {
