@@ -139,7 +139,7 @@ export class StellarService {
     return this.computeBeneficiaryTokenDistribution(groups, tokens);
   }
 
-  async addTriggerOnChain(trigger: AddTriggerDto) {
+  async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(
       JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
       trigger,

@@ -65,7 +65,7 @@ export class StellarController {
     cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
-  async addTriggerOnChain(trigger: AddTriggerDto) {
+  async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarService.addTriggerOnChain(trigger);
   }
 

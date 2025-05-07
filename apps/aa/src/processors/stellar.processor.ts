@@ -1,5 +1,5 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger, Inject, Injectable } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
@@ -32,61 +32,87 @@ export class StellarProcessor {
     private readonly stellarService: StellarService
   ) {}
 
-  @Process(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE)
-  async addTriggerOnchain(job: Job<AddTriggerDto>) {
+  @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
+  async addTriggerOnchain(job: Job<{ triggers: AddTriggerDto[] }>) {
     this.logger.log(
-      'Processing add trigger on-chain job...',
-      StellarProcessor.name
-    );
-    const trigger = job.data;
-    this.logger.log(
-      `Trigger data: ${JSON.stringify(trigger)}`,
+      'Processing add triggers on-chain job...',
       StellarProcessor.name
     );
 
-    const maxRetries = job?.opts.attempts || 3;
-    let attempt = 1;
-    let lastError: any = null;
+    const { triggers } = job.data;
+    this.logger.log(
+      `Received ${triggers.length} triggers to process`,
+      StellarProcessor.name
+    );
 
-    while (attempt <= maxRetries) {
-      try {
-        this.logger.log(
-          `Attempt ${attempt} of ${maxRetries}`,
-          StellarProcessor.name
-        );
-        const transaction = await this.createTransaction(trigger);
-        const result = await this.prepareSignAndSend(transaction);
-        this.logger.log(
-          `Transaction successfully processed - ID: ${result}`,
-          StellarProcessor.name
-        );
-        return result;
-      } catch (error) {
-        lastError = error;
-        this.logger.error(
-          `Attempt ${attempt} failed with error: ${error.message}`,
-          error.stack,
-          StellarProcessor.name
-        );
+    for (const trigger of triggers) {
+      const maxRetries = job?.opts.attempts || 3;
+      let attempt = 1;
+      let lastError: any = null;
 
-        if (attempt === maxRetries) {
-          this.logger.error(
-            `All ${maxRetries} attempts failed for trigger ${trigger.id}. Final error: ${error.message}`,
+      while (attempt <= maxRetries) {
+        try {
+          this.logger.log(
+            `Processing trigger ${trigger.id} - Attempt ${attempt} of ${maxRetries}`,
             StellarProcessor.name
           );
-          throw error;
-        }
 
-        this.logger.log(
-          `Retrying attempt: ${attempt + 1}`,
-          StellarProcessor.name
-        );
-        attempt++;
+          if (attempt > 1) {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+
+          const transaction = await this.createTransaction(trigger);
+          const result = await this.prepareSignAndSend(transaction);
+
+          if (result.status === 'TRY_AGAIN_LATER') {
+            this.logger.log(
+              `Transaction for trigger ${trigger.id} needs retry. Status: ${result.status}`,
+              StellarProcessor.name
+            );
+            throw new RpcException(result.errorResult);
+          }
+
+          this.logger.log(
+            `Successfully processed trigger ${
+              trigger.id
+            } - Transaction: ${JSON.stringify(result)}`,
+            StellarProcessor.name
+          );
+
+          this.logger.log('Sleeping for 5 seconds...');
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          break;
+        } catch (error) {
+          lastError = error;
+          this.logger.error(
+            `Attempt ${attempt} failed for trigger ${trigger.id}: ${error.message}`,
+            error.stack,
+            StellarProcessor.name
+          );
+
+          if (attempt === maxRetries) {
+            this.logger.error(
+              `All ${maxRetries} attempts failed for trigger ${trigger.id}. Final error: ${error.message}`,
+              StellarProcessor.name
+            );
+          }
+
+          attempt++;
+          if (attempt <= maxRetries) {
+            this.logger.log(
+              `Retrying trigger ${trigger.id} - Attempt ${attempt} of ${maxRetries}`,
+              StellarProcessor.name
+            );
+          }
+        }
       }
     }
   }
 
-  @Process('aa.jobs.stellar.faucetTrustline')
+  @Process({
+    name: 'aa.jobs.stellar.faucetTrustline',
+    concurrency: 10,
+  })
   async faucetAndTrustline(
     job: Job<{ walletAddress: string; secretKey: string }>
   ) {
@@ -104,7 +130,7 @@ export class StellarProcessor {
       return result;
     } catch (error) {
       this.logger.error(
-        `Error in faucet and trustline: ${error.message}`,
+        `Error in faucet and trustline: ${JSON.stringify(error)}`,
         error.stack,
         StellarProcessor.name
       );
@@ -131,7 +157,7 @@ export class StellarProcessor {
     while (attempt <= maxRetries) {
       try {
         this.logger.log(
-          `Attempt ${attempt} of ${maxRetries}`,
+          `Attempt ${attempt} of ${maxRetries} for trigger ${triggerUpdate.id}`,
           StellarProcessor.name
         );
         const transaction = await this.createUpdateTriggerParamsTransaction(
@@ -139,28 +165,32 @@ export class StellarProcessor {
         );
         const result = await this.prepareSignAndSend(transaction);
         this.logger.log(
-          `Transaction successfully processed - ID: ${result}`,
+          `Transaction successfully processed for trigger ${triggerUpdate.id} - ID: ${result}`,
           StellarProcessor.name
         );
         return result;
       } catch (error) {
         lastError = error;
         this.logger.error(
-          `Attempt ${attempt} failed with error: ${error.message}`,
+          `Attempt ${attempt} failed for trigger ${
+            triggerUpdate.id
+          } with error: ${JSON.stringify(error)}`,
           error.stack,
           StellarProcessor.name
         );
 
         if (attempt === maxRetries) {
           this.logger.error(
-            `All ${maxRetries} attempts failed for trigger ${triggerUpdate.id}. Final error: ${error.message}`,
+            `All ${maxRetries} attempts failed for trigger ${
+              triggerUpdate.id
+            }. Final error: ${JSON.stringify(error)}`,
             StellarProcessor.name
           );
           throw error;
         }
 
         this.logger.log(
-          `Retrying attempt: ${attempt + 1}`,
+          `Retrying attempt: ${attempt + 1} for trigger ${triggerUpdate.id}`,
           StellarProcessor.name
         );
         attempt++;
@@ -169,27 +199,24 @@ export class StellarProcessor {
   }
 
   // Private functions
-  private async getStellarObjects() {
-    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
-    const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
-    const publicKey = keypair.publicKey();
-    const contractId = await this.getFromSettings('CONTRACTID');
-    const sourceAccount = await server.getAccount(publicKey);
-    const contract = new Contract(contractId);
-
-    return {
-      server,
-      keypair,
-      publicKey,
-      contractId,
-      sourceAccount,
-      contract,
-    };
-  }
-
   private async createTransaction(trigger: AddTriggerDto) {
     try {
-      const { sourceAccount, contract } = await this.getStellarObjects();
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const publicKey = keypair.publicKey();
+      const contractId = await this.getFromSettings('CONTRACTID');
+
+      const sourceAccount = await server.getAccount(publicKey);
+      const contract = new Contract(contractId);
+
+      this.logger.error(
+        `Using sequence number: ${sourceAccount.sequenceNumber()} for trigger ${
+          trigger.id
+        }`,
+        StellarProcessor.name
+      );
 
       const paramsHash = generateParamsHash(trigger.params);
 
@@ -216,7 +243,9 @@ export class StellarProcessor {
       return transaction;
     } catch (error) {
       this.logger.error(
-        `Error creating transaction: ${error.message}`,
+        `Error creating transaction for trigger ${trigger.id}: ${JSON.stringify(
+          error
+        )}`,
         error.stack,
         StellarProcessor.name
       );
@@ -232,7 +261,19 @@ export class StellarProcessor {
         throw new Error('Trigger ID is required');
       }
 
-      const { sourceAccount, contract } = await this.getStellarObjects();
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
+      const publicKey = keypair.publicKey();
+      const contractId = await this.getFromSettings('CONTRACTID');
+      const sourceAccount = await server.getAccount(publicKey);
+      const contract = new Contract(contractId);
+
+      this.logger.log(
+        `Using sequence number: ${sourceAccount} for trigger ${triggerUpdate.id}`,
+        StellarProcessor.name
+      );
 
       let paramsHash: string | undefined = undefined;
       if (triggerUpdate.params) {
@@ -265,7 +306,9 @@ export class StellarProcessor {
       return transaction;
     } catch (error) {
       this.logger.error(
-        `Error creating update_trigger_params transaction: ${error.message}`,
+        `Error creating update_trigger_params transaction for trigger ${
+          triggerUpdate.id
+        }: ${JSON.stringify(error)}`,
         error.stack,
         StellarProcessor.name
       );
@@ -277,7 +320,10 @@ export class StellarProcessor {
 
   private async prepareSignAndSend(transaction: any) {
     try {
-      const { server, keypair } = await this.getStellarObjects();
+      const server = new StellarRpc.Server(
+        await this.getFromSettings('SERVER')
+      );
+      const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
 
       this.logger.log('Preparing transaction...', StellarProcessor.name);
       const preparedTransaction = await server.prepareTransaction(transaction);
@@ -290,31 +336,25 @@ export class StellarProcessor {
       );
       const txn = await server.sendTransaction(preparedTransaction);
 
-      // Check for contract-specific errors in the response
       if (txn.status === 'ERROR') {
-        if (txn.errorResult) {
-          // This would contain Soroban contract errors
-          this.logger.error(
-            `Contract error: ${JSON.stringify(txn.errorResult)}`,
-            StellarProcessor.name
-          );
-        }
+        this.logger.error(
+          `Contract error: ${JSON.stringify(txn.errorResult)}`,
+          StellarProcessor.name
+        );
+        throw new RpcException('Transaction failed');
       }
 
       return txn;
     } catch (error) {
-      // Extract contract error codes if available
       let errorMessage = error.message || 'Transaction failed';
 
-      // Check for TriggerNotFound or TriggerAlreadyExists errors
       if (error.message?.includes('ContractError')) {
         this.logger.error(
-          `Contract error details: ${error.message}`,
+          `Contract error details: ${JSON.stringify(error.message)}`,
           StellarProcessor.name
         );
       }
 
-      // Also log the raw error for debugging
       this.logger.error(
         `Transaction error: ${JSON.stringify(error)}`,
         error.stack,
