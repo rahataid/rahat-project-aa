@@ -2,6 +2,8 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 
 export const NAMESPACE = 'rahat.projects';
 
+export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+
 export const STELLER_UID = 'stellar';
 
 export const DATA_SOURCES = {
@@ -96,6 +98,7 @@ export const JOBS = {
     GET_ONCHAIN_TRIGGER: 'aa.jobs.stellar.getTriggerOnChain',
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
+    FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',

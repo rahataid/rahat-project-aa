@@ -23,7 +23,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { SettingsService } from '@rumsan/settings';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { Queue } from 'bull';
 import {
   AddTriggerDto,
@@ -35,7 +35,7 @@ import {
 export class StellarService {
   private readonly logger = new Logger(StellarService.name);
   constructor(
-    @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.STELLAR)
@@ -164,7 +164,7 @@ export class StellarService {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(
-          contract.call('get_trigger', xdr.ScVal.scvSymbol(trigger.id))
+          contract.call('get_trigger', xdr.ScVal.scvString(trigger.id))
         )
         .setTimeout(30)
         .build();

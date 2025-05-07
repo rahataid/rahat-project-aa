@@ -4,7 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
-import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
@@ -32,8 +32,9 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
     private eventEmitter: EventEmitter2,
     private readonly stellarService: StellarService
   ) {
@@ -76,10 +77,18 @@ export class BeneficiaryService {
       )
     );
 
-    await this.stellarService.faucetAndTrustlineService({
-      walletAddress: keys.address,
-      secretKey: keys.privateKey,
-    });
+    await this.stellarQueue.add(
+      'aa.jobs.stellar.faucetTrustline',
+      { walletAddress: keys.address, secretKey: keys.privateKey },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
 
     await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
@@ -152,7 +161,6 @@ export class BeneficiaryService {
       }
     );
 
-    console.log(benfGroups);
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
       benfGroups
@@ -255,9 +263,7 @@ export class BeneficiaryService {
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
-    console.log(beneficiaryGroupData);
-    // Get beneficiary uuid array from the group
-    // Add trustline to all the beneficiaries in the group
+
     return this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,

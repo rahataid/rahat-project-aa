@@ -2,6 +2,7 @@ import { Process, Processor } from '@nestjs/bull';
 import { Logger, Inject, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
+import { StellarService } from '../stellar/stellar.service';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import {
@@ -27,7 +28,8 @@ export class StellarProcessor {
 
   constructor(
     private readonly settingService: SettingsService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly stellarService: StellarService
   ) {}
 
   @Process(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE)
@@ -81,6 +83,32 @@ export class StellarProcessor {
         );
         attempt++;
       }
+    }
+  }
+
+  @Process('aa.jobs.stellar.faucetTrustline')
+  async faucetAndTrustline(
+    job: Job<{ walletAddress: string; secretKey: string }>
+  ) {
+    this.logger.log(
+      'Processing faucet and trustline job...',
+      StellarProcessor.name
+    );
+    const { walletAddress, secretKey } = job.data;
+
+    try {
+      const result = await this.stellarService.faucetAndTrustlineService({
+        walletAddress,
+        secretKey,
+      });
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error in faucet and trustline: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
     }
   }
 
@@ -162,7 +190,7 @@ export class StellarProcessor {
   private async createTransaction(trigger: AddTriggerDto) {
     try {
       const { sourceAccount, contract } = await this.getStellarObjects();
-      
+
       const paramsHash = generateParamsHash(trigger.params);
 
       const transaction = new TransactionBuilder(sourceAccount, {
@@ -172,7 +200,7 @@ export class StellarProcessor {
         .addOperation(
           contract.call(
             'add_trigger',
-            xdr.ScVal.scvSymbol(trigger.id),
+            xdr.ScVal.scvString(trigger.id),
             xdr.ScVal.scvString(trigger.trigger_type),
             xdr.ScVal.scvString(trigger.phase),
             xdr.ScVal.scvString(trigger.title),
@@ -218,7 +246,7 @@ export class StellarProcessor {
         .addOperation(
           contract.call(
             'update_trigger_params',
-            xdr.ScVal.scvSymbol(triggerUpdate.id),
+            xdr.ScVal.scvString(triggerUpdate.id),
             this.toOptionalScVal(paramsHash),
             this.toOptionalScVal(triggerUpdate.source),
             triggerUpdate.isTriggered !== undefined

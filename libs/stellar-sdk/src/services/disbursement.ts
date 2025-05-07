@@ -51,8 +51,6 @@ export class DisbursementServices implements IDisbursementService {
     const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
     const asset = new Asset(ASSET.NAME, issuerKeypair.publicKey());
 
-    console.log(amount, 'is the amount');
-
     await axiosInstance.post(STELLAR.ASSET, {
       code: ASSET.NAME,
       issuer: ASSET.ISSUER,
