@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 const prismaService = new PrismaService();
 const settings = new SettingsService(prismaService);
 
-const main = async () => {
+export const seedProject = async () => {
   const activeYear = process.env.ACTIVE_YEAR;
   const riverBasin = process.env.RIVER_BASIN;
   if(!activeYear || !riverBasin) {
@@ -39,15 +39,17 @@ const main = async () => {
         },
         isPrivate: false
     })
-
   }
 }
 
-main()
+// Keep the standalone execution capability for when run directly
+if (require.main === module) {
+  seedProject()
     .then(async () => {
-        await prisma.$disconnect();
+      await prisma.$disconnect();
     })
     .catch(async (error) => {
-        console.log(error);
-        await prisma.$disconnect();
+      console.log(error);
+      await prisma.$disconnect();
     });
+}
