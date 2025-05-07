@@ -1,6 +1,24 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
+import {seedProject} from "../../prisma/seed-project";
+import {seedStellar} from "../../prisma/seed-stellar";
+import * as readline from 'readline';
+import * as path from 'path';
+
+function askQuestion(query: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 const prisma = new PrismaClient({
   datasourceUrl: process.env.CORE_DATABASE_URL as string,
@@ -20,13 +38,16 @@ const rootEnv = `${rootPath}/.env`;
 async function main() {
   const uuid = randomUUID();
 
+  const name = await askQuestion('Enter project name: ');
+  const description = await askQuestion('Enter project description: ');
+
   await prisma.$executeRaw(
     Prisma.sql`
         INSERT INTO tbl_projects (uuid, name, description, status, type)
-        VALUES (${uuid}::uuid, 'AA', 'AA Project', 'ACTIVE', 'AA')`
+        VALUES (${uuid}::uuid, ${name}, ${description}, 'ACTIVE', 'AA')`
   );
 
-  console.log('Project created successfully.');
+  console.log(`Project created with UUID: ${uuid}`);
 
   const [devSettings] = await prisma.$queryRaw<any[]>(
     Prisma.sql([`SELECT *  FROM tbl_settings WHERE name='AA_DEV'`])
@@ -34,7 +55,43 @@ async function main() {
 
   const prvKey = devSettings.value.privateKey;
 
+  // Read environment variables
+  const envData = await fs.readFile(rootEnv, 'utf8');
+  const lines = envData.split('\n') as string[];
+  const activeYear = process.env.ACTIVE_YEAR || lines.find(line => line.startsWith('ACTIVE_YEAR'))?.split('=')[1];
+  const riverBasin = process.env.RIVER_BASIN || lines.find(line => line.startsWith('RIVER_BASIN'))?.split('=')[1];
+
+  if (!activeYear || !riverBasin) {
+    throw new Error('ACTIVE_YEAR and RIVER_BASIN environment variables are required');
+  }
+
+  // Create a summary object
+  const scriptSummary = {
+    project: {
+      uuid,
+      name,
+      description,
+      status: 'ACTIVE',
+      type: 'AA',
+    },
+    environment: {
+      activeYear,
+      riverBasin,
+    },
+    createdAt: new Date().toISOString(),
+  };
+
+  const summaryFilePath = path.join(rootPath || '.', 'project-setup-summary.json');
+
+  try {
+    await fs.writeFile(summaryFilePath, JSON.stringify(scriptSummary, null, 2), 'utf8');
+    console.log(`Script summary saved to ${summaryFilePath}`);
+  } catch (error) {
+    console.error('Error writing script summary to file:', error);
+  }
+
   await modifyEnvAndSettings(uuid, prvKey);
+  await seedTriggers(uuid);
 }
 
 async function seedTriggers(projectUuid: string) {
@@ -52,15 +109,13 @@ async function seedTriggers(projectUuid: string) {
   for (const category of categories) {
     await triggerPrisma.$executeRaw(
       Prisma.sql`
-        INSERT INTO tbl_activity_categories (uuid, app, name, is_deleted, created_at)
-        VALUES (${randomUUID()}::uuid, ${projectUuid}, ${category}, false, now())
+        INSERT INTO tbl_activity_categories (uuid, app, name, "isDeleted", "createdAt", "updatedAt")
+        VALUES (${randomUUID()}::uuid, ${projectUuid}, ${category}, false, now(), now())
       `
     );
   }
   console.log('Activity categories seeded successfully.');
 
-  // Seed Phases with Active year and River Basin
-  // Phases.PREPAREDNESS, Phases.ACTIVATION, Phases.READINESS
   const phases = [
     "PREPAREDNESS",
     "ACTIVATION",
@@ -69,34 +124,62 @@ async function seedTriggers(projectUuid: string) {
   // read ActiveYear and River basin from project .env
   const envData = await fs.readFile(rootEnv, 'utf8');
   const lines = envData.split('\n') as string[];
-  const activeYear = lines.find(line => line.startsWith('ACTIVE_YEAR'))?.split('=')[1];
-  const riverBasin = lines.find(line => line.startsWith('RIVER_BASIN'))?.split('=')[1];
+  const activeYear = process.env.ACTIVE_YEAR || lines.find(line => line.startsWith('ACTIVE_YEAR'))?.split('=')[1];
+  const riverBasin = process.env.RIVER_BASIN || lines.find(line => line.startsWith('RIVER_BASIN'))?.split('=')[1];
 
   if (!activeYear || !riverBasin) {
     throw new Error('ACTIVE_YEAR and RIVER_BASIN environment variables are required');
   }
+  // check if river basin exist or not if, it doesn't exit create one
+  const selectRiverBasinQuery = Prisma.sql`
+    SELECT * FROM tbl_sources WHERE "riverBasin" = ${riverBasin};
+  `
+  const riverBasinExists = await triggerPrisma.$executeRaw(selectRiverBasinQuery);
+  if(riverBasinExists === 0){
+    console.log(`Data source with river basin ${riverBasin} does not exist, creating one...`);
+    const createSourceQuery = Prisma.sql`
+      INSERT INTO tbl_sources ("uuid", "source", "riverBasin", "createdAt", "updatedAt")
+      VALUES (
+        ${randomUUID()}::uuid,
+        ARRAY['MANUAL', 'DHM', 'GLOFAS']::"DataSource"[],
+        ${riverBasin},
+        now(),
+        now()
+      )
+    `;
+    await triggerPrisma.$executeRaw(createSourceQuery);
+    console.log(`Data source with river basin ${riverBasin} created successfully.`);
+  }
 
-  // Updated phase seeding with raw SQL upsert query
+  // check if phases exist for that riverBasin and activeYear or not if, it doesn't exit create one
   for (const phase of phases) {
-    await triggerPrisma.$executeRaw(
-      Prisma.sql`
-        INSERT INTO tbl_phases (uuid, name, active_year, river_basin, is_deleted, created_at, updated_at)
+    const checkPhaseQuery = Prisma.sql`
+      SELECT count(*) FROM tbl_phases
+      WHERE "riverBasin" = ${riverBasin} AND "activeYear" = ${activeYear} AND name = ${phase}::"Phases";
+    `;
+
+    const [phaseExists] = await triggerPrisma.$queryRaw<any[]>(checkPhaseQuery);
+
+    if (phaseExists.count === 0n) {
+      console.log(`Phase ${phase} for river basin ${riverBasin} and active year ${activeYear} does not exist. Creating...`);
+      const canTriggerPayout = phase === "PREPAREDNESS" ? false : true;
+      const insertPhaseQuery = Prisma.sql`
+        INSERT INTO tbl_phases (uuid, name, "activeYear", "riverBasin", "canTriggerPayout", "createdAt", "updatedAt")
         VALUES (
           ${randomUUID()}::uuid,
-          ${phase},
+          ${phase}::"Phases",
           ${activeYear},
           ${riverBasin},
-          false,
+          ${canTriggerPayout}::boolean,
           now(),
           now()
-        )
-        ON CONFLICT (river_basin, active_year, name)
-        DO UPDATE SET
-          active_year = ${activeYear},
-          river_basin = ${riverBasin},
-          updated_at = now()
-      `
-    );
+        );
+      `;
+      await triggerPrisma.$executeRaw(insertPhaseQuery);
+      console.log(`Phase ${phase} created successfully.`);
+    } else {
+      console.log(`Phase ${phase} for river basin ${riverBasin} and active year ${activeYear} already exists.`);
+    }
   }
 
   console.log('Phases seeded successfully.');
@@ -125,49 +208,45 @@ async function modifyEnvAndSettings(uuid: string, prvKey: string) {
     const newData = newLines.join('\n');
 
     await fs.writeFile(rootEnv, newData, 'utf8');
-
-    await projectPrisma.setting.create({
-      data: {
-        name: 'DEPLOYER_PRIVATE_KEY',
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
+    await projectPrisma.setting.upsert({
+      where: {
+      name: 'DEPLOYER_PRIVATE_KEY',
       },
-    });
-
-    await projectPrisma.setting.create({
-      data: {
-        name: 'RAHAT_ADMIN_PRIVATE_KEY',
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
+      create: {
+      name: 'DEPLOYER_PRIVATE_KEY',
+      value: prvKey,
+      dataType: 'STRING',
+      isPrivate: true,
+      },
+      update: {
+      value: prvKey,
+      dataType: 'STRING',
+      isPrivate: true,
       },
     });
 
     await projectPrisma.setting.upsert({
       where: {
-        name: 'PROJECTINFO',
+      name: 'RAHAT_ADMIN_PRIVATE_KEY',
       },
       create: {
-        name: 'PROJECTINFO',
-        value: {
-          "ACTIVE_YEAR": activeYear,
-          "RIVER_BASIN": riverBasin,
-        },
-        dataType: 'OBJECT',
-        isPrivate: false,
-        isReadOnly: false,
+      name: 'RAHAT_ADMIN_PRIVATE_KEY',
+      value: prvKey,
+      dataType: 'STRING',
+      isPrivate: true,
       },
       update: {
-        value: {
-          "ACTIVE_YEAR": activeYear,
-          "RIVER_BASIN": riverBasin,
-        },
-        isPrivate: false,
-        isReadOnly: false,
-      }
+      value: prvKey,
+      dataType: 'STRING',
+      isPrivate: true,
+      },
+    });
 
-    })
+    await seedProject();
+    console.log('ProjectInfo seeded successfully.');
+    await seedStellar();
+    console.log('Stellar seeded successfully.');
+
     console.log(rootEnv);
     console.log('File updated.');
   } catch (error) {
