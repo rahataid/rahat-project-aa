@@ -6,6 +6,7 @@ import {seedStellar} from "../../prisma/seed-stellar";
 import * as readline from 'readline';
 import * as path from 'path';
 
+// running script example:  npx tsx tools/scripts/seed.aa.ts /Users/dipeshrumsan/Projects/rahat/rahat-project-aa
 function askQuestion(query: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -121,6 +122,7 @@ async function seedTriggers(projectUuid: string) {
     "ACTIVATION",
     "READINESS",
   ]
+
   // read ActiveYear and River basin from project .env
   const envData = await fs.readFile(rootEnv, 'utf8');
   const lines = envData.split('\n') as string[];
@@ -130,6 +132,7 @@ async function seedTriggers(projectUuid: string) {
   if (!activeYear || !riverBasin) {
     throw new Error('ACTIVE_YEAR and RIVER_BASIN environment variables are required');
   }
+
   // check if river basin exist or not if, it doesn't exit create one
   const selectRiverBasinQuery = Prisma.sql`
     SELECT * FROM tbl_sources WHERE "riverBasin" = ${riverBasin};
