@@ -78,7 +78,7 @@ export class BeneficiaryService {
     );
 
     await this.stellarQueue.add(
-      'aa.jobs.stellar.faucetTrustline',
+      JOBS.STELLAR.FAUCET_TRUSTLINE,
       { walletAddress: keys.address, secretKey: keys.privateKey },
       {
         attempts: 3,

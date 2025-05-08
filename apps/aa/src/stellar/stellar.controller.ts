@@ -59,7 +59,16 @@ export class StellarController {
     return this.stellarService.getDisbursementStats();
   }
 
-  // ------ Onchain triggers ------
+  // Get trigger from on-chain contract
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_ONCHAIN_TRIGGER,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getTriggerWithID(trigger: GetTriggerDto) {
+    return this.stellarService.getTriggerWithID(trigger);
+  }
+
+  // ------ Onchain triggers: Remove after testing ------
   // Adds trigger to the on-chain contract
   @MessagePattern({
     cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
@@ -76,14 +85,5 @@ export class StellarController {
   })
   async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
     return this.stellarService.updateOnchainTrigger(trigger);
-  }
-
-  // Get trigger from on-chain contract
-  @MessagePattern({
-    cmd: JOBS.STELLAR.GET_ONCHAIN_TRIGGER,
-    uuid: process.env.PROJECT_ID,
-  })
-  async getTriggerWithID(trigger: GetTriggerDto) {
-    return this.stellarService.getTriggerWithID(trigger);
   }
 }

@@ -109,7 +109,7 @@ export class StellarProcessor {
   }
 
   @Process({
-    name: 'aa.jobs.stellar.faucetTrustline',
+    name: JOBS.STELLAR.FAUCET_TRUSTLINE,
     concurrency: 10,
   })
   async faucetAndTrustline(
@@ -122,11 +122,10 @@ export class StellarProcessor {
     const { walletAddress, secretKey } = job.data;
 
     try {
-      const result = await this.stellarService.faucetAndTrustlineService({
+      await this.stellarService.faucetAndTrustlineService({
         walletAddress,
         secretKey,
       });
-      return result;
     } catch (error) {
       this.logger.error(
         `Error in faucet and trustline: ${JSON.stringify(error)}`,
@@ -162,12 +161,11 @@ export class StellarProcessor {
         const transaction = await this.createUpdateTriggerParamsTransaction(
           triggerUpdate
         );
-        const result = await this.prepareSignAndSend(transaction);
+        await this.prepareSignAndSend(transaction);
         this.logger.log(
-          `Transaction successfully processed for trigger ${triggerUpdate.id} - ID: ${result}`,
+          `Transaction successfully processed for trigger ${triggerUpdate.id}`,
           StellarProcessor.name
         );
-        return result;
       } catch (error) {
         lastError = error;
         this.logger.error(
