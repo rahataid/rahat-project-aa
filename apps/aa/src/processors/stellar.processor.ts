@@ -72,15 +72,14 @@ export class StellarProcessor {
             throw new RpcException(result.errorResult);
           }
 
+          await this.waitForTransactionConfirmation(result.hash, trigger.id);
+
           this.logger.log(
             `Successfully processed trigger ${
               trigger.id
             } - Transaction: ${JSON.stringify(result)}`,
             StellarProcessor.name
           );
-
-          this.logger.log('Sleeping for 5 seconds...');
-          await new Promise((resolve) => setTimeout(resolve, 5000));
           break;
         } catch (error) {
           lastError = error;
@@ -363,6 +362,42 @@ export class StellarProcessor {
 
       throw new RpcException(errorMessage);
     }
+  }
+
+  private async waitForTransactionConfirmation(
+    transactionHash: string,
+    triggerId: string
+  ): Promise<any> {
+    const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
+    const startTime = Date.now();
+    const timeoutMs = 60000;
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const txResponse = await server.getTransaction(transactionHash);
+        this.logger.log(
+          `Transaction status for trigger ${triggerId}: ${txResponse.status}`
+        );
+
+        if (txResponse.status === 'SUCCESS') {
+          return txResponse;
+        } else if (txResponse.status === 'FAILED') {
+          throw new RpcException(
+            `Transaction failed: ${JSON.stringify(txResponse)}`
+          );
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          this.logger.log(`Retrying ${triggerId}`);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error checking transaction status for trigger ${triggerId}: ${error.message}`
+        );
+        throw error;
+      }
+    }
+    throw new RpcException(
+      `Transaction confirmation timed out for trigger ${triggerId} after ${timeoutMs}ms`
+    );
   }
 
   private toOptionalScVal(value: string | null | undefined): xdr.ScVal {
