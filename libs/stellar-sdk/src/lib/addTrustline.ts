@@ -15,6 +15,7 @@ export const add_trustline = async (
   ASSET_Issuer: string,
   ASSET_code: string
 ) => {
+  logger.warn('Adding trustline...');
   const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
   const server = new Horizon.Server(horizonServer);
   const account = await server.loadAccount(publicKey);

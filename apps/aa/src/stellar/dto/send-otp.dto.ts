@@ -1,4 +1,4 @@
-import { IsOptional } from 'class-validator';
+import { IsBoolean, IsJSON, IsOptional, IsString } from 'class-validator';
 
 export class SendOtpDto {
   phoneNumber: string;
@@ -17,8 +17,4 @@ export class SendAssetDto {
 export class FundAccountDto {
   walletAddress: string;
   secretKey: string;
-}
-
-export class AddTriggerDto {
-  id: string;
 }

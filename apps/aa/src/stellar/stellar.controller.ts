@@ -4,6 +4,11 @@ import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
 import { DisburseDto } from './dto/disburse.dto';
+import {
+  AddTriggerDto,
+  GetTriggerDto,
+  UpdateTriggerParamsDto,
+} from './dto/trigger.dto';
 
 @Controller('stellar')
 export class StellarController {
@@ -45,15 +50,6 @@ export class StellarController {
     return this.stellarService.faucetAndTrustlineService(account);
   }
 
-  // Adds trigger to the on-chain contract
-  @MessagePattern({
-    cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
-    uuid: process.env.PROJECT_ID,
-  })
-  async addTriggerOnChain(trigger: any) {
-    return this.stellarService.addTriggerOnChain(trigger);
-  }
-
   // Returns all the required stats for the disbursement
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_STELLAR_STATS,
@@ -61,5 +57,33 @@ export class StellarController {
   })
   async getDisbursementStats() {
     return this.stellarService.getDisbursementStats();
+  }
+
+  // Get trigger from on-chain contract
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_ONCHAIN_TRIGGER,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getTriggerWithID(trigger: GetTriggerDto) {
+    return this.stellarService.getTriggerWithID(trigger);
+  }
+
+  // ------ Onchain triggers: Remove after testing ------
+  // Adds trigger to the on-chain contract
+  @MessagePattern({
+    cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
+    uuid: process.env.PROJECT_ID,
+  })
+  async addTriggerOnChain(trigger: AddTriggerDto[]) {
+    return this.stellarService.addTriggerOnChain(trigger);
+  }
+
+  // Update trigger from on-chain contract
+  @MessagePattern({
+    cmd: JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER,
+    uuid: process.env.PROJECT_ID,
+  })
+  async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
+    return this.stellarService.updateOnchainTrigger(trigger);
   }
 }

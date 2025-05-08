@@ -35,8 +35,10 @@ export class DisbursementServices implements IDisbursementService {
       this.email,
       this.password
     );
+
     token = (await authService.getToken()) as string;
-    await this.custom_asset(amount);
+
+    await this.custom_asset(amount.toString());
     return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 

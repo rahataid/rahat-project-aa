@@ -241,6 +241,7 @@ model Triggers {
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
   isDeleted   Boolean @default(false)
+  isOnchainSuccess Boolean @default(false)
 
   triggeredBy String?
 

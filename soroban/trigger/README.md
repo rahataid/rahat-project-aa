@@ -24,7 +24,9 @@ This will deploy from compiled file hello_world.wasm
 - Saves deployment config -> ./stellar/contract-ids/deployed_contract
 
 stellar contract deploy \
- --wasm target/wasm32-unknown-unknown/release/hello_world.wasm \
+ --wasm target/wasm32-unknown-unknown/release/soroban_contract.wasm \
  --source sushant \
  --network testnet \
  --alias deployed_contract
+
+CONTRACT= CDIESPF2SHPYTXTAM4EW55TD4DIIMSYBRS72CCRQH2UDCL4IS4KOZEMK
