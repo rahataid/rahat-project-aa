@@ -41,6 +41,8 @@ export class StellarProcessor {
       StellarProcessor.name
     );
 
+    console.log(job.data);
+
     const { triggers } = job.data;
     this.logger.log(
       `Received ${triggers.length} triggers to process`,
@@ -195,6 +197,7 @@ export class StellarProcessor {
           `Transaction successfully processed for trigger ${triggerUpdate.id}`,
           JSON.stringify(result)
         );
+        break;
       } catch (error) {
         lastError = error;
         this.logger.error(
