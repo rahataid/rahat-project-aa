@@ -27,11 +27,12 @@ This document outlines the process for the vendor app to interact with the backe
   {
     "action": "aa.stellar.sendOtp",
     "payload": {
-      "phoneNumber": ""
+      "phoneNumber": "",
+      "amount": ""
     }
   }
   ```
-- **Description**: Sends a One-Time Password (OTP) to the specified phone number. This OTP is used to authenticate the beneficiary before proceeding with asset transfer.
+- **Description**: Sends a One-Time Password (OTP) to the specified phone number. If the `amount` is specified, it represents the token amount to be considered; otherwise, the entire token balance of the beneficiary is used.
 
 ## 3. Send Asset to Vendor
 
@@ -41,11 +42,11 @@ This document outlines the process for the vendor app to interact with the backe
   {
     "action": "aa.stellar.sendAsset",
     "payload": {
-      "amount": "",
       "phoneNumber": "",
       "receiverAddress": "",
-      "otp": ""
+      "otp": "",
+      "amount": ""
     }
   }
   ```
-- **Description**: Transfers the specified amount of tokens to the vendor's account. This step requires a valid OTP to ensure the transaction is authorized by the beneficiary.
+- **Description**: Transfers the specified amount of tokens to the vendor's account. This step requires a valid OTP to ensure the transaction is authorized by the beneficiary. If the `amount` is not specified, the entire token balance is considered.
