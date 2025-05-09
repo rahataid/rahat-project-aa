@@ -17,7 +17,7 @@ export class AuthService {
   }
 
   public async login(): Promise<void> {
-    const response = await ag.post(
+    const response = await ag().post(
       AUTH.LOGIN,
       {
         email: this.email,

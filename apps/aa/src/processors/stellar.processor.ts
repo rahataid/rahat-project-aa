@@ -32,7 +32,7 @@ export class StellarProcessor {
     private readonly stellarService: StellarService
   ) {}
 
-  @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
+  @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, concurrency: 1 })
   async addTriggerOnchain(job: Job<{ triggers: AddTriggerDto[] }>) {
     this.logger.log(
       'Processing add triggers on-chain job...',

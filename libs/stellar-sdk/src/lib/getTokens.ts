@@ -6,16 +6,16 @@ export const getAuthToken = async (
   receiver_public_key: string
 ) => {
   const home_domain = RECEIVER.HOME_DOMAIN(tenant_name);
-  const account = await ar.get(RECEIVER.AUTH, {
+  const account = await ar().get(RECEIVER.AUTH, {
     params: {
       account: receiver_public_key,
       home_domain,
       client_domain: RECEIVER.CLIENT_DOMAIN,
     },
   });
-  const sign = await as.post(RECEIVER.SIGN, account.data);
+  const sign = await as().post(RECEIVER.SIGN, account.data);
 
-  return ar.post(RECEIVER.AUTH, {
+  return ar().post(RECEIVER.AUTH, {
     transaction: sign.data.transaction,
   });
 };
@@ -31,7 +31,7 @@ export const interactive_url = async (
   formdata.append('claimable_balance_supported', 'false');
   formdata.append('lang', 'en');
 
-  return ar.post(RECEIVER.INTERACTIVE, formdata, {
+  return ar().post(RECEIVER.INTERACTIVE, formdata, {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type':

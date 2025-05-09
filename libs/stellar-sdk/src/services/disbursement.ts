@@ -3,7 +3,6 @@ import { ASSET, DISBURSEMENT, WALLETS } from '../constants/constant';
 import {
   createDisbursement,
   updateDisbursementStatus,
-  uploadDisbursementFile,
 } from '../lib/disbursement';
 import { transfer_asset } from '../lib/transferAsset';
 import { AuthService } from '../lib/login';

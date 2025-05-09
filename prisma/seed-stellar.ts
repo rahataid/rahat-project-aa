@@ -31,6 +31,11 @@ const main = async () => {
       password: 'Password123!',
       contractId: 'CARWC3PLXU7V6EPZ67GDIDIU2ZSXN7ASHSX35G4THJHTVT2ZQY232KN2',
       vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
+      baseUrl: 'https://api-sdp.stellar.rahat.io',
+      receiverBaseurl: 'https://anchor.stellar.rahat.io',
+      demoWallet: 'https://demo-wallet-server.stellar.org',
+      adminBaseUrl: 'https://admin-sdp.stellar.rahat.io',
+      friendbotUrl: 'https://friendbot.stellar.org',
     };
 
     await settings.create({
@@ -47,6 +52,11 @@ const main = async () => {
       password: 'Password123!',
       contractId: 'CAS57GSDGERUYREBA47G4AKPWTNOQRQDXQQBMAT3JXGGKEOTNDGI7AI7',
       vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
+      baseUrl: 'https://api-sdp.stellar.rahat.io',
+      receiverBaseurl: 'https://anchor.stellar.rahat.io',
+      demoWallet: 'https://demo-wallet-server.stellar.org',
+      adminBaseUrl: 'https://admin-sdp.stellar.rahat.io',
+      friendbotUrl: 'https://friendbot.stellar.org',
     };
 
     await settings.create({

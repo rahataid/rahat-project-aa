@@ -1,6 +1,6 @@
 import { getAuthToken, interactive_url } from '../lib/getTokens';
 import { send_otp } from '../lib/sendOtp';
-import { ag } from '../lib/axios/axiosGuest';
+import { ag, friendbot } from '../lib/axios/axiosGuest'; // Import friendbot from axiosGuest
 import { RECEIVER } from '../constants/routes';
 import { ASSET, DISBURSEMENT, horizonServer } from '../constants/constant';
 import {
@@ -12,7 +12,6 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { add_trustline } from '../lib/addTrustline';
-import axios from 'axios';
 import { IReceiveService } from '../types';
 
 export class ReceiveService implements IReceiveService {
@@ -70,7 +69,7 @@ export class ReceiveService implements IReceiveService {
     otp: string,
     verification: string
   ): Promise<any> {
-    const res = ag.post(
+    const res = ag().post(
       RECEIVER.VERIFY_OTP,
       {
         phone_number: phoneNumber,
@@ -92,9 +91,7 @@ export class ReceiveService implements IReceiveService {
     walletAddress: string,
     secretKey: string
   ) {
-    await axios.get(
-      `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
-    );
+    await friendbot().get(`?addr=${walletAddress}`);
     await add_trustline(
       walletAddress,
       secretKey,
@@ -119,7 +116,7 @@ export class ReceiveService implements IReceiveService {
         Operation.payment({
           destination: receiverPk,
           asset,
-          amount,
+          amount: amount.toString(),
         })
       )
       .setTimeout(30)
@@ -129,7 +126,7 @@ export class ReceiveService implements IReceiveService {
 
     await server.submitTransaction(transaction);
 
-    return { success: 'tokens sent to vendor' };
+    return { success: 'Tokens sent to vendor' };
   }
 
   public async getAccountBalance(wallet: string) {
