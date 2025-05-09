@@ -159,12 +159,13 @@ async function main() {
     }
 
     const scriptSummary = {
+      envFile: envPath,
       project: {
         uuid,
         name,
         description,
         status: 'ACTIVE',
-        type: 'AA',
+        type: 'aa',
       },
       environment: {
         activeYear,
