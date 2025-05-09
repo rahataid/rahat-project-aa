@@ -1,7 +1,7 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable, Inject } from '@nestjs/common';
 import { Job } from 'bull';
-import { BQUEUE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
@@ -14,12 +14,13 @@ import {
   Contract,
   xdr,
 } from '@stellar/stellar-sdk';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { generateParamsHash } from '../stellar/utils/stellar.utils.service';
 import {
   AddTriggerDto,
   UpdateTriggerParamsDto,
 } from '../stellar/dto/trigger.dto';
+import { lastValueFrom } from 'rxjs';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -27,6 +28,7 @@ export class StellarProcessor {
   private readonly logger = Logger;
 
   constructor(
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
     private readonly stellarService: StellarService
@@ -79,6 +81,14 @@ export class StellarProcessor {
               trigger.id
             } - Transaction: ${JSON.stringify(result)}`,
             StellarProcessor.name
+          );
+
+          this.client.send(
+            { cmd: 'ms.jobs.triggers.updateTransaction' },
+            {
+              uuid: trigger.id,
+              transactionHash: result.hash,
+            }
           );
           break;
         } catch (error) {
@@ -158,13 +168,32 @@ export class StellarProcessor {
           `Attempt ${attempt} of ${maxRetries} for trigger ${triggerUpdate.id}`,
           StellarProcessor.name
         );
+
+        if (attempt > 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+
         const transaction = await this.createUpdateTriggerParamsTransaction(
           triggerUpdate
         );
-        await this.prepareSignAndSend(transaction);
+        const result = await this.prepareSignAndSend(transaction);
+
+        if (result.status === 'TRY_AGAIN_LATER') {
+          this.logger.log(
+            `Transaction for trigger ${triggerUpdate.id} needs retry. Status: ${result.status}`,
+            StellarProcessor.name
+          );
+          throw new RpcException(result.errorResult);
+        }
+
+        await this.waitForTransactionConfirmation(
+          result.hash,
+          triggerUpdate.id
+        );
+
         this.logger.log(
           `Transaction successfully processed for trigger ${triggerUpdate.id}`,
-          StellarProcessor.name
+          JSON.stringify(result)
         );
       } catch (error) {
         lastError = error;
@@ -183,14 +212,20 @@ export class StellarProcessor {
             }. Final error: ${JSON.stringify(error)}`,
             StellarProcessor.name
           );
-          throw error;
         }
+
+        attempt++;
 
         this.logger.log(
           `Retrying attempt: ${attempt + 1} for trigger ${triggerUpdate.id}`,
           StellarProcessor.name
         );
-        attempt++;
+        if (attempt <= maxRetries) {
+          this.logger.log(
+            `Retrying trigger ${triggerUpdate.id} - Attempt ${attempt} of ${maxRetries}`,
+            StellarProcessor.name
+          );
+        }
       }
     }
   }
@@ -338,7 +373,7 @@ export class StellarProcessor {
           `Contract error: ${JSON.stringify(txn.errorResult)}`,
           StellarProcessor.name
         );
-        throw new RpcException('Transaction failed');
+        throw new Error('Transaction failed');
       }
 
       return txn;
