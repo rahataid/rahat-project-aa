@@ -206,13 +206,20 @@ export class StellarProcessor {
           JSON.stringify(result)
         );
 
-          this.client.send(
+          const res = await lastValueFrom(this.client.send(
             { cmd: 'ms.jobs.triggers.updateTransaction' },
             {
               uuid: triggerUpdate.id,
               transactionHash: result.hash,
             }
-          );
+          ));
+          if(res) {
+            this.logger.log(
+              `Updated Trigger ${triggerUpdate.id} status successfully updated in database`,
+              StellarProcessor.name
+            );
+          }
+
         break;
       } catch (error) {
         lastError = error;
