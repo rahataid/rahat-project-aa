@@ -1,4 +1,8 @@
+import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
+
 export const NAMESPACE = 'rahat.projects';
+
+export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 
 export const STELLER_UID = 'stellar';
 
@@ -86,6 +90,15 @@ export const JOBS = {
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
+    ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
+    UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
+    ADD_ONCHAIN_TRIGGER_QUEUE: 'aa.jobs.stellar.getTriggerOnChainQueue',
+    UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE:
+      'aa.jobs.stellar.updateTriggerParamsOnChainQueue',
+    GET_ONCHAIN_TRIGGER: 'aa.jobs.stellar.getTriggerOnChain',
+    GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
+    GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
+    FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
@@ -150,6 +163,18 @@ export const JOBS = {
     UPDATE: 'aa.jobs.dailyMonitoring.update',
     REMOVE: 'aa.jobs.dailyMonitoring.remove',
   },
+  VENDOR: {
+    REIMBURSE: {
+      CREATE: 'rahat.jobs.vendor.reimburse.create',
+      LIST: 'rahat.jobs.vendor.reimburse.list',
+      GET: 'rahat.jobs.vendor.reimburse.get',
+    },
+    GET: 'rahat.jobs.vendor.get',
+    LIST: 'rahat.jobs.vendor.list',
+    LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    CREATE: 'rahat.jobs.vendor.create',
+    ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+  },
 };
 
 export const EVENTS = {
@@ -170,6 +195,7 @@ export const BQUEUE = {
   TRIGGER: 'TRIGGER',
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
+  STELLAR: 'STELLAR',
 };
 
 export const VULNERABILITY_FIELD = {

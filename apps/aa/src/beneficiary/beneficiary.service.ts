@@ -4,7 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
-import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
@@ -32,8 +32,9 @@ export class BeneficiaryService {
   private rsprisma;
   constructor(
     protected prisma: PrismaService,
-    @Inject('RAHAT_CORE_PROJECT_CLIENT') private readonly client: ClientProxy,
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
     private eventEmitter: EventEmitter2,
     private readonly stellarService: StellarService
   ) {
@@ -76,10 +77,18 @@ export class BeneficiaryService {
       )
     );
 
-    await this.stellarService.faucetAndTrustlineService({
-      walletAddress: keys.address,
-      secretKey: keys.privateKey,
-    });
+    await this.stellarQueue.add(
+      JOBS.STELLAR.FAUCET_TRUSTLINE,
+      { walletAddress: keys.address, secretKey: keys.privateKey },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
 
     await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
@@ -121,7 +130,7 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage, sort, order } = dto;
+    const { page, perPage, sort, order, tokenAssigned, search } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -130,6 +139,18 @@ export class BeneficiaryService {
       this.prisma.beneficiaryGroups,
       {
         where: {
+          ...(tokenAssigned === true
+            ? { tokensReserved: { isNot: null } } // only assigned
+            : tokenAssigned === false
+            ? { tokensReserved: null } // only unassigned
+            : {}), // both
+          ...(search && {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          }),
+
           deletedAt: null,
         },
         orderBy,
@@ -211,19 +232,38 @@ export class BeneficiaryService {
         uuid: uuid,
         deletedAt: null,
       },
+      include: {
+        tokensReserved: true,
+      },
     });
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    return lastValueFrom(
+    const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
         benfGroup.uuid
       )
     );
+
+    data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
+      let token = null;
+
+      if (benfGroup.tokensReserved) {
+        token = benfGroup.tokensReserved.numberOfTokens;
+      }
+
+      return {
+        ...benf,
+        tokensReserved: token,
+      };
+    });
+
+    return data;
   }
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
+
     return this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,

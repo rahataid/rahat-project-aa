@@ -27,20 +27,27 @@ export class DisbursementServices implements IDisbursementService {
   public async createDisbursementProcess(
     disbursementName: string,
     fileBuffer: Buffer,
-    fileName: string
+    fileName: string,
+    amount: string
   ): Promise<any> {
     const authService = new AuthService(
       this.tenantName,
       this.email,
       this.password
     );
+
     token = (await authService.getToken()) as string;
-    await this.custom_asset();
+
+    await this.custom_asset(amount.toString());
     return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 
+  public async getDistributionAddress(tenantName: string) {
+    return await getDistributionAddress(tenantName);
+  }
+
   // Creates custom asset and fund disbursement account
-  private async custom_asset() {
+  private async custom_asset(amount: string) {
     const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
     const asset = new Asset(ASSET.NAME, issuerKeypair.publicKey());
 
@@ -49,7 +56,7 @@ export class DisbursementServices implements IDisbursementService {
       issuer: ASSET.ISSUER,
     });
     const disbursementAddress = await getDistributionAddress(this.tenantName);
-    await transfer_asset(disbursementAddress, asset);
+    await transfer_asset(disbursementAddress, asset, amount);
   }
 
   // Create disbursement and update status

@@ -7,14 +7,14 @@ import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { CvaDisbursementService } from '@rahat-project/cva';
 import { BullModule } from '@nestjs/bull';
-import { BQUEUE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
 
 @Module({
   imports: [
     ClientsModule.register([
       {
-        name: 'RAHAT_CORE_PROJECT_CLIENT',
+        name: CORE_MODULE,
         transport: Transport.REDIS,
         options: {
           host: process.env.REDIS_HOST,
@@ -26,6 +26,9 @@ import { StellarService } from '../stellar/stellar.service';
     StatsModule,
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
     }),
   ],
   controllers: [BeneficiaryController],

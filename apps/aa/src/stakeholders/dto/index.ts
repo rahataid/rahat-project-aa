@@ -30,6 +30,8 @@ export interface GetStakeholdersData {
   district: string;
   municipality: string;
   page: number;
+  order?: string;
+  sort?: string;
   perPage: number;
 }
 
@@ -51,6 +53,9 @@ export interface UpdateStakeholdersGroups {
 export interface GetAllGroups {
   page: number;
   perPage: number;
+  order?: string;
+  sort?: string;
+  search?: string;
 }
 
 export interface GetOneGroup {

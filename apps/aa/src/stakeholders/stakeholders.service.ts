@@ -68,6 +68,8 @@ export class StakeholdersService {
       organization,
       page,
       perPage,
+      order,
+      sort
     } = payload;
 
     const query = {
@@ -90,9 +92,17 @@ export class StakeholdersService {
       include: {
         stakeholdersGroups: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      ...(order && sort ?
+        {
+          orderBy: {
+            [sort]: order,
+          },
+        }
+        : {
+          orderBy: {
+            createdAt: 'desc',
+          }
+        }),
     };
 
     return paginate(this.prisma.stakeholders, query, {
@@ -215,11 +225,23 @@ export class StakeholdersService {
   }
 
   async getAllGroups(payload: GetAllGroups) {
-    const { page, perPage } = payload;
+    const { page, perPage, order, search, sort } = payload;
 
     const query = {
       where: {
         isDeleted: false,
+        ...(search && {
+          name: { contains: search, mode: 'insensitive' },
+        })
+      },
+      orderBy: {
+        ...(order && sort
+          ? {
+            [sort]: order,
+          }
+          : {
+            createdAt: 'desc',
+          }),
       },
       include: {
         _count: {

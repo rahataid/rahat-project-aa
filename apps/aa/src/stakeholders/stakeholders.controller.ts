@@ -89,6 +89,7 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroups(payload: GetAllGroups) {
+    console.log(payload, 'getting groups');
     return this.stakeholdersService.getAllGroups(payload);
   }
 
