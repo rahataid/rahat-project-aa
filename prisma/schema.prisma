@@ -270,6 +270,7 @@ model Triggers {
   isMandatory Boolean @default(false)
   isTriggered Boolean @default(false)
   isDeleted   Boolean @default(false)
+  isOnchainSuccess Boolean @default(false)
 
   triggeredBy String?
 
@@ -492,6 +493,20 @@ model OfflineBeneficiary {
 }
 
 // ============== END CORE CVA SCHEMAS================
+
+// ============== Start OTP SCHEMAS ================
+model Otp {
+  id          Int      @id @default(autoincrement())
+  phoneNumber String   @unique
+  otpHash     String
+  amount      Float
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map(name: "tbl_otp")
+}
+// ============== End OTP SCHEMAS ================
 
 enum Gender {
   MALE

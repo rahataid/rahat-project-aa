@@ -1,28 +1,60 @@
+import { RpcException } from '@nestjs/microservices';
 import { BeneficiaryCSVData } from '../../triggers/dto/beneficiaryCSVData.dto';
+import * as crypto from 'crypto';
 
 export const generateCSV = async (
-  benData: BeneficiaryCSVData[],
-  verificationNumber: string
+  benData: BeneficiaryCSVData[]
 ): Promise<Buffer> => {
-  const header = 'phone,id,amount,verification,paymentID\n';
+  try {
+    const header =
+      'phone,walletAddress,walletAddressMemo,id,amount,paymentID\n';
 
-  const randomNumber = Math.floor(Math.random() * 100000000000);
+    const rows = benData
+      .map((beneficiary) => {
+        const phone = `+977${beneficiary.phone.replace(/"/g, '""')}`;
+        const amount = parseFloat(beneficiary.amount);
+        if (isNaN(amount) || amount <= 1) {
+          throw new Error(
+            `Invalid amount for beneficiary ${beneficiary.id}: must be greater than 1`
+          );
+        }
 
-  const rows = benData
-    .map((beneficiary) => {
-      const reciverId = `RECEIVER_${randomNumber}`;
-      const paymentId = `PAY_${randomNumber}`;
-      const phone = beneficiary.phone.replace(/"/g, '""');
-      const id = reciverId.replace(/"/g, '""');
-      const amount = beneficiary.amount.replace(/"/g, '""');
-      const verification = verificationNumber.replace(/"/g, '""');
-      const paymentID = paymentId.replace(/"/g, '""');
+        const randomNumber = Math.floor(Math.random() * 100000);
+        const reciverId = `RECEIVER_${beneficiary.id}`;
+        const paymentId = `PAY_${beneficiary.id}_${randomNumber}`;
+        const id = reciverId.replace(/"/g, '""');
+        const formattedAmount = beneficiary.amount.replace(/"/g, '""');
+        const paymentID = paymentId.replace(/"/g, '""');
+        const walletAddress = beneficiary.walletAddress.replace(/"/g, '""');
 
-      return `"${phone}","${id}","${amount}","${verification}","${paymentID}"`;
-    })
-    .join('\n');
+        return `"${phone}","${walletAddress}","${
+          beneficiary.phone
+        }","${id}","${formattedAmount.toString()}","${paymentID}"`;
+      })
+      .join('\n');
 
-  const csvFile = header + rows;
+    const csvFile = header + rows;
 
-  return Buffer.from(csvFile, 'utf8');
+    console.log(csvFile);
+
+    return Buffer.from(csvFile, 'utf8');
+  } catch (error) {
+    throw new RpcException(
+      error.message || 'Something went wrong while generating CSV'
+    );
+  }
+};
+
+export const generateParamsHash = (params) => {
+  const SALT = 'hash_salt';
+  const sortedParams = {};
+  Object.keys(params)
+    .sort()
+    .forEach((key) => {
+      sortedParams[key] = params[key];
+    });
+  const serialized = JSON.stringify(sortedParams);
+  const dataToHash = `${SALT}:${serialized}`;
+  const hash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+  return hash;
 };

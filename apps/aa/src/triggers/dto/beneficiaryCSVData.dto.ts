@@ -1,5 +1,6 @@
 export interface BeneficiaryCSVData {
   phone: string;
   amount: string;
-  id: number;
+  walletAddress: string;
+  id: string;
 }

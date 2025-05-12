@@ -1,135 +1,137 @@
 #![cfg(test)]
 
-extern crate std; // For std types in tests
+use soroban_sdk::{Env, Symbol, String, testutils::ContractFunctionError};
 
-use super::*;
-use soroban_sdk::{ Env, String };
-use std::format;  // 👈 Fix here: Explicitly import format!
-
-fn create_mock_trigger(env: &Env) -> (String, String, String, String, String, u32, u32, u32, bool) {
-    (
-        String::from_str(env, "manual"),
-        String::from_str(env, "readiness"),
-        String::from_str(env, "Test Trigger"),
-        String::from_str(env, "glofas"),
-        String::from_str(env, "Narayani"),
-        3,
-        7,
-        85,
-        true,
-    )
-}
-
-#[test]
-fn test_hello() {
-    let env = Env::default();
-    let name = String::from_str(&env, "Sushant");
-    let result = Contract::hello(env.clone(), name.clone());
-
-    assert_eq!(result, vec![&env, String::from_str(&env, "Hello"), name]);
-}
-
-#[test]
-fn test_increment() {
-    let env = Env::default();
-
-    let value1 = Contract::increment(env.clone());
-    let value2 = Contract::increment(env.clone());
-
-    assert_eq!(value1, 1);
-    assert_eq!(value2, 2);
-}
+use crate::{Contract, ContractClient, Trigger, ContractError};
 
 #[test]
 fn test_add_and_get_trigger() {
     let env = Env::default();
+    let contract = ContractClient::new(&env, &env.register_contract(None, Contract));
 
-    let (trigger_type, phase, title, source, river_basin, min_lead, max_lead, probability, is_mandatory) =
-        create_mock_trigger(&env);
-
-    let trigger_id = Contract::add_trigger(
-        env.clone(),
-        trigger_type.clone(),
-        phase.clone(),
-        title.clone(),
-        source.clone(),
-        river_basin.clone(),
-        min_lead,
-        max_lead,
-        probability,
-        is_mandatory,
+    contract.add_trigger(
+        &Symbol::new(&env, "test1"),
+        &String::from_str(&env, "flood"),
+        &String::from_str(&env, "response"),
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "sensor"),
+        &String::from_str(&env, "nile"),
+        &String::from_str(&env, "hash123"),
+        &true,
     );
 
-    let all_triggers = Contract::get_triggers(env.clone());
-    assert!(all_triggers.contains_key(trigger_id.clone()));
-
-    let retrieved_trigger = Contract::get_trigger(env.clone(), trigger_id.clone());
-    assert!(retrieved_trigger.is_some());
-
-    let trigger = retrieved_trigger.unwrap();
-    assert_eq!(trigger.trigger_type, trigger_type);
-    assert_eq!(trigger.phase, phase);
-    assert_eq!(trigger.title, title);
-    assert_eq!(trigger.source, source);
-    assert_eq!(trigger.river_basin, river_basin);
-    assert_eq!(trigger.min_lead_time_delay, min_lead);
-    assert_eq!(trigger.max_lead_time_delay, max_lead);
-    assert_eq!(trigger.forecast_probability, probability);
-    assert_eq!(trigger.is_mandatory, is_mandatory);
-    assert_eq!(trigger.is_triggered, false);
+    let stored = contract.get_trigger(&Symbol::new(&env, "test1")).unwrap();
+    assert_eq!(stored.title, String::from_str(&env, "Test"));
+    assert_eq!(stored.trigger_type, String::from_str(&env, "flood"));
+    assert_eq!(stored.phase, String::from_str(&env, "response"));
+    assert_eq!(stored.source, String::from_str(&env, "sensor"));
+    assert_eq!(stored.river_basin, String::from_str(&env, "nile"));
+    assert_eq!(stored.params_hash, String::from_str(&env, "hash123"));
+    assert_eq!(stored.is_mandatory, true);
+    assert_eq!(stored.is_triggered, false);
 }
 
 #[test]
-fn test_update_trigger_status() {
+fn test_update_trigger_to_triggered() {
     let env = Env::default();
+    let contract = ContractClient::new(&env, &env.register_contract(None, Contract));
 
-    let (trigger_type, phase, title, source, river_basin, min_lead, max_lead, probability, is_mandatory) =
-        create_mock_trigger(&env);
-
-    let trigger_id = Contract::add_trigger(
-        env.clone(),
-        trigger_type,
-        phase,
-        title,
-        source,
-        river_basin,
-        min_lead,
-        max_lead,
-        probability,
-        is_mandatory,
+    contract.add_trigger(
+        &Symbol::new(&env, "test2"),
+        &String::from_str(&env, "flood"),
+        &String::from_str(&env, "response"),
+        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "sensor"),
+        &String::from_str(&env, "nile"),
+        &String::from_str(&env, "hash123"),
+        &true,
     );
 
-    let initial_trigger = Contract::get_trigger(env.clone(), trigger_id.clone()).unwrap();
-    assert_eq!(initial_trigger.is_triggered, false);
-
-    Contract::update_trigger_status(env.clone(), trigger_id.clone(), true);
-
-    let updated_trigger = Contract::get_trigger(env.clone(), trigger_id.clone()).unwrap();
-    assert_eq!(updated_trigger.is_triggered, true);
+    contract.update_trigger_to_triggered(&Symbol::new(&env, "test2"));
+    let stored = contract.get_trigger(&Symbol::new(&env, "test2")).unwrap();
+    assert!(stored.is_triggered);
+    assert_eq!(stored.title, String::from_str(&env, "Test"));
+    assert_eq!(stored.params_hash, String::from_str(&env, "hash123"));
+    assert_eq!(stored.source, String::from_str(&env, "sensor"));
 }
 
 #[test]
-fn test_add_multiple_triggers() {
+fn test_update_trigger_params() {
     let env = Env::default();
+    let contract = ContractClient::new(&env, &env.register_contract(None, Contract));
 
-    for i in 0..5 {
-        let trigger_id = Contract::add_trigger(
-            env.clone(),
-            String::from_str(&env, "manual"),
-            String::from_str(&env, "readiness"),
-            String::from_str(&env, &format!("Trigger {}", i)),
-            String::from_str(&env, "glofas"),
-            String::from_str(&env, "Narayani"),
-            3,
-            7,
-            85,
-            true,
-        );
+    contract.add_trigger(
+        &Symbol::new(&env, "test3"),
+        &String::from_str(&env, "drought"),
+        &String::from_str(&env, "monitoring"),
+        &String::from_str(&env, "Drought Alert"),
+        &String::from_str(&env, "weather_api"),
+        &String::from_str(&env, "amazon"),
+        &String::from_str(&env, "old_hash456"),
+        &false,
+    );
 
-        let trigger = Contract::get_trigger(env.clone(), trigger_id).unwrap();
-        assert_eq!(trigger.title, String::from_str(&env, &format!("Trigger {}", i)));
-    }
+    contract.update_trigger_params(
+        &Symbol::new(&env, "test3"),
+        &String::from_str(&env, "new_hash789"),
+        &String::from_str(&env, "new_weather_api"),
+    );
 
-    let all_triggers = Contract::get_triggers(env.clone());
-    assert_eq!(all_triggers.len(), 5);
+    let stored = contract.get_trigger(&Symbol::new(&env, "test3")).unwrap();
+    assert_eq!(stored.params_hash, String::from_str(&env, "new_hash789"));
+    assert_eq!(stored.source, String::from_str(&env, "new_weather_api"));
+    assert_eq!(stored.trigger_type, String::from_str(&env, "drought"));
+    assert_eq!(stored.phase, String::from_str(&env, "monitoring"));
+    assert_eq!(stored.title, String::from_str(&env, "Drought Alert"));
+    assert_eq!(stored.river_basin, String::from_str(&env, "amazon"));
+    assert_eq!(stored.is_mandatory, false);
+    assert_eq!(stored.is_triggered, false);
+}
+
+#[test]
+fn test_nonexistent_trigger() {
+    let env = Env::default();
+    let contract = ContractClient::new(&env, &env.register_contract(None, Contract));
+    assert!(contract.get_trigger(&Symbol::new(&env, "nonexistent")).is_none());
+}
+
+#[test]
+fn test_duplicate_trigger_id() {
+    let env = Env::default();
+    let contract = ContractClient::new(&env, &env.register_contract(None, Contract));
+
+    // Add a trigger
+    contract.add_trigger(
+        &Symbol::new(&env, "test4"),
+        &String::from_str(&env, "flood"),
+        &String::from_str(&env, "alert"),
+        &String::from_str(&env, "Flood Warning"),
+        &String::from_str(&env, "sensor"),
+        &String::from_str(&env, "yangtze"),
+        &String::from_str(&env, "hash789"),
+        &true,
+    );
+
+    // Attempt to add another trigger with the same ID
+    let result = contract.try_add_trigger(
+        &Symbol::new(&env, "test4"),
+        &String::from_str(&env, "drought"),
+        &String::from_str(&env, "monitoring"),
+        &String::from_str(&env, "Drought Warning"),
+        &String::from_str(&env, "weather_api"),
+        &String::from_str(&env, "amazon"),
+        &String::from_str(&env, "new_hash456"),
+        &false,
+    );
+
+    // Verify that the operation fails with TriggerIdAlreadyExists error
+    assert_eq!(
+        result,
+        Err(ContractFunctionError::ContractError(ContractError::TriggerIdAlreadyExists))
+    );
+
+    // Verify that the original trigger is unchanged
+    let stored = contract.get_trigger(&Symbol::new(&env, "test4")).unwrap();
+    assert_eq!(stored.title, String::from_str(&env, "Flood Warning"));
+    assert_eq!(stored.params_hash, String::from_str(&env, "hash789"));
 }

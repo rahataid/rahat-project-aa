@@ -11,50 +11,72 @@ const FormData = require('form-data');
 
 type DisbursementProp = {
   walletType: 'Demo Wallet' | 'Vibrant Wallet';
-  verification: VERIFICATION;
   assetCodes: string;
   disbursement_name: string;
+  fileBuffer: Buffer;
+  fileName: string;
 };
 
 export const createDisbursement = async ({
   walletType,
-  verification,
   assetCodes,
   disbursement_name,
+  fileBuffer,
+  fileName,
 }: DisbursementProp) => {
-  const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
-  const { id: wallet_id } = walletRes.data.find(
-    (wallet: any) => wallet.name === walletType
-  );
+  try {
+    const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
 
-  const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
-  const { id: asset_id } = asset_res.data.find(
-    (asset: any) => asset.code === assetCodes
-  );
+    const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
+    const { id: asset_id } = asset_res.data.find(
+      (asset: any) => asset.code === assetCodes
+    );
 
-  await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
-    name: disbursement_name,
-    wallet_id,
-    asset_id,
-    country_code: countryCode,
-    verification_field: verification,
-    receiver_registration_message_template: smsRegistrationMessageTemplate,
-  });
+    const formDataObject = {
+      name: disbursement_name,
+      wallet_id: '',
+      asset_id: asset_id,
+      registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
+      verification_field: '',
+      receiver_registration_message_template: '',
+    };
 
-  const res: any = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, {
-    name: disbursement_name,
-    wallet_id,
-    asset_id,
-    country_code: countryCode,
-    verification_field: verification,
-    receiver_registration_message_template: smsRegistrationMessageTemplate,
-  });
+    const formDataString = JSON.stringify(formDataObject);
 
-  logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
-  return {
-    disbursementID: res.data.id,
-    assetIssuer: walletRes.data[0].assets[0].issuer,
-  };
+    const formData = new FormData();
+    formData.append('data', formDataString);
+    formData.append('file', fileBuffer, {
+      filename: 'beneficiaries.csv',
+      contentType: 'text/csv',
+    });
+
+    const res = await axiosInstance.post(DISBURSEMENT.DISBURSEMENT, formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+    });
+
+    logger.warn(LOGS.WARN.DISBURSEMENT_SUCCESS);
+    return {
+      disbursementID: res.data.id,
+      assetIssuer: walletRes.data[0].assets[0].issuer,
+    };
+  } catch (error: any) {
+    if (error.response?.data) {
+      const { error: errorMessage, extras } = error.response.data;
+      let formattedError = errorMessage;
+
+      if (extras && typeof extras === 'object') {
+        const extraMessages = Object.entries(extras)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('; ');
+        formattedError += ` - Details: ${extraMessages}`;
+      }
+      throw Error(formattedError);
+    } else {
+      throw Error(error.message);
+    }
+  }
 };
 
 export const updateDisbursementStatus = async (disbursementId: string) => {

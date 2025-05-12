@@ -9,8 +9,6 @@ import { ActivityCategoriesModule } from '../activity-categories/activity-catego
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { DataSourceModule } from '../datasource/datasource.module';
-import { DepositModule } from '../deposit/deposit.module';
-import { DisbursementModule } from '../disbursement/disbursement.modue';
 import { ListenersModule } from '../listeners/listeners.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ProcessorsModule } from '../processors/processors.module';
@@ -23,6 +21,7 @@ import { CommsModule } from '../comms/comms.module';
 import { ActivitiesModule } from '../activities/activites.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StellarModule } from '../stellar/stellar.module';
+import { VendorsModule } from '../vendors/vendors.module';
 
 @Module({
   imports: [
@@ -54,8 +53,6 @@ import { StellarModule } from '../stellar/stellar.module';
         },
       },
     ]),
-    DisbursementModule,
-    DepositModule,
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
@@ -71,6 +68,7 @@ import { StellarModule } from '../stellar/stellar.module';
     DailyMonitoringModule,
     ListenersModule,
     CommsModule.forRoot(),
+    VendorsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

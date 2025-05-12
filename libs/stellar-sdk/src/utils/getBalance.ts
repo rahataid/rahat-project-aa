@@ -1,12 +1,6 @@
 import { Horizon } from '@stellar/stellar-sdk';
 import { ASSET, horizonServer } from '../constants/constant';
 
-export const getAccountBalance = async (wallet: string) => {
-  const server = new Horizon.Server(horizonServer);
-  const account = await server.accounts().accountId(wallet).call();
-  return account.balances;
-};
-
 export const getBalance = async (pk: string) => {
   const server = new Horizon.Server(horizonServer);
 

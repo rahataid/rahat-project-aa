@@ -1,12 +1,17 @@
+import { IsBoolean, IsJSON, IsOptional, IsString } from 'class-validator';
+
 export class SendOtpDto {
   phoneNumber: string;
+
+  @IsOptional()
+  amount: string;
 }
 
-export class VerifyOtpDto {
-  auth: string;
+export class SendAssetDto {
+  amount: string | number;
   phoneNumber: string;
+  receiverAddress: string;
   otp: string;
-  verification: string;
 }
 
 export class FundAccountDto {
