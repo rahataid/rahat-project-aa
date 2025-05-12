@@ -92,9 +92,9 @@ export const JOBS = {
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
     UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
-    ADD_ONCHAIN_TRIGGER_QUEUE: 'aa.jobs.stellar.getTriggerOnChainQueue',
+    ADD_ONCHAIN_TRIGGER_QUEUE: `aa.jobs.stellar.getTriggerOnChainQueue_${process.env.PROJECT_ID}`,
     UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE:
-      'aa.jobs.stellar.updateTriggerParamsOnChainQueue',
+    `aa.jobs.stellar.updateTriggerParamsOnChainQueue_${process.env.PROJECT_ID}`,
     GET_ONCHAIN_TRIGGER: 'aa.jobs.stellar.getTriggerOnChain',
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
