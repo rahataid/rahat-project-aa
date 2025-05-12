@@ -41,7 +41,7 @@ enum SettingDataType {
 
 enum PayoutType {
   FSP
-  CVA
+  VENDOR
 }
 
 enum PayoutMode {
@@ -112,6 +112,7 @@ model Payouts {
   extras           Json?
 
   groupId          String            @unique
+  payoutProcessorId String // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
   benefefiaryGroup BeneficiaryGroupTokens @relation(fields: [groupId], references: [uuid])
 
   createdAt DateTime  @default(now())
