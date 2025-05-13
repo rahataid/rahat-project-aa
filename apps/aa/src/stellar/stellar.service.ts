@@ -28,6 +28,7 @@ import { Queue } from 'bull';
 import {
   AddTriggerDto,
   GetTriggerDto,
+  GetWalletBalanceDto,
   UpdateTriggerParamsDto,
 } from './dto/trigger.dto';
 
@@ -150,6 +151,13 @@ export class StellarService {
     });
   }
 
+  async getWalletStats(address: GetWalletBalanceDto) {
+    return {
+      balances: await this.receiveService.getAccountBalance(address.address),
+      transactions: await this.getRecentTransaction(address.address),
+    };
+  }
+
   async getTriggerWithID(trigger: GetTriggerDto) {
     try {
       const { server, sourceAccount, contract } =
@@ -252,7 +260,11 @@ export class StellarService {
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
-      transactionStats: await this.getRecentTransaction(),
+      transactionStats: await this.getRecentTransaction(
+        await this.disbursementService.getDistributionAddress(
+          await this.getFromSettings('TENANTNAME')
+        )
+      ),
     };
   }
 
@@ -444,11 +456,9 @@ export class StellarService {
     );
   }
 
-  private async getRecentTransaction() {
+  private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      ),
+      address,
       10,
       'desc'
     );

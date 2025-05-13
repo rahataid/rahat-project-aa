@@ -99,6 +99,7 @@ export const JOBS = {
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
+    GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
