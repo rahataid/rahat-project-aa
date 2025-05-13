@@ -113,7 +113,6 @@ export const JOBS = {
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',
     UPDATE: 'aa.jobs.payout.update',
-    REMOVE: 'aa.jobs.payout.remove',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',

@@ -28,9 +28,4 @@ export class PayoutsController {
   update(@Payload() updatePayoutDto: UpdatePayoutDto & { uuid: string }) {
     return this.payoutsService.update(updatePayoutDto.uuid, updatePayoutDto);
   }
-
-  @MessagePattern({ cmd: JOBS.PAYOUT.REMOVE, uuid: process.env.PROJECT_ID })
-  remove(@Payload() payload: { uuid: string }) {
-    return this.payoutsService.remove(payload.uuid);
-  }
 } 
