@@ -68,6 +68,15 @@ export class StellarController {
     return this.stellarService.getTriggerWithID(trigger);
   }
 
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getWalletBalance(address: GetWalletBalanceDto) {
+    console.log(address);
+    return this.stellarService.getWalletBalance(address);
+  }
+
   // ------ Onchain triggers: Remove after testing ------
   // Adds trigger to the on-chain contract
   @MessagePattern({
