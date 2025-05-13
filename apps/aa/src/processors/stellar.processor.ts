@@ -197,6 +197,14 @@ export class StellarProcessor {
           `Transaction successfully processed for trigger ${triggerUpdate.id}`,
           JSON.stringify(result)
         );
+
+          this.client.send(
+            { cmd: 'ms.jobs.triggers.updateTransaction' },
+            {
+              uuid: triggerUpdate.id,
+              transactionHash: result.hash,
+            }
+          );
         break;
       } catch (error) {
         lastError = error;
