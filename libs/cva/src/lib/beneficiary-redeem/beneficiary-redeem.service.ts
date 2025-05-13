@@ -17,8 +17,9 @@ export class CvaBeneficiaryRedeemService {
     return this.rsprisma.beneficiaryRedeem.create({
       data: {
         beneficiaryWalletAddress: dto.beneficiaryWalletAddress,
-        vendorUid: dto.vendorId,
+        vendorUid: dto.vendorUid,
         hasRedeemed: dto.hasRedeemed,
+        transactionType: dto.transactionType,
       },
     });
   }
