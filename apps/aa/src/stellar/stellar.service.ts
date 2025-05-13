@@ -42,6 +42,8 @@ export class StellarService {
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue
   ) {
+    this.receiveService = new ReceiveService();
+    this.transactionService = new TransactionService();
     this.initializeDisbursementService();
   }
 
@@ -105,18 +107,16 @@ export class StellarService {
         verifyOtpDto.phoneNumber,
         amount as number
       );
-    } catch (error) {
-      throw new Error(
-        error instanceof Error ? error.message : 'OTP verification failed'
-      );
-    }
 
-    const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
-    return this.receiveService.sendAsset(
-      keys.privateKey,
-      verifyOtpDto.receiverAddress,
-      verifyOtpDto.amount as string
-    );
+      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      return this.receiveService.sendAsset(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount as string
+      );
+    } catch (error) {
+      throw new RpcException(error ? error : 'OTP verification failed');
+    }
   }
 
   async faucetAndTrustlineService(account: FundAccountDto) {
@@ -141,18 +141,21 @@ export class StellarService {
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarQueue.add(
-      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
-      trigger,
-      {
-        attempts: 3,
-        removeOnComplete: true,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      }
-    );
+    return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+    });
+  }
+
+  async getWalletStats(address: GetWalletBalanceDto) {
+    return {
+      balances: await this.receiveService.getAccountBalance(address.address),
+      transactions: await this.getRecentTransaction(address.address),
+    };
   }
 
   async getTriggerWithID(trigger: GetTriggerDto) {
@@ -257,12 +260,12 @@ export class StellarService {
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
-      transactionStats: await this.getRecentTransaction(),
+      transactionStats: await this.getRecentTransaction(
+        await this.disbursementService.getDistributionAddress(
+          await this.getFromSettings('TENANTNAME')
+        )
+      ),
     };
-  }
-
-  async getWalletBalance(address: GetWalletBalanceDto) {
-    return await this.receiveService.getAccountBalance(address.address);
   }
 
   // ---------- Private functions ----------------
@@ -315,8 +318,8 @@ export class StellarService {
     groups.forEach((group) => {
       const groupToken = tokens.find((t) => t.groupId === group.uuid);
       const totalTokens = groupToken?.numberOfTokens ?? 0;
-      const totalBeneficiaries = group._count?.groupedBeneficiaries ?? 1;
 
+      const totalBeneficiaries = group._count?.groupedBeneficiaries;
       const tokenPerBeneficiary = totalTokens / totalBeneficiaries;
 
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
@@ -343,17 +346,26 @@ export class StellarService {
   }
 
   private async getBenTotal(phoneNumber: string) {
-    const keys = await this.getSecretByPhone(phoneNumber);
-    return this.getRahatBalance(keys.address);
+    try {
+      const keys = await this.getSecretByPhone(phoneNumber);
+      return this.getRahatBalance(keys.address);
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   private async getSecretByPhone(phoneNumber: string) {
-    return lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
-        { phoneNumber: phoneNumber, chain: 'stellar' }
-      )
-    );
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
+          { phoneNumber, chain: 'stellar' }
+        )
+      );
+      return ben;
+    } catch (error) {
+      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
   }
 
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
@@ -387,17 +399,17 @@ export class StellarService {
     });
 
     if (!record) {
-      throw new Error('OTP record not found');
+      throw new RpcException('OTP record not found');
     }
 
     const now = new Date();
     if (record.expiresAt < now) {
-      throw new Error('OTP has expired');
+      throw new RpcException('OTP has expired');
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
     if (!isValid) {
-      throw new Error('Invalid OTP or amount mismatch');
+      throw new RpcException('Invalid OTP or amount mismatch');
     }
 
     return true;
@@ -423,7 +435,7 @@ export class StellarService {
   }
 
   private async getRahatBalance(keys) {
-    const accountBalances = await this.getRahatBalance(keys);
+    const accountBalances = await this.receiveService.getAccountBalance(keys);
     const rahatAsset = accountBalances?.find(
       (bal: any) => bal.asset_code === 'RAHAT'
     );
@@ -444,11 +456,9 @@ export class StellarService {
     );
   }
 
-  private async getRecentTransaction() {
+  private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      ),
+      address,
       10,
       'desc'
     );

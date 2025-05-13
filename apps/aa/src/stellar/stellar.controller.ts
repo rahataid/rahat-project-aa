@@ -73,9 +73,9 @@ export class StellarController {
     cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
     uuid: process.env.PROJECT_ID,
   })
-  async getWalletBalance(address: GetWalletBalanceDto) {
+  async getWalletStats(address: GetWalletBalanceDto) {
     console.log(address);
-    return this.stellarService.getWalletBalance(address);
+    return this.stellarService.getWalletStats(address);
   }
 
   // ------ Onchain triggers: Remove after testing ------
