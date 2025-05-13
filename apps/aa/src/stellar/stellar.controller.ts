@@ -7,6 +7,7 @@ import { DisburseDto } from './dto/disburse.dto';
 import {
   AddTriggerDto,
   GetTriggerDto,
+  GetWalletBalanceDto,
   UpdateTriggerParamsDto,
 } from './dto/trigger.dto';
 
@@ -66,6 +67,15 @@ export class StellarController {
   })
   async getTriggerWithID(trigger: GetTriggerDto) {
     return this.stellarService.getTriggerWithID(trigger);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getWalletBalance(address: GetWalletBalanceDto) {
+    console.log(address);
+    return this.stellarService.getWalletBalance(address);
   }
 
   // ------ Onchain triggers: Remove after testing ------

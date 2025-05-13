@@ -28,6 +28,7 @@ import { Queue } from 'bull';
 import {
   AddTriggerDto,
   GetTriggerDto,
+  GetWalletBalanceDto,
   UpdateTriggerParamsDto,
 } from './dto/trigger.dto';
 
@@ -260,6 +261,10 @@ export class StellarService {
     };
   }
 
+  async getWalletBalance(address: GetWalletBalanceDto) {
+    return await this.receiveService.getAccountBalance(address.address);
+  }
+
   // ---------- Private functions ----------------
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
@@ -418,7 +423,7 @@ export class StellarService {
   }
 
   private async getRahatBalance(keys) {
-    const accountBalances = await this.receiveService.getAccountBalance(keys);
+    const accountBalances = await this.getRahatBalance(keys);
     const rahatAsset = accountBalances?.find(
       (bal: any) => bal.asset_code === 'RAHAT'
     );
