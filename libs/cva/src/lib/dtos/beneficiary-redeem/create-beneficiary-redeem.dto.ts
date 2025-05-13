@@ -1,22 +1,26 @@
-import { IsBoolean, IsNotEmpty, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { PayoutType } from '@prisma/client';
 
 export class CreateBeneficiaryRedeemDto {
-  constructor() {
-    this.beneficiaryWalletAddress = '';
-    this.vendorId = '';
-    this.hasRedeemed = false;
-  }
-
   @IsString()
   @IsNotEmpty()
-  beneficiaryWalletAddress: string;
-
-  @IsString()
-  @IsNotEmpty()
-  vendorId: string;
+  beneficiaryWalletAddress: string = '';
 
   @IsBoolean()
-  hasRedeemed: boolean;
+  @IsOptional()
+  hasRedeemed?: boolean = false;
+
+  @IsEnum(PayoutType)
+  @IsNotEmpty()
+  transactionType: PayoutType = PayoutType.FSP;
+
+  @IsUUID()
+  @IsOptional()
+  vendorUid?: string;
+
+  @IsString()
+  @IsOptional()
+  fspId?: string;
 }
 
 export class GetBeneficiaryRedeemDto {
