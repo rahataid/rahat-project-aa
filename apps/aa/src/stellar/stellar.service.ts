@@ -236,14 +236,12 @@ export class StellarService {
   }
 
   async getDisbursementStats() {
-    // Disbursement Account balance
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
         await this.getFromSettings('TENANTNAME')
       )
     );
 
-    // Vendor address balance
     const disbursedBalance = await this.getRahatBalance(
       await this.getFromSettings('VENDORADDRESS')
     );
@@ -470,6 +468,7 @@ export class StellarService {
         date: txn.created_at,
         amount: Number(txn.amount).toFixed(0),
         amtColor: txn.amtColor,
+        hash: txn.hash,
       };
     });
   }
