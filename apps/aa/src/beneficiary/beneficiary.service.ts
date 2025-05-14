@@ -260,8 +260,14 @@ export class BeneficiaryService {
       },
       include: {
         tokensReserved: true,
+        beneficiaries: {
+          include: {
+            beneficiary: true, 
+          },
+        },
       },
     });
+
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
     const data = await lastValueFrom(
