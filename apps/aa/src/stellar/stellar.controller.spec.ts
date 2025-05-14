@@ -32,6 +32,12 @@ describe('StellarController', () => {
     }),
   };
 
+  const mockBullQueueStellar = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [StellarController],
@@ -51,6 +57,10 @@ describe('StellarController', () => {
         {
           provide: SettingsService,
           useValue: mockSettingsService,
+        },
+        {
+          provide: 'BullQueue_STELLAR',
+          useValue: mockBullQueueStellar,
         },
       ],
     }).compile();
@@ -135,14 +145,21 @@ describe('StellarController', () => {
   describe('addTriggerOnChain', () => {
     const mockTrigger = {
       id: 'trigger1',
+      trigger_type: 'type1',
+      phase: 'phase1',
+      title: 'Sample Trigger',
+      source: 'source1',
+      river_basin: 'sample_basin',
+      params: Object.create({data: 'sample_data'}),
+      is_mandatory: true,
     };
 
     it('should call service.addTriggerOnChain with correct parameters', async () => {
       mockStellarService.addTriggerOnChain.mockResolvedValue({ success: true });
-      
-      const result = await controller.addTriggerOnChain(mockTrigger);
-      
-      expect(service.addTriggerOnChain).toHaveBeenCalledWith(mockTrigger);
+
+      const result = await controller.addTriggerOnChain([mockTrigger]);
+
+      expect(service.addTriggerOnChain).toHaveBeenCalledWith([mockTrigger]); // Fix: Pass an array
       expect(result).toEqual({ success: true });
     });
   });
