@@ -35,3 +35,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: rahataid/rahat-project-aa
+          files: coverage/apps/aa/lcov.info
