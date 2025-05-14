@@ -5,7 +5,6 @@ import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
-import { CvaDisbursementService } from '@rahat-project/cva';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
@@ -36,7 +35,6 @@ import { StellarService } from '../stellar/stellar.service';
     BeneficiaryService,
     PrismaService,
     BeneficiaryStatService,
-    CvaDisbursementService,
     StellarService,
   ],
   exports: [BeneficiaryService],
