@@ -3,7 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { lastValueFrom } from 'rxjs';
+import { async, lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -153,6 +153,15 @@ export class BeneficiaryService {
 
           deletedAt: null,
         },
+      include: {
+        _count: {
+          select: {
+            beneficiaries: true,
+          },
+        },
+        beneficiaries: true,
+        tokensReserved: true,
+      },
         orderBy,
       },
       {
@@ -161,10 +170,27 @@ export class BeneficiaryService {
       }
     );
 
-    return this.client.send(
-      { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-      benfGroups
+    const res = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+        benfGroups
+      )
     );
+
+    res.data = res.data.map((group) => {
+      let updatedGroup = group;
+      benfGroups.data.forEach((benfGroup: any) => {
+        if (group.uuid === benfGroup.uuid) {
+          updatedGroup = {
+            ...group,
+            tokensReserved: benfGroup.tokensReserved,
+          };
+        }
+      });
+      return updatedGroup;
+    });
+
+    return res;
   }
 
   async findByUUID(uuid: UUID) {
@@ -263,13 +289,24 @@ export class BeneficiaryService {
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
-
-    return this.prisma.beneficiaryGroups.create({
+    const group = await this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,
         name: beneficiaryGroupData.name,
       },
     });
+
+    const groupedBeneficiaries = await this.prisma.beneficiaryToGroup.createMany({
+      data: beneficiaryGroupData.groupedBeneficiaries.map((beneficiary) => ({
+        beneficiaryId: beneficiary.beneficiaryId,
+        groupId: beneficiaryGroupData.uuid,
+      })),
+    });
+
+    return {
+      group,
+      groupedBeneficiaries,
+    };
   }
 
   async reserveTokenToGroup(payload: AddTokenToGroup) {

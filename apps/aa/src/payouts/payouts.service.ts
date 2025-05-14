@@ -1,27 +1,88 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { Payouts } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
+import { VendorsService } from '../vendors/vendors.service';
+import { isUUID } from 'class-validator';
+import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
+import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
+
+const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
 
-  constructor(private prisma: PrismaService) {}
-  
+  constructor(
+    private prisma: PrismaService,
+    private vendorsService: VendorsService
+  ) {}
 
   async create(createPayoutDto: CreatePayoutDto): Promise<Payouts> {
     try {
-      this.logger.log(`Creating new payout for group: ${createPayoutDto}`);
-      
-      const beneficiaryGroup = await this.prisma.beneficiaryGroupTokens.findFirst({
-        where: { uuid: createPayoutDto.groupId },
-      });
+      this.logger.log(
+        `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
+      );
+
+      const beneficiaryGroup =
+        await this.prisma.beneficiaryGroupTokens.findFirst({
+          where: { uuid: createPayoutDto.groupId },
+        });
 
       if (!beneficiaryGroup) {
-        throw new RpcException(`Beneficiary group tokens with UUID '${createPayoutDto.groupId}' not found`);
+        throw new RpcException(
+          `Beneficiary group tokens with UUID '${createPayoutDto.groupId}' not found`
+        );
+      }
+      const existingPayout = await this.prisma.payouts.findFirst({
+        where: { groupId: createPayoutDto.groupId },
+      });
+
+      if (existingPayout) {
+        throw new RpcException(
+          `Payout with groupId '${createPayoutDto.groupId}' already exists`
+        );
+      }
+
+      /*
+       * FSP Payout is done by the Offramp service so
+       * we need to check and store the payout processor id
+       * it be either id for ConnectIPS, Khalti and so on
+       */
+      if (createPayoutDto.type === 'FSP') {
+        if (!createPayoutDto.payoutProcessorId) {
+          throw new RpcException(
+            `Payout processor ID is required for FSP payout`
+          );
+        }
+      } else {
+        /*
+         * Offline Payout is done by the vendor so
+         * we need to check and store the payout processor id which is vendor id
+         * If the 'type' is Vendor and mode is OFFLINE
+         */
+        if (createPayoutDto.mode === 'OFFLINE') {
+          if (!createPayoutDto.payoutProcessorId) {
+            throw new RpcException(
+              `Payout processor ID is required for OFFLINE payout`
+            );
+          }
+
+          if (!isUUID(createPayoutDto.payoutProcessorId)) {
+            throw new RpcException(`Payout processor ID is not a valid UUID`);
+          }
+
+          const vendor = await this.vendorsService.findOne(
+            createPayoutDto.payoutProcessorId
+          );
+
+          if (!vendor) {
+            throw new RpcException(
+              `Vendor with ID '${createPayoutDto.payoutProcessorId}' not found`
+            );
+          }
+        }
       }
 
       const payout = await this.prisma.payouts.create({
@@ -31,25 +92,60 @@ export class PayoutsService {
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       return payout;
     } catch (error) {
-      this.logger.error(`Failed to create payout: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to create payout: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
 
-  async findAll(): Promise<Payouts[]> {
+  async findAll(
+    payload: { page?: number; perPage?: number } = { page: 1, perPage: 10 }
+  ): Promise<PaginatedResult<Payouts>> {
     try {
       this.logger.log('Fetching all payouts');
+
+      const { page, perPage } = payload;
       
-      const payouts = await this.prisma.payouts.findMany({
+
+      const query = {
         include: {
-          benefefiaryGroup: true,
-        }
-      });
+          benefefiaryGroup: {
+            include: {
+              benefefiaryGroup: {
+                include: {
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      };
       
-      this.logger.log(`Successfully fetched ${payouts.length} payouts`);
-      return payouts;
+      const result: PaginatedResult<Payouts> = await paginate(
+        this.prisma.payouts,
+        query,
+        {
+          page,
+          perPage,
+        }
+      );
+
+      this.logger.log(`Successfully fetched ${result.data.length} payouts`);
+      return result;
     } catch (error) {
-      this.logger.error(`Failed to fetch payouts: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch payouts: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -57,16 +153,25 @@ export class PayoutsService {
   async findOne(uuid: string): Promise<Payouts> {
     try {
       this.logger.log(`Fetching payout with UUID: '${uuid}'`);
-      
+
       const payout = await this.prisma.payouts.findUnique({
         where: { uuid },
         include: {
           benefefiaryGroup: {
             include: {
-              benefefiaryGroup: true,
-            }
+              benefefiaryGroup: {
+                include: {
+                  beneficiaries: true,
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
+                  },
+                },
+              },
+            },
           },
-        }
+        },
       });
 
       if (!payout) {
@@ -77,15 +182,21 @@ export class PayoutsService {
       this.logger.log(`Successfully fetched payout with UUID: '${uuid}'`);
       return payout;
     } catch (error) {
-      this.logger.error(`Failed to fetch payout: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch payout: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
 
-  async update(uuid: string, updatePayoutDto: UpdatePayoutDto): Promise<Payouts> {
+  async update(
+    uuid: string,
+    updatePayoutDto: UpdatePayoutDto
+  ): Promise<Payouts> {
     try {
       this.logger.log(`Updating payout with UUID: '${uuid}'`);
-      
+
       const existingPayout = await this.prisma.payouts.findUnique({
         where: { uuid },
       });
@@ -103,8 +214,11 @@ export class PayoutsService {
       this.logger.log(`Successfully updated payout with UUID: '${uuid}'`);
       return updatedPayout;
     } catch (error) {
-      this.logger.error(`Failed to update payout: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to update payout: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
-} 
+}
