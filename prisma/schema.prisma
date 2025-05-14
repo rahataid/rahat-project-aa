@@ -431,6 +431,7 @@ model VendorReimbursment {
 
   vendorUid String @db.Uuid()
   vendor    Vendor @relation(fields: [vendorUid], references: [uuid])
+  transactionId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -450,6 +451,7 @@ model BeneficiaryRedeem {
   vendorUid   String?      @db.Uuid()
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
   fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
+  transactionId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()

@@ -80,6 +80,8 @@ export class StellarService {
     );
   }
 
+  // get the amount from the rahat-platform and just process from rahat-platform
+  // store transaction in beneficiaryRedeem
   async sendOtp(sendOtpDto: SendOtpDto) {
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
