@@ -61,3 +61,8 @@ export class GetWalletBalanceDto {
   @IsString()
   address: string;
 }
+
+export class VendorStatsDto {
+  @IsString()
+  uuid: string;
+}

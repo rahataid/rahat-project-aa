@@ -100,6 +100,7 @@ export const JOBS = {
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
+    GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',

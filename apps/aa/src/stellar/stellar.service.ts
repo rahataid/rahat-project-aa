@@ -30,6 +30,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
+  VendorStatsDto,
 } from './dto/trigger.dto';
 
 @Injectable()
@@ -84,6 +85,8 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
+    // Check if beneficiary is has vendor payout or not
+
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
     const res = await lastValueFrom(
@@ -242,19 +245,31 @@ export class StellarService {
       )
     );
 
-    const disbursedBalance = await this.getRahatBalance(
-      await this.getFromSettings('VENDORADDRESS')
+    const vendors = await this.prisma.vendor.findMany({
+      select: { walletAddress: true },
+    });
+
+    let totalVendorBalance = 0;
+
+    await Promise.all(
+      vendors.map(async (vendor) => {
+        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
+      })
     );
 
     return {
       tokenStats: [
         {
           name: 'Disbursement Balance',
-          amount: disbursementBalance.toLocaleString(),
+          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
         },
         {
           name: 'Disbursed Balance',
-          amount: disbursedBalance.toLocaleString(),
+          amount: totalVendorBalance.toLocaleString(),
+        },
+        {
+          name: 'Remaining Balance',
+          amount: disbursementBalance.toLocaleString(),
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
@@ -264,6 +279,13 @@ export class StellarService {
         )
       ),
     };
+  }
+
+  async getVendorWalletStats(vendorWallet: VendorStatsDto) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: vendorWallet.uuid },
+    });
+    return this.getWalletStats({ address: vendor.walletAddress });
   }
 
   // ---------- Private functions ----------------
@@ -433,12 +455,18 @@ export class StellarService {
   }
 
   private async getRahatBalance(keys) {
-    const accountBalances = await this.receiveService.getAccountBalance(keys);
-    const rahatAsset = accountBalances?.find(
-      (bal: any) => bal.asset_code === 'RAHAT'
-    );
+    try {
+      const accountBalances = await this.receiveService.getAccountBalance(keys);
 
-    return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+      const rahatAsset = accountBalances?.find(
+        (bal: any) => bal.asset_code === 'RAHAT'
+      );
+
+      return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+    } catch (error) {
+      this.logger.error(error.message);
+      return 0;
+    }
   }
 
   private async initializeDisbursementService() {

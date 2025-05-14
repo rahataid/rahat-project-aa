@@ -9,6 +9,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
+  VendorStatsDto,
 } from './dto/trigger.dto';
 
 @Controller('stellar')
@@ -58,6 +59,15 @@ export class StellarController {
   })
   async getDisbursementStats() {
     return this.stellarService.getDisbursementStats();
+  }
+
+  // Return required stats for a vendor address
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_VENDOR_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getVendorStats(vendorWallet: VendorStatsDto) {
+    return this.stellarService.getVendorWalletStats(vendorWallet);
   }
 
   // Get trigger from on-chain contract
