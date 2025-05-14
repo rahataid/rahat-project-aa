@@ -85,7 +85,12 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // Check if beneficiary is has vendor payout or not
+    // Check if beneficiary group has vendor payout or not
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
+    );
+    console.log(payoutType);
+    return 'ok';
 
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
@@ -499,5 +504,40 @@ export class StellarService {
         hash: txn.hash,
       };
     });
+  }
+
+  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+    try {
+      const beneficiary = await lastValueFrom(
+        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+      );
+
+      console.log('beneficiary', beneficiary);
+
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findFirst({
+        where: {
+          uuid: beneficiary.groupId,
+        },
+        include: {
+          tokensReserved: true,
+        },
+      });
+
+      console.log('beneficiaryGroup', beneficiaryGroups);
+
+      return 'ok';
+
+      // // Step 3: Extract the payout type from the group's payouts
+      // const beneficiaryGroups = beneficiaryGroup.group.BeneficiaryGroups;
+      // if (!beneficiaryGroups || !beneficiaryGroups.tokensReserved?.payouts) {
+      //   return null; // No tokens or payouts associated with the group
+      // }
+
+      // // Assuming the first payout is relevant (modify if multiple payouts need consideration)
+      // const payout = beneficiaryGroups.tokensReserved.payouts;
+      // return payout?.type || null; // Return the payout type (FSP or VENDOR) or null if not found
+    } catch (error) {
+      throw new Error(`Failed to retrieve payout type: ${error.message}`);
+    }
   }
 }

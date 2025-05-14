@@ -89,7 +89,7 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroups(payload: GetAllGroups) {
-    console.log(payload, 'getting groups');
+    console.log('getting all stakeholders groups', payload);
     return this.stakeholdersService.getAllGroups(payload);
   }
 
@@ -98,6 +98,7 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async getOneGroup(payload: GetOneGroup) {
+    console.log('getting one stakeholders group', payload);
     return this.stakeholdersService.getOneGroup(payload);
   }
   // ***** stakeholders groups end ********** //
