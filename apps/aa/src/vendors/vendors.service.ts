@@ -30,4 +30,10 @@ export class VendorsService {
       }
     );
   }
+
+  async findOne(uuid: string) {
+    return this.prisma.vendor.findUnique({
+      where: { uuid },
+    });
+  } 
 }

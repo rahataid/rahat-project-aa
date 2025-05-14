@@ -44,5 +44,14 @@ export interface AssignBenfGroupToProject {
     id: number;
     uuid: string;
     name: string;
+    groupedBeneficiaries?: Array<{
+      id: number;
+      uuid: string;
+      beneficiaryGroupId: string;
+      beneficiaryId: string;
+      createdAt: Date;
+      updatedAt: Date;
+      deletedAt: Date | null;
+    }>;
   };
 }

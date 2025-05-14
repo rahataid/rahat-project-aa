@@ -3,7 +3,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
-
+import { VendorsService } from '../vendors/vendors.service';
 @Module({
   imports: [
     ClientsModule.register([
@@ -19,7 +19,7 @@ import { PayoutsService } from './payouts.service';
     ]),
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService],
+  providers: [PayoutsService, PrismaService, VendorsService],
   exports: [PayoutsService],
 })
 export class PayoutsModule {} 
