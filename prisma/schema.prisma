@@ -67,6 +67,7 @@ model Beneficiary {
   deletedAt         DateTime?
   BeneficiaryRedeem BeneficiaryRedeem[]
   BeneficiaryGroup  BeneficiaryGroup[]
+  BeneficiaryToGroup BeneficiaryToGroup[]
 
   @@map("tbl_beneficiaries")
 }
@@ -78,12 +79,28 @@ model BeneficiaryGroups {
   name String
 
   tokensReserved BeneficiaryGroupTokens?
+  beneficiaries BeneficiaryToGroup[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   deletedAt DateTime?
 
   @@map("tbl_beneficiaries_groups")
+}
+
+model BeneficiaryToGroup {
+  id              Int               @id @default(autoincrement()) @db.Integer()
+  uuid            String            @unique @default(uuid())
+  beneficiary      Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
+  beneficiaryId    String            @db.Uuid()
+  group           BeneficiaryGroups @relation(fields: [groupId], references: [uuid]) 
+  groupId         String
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt()
+
+  @@unique([beneficiaryId, groupId])
+  @@map("tbl_beneficiaries_to_groups")
 }
 
 model BeneficiaryGroupTokens {
