@@ -24,3 +24,7 @@ export class FundAccountDto {
   @IsOptional()
   secretKey?: string;
 }
+
+export class CheckTrustlineDto {
+  walletAddress: string;
+}

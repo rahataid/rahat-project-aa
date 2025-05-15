@@ -2,7 +2,12 @@ import { Controller } from '@nestjs/common';
 import { StellarService } from './stellar.service';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
+import {
+  CheckTrustlineDto,
+  FundAccountDto,
+  SendAssetDto,
+  SendOtpDto,
+} from './dto/send-otp.dto';
 import { DisburseDto } from './dto/disburse.dto';
 import {
   AddTriggerDto,
@@ -52,6 +57,14 @@ export class StellarController {
     return this.stellarService.faucetAndTrustlineService(account);
   }
 
+  @MessagePattern({
+    cmd: JOBS.STELLAR.CHECK_TRUSTLINE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async checkTrustline(account: CheckTrustlineDto) {
+    return this.stellarService.checkTrustline(account);
+  }
+
   // Returns all the required stats for the disbursement
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_STELLAR_STATS,
@@ -84,7 +97,6 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async getWalletStats(address: GetWalletBalanceDto) {
-    console.log(address);
     return this.stellarService.getWalletStats(address);
   }
 

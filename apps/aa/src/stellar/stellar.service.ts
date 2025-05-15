@@ -5,6 +5,7 @@ import {
 } from '@rahataid/stellar-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  CheckTrustlineDto,
   FundAccountDto,
   SendAssetDto,
   SendGroupDto,
@@ -37,6 +38,7 @@ import {
   UpdateTriggerParamsDto,
   VendorStatsDto,
 } from './dto/trigger.dto';
+import { ASSET } from '@rahataid/stellar-sdk';
 
 @Injectable()
 export class StellarService {
@@ -144,11 +146,25 @@ export class StellarService {
     }
   }
 
-  async faucetAndTrustlineService(account: FundAccountDto) {
-    return this.receiveService.faucetAndTrustlineService(
-      account.walletAddress,
-      account?.secretKey
+  async checkTrustline(checkTrustlineDto: CheckTrustlineDto) {
+    return this.transactionService.hasTrustline(
+      checkTrustlineDto.walletAddress,
+      ASSET.NAME,
+      ASSET.ISSUER
     );
+  }
+
+  async faucetAndTrustlineService(account: FundAccountDto) {
+    try {
+      return this.receiveService.faucetAndTrustlineService(
+        account.walletAddress,
+        account?.secretKey
+      );
+    } catch (error) {
+      throw new RpcException(
+        `Failed to add trustline: ${JSON.stringify(error)}`
+      );
+    }
   }
 
   async getBeneficiaryTokenBalance(groupUuids: string[]) {
