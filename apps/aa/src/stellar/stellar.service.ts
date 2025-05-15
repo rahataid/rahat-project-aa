@@ -4,7 +4,12 @@ import {
   TransactionService,
 } from '@rahataid/stellar-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
+import {
+  FundAccountDto,
+  SendAssetDto,
+  SendGroupDto,
+  SendOtpDto,
+} from './dto/send-otp.dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
@@ -85,23 +90,35 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // Check if beneficiary group has vendor payout or not
     const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
       sendOtpDto.phoneNumber
     );
-    console.log(payoutType);
-    return 'ok';
 
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
-    );
+    if (payoutType.type != 'VENDOR') {
+      throw new RpcException('Payout type is not VENDOR');
+    }
 
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+    if (payoutType.mode === 'OFFLINE') {
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(sendOtpDto);
+  }
+
+  async sendGroupOTP(sendGroupDto: SendGroupDto) {
+    // Get all offline beneficiaries of the vendor
+    const offlineBeneficiaries = await this.prisma.vendor.findUnique({
+      where: {
+        uuid: sendGroupDto.vendorUuid,
+      },
+      include: {
+        OfflineBeneficiary: true,
+      },
+    });
+
+    if (!offlineBeneficiaries) {
+      throw new RpcException('Vendor not found');
+    }
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
@@ -130,7 +147,7 @@ export class StellarService {
   async faucetAndTrustlineService(account: FundAccountDto) {
     return this.receiveService.faucetAndTrustlineService(
       account.walletAddress,
-      account.secretKey
+      account?.secretKey
     );
   }
 
@@ -418,6 +435,19 @@ export class StellarService {
     });
   }
 
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+    const amount =
+      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+    const res = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: sendOtpDto.phoneNumber, amount }
+      )
+    );
+
+    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
+
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },
@@ -512,30 +542,20 @@ export class StellarService {
         this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
       );
 
-      console.log('beneficiary', beneficiary);
-
-      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findFirst({
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
-          uuid: beneficiary.groupId,
+          uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
         },
         include: {
-          tokensReserved: true,
+          tokensReserved: {
+            include: {
+              payouts: true,
+            },
+          },
         },
       });
 
-      console.log('beneficiaryGroup', beneficiaryGroups);
-
-      return 'ok';
-
-      // // Step 3: Extract the payout type from the group's payouts
-      // const beneficiaryGroups = beneficiaryGroup.group.BeneficiaryGroups;
-      // if (!beneficiaryGroups || !beneficiaryGroups.tokensReserved?.payouts) {
-      //   return null; // No tokens or payouts associated with the group
-      // }
-
-      // // Assuming the first payout is relevant (modify if multiple payouts need consideration)
-      // const payout = beneficiaryGroups.tokensReserved.payouts;
-      // return payout?.type || null; // Return the payout type (FSP or VENDOR) or null if not found
+      return beneficiaryGroups.tokensReserved.payouts[0];
     } catch (error) {
       throw new Error(`Failed to retrieve payout type: ${error.message}`);
     }

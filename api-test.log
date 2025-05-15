@@ -676,3 +676,10 @@
 {"level":"info","message":"Fetching distribution address for tenant: dev","timestamp":"2025-05-13 17:54:03"}
 {"level":"info","message":"Fetching distribution address for tenant: dev","timestamp":"2025-05-13 17:54:22"}
 {"level":"info","message":"Fetching distribution address for tenant: dev","timestamp":"2025-05-13 17:54:25"}
+{"level":"warn","message":"Adding trustline...","timestamp":"2025-05-14 16:47:54"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-05-14 16:47:59"}
+{"level":"warn","message":"Adding trustline...","timestamp":"2025-05-14 17:10:00"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-05-14 17:10:05"}
+{"level":"warn","message":"Adding trustline...","timestamp":"2025-05-14 17:20:46"}
+{"level":"warn","message":"Added trustline successfully.","timestamp":"2025-05-14 17:20:51"}
+{"level":"warn","message":"Adding trustline...","timestamp":"2025-05-15 11:13:55"}

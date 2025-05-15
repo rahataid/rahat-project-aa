@@ -7,6 +7,10 @@ export class SendOtpDto {
   amount: string;
 }
 
+export class SendGroupDto {
+  vendorUuid: string;
+}
+
 export class SendAssetDto {
   amount: string | number;
   phoneNumber: string;
@@ -16,5 +20,7 @@ export class SendAssetDto {
 
 export class FundAccountDto {
   walletAddress: string;
-  secretKey: string;
+
+  @IsOptional()
+  secretKey?: string;
 }
