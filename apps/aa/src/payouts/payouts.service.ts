@@ -107,13 +107,12 @@ export class PayoutsService {
       this.logger.log('Fetching all payouts');
 
       const { page, perPage } = payload;
-      
 
       const query = {
         include: {
-          benefefiaryGroup: {
+          beneficiaryGroupToken: {
             include: {
-              benefefiaryGroup: {
+              beneficiaryGroup: {
                 include: {
                   _count: {
                     select: {
@@ -157,9 +156,9 @@ export class PayoutsService {
       const payout = await this.prisma.payouts.findUnique({
         where: { uuid },
         include: {
-          benefefiaryGroup: {
+          beneficiaryGroupToken: {
             include: {
-              benefefiaryGroup: {
+              beneficiaryGroup: {
                 include: {
                   beneficiaries: true,
                   _count: {
