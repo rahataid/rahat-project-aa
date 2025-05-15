@@ -39,6 +39,15 @@ enum SettingDataType {
   OBJECT
 }
 
+enum PayoutType {
+  FSP
+  VENDOR
+}
+
+enum PayoutMode {
+  ONLINE
+  OFFLINE
+}
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -58,6 +67,7 @@ model Beneficiary {
   deletedAt         DateTime?
   BeneficiaryRedeem BeneficiaryRedeem[]
   BeneficiaryGroup  BeneficiaryGroup[]
+  BeneficiaryToGroup BeneficiaryToGroup[]
 
   @@map("tbl_beneficiaries")
 }
@@ -69,12 +79,28 @@ model BeneficiaryGroups {
   name String
 
   tokensReserved BeneficiaryGroupTokens?
+  beneficiaries BeneficiaryToGroup[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   deletedAt DateTime?
 
   @@map("tbl_beneficiaries_groups")
+}
+
+model BeneficiaryToGroup {
+  id              Int               @id @default(autoincrement()) @db.Integer()
+  uuid            String            @unique @default(uuid())
+  beneficiary      Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
+  beneficiaryId    String            @db.Uuid()
+  group           BeneficiaryGroups @relation(fields: [groupId], references: [uuid]) 
+  groupId         String
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt()
+
+  @@unique([beneficiaryId, groupId])
+  @@map("tbl_beneficiaries_to_groups")
 }
 
 model BeneficiaryGroupTokens {
@@ -85,11 +111,31 @@ model BeneficiaryGroupTokens {
   numberOfTokens Int    @default(0)
 
   groupId          String            @unique
-  benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
+  payouts Payouts[]
   createdBy String?
 
   @@map("tbl_beneficiaries_groups_tokens")
+}
+
+model Payouts {
+  int   Int    @id @default(autoincrement()) @db.Integer()
+  uuid  String @unique @default(uuid())
+
+  type             PayoutType
+  mode             PayoutMode
+  status           String?
+  extras           Json?
+
+  groupId          String            @unique
+  payoutProcessorId String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
+  beneficiaryGroupToken BeneficiaryGroupTokens @relation(fields: [groupId], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups_payouts")
 }
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
@@ -368,7 +414,7 @@ model Communication {
   message     String
   transportId String
   groupUID    String? @db.Uuid()
-  sessionId   String? // If sessionID is null, it means the message is not sent 
+  sessionId   String? // If sessionID is null, it means the message is not sent
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -415,10 +461,12 @@ model BeneficiaryRedeem {
   uuid                     String  @unique @default(uuid())
   beneficiaryWalletAddress String
   hasRedeemed              Boolean @default(false)
+  transactionType          PayoutType
 
   Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
-  vendorUid   String      @db.Uuid()
-  Vendor      Vendor      @relation(fields: [vendorUid], references: [uuid])
+  vendorUid   String?      @db.Uuid()
+  Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
+  fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()

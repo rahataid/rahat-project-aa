@@ -30,6 +30,13 @@ export const CONTROLLERS = {
     LISTONE: NAMESPACE + '.beneficiary.listone',
     UPDATE: NAMESPACE + '.beneficiary.update',
   },
+  PAYOUTS: {
+    CREATE: NAMESPACE + '.payouts.create',
+    LIST: NAMESPACE + '.payouts.list',
+    GET: NAMESPACE + '.payouts.get',
+    UPDATE: NAMESPACE + '.payouts.update',
+    REMOVE: NAMESPACE + '.payouts.remove',
+  },
 };
 
 export const JOBS = {
@@ -102,6 +109,10 @@ export const JOBS = {
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    CREATE: 'aa.jobs.payout.create',
+    LIST: 'aa.jobs.payout.list',
+    GET: 'aa.jobs.payout.get',
+    UPDATE: 'aa.jobs.payout.update',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',

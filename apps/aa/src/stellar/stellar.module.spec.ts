@@ -23,6 +23,12 @@ describe('StellarModule', () => {
     }),
   };
 
+  const mockBullQueueStellar = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
   beforeEach(async () => {
     module = await Test.createTestingModule({
       imports: [
@@ -59,6 +65,10 @@ describe('StellarModule', () => {
           provide: SettingsService,
           useValue: mockSettingsService,
         },
+        {
+          provide: 'BullQueue_STELLAR',
+          useValue: mockBullQueueStellar,
+        },
       ],
     }).compile();
   });
@@ -76,4 +86,4 @@ describe('StellarModule', () => {
     const service = module.get<StellarService>(StellarService);
     expect(service).toBeDefined();
   });
-}); 
+});

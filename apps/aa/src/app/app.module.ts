@@ -22,6 +22,7 @@ import { ActivitiesModule } from '../activities/activites.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
+import { PayoutsModule } from '../payouts/payouts.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { VendorsModule } from '../vendors/vendors.module';
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,
+    PayoutsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
