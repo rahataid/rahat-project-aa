@@ -90,17 +90,18 @@ export class ReceiveService implements IReceiveService {
 
   public async faucetAndTrustlineService(
     walletAddress: string,
-    secretKey: string
+    secretKey?: string
   ) {
     await axios.get(
       `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
     );
-    await add_trustline(
-      walletAddress,
-      secretKey,
-      this.assetIssuer,
-      this.assetCode
-    );
+    secretKey &&
+      (await add_trustline(
+        walletAddress,
+        secretKey as string,
+        this.assetIssuer,
+        this.assetCode
+      ));
     return { message: 'Funded successfully' };
   }
 

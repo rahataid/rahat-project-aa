@@ -85,15 +85,17 @@ export class StellarProcessor {
             StellarProcessor.name
           );
 
-          const res = await lastValueFrom(this.client.send(
-            { cmd: 'ms.jobs.triggers.updateTransaction' },
-            {
-              uuid: trigger.id,
-              transactionHash: result.hash,
-            }
-          ));
+          const res = await lastValueFrom(
+            this.client.send(
+              { cmd: 'ms.jobs.triggers.updateTransaction' },
+              {
+                uuid: trigger.id,
+                transactionHash: result.hash,
+              }
+            )
+          );
 
-          if(res) {
+          if (res) {
             this.logger.log(
               `Trigger ${trigger.id} status successfully updated in database`,
               StellarProcessor.name
@@ -206,19 +208,21 @@ export class StellarProcessor {
           JSON.stringify(result)
         );
 
-          const res = await lastValueFrom(this.client.send(
+        const res = await lastValueFrom(
+          this.client.send(
             { cmd: 'ms.jobs.triggers.updateTransaction' },
             {
               uuid: triggerUpdate.id,
               transactionHash: result.hash,
             }
-          ));
-          if(res) {
-            this.logger.log(
-              `Updated Trigger ${triggerUpdate.id} status successfully updated in database`,
-              StellarProcessor.name
-            );
-          }
+          )
+        );
+        if (res) {
+          this.logger.log(
+            `Updated Trigger ${triggerUpdate.id} status successfully updated in database`,
+            StellarProcessor.name
+          );
+        }
 
         break;
       } catch (error) {

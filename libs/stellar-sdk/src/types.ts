@@ -31,6 +31,11 @@ export interface ITransactionService {
     limit: number,
     order: 'asc' | 'desc'
   ): Promise<any>;
+  hasTrustline(
+    publicKey: string,
+    assetCode: string,
+    assetIssuer: string
+  ): Promise<boolean>;
 }
 
 export interface ICreateTenantService {

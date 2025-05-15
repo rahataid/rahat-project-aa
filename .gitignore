@@ -57,3 +57,7 @@ prod-data/
 /soroban/trigger/target
 play/
 project-setup-summary.json
+
+api-test.log
+
+

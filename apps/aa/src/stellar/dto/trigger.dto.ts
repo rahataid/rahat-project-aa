@@ -56,3 +56,13 @@ export class UpdateTriggerParamsDto {
   @IsOptional()
   params?: Record<string, any>;
 }
+
+export class GetWalletBalanceDto {
+  @IsString()
+  address: string;
+}
+
+export class VendorStatsDto {
+  @IsString()
+  uuid: string;
+}
