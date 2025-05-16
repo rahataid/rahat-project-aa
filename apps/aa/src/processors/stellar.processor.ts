@@ -260,6 +260,7 @@ export class StellarProcessor {
     }
   }
 
+  /*
   @Process({ name: JOBS.STELLAR.SEND_GROUP_OTP, concurrency: 1 })
   async sendGroupOTP(job: Job<{ phoneNumber: string[] }>) {
     this.logger.log('Processing send group OTP job...', StellarProcessor.name);
@@ -276,6 +277,7 @@ export class StellarProcessor {
     //   throw error;
     // }
   }
+  */
 
   // Private functions
   private async createTransaction(trigger: AddTriggerDto) {
