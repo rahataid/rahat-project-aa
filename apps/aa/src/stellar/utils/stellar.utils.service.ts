@@ -11,7 +11,7 @@ export const generateCSV = async (
 
     const rows = benData
       .map((beneficiary) => {
-        const phone = `+977${beneficiary.phone.replace(/"/g, '""')}`;
+        const phone = `${beneficiary.phone.replace(/"/g, '""')}`;
         const amount = parseFloat(beneficiary.amount);
         if (isNaN(amount) || amount <= 1) {
           throw new Error(
