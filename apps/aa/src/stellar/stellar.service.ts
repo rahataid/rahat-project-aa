@@ -4,7 +4,13 @@ import {
   TransactionService,
 } from '@rahataid/stellar-sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { FundAccountDto, SendAssetDto, SendOtpDto } from './dto/send-otp.dto';
+import {
+  CheckTrustlineDto,
+  FundAccountDto,
+  SendAssetDto,
+  SendGroupDto,
+  SendOtpDto,
+} from './dto/send-otp.dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { DisburseDto } from './dto/disburse.dto';
@@ -28,8 +34,11 @@ import { Queue } from 'bull';
 import {
   AddTriggerDto,
   GetTriggerDto,
+  GetWalletBalanceDto,
   UpdateTriggerParamsDto,
+  VendorStatsDto,
 } from './dto/trigger.dto';
+import { ASSET } from '@rahataid/stellar-sdk';
 
 @Injectable()
 export class StellarService {
@@ -41,6 +50,8 @@ export class StellarService {
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue
   ) {
+    this.receiveService = new ReceiveService();
+    this.transactionService = new TransactionService();
     this.initializeDisbursementService();
   }
 
@@ -81,16 +92,35 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
     );
 
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+    if (payoutType.type != 'VENDOR') {
+      throw new RpcException('Payout type is not VENDOR');
+    }
+
+    if (payoutType.mode === 'OFFLINE') {
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(sendOtpDto);
+  }
+
+  async sendGroupOTP(sendGroupDto: SendGroupDto) {
+    // Get all offline beneficiaries of the vendor
+    const offlineBeneficiaries = await this.prisma.vendor.findUnique({
+      where: {
+        uuid: sendGroupDto.vendorUuid,
+      },
+      include: {
+        OfflineBeneficiary: true,
+      },
+    });
+
+    if (!offlineBeneficiaries) {
+      throw new RpcException('Vendor not found');
+    }
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
@@ -104,25 +134,37 @@ export class StellarService {
         verifyOtpDto.phoneNumber,
         amount as number
       );
-    } catch (error) {
-      throw new Error(
-        error instanceof Error ? error.message : 'OTP verification failed'
-      );
-    }
 
-    const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
-    return this.receiveService.sendAsset(
-      keys.privateKey,
-      verifyOtpDto.receiverAddress,
-      verifyOtpDto.amount as string
+      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      return this.receiveService.sendAsset(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount as string
+      );
+    } catch (error) {
+      throw new RpcException(error ? error : 'OTP verification failed');
+    }
+  }
+
+  async checkTrustline(checkTrustlineDto: CheckTrustlineDto) {
+    return this.transactionService.hasTrustline(
+      checkTrustlineDto.walletAddress,
+      ASSET.NAME,
+      ASSET.ISSUER
     );
   }
 
   async faucetAndTrustlineService(account: FundAccountDto) {
-    return this.receiveService.faucetAndTrustlineService(
-      account.walletAddress,
-      account.secretKey
-    );
+    try {
+      return this.receiveService.faucetAndTrustlineService(
+        account.walletAddress,
+        account?.secretKey
+      );
+    } catch (error) {
+      throw new RpcException(
+        `Failed to add trustline: ${JSON.stringify(error)}`
+      );
+    }
   }
 
   async getBeneficiaryTokenBalance(groupUuids: string[]) {
@@ -140,18 +182,21 @@ export class StellarService {
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarQueue.add(
-      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
-      trigger,
-      {
-        attempts: 3,
-        removeOnComplete: true,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      }
-    );
+    return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+    });
+  }
+
+  async getWalletStats(address: GetWalletBalanceDto) {
+    return {
+      balances: await this.receiveService.getAccountBalance(address.address),
+      transactions: await this.getRecentTransaction(address.address),
+    };
   }
 
   async getTriggerWithID(trigger: GetTriggerDto) {
@@ -232,32 +277,53 @@ export class StellarService {
   }
 
   async getDisbursementStats() {
-    // Disbursement Account balance
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
         await this.getFromSettings('TENANTNAME')
       )
     );
 
-    // Vendor address balance
-    const disbursedBalance = await this.getRahatBalance(
-      await this.getFromSettings('VENDORADDRESS')
+    const vendors = await this.prisma.vendor.findMany({
+      select: { walletAddress: true },
+    });
+
+    let totalVendorBalance = 0;
+
+    await Promise.all(
+      vendors.map(async (vendor) => {
+        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
+      })
     );
 
     return {
       tokenStats: [
         {
           name: 'Disbursement Balance',
-          amount: disbursementBalance.toLocaleString(),
+          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
         },
         {
           name: 'Disbursed Balance',
-          amount: disbursedBalance.toLocaleString(),
+          amount: totalVendorBalance.toLocaleString(),
+        },
+        {
+          name: 'Remaining Balance',
+          amount: disbursementBalance.toLocaleString(),
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
-      transactionStats: await this.getRecentTransaction(),
+      transactionStats: await this.getRecentTransaction(
+        await this.disbursementService.getDistributionAddress(
+          await this.getFromSettings('TENANTNAME')
+        )
+      ),
     };
+  }
+
+  async getVendorWalletStats(vendorWallet: VendorStatsDto) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: vendorWallet.uuid },
+    });
+    return this.getWalletStats({ address: vendor.walletAddress });
   }
 
   // ---------- Private functions ----------------
@@ -310,8 +376,8 @@ export class StellarService {
     groups.forEach((group) => {
       const groupToken = tokens.find((t) => t.groupId === group.uuid);
       const totalTokens = groupToken?.numberOfTokens ?? 0;
-      const totalBeneficiaries = group._count?.groupedBeneficiaries ?? 1;
 
+      const totalBeneficiaries = group._count?.groupedBeneficiaries;
       const tokenPerBeneficiary = totalTokens / totalBeneficiaries;
 
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
@@ -338,17 +404,26 @@ export class StellarService {
   }
 
   private async getBenTotal(phoneNumber: string) {
-    const keys = await this.getSecretByPhone(phoneNumber);
-    return this.getRahatBalance(keys.address);
+    try {
+      const keys = await this.getSecretByPhone(phoneNumber);
+      return this.getRahatBalance(keys.address);
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   private async getSecretByPhone(phoneNumber: string) {
-    return lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
-        { phoneNumber: phoneNumber, chain: 'stellar' }
-      )
-    );
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
+          { phoneNumber, chain: 'stellar' }
+        )
+      );
+      return ben;
+    } catch (error) {
+      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
   }
 
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
@@ -376,23 +451,36 @@ export class StellarService {
     });
   }
 
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+    const amount =
+      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+    const res = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: sendOtpDto.phoneNumber, amount }
+      )
+    );
+
+    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
+
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },
     });
 
     if (!record) {
-      throw new Error('OTP record not found');
+      throw new RpcException('OTP record not found');
     }
 
     const now = new Date();
     if (record.expiresAt < now) {
-      throw new Error('OTP has expired');
+      throw new RpcException('OTP has expired');
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
     if (!isValid) {
-      throw new Error('Invalid OTP or amount mismatch');
+      throw new RpcException('Invalid OTP or amount mismatch');
     }
 
     return true;
@@ -418,12 +506,18 @@ export class StellarService {
   }
 
   private async getRahatBalance(keys) {
-    const accountBalances = await this.receiveService.getAccountBalance(keys);
-    const rahatAsset = accountBalances?.find(
-      (bal: any) => bal.asset_code === 'RAHAT'
-    );
+    try {
+      const accountBalances = await this.receiveService.getAccountBalance(keys);
 
-    return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+      const rahatAsset = accountBalances?.find(
+        (bal: any) => bal.asset_code === 'RAHAT'
+      );
+
+      return Math.floor(parseFloat(rahatAsset?.balance || '0'));
+    } catch (error) {
+      this.logger.error(error.message);
+      return 0;
+    }
   }
 
   private async initializeDisbursementService() {
@@ -439,11 +533,9 @@ export class StellarService {
     );
   }
 
-  private async getRecentTransaction() {
+  private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      ),
+      address,
       10,
       'desc'
     );
@@ -455,7 +547,33 @@ export class StellarService {
         date: txn.created_at,
         amount: Number(txn.amount).toFixed(0),
         amtColor: txn.amtColor,
+        hash: txn.hash,
       };
     });
+  }
+
+  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+    try {
+      const beneficiary = await lastValueFrom(
+        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+      );
+
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
+        where: {
+          uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
+        },
+        include: {
+          tokensReserved: {
+            include: {
+              payouts: true,
+            },
+          },
+        },
+      });
+
+      return beneficiaryGroups.tokensReserved.payouts[0];
+    } catch (error) {
+      throw new Error(`Failed to retrieve payout type: ${error.message}`);
+    }
   }
 }
