@@ -260,6 +260,25 @@ export class StellarProcessor {
     }
   }
 
+  /*
+  @Process({ name: JOBS.STELLAR.SEND_GROUP_OTP, concurrency: 1 })
+  async sendGroupOTP(job: Job<{ phoneNumber: string[] }>) {
+    this.logger.log('Processing send group OTP job...', StellarProcessor.name);
+    const { phoneNumber } = job.data;
+
+    // try {
+    //   await this.stellarService.sendGroupOTP({ phoneNumber });
+    // } catch (error) {
+    //   this.logger.error(
+    //     `Error in send group OTP: ${JSON.stringify(error)}`,
+    //     error.stack,
+    //     StellarProcessor.name
+    //   );
+    //   throw error;
+    // }
+  }
+  */
+
   // Private functions
   private async createTransaction(trigger: AddTriggerDto) {
     try {

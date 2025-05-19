@@ -16,9 +16,11 @@ import {
   UpdateTriggerParamsDto,
   VendorStatsDto,
 } from './dto/trigger.dto';
+import { Logger } from '@nestjs/common';
 
 @Controller('stellar')
 export class StellarController {
+  private readonly logger = new Logger(StellarController.name);
   constructor(private readonly stellarService: StellarService) {}
 
   // Create disbursement
@@ -36,6 +38,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async sendOtp(sendAssetDto: SendOtpDto) {
+    this.logger.log('Sending OTP to beneficiary');
     return this.stellarService.sendOtp(sendAssetDto);
   }
 

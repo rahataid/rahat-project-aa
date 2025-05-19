@@ -91,21 +91,23 @@ export class StellarService {
     );
   }
 
+  /*
   async sendOtp(sendOtpDto: SendOtpDto) {
-    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
-      sendOtpDto.phoneNumber
-    );
+    // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+    //   sendOtpDto.phoneNumber
+    // );
 
-    if (payoutType.type != 'VENDOR') {
-      throw new RpcException('Payout type is not VENDOR');
-    }
+    // if (payoutType.type != 'VENDOR') {
+    //   throw new RpcException('Payout type is not VENDOR');
+    // }
 
-    if (payoutType.mode === 'OFFLINE') {
-      throw new RpcException('Payout mode is not ONLINE');
-    }
+    // if (payoutType.mode === 'OFFLINE') {
+    //   throw new RpcException('Payout mode is not ONLINE');
+    // }
 
     return this.sendOtpByPhone(sendOtpDto);
   }
+    */
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
     // Get all offline beneficiaries of the vendor
@@ -120,6 +122,18 @@ export class StellarService {
 
     if (!offlineBeneficiaries) {
       throw new RpcException('Vendor not found');
+    }
+
+    // Get array of phone number from uuid
+    const response = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+        { data: offlineBeneficiaries.OfflineBeneficiary.map((ben) => ben.uuid) }
+      )
+    );
+
+    if (!response) {
+      throw new RpcException('Beneficiaries not found');
     }
   }
 
@@ -136,10 +150,11 @@ export class StellarService {
       );
 
       const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+
       return this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
-        amount as string
+        amount.toString()
       );
     } catch (error) {
       throw new RpcException(error ? error : 'OTP verification failed');
@@ -428,9 +443,11 @@ export class StellarService {
 
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
     const expiresAt = new Date();
+    this.logger.log('Expires at: ', expiresAt);
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
 
     const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+    this.logger.log('OTP hash: ', otpHash);
 
     return await this.prisma.otp.upsert({
       where: {
@@ -451,19 +468,6 @@ export class StellarService {
     });
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
-    );
-
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
-  }
-
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },
@@ -479,6 +483,7 @@ export class StellarService {
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+
     if (!isValid) {
       throw new RpcException('Invalid OTP or amount mismatch');
     }
