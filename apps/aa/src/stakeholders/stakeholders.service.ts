@@ -59,6 +59,45 @@ export class StakeholdersService {
     });
   }
 
+  async bulkAdd(payloads: AddStakeholdersData[]) {
+    // Step 1: Clean and normalize input
+    const cleanedPayloads = payloads.map(({ phone, ...rest }) => ({
+      ...rest,
+      phone: phone?.trim() || null,
+    }));
+
+    // Step 2: Extract non-null phones
+    const phonesToCheck = cleanedPayloads
+      .map((p) => p.phone)
+      .filter((phone): phone is string => !!phone);
+
+    // Step 3: Check for existing phones in DB
+    const existing = await this.prisma.stakeholders.findMany({
+      where: {
+        phone: { in: phonesToCheck },
+      },
+      select: { phone: true },
+    });
+
+    const existingPhones = existing.map((e) => e.phone);
+
+    if (existingPhones.length > 0) {
+      throw new RpcException(
+        `Phone number must be unique, ${existingPhones.join(', ')}`
+      );
+    }
+
+    // Step 4: Insert all if no duplicates
+    const result = await this.prisma.stakeholders.createMany({
+      data: cleanedPayloads,
+    });
+
+    return {
+      successCount: result.count,
+      message: 'All stakeholders successfully added.',
+    };
+  }
+
   async getAll(payload: GetStakeholdersData) {
     const {
       name,
@@ -69,7 +108,7 @@ export class StakeholdersService {
       page,
       perPage,
       order,
-      sort
+      sort,
     } = payload;
 
     const query = {
@@ -92,17 +131,17 @@ export class StakeholdersService {
       include: {
         stakeholdersGroups: true,
       },
-      ...(order && sort ?
-        {
-          orderBy: {
-            [sort]: order,
-          },
-        }
-        : {
-          orderBy: {
-            createdAt: 'desc',
+      ...(order && sort
+        ? {
+            orderBy: {
+              [sort]: order,
+            },
           }
-        }),
+        : {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          }),
     };
 
     return paginate(this.prisma.stakeholders, query, {
@@ -232,16 +271,16 @@ export class StakeholdersService {
         isDeleted: false,
         ...(search && {
           name: { contains: search, mode: 'insensitive' },
-        })
+        }),
       },
       orderBy: {
         ...(order && sort
           ? {
-            [sort]: order,
-          }
+              [sort]: order,
+            }
           : {
-            createdAt: 'desc',
-          }),
+              createdAt: 'desc',
+            }),
       },
       include: {
         _count: {
