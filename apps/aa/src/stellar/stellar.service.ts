@@ -91,6 +91,7 @@ export class StellarService {
     );
   }
 
+  /*
   async sendOtp(sendOtpDto: SendOtpDto) {
     // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
     //   sendOtpDto.phoneNumber
@@ -106,6 +107,7 @@ export class StellarService {
 
     return this.sendOtpByPhone(sendOtpDto);
   }
+    */
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
     // Get all offline beneficiaries of the vendor
@@ -144,7 +146,7 @@ export class StellarService {
       await this.verifyOTP(
         verifyOtpDto.otp,
         verifyOtpDto.phoneNumber,
-        amount.toString()
+        amount as number
       );
 
       const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
@@ -466,31 +468,7 @@ export class StellarService {
     });
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    this.logger.log('Sending OTP to beneficiary');
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
-
-    this.logger.log('Amount: ', amount);
-    if (Number(amount) <= 0) {
-      throw new RpcException('Amount must be greater than 0');
-    }
-
-    this.logger.log('Sending OTP to beneficiary');
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
-    );
-
-    this.logger.log('OTP sent to beneficiary');
-    console.log(res);
-
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
-  }
-
-  private async verifyOTP(otp: string, phoneNumber: string, amount: string) {
+  private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },
     });
