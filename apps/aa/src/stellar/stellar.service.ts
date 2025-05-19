@@ -111,6 +111,8 @@ export class StellarService {
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
 
+      this.logger.log('Amount: ', amount);
+
     if (Number(amount) <= 0) {
       throw new RpcException('Amount must be greater than 0');
     }
@@ -437,6 +439,7 @@ export class StellarService {
   private async getBenTotal(phoneNumber: string) {
     try {
       const keys = await this.getSecretByPhone(phoneNumber);
+      this.logger.log('Keys: ', keys);
       return this.getRahatBalance(keys.address);
     } catch (error) {
       throw new RpcException(error);
@@ -533,6 +536,13 @@ export class StellarService {
       const rahatAsset = accountBalances?.find(
         (bal: any) => bal.asset_code === 'RAHAT'
       );
+
+      if (!rahatAsset) {
+        this.logger.error('RAHAT asset not found in account balances');
+        return 0;
+      }
+
+      this.logger.log('RAHAT asset balance:', rahatAsset.balance);
 
       return Math.floor(parseFloat(rahatAsset?.balance || '0'));
     } catch (error) {
