@@ -91,7 +91,6 @@ export class StellarService {
     );
   }
 
-  /*
   async sendOtp(sendOtpDto: SendOtpDto) {
     // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
     //   sendOtpDto.phoneNumber
@@ -107,7 +106,24 @@ export class StellarService {
 
     return this.sendOtpByPhone(sendOtpDto);
   }
-    */
+
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+    const amount =
+      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+
+    if (Number(amount) <= 0) {
+      throw new RpcException('Amount must be greater than 0');
+    }
+
+    const res = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: sendOtpDto.phoneNumber, amount }
+      )
+    );
+
+    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
     // Get all offline beneficiaries of the vendor
