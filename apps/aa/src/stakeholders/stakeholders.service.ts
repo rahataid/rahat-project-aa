@@ -17,7 +17,6 @@ import { RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
-
 @Injectable()
 export class StakeholdersService {
   private readonly logger = new Logger(StakeholdersService.name);
@@ -60,6 +59,7 @@ export class StakeholdersService {
   }
 
   async bulkAdd(payloads: AddStakeholdersData[]) {
+    this.logger.log('Adding bulk stakeholders...');
     // Step 1: Clean and normalize input
     const cleanedPayloads = payloads.map(({ phone, ...rest }) => ({
       ...rest,
@@ -82,6 +82,9 @@ export class StakeholdersService {
     const existingPhones = existing.map((e) => e.phone);
 
     if (existingPhones.length > 0) {
+      this.logger.warn(
+        `Found ${existingPhones.length} duplicate phone number(s)`
+      );
       throw new RpcException(
         `Phone number must be unique, ${existingPhones.join(', ')}`
       );
