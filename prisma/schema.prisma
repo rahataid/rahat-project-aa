@@ -110,6 +110,10 @@ model BeneficiaryGroupTokens {
   title          String
   numberOfTokens Int    @default(0)
 
+  status         String @default("NOT_DISBURSED")
+  isDisbursed    Boolean @default(false)
+  info           Json?
+
   groupId          String            @unique
   beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
