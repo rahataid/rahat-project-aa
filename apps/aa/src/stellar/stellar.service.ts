@@ -36,7 +36,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorStatsDto,
+  VendorRedemptionRequestDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
 
@@ -111,7 +111,7 @@ export class StellarService {
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
 
-      this.logger.log('Amount: ', amount);
+    this.logger.log('Amount: ', amount);
 
     if (Number(amount) <= 0) {
       throw new RpcException('Amount must be greater than 0');
@@ -157,6 +157,16 @@ export class StellarService {
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: verifyOtpDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
       const amount =
         verifyOtpDto?.amount ||
         (await this.getBenTotal(verifyOtpDto?.phoneNumber));
@@ -169,11 +179,34 @@ export class StellarService {
 
       const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
 
-      return this.receiveService.sendAsset(
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
+        },
+      });
+
+      const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
         amount.toString()
       );
+
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          id: beneficiaryRedeem.id,
+        },
+        data: {
+          hasRedeemed: true,
+          txHash: result.tx.hash,
+        },
+      });
     } catch (error) {
       throw new RpcException(error ? error : 'OTP verification failed');
     }
@@ -214,6 +247,15 @@ export class StellarService {
     return this.computeBeneficiaryTokenDistribution(groups, tokens);
   }
 
+  async getWalletStats(walletBalanceDto: GetWalletBalanceDto) {
+    return {
+      balances: await this.receiveService.getAccountBalance(
+        walletBalanceDto.address
+      ),
+      transactions: await this.getRecentTransaction(walletBalanceDto.address),
+    };
+  }
+
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
       attempts: 3,
@@ -223,13 +265,6 @@ export class StellarService {
         delay: 1000,
       },
     });
-  }
-
-  async getWalletStats(address: GetWalletBalanceDto) {
-    return {
-      balances: await this.receiveService.getAccountBalance(address.address),
-      transactions: await this.getRecentTransaction(address.address),
-    };
   }
 
   async getTriggerWithID(trigger: GetTriggerDto) {
@@ -352,11 +387,20 @@ export class StellarService {
     };
   }
 
-  async getVendorWalletStats(vendorWallet: VendorStatsDto) {
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { uuid: vendorWallet.uuid },
+  async getRedemptionRequest(vendorWallet: VendorRedemptionRequestDto) {
+    const redemptionRequest = await this.prisma.beneficiaryRedeem.findMany({
+      where: {
+        vendorUid: vendorWallet.uuid,
+      },
+      take: vendorWallet.take || 10,
+      skip: vendorWallet.skip || 0,
     });
-    return this.getWalletStats({ address: vendor.walletAddress });
+
+    if (!redemptionRequest.length) {
+      throw new RpcException('No redemption requests found for vendor');
+    }
+
+    return redemptionRequest;
   }
 
   // ---------- Private functions ----------------
@@ -468,7 +512,7 @@ export class StellarService {
     const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
     this.logger.log('OTP hash: ', otpHash);
 
-    return await this.prisma.otp.upsert({
+    const otpRes = await this.prisma.otp.upsert({
       where: {
         phoneNumber,
       },
@@ -485,6 +529,10 @@ export class StellarService {
         expiresAt,
       },
     });
+
+    delete otpRes.otpHash;
+
+    return otpRes;
   }
 
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {

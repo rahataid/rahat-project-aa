@@ -14,7 +14,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorStatsDto,
+  VendorRedemptionRequestDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
 
@@ -79,11 +79,11 @@ export class StellarController {
 
   // Return required stats for a vendor address
   @MessagePattern({
-    cmd: JOBS.STELLAR.GET_VENDOR_STATS,
+    cmd: JOBS.STELLAR.GET_REDEMPTION_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
-  async getVendorStats(vendorWallet: VendorStatsDto) {
-    return this.stellarService.getVendorWalletStats(vendorWallet);
+  async getRedemptionRequest(vendorWallet: VendorRedemptionRequestDto) {
+    return this.stellarService.getRedemptionRequest(vendorWallet);
   }
 
   // Get trigger from on-chain contract

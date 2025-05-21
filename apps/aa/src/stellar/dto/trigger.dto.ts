@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsJSON,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -62,7 +63,16 @@ export class GetWalletBalanceDto {
   address: string;
 }
 
-export class VendorStatsDto {
+export class VendorRedemptionRequestDto {
   @IsString()
-  uuid: string;
+  @IsOptional()
+  uuid?: string;
+
+  @IsNumber()
+  @IsOptional()
+  take?: number;
+
+  @IsNumber()
+  @IsOptional()
+  skip?: number;
 }

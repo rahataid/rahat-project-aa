@@ -128,9 +128,9 @@ export class ReceiveService implements IReceiveService {
 
     transaction.sign(Keypair.fromSecret(senderSk));
 
-    await server.submitTransaction(transaction);
+    const tx = await server.submitTransaction(transaction);
 
-    return { success: 'tokens sent to vendor' };
+    return { success: 'tokens sent to vendor', tx };
   }
 
   public async getAccountBalance(wallet: string) {
