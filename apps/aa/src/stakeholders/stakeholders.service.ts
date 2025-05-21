@@ -4,6 +4,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
   AddStakeholdersGroups,
+  CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
   GetOneGroup,
@@ -15,6 +16,8 @@ import {
 } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -58,10 +61,15 @@ export class StakeholdersService {
     });
   }
 
-  async bulkAdd(payloads: AddStakeholdersData[]) {
+  async bulkAdd(payloads: any) {
     this.logger.log('Adding bulk stakeholders...');
+
+    // validate the  parseddata with the stakeholder class
+    const rData = await this.validateStakeholders(payloads);
+
     // Step 1: Clean and normalize input
-    const cleanedPayloads = payloads.map(({ phone, ...rest }) => ({
+
+    const cleanedPayloads = rData.map(({ phone, ...rest }) => ({
       ...rest,
       phone: phone?.trim() || null,
     }));
@@ -342,5 +350,51 @@ export class StakeholdersService {
       },
     });
   }
+
+  async validateStakeholders(payload: any[]) {
+    const data = payload.map((item) => ({
+      name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
+      designation: item['Designation']?.trim() || '',
+      organization: item['Organization']?.trim() || '',
+      district: item['District']?.trim() || '',
+      municipality: item['Municipality']?.trim() || '',
+      phone:
+        item['Mobile #']?.toString().trim() ||
+        item['Phone Number']?.toString().trim() ||
+        '',
+      email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+    }));
+    const validationErrors = [];
+    const stakeholders = [];
+    for (const row of data) {
+      const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
+
+      const errors = await validate(stakeholdersDto);
+
+      if (errors.length > 0) {
+        validationErrors.push({
+          row,
+          errors: errors.map((error) => Object.values(error.constraints)),
+        });
+      } else {
+        stakeholders.push(row);
+      }
+    }
+
+    // If any validation errors, throw exception
+    if (validationErrors.length > 0) {
+      console.log(validationErrors);
+      const errorMessages = validationErrors
+        .map((e, i) => {
+          const flattenedErrors = e.errors.flat().join(', ');
+          return `Row ${i + 1}: ${flattenedErrors}`;
+        })
+        .join(',');
+      throw new Error(errorMessages);
+    }
+
+    return stakeholders;
+  }
+
   // ***** stakeholders groups end ********** //
 }
