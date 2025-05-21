@@ -1,11 +1,8 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { BQUEUE, CORE_MODULE, DATA_SOURCES, JOBS } from '../constants';
+import { CORE_MODULE } from '../constants';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { Queue } from 'bull';
-import { InjectQueue } from '@nestjs/bull';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { PhasesService } from '../phases/phases.service';
 import { PaginationBaseDto } from './common';
 import { VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
@@ -17,14 +14,12 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 export class VendorsService {
   private readonly logger = new Logger(VendorsService.name);
 
+  receiveService = new ReceiveService();
+
   constructor(
     private prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
-  ) {
-    this.receiveService = new ReceiveService();
-  }
-
-  receiveService = new ReceiveService();
+  ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
     return paginate(
@@ -48,57 +43,84 @@ export class VendorsService {
   }
 
   async getVendorWalletStats(vendorWallet: VendorStatsDto) {
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { uuid: vendorWallet.uuid },
-    });
-    return this.getWalletStats({
-      address: vendor.walletAddress,
-    });
-  }
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorWallet.uuid },
+      });
 
-  async getWalletStats(walletBalanceDto: VendorStatsDto) {
-    return {
-      balances: await this.receiveService.getAccountBalance(
-        walletBalanceDto.address
-      ),
-      transactions: await this.getRecentTransactionDb(walletBalanceDto),
-    };
+      if (!vendor) {
+        throw new RpcException(`Vendor with id ${vendorWallet.uuid} not found`);
+      }
+
+      const vendorBalance = await this.receiveService.getAccountBalance(
+        vendor.walletAddress
+      );
+
+      if (!vendorBalance) {
+        throw new RpcException(
+          `Failed to get balance for vendor with id ${vendorWallet.uuid}`
+        );
+      }
+
+      return {
+        balances: vendorBalance,
+        transactions: await this.getRecentTransactionDb(vendorWallet),
+      };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
   }
 
   private async getRecentTransactionDb(walletBalanceDto: VendorStatsDto) {
-    const transactions = await this.prisma.beneficiaryRedeem.findMany({
-      where: {
-        vendorUid: walletBalanceDto.uuid,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: walletBalanceDto.take || 10,
-      skip: walletBalanceDto.skip || 0,
-    });
+    try {
+      const transactions = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          vendorUid: walletBalanceDto.uuid,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: walletBalanceDto.take || 10,
+        skip: walletBalanceDto.skip || 0,
+      });
 
-    const beneficiaryWalletAddresses = transactions.map(
-      (txn) => txn.beneficiaryWalletAddress
-    );
+      if (!transactions) {
+        throw new RpcException(
+          `Transactions not found for vendor with id ${walletBalanceDto.uuid}`
+        );
+      }
 
-    const benResponse = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' },
-        beneficiaryWalletAddresses
-      )
-    );
+      const beneficiaryWalletAddresses = transactions.map(
+        (txn) => txn.beneficiaryWalletAddress
+      );
 
-    return transactions.map((txn) => {
-      return {
-        title: txn.transactionType,
-        subtitle: txn.beneficiaryWalletAddress,
-        date: txn.createdAt,
-        amount: Number(txn.amount).toFixed(0),
-        hash: txn.txHash,
-        beneficiaryName: benResponse.find(
-          (ben) => ben.walletAddress === txn.beneficiaryWalletAddress
-        )?.piiData?.name,
-      };
-    });
+      const benResponse = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' },
+          beneficiaryWalletAddresses
+        )
+      );
+
+      if (!benResponse) {
+        throw new RpcException(`Failed to get beneficiaries info`);
+      }
+
+      return transactions.map((txn) => {
+        return {
+          title: txn.transactionType,
+          subtitle: txn.beneficiaryWalletAddress,
+          date: txn.createdAt,
+          amount: Number(txn.amount).toFixed(0),
+          hash: txn.txHash,
+          beneficiaryName: benResponse.find(
+            (ben) => ben.walletAddress === txn.beneficiaryWalletAddress
+          )?.piiData?.name,
+        };
+      });
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
   }
 }

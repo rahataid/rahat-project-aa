@@ -36,7 +36,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorRedemptionRequestDto,
+  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
 
@@ -171,6 +171,10 @@ export class StellarService {
         verifyOtpDto?.amount ||
         (await this.getBenTotal(verifyOtpDto?.phoneNumber));
 
+      this.logger.log(
+        `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
+      );
+
       await this.verifyOTP(
         verifyOtpDto.otp,
         verifyOtpDto.phoneNumber,
@@ -197,6 +201,14 @@ export class StellarService {
         verifyOtpDto.receiverAddress,
         amount.toString()
       );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${verifyOtpDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
       await this.prisma.beneficiaryRedeem.update({
         where: {
@@ -387,20 +399,25 @@ export class StellarService {
     };
   }
 
-  async getRedemptionRequest(vendorWallet: VendorRedemptionRequestDto) {
-    const redemptionRequest = await this.prisma.beneficiaryRedeem.findMany({
-      where: {
-        vendorUid: vendorWallet.uuid,
-      },
-      take: vendorWallet.take || 10,
-      skip: vendorWallet.skip || 0,
-    });
+  async getRedemptionRequest(vendorWallet: BeneficiaryRedeemDto) {
+    try {
+      const redemptionRequest = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          vendorUid: vendorWallet.uuid,
+        },
+        take: vendorWallet.take || 10,
+        skip: vendorWallet.skip || 0,
+      });
 
-    if (!redemptionRequest.length) {
-      throw new RpcException('No redemption requests found for vendor');
+      if (!redemptionRequest.length) {
+        throw new RpcException('No redemption requests found for vendor');
+      }
+
+      return redemptionRequest;
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
     }
-
-    return redemptionRequest;
   }
 
   // ---------- Private functions ----------------

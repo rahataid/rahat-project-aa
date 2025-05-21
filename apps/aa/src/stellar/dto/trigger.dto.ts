@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsJSON,
@@ -63,16 +64,17 @@ export class GetWalletBalanceDto {
   address: string;
 }
 
-export class VendorRedemptionRequestDto {
+export class BeneficiaryRedeemDto {
   @IsString()
-  @IsOptional()
-  uuid?: string;
+  uuid: string;
 
   @IsNumber()
   @IsOptional()
+  @ApiProperty({ description: 'Number of transactions to fetch' })
   take?: number;
 
   @IsNumber()
   @IsOptional()
+  @ApiProperty({ description: 'Number of transactions to skip' })
   skip?: number;
 }

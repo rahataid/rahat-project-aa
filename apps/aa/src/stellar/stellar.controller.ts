@@ -14,7 +14,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorRedemptionRequestDto,
+  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
 
@@ -82,7 +82,7 @@ export class StellarController {
     cmd: JOBS.STELLAR.GET_REDEMPTION_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
-  async getRedemptionRequest(vendorWallet: VendorRedemptionRequestDto) {
+  async getRedemptionRequest(vendorWallet: BeneficiaryRedeemDto) {
     return this.stellarService.getRedemptionRequest(vendorWallet);
   }
 
