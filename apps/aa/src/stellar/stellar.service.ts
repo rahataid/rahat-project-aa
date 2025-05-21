@@ -8,6 +8,7 @@ import {
   CheckTrustlineDto,
   FundAccountDto,
   SendAssetDto,
+  SendAssetDtoWithAddress,
   SendGroupDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
@@ -92,15 +93,16 @@ export class StellarService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
-    //   sendOtpDto.phoneNumber
-    // );
+    // const payout = await this.getBeneficiaryPayout({
+    //   key: 'phone',
+    //   value: sendOtpDto.phoneNumber,
+    // });
 
-    // if (payoutType.type != 'VENDOR') {
+    // if (payout.type != 'VENDOR') {
     //   throw new RpcException('Payout type is not VENDOR');
     // }
 
-    // if (payoutType.mode === 'OFFLINE') {
+    // if (payout.mode === 'OFFLINE') {
     //   throw new RpcException('Payout mode is not ONLINE');
     // }
 
@@ -108,35 +110,48 @@ export class StellarService {
   }
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
-    // Get all offline beneficiaries of the vendor
-    const offlineBeneficiaries = await this.prisma.vendor.findUnique({
-      where: {
-        uuid: sendGroupDto.vendorUuid,
-      },
-      include: {
-        OfflineBeneficiary: true,
-      },
-    });
+    const groupBeneficiaries = await this.fetchGroupedBeneficiaries([
+      sendGroupDto.groupUuid,
+    ]);
 
-    if (!offlineBeneficiaries) {
-      throw new RpcException('Vendor not found');
+    if (!groupBeneficiaries) {
+      throw new RpcException('Group not found');
     }
 
-    // Get array of phone number from uuid
-    const response = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        { data: offlineBeneficiaries.OfflineBeneficiary.map((ben) => ben.uuid) }
-      )
+    const beneficiariesUuid = groupBeneficiaries.map((ben) => ben.uuid);
+
+    const phoneNumbers = groupBeneficiaries.map(
+      (ben) => ben.groupedBeneficiaries[0].Beneficiary.pii.phone
     );
 
-    if (!response) {
-      throw new RpcException('Beneficiaries not found');
-    }
+    console.log(beneficiariesUuid);
+
+    console.log(sendGroupDto.vendorUuid);
+    console.log(phoneNumbers);
+
+    // const offlineBeneficiaries = await this.prisma.offlineBeneficiary.create({
+    //   data: {
+    //     otpHash: 'otpHash',
+    //     disbursementId: 'disbursementId',
+    //     amount: 0,
+    //     status: 'PENDING',
+    //     vendorId: ""
+    //   },
+    // });
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: verifyOtpDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
       const amount =
         verifyOtpDto?.amount ||
         (await this.getBenTotal(verifyOtpDto?.phoneNumber));
@@ -149,9 +164,59 @@ export class StellarService {
 
       const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
 
-      return this.receiveService.sendAsset(
+      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
+        },
+      });
+
+      const sendAsset = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
+        amount.toString()
+      );
+
+      console.log(sendAsset);
+
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          id: beneficiaryRedeem.id,
+        },
+        data: {
+          hasRedeemed: true,
+        },
+      });
+    } catch (error) {
+      throw new RpcException(error ? error : 'OTP verification failed');
+    }
+  }
+
+  async sendAssetToVendorWithAddress(sendAssetDto: SendAssetDtoWithAddress) {
+    try {
+      // const payoutType = await this.getBeneficiaryPayout({
+      //   key: 'wallet',
+      //   value: sendAssetDto.senderAddress,
+      // });
+
+      // if (payoutType.type != 'VENDOR') {
+      //   throw new RpcException('Payout type is not VENDOR');
+      // }
+
+      // if (payoutType.mode === 'OFFLINE') {
+      //   throw new RpcException('Payout mode is not ONLINE');
+      // }
+
+      const amount =
+        sendAssetDto?.amount ||
+        (await this.getBenTotal(sendAssetDto?.senderAddress));
+
+      const keys = await this.getSecretByAddress(sendAssetDto.senderAddress);
+
+      return this.receiveService.sendAsset(
+        keys.privateKey,
+        sendAssetDto.receiverAddress,
         amount.toString()
       );
     } catch (error) {
@@ -439,6 +504,22 @@ export class StellarService {
     }
   }
 
+  private async getSecretByAddress(walletAddress: string) {
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
+          { walletAddress, chain: 'stellar' }
+        )
+      );
+      return ben;
+    } catch (error) {
+      throw new RpcException(
+        `Beneficiary with address ${walletAddress} not found`
+      );
+    }
+  }
+
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
@@ -571,10 +652,18 @@ export class StellarService {
     });
   }
 
-  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+  private async getBeneficiaryPayout(payoutPayload: {
+    key: string;
+    value: string;
+  }): Promise<any> {
     try {
+      const cmd =
+        payoutPayload.key === 'wallet'
+          ? 'rahat.jobs.beneficiary.get_by_wallet'
+          : 'rahat.jobs.beneficiary.get_by_phone';
+
       const beneficiary = await lastValueFrom(
-        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+        this.client.send({ cmd }, payoutPayload.value)
       );
 
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
@@ -592,7 +681,11 @@ export class StellarService {
 
       return beneficiaryGroups.tokensReserved.payouts[0];
     } catch (error) {
-      throw new Error(`Failed to retrieve payout type: ${error.message}`);
+      throw new RpcException(
+        `Failed to retrieve payout type: ${error.message}`
+      );
     }
   }
+
+  private async getAmountInBulk(beneficiaryUuid: string[]) {}
 }

@@ -67,6 +67,7 @@ model Beneficiary {
   deletedAt         DateTime?
   BeneficiaryRedeem BeneficiaryRedeem[]
   BeneficiaryGroup  BeneficiaryGroup[]
+  OfflineOtpStellar OfflineOtpStellar[]
 
   @@map("tbl_beneficiaries")
 }
@@ -338,6 +339,7 @@ model Vendor {
   VendorReimbursment VendorReimbursment[]
   BeneficiaryRedeem  BeneficiaryRedeem[]
   OfflineBeneficiary OfflineBeneficiary[]
+  OfflineOtpStellar  OfflineOtpStellar[]
 
   @@map("tbl_vendors")
 }
@@ -450,6 +452,7 @@ model BeneficiaryRedeem {
   vendorUid   String?      @db.Uuid()
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
   fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
+  txHash     String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -492,6 +495,23 @@ model OfflineBeneficiary {
   @@map(name: "tbl_offline_beneficiaries")
 }
 
+model OfflineOtpStellar {
+  id Int @id @default(autoincrement()) @db.Integer()
+  beneficiary    Beneficiary @relation(fields: [beneficiaryUID], references: [uuid])
+  beneficiaryUID String      @db.Uuid()
+
+  otp Otp @relation(fields: [otpId], references: [id])
+  otpId Int 
+
+  Vendor       Vendor                   @relation(fields: [vendorId], references: [uuid])
+  vendorId       String @db.Uuid()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map(name: "tbl_offline_otp_stellar")
+}
+
 // ============== END CORE CVA SCHEMAS================
 
 // ============== Start OTP SCHEMAS ================
@@ -501,6 +521,9 @@ model Otp {
   otpHash     String
   amount      Float
   expiresAt   DateTime
+
+  OfflineOtpStellar  OfflineOtpStellar[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

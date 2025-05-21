@@ -8,12 +8,20 @@ export class SendOtpDto {
 }
 
 export class SendGroupDto {
+  groupUuid: string;
   vendorUuid: string;
 }
 
 export class SendAssetDto {
   amount: string | number;
   phoneNumber: string;
+  receiverAddress: string;
+  otp: string;
+}
+
+export class SendAssetDtoWithAddress {
+  amount: string | number;
+  senderAddress: string;
   receiverAddress: string;
   otp: string;
 }

@@ -18,7 +18,6 @@ export const generateCSV = async (
             `Invalid amount for beneficiary ${beneficiary.id}: must be greater than 1`
           );
         }
-
         const randomNumber = Math.floor(Math.random() * 100000);
         const reciverId = `RECEIVER_${beneficiary.id}`;
         const paymentId = `PAY_${beneficiary.id}_${randomNumber}`;
