@@ -87,14 +87,18 @@ export class CreateStakeholderDto {
   phone: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'Designation is required' })
   designation: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'Organization is required' })
   organization: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'District is required' })
   district: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'Municipality is required' })
   municipality: string;
 }

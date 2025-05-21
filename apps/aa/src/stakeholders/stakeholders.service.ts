@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
@@ -18,6 +18,7 @@ import { RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
+import { ValidateStakeholdersResponse } from './dto/type';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -69,10 +70,12 @@ export class StakeholdersService {
 
     // Step 1: Clean and normalize input
 
-    const cleanedPayloads = rData.map(({ phone, ...rest }) => ({
-      ...rest,
-      phone: phone?.trim() || null,
-    }));
+    const cleanedPayloads = rData.validStakeholders.map(
+      ({ phone, ...rest }) => ({
+        ...rest,
+        phone: phone?.trim() || null,
+      })
+    );
 
     // Step 2: Extract non-null phones
     const phonesToCheck = cleanedPayloads
@@ -351,7 +354,9 @@ export class StakeholdersService {
     });
   }
 
-  async validateStakeholders(payload: any[]) {
+  async validateStakeholders(
+    payload: any[]
+  ): Promise<ValidateStakeholdersResponse> {
     const data = payload.map((item) => ({
       name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
       designation: item['Designation']?.trim() || '',
@@ -370,6 +375,7 @@ export class StakeholdersService {
       const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
 
       const errors = await validate(stakeholdersDto);
+      console.log(errors);
 
       if (errors.length > 0) {
         validationErrors.push({
@@ -380,20 +386,33 @@ export class StakeholdersService {
         stakeholders.push(row);
       }
     }
-
     // If any validation errors, throw exception
+
     if (validationErrors.length > 0) {
       console.log(validationErrors);
-      const errorMessages = validationErrors
-        .map((e, i) => {
-          const flattenedErrors = e.errors.flat().join(', ');
-          return `Row ${i + 1}: ${flattenedErrors}`;
-        })
-        .join(',');
-      throw new Error(errorMessages);
+
+      const errorMessages = validationErrors.map((e, i) => {
+        const flattenedErrors = e.errors.flat().join(', ');
+        return {
+          row: i + 1,
+          errors: flattenedErrors,
+        };
+      });
+
+      throw new RpcException({
+        success: false,
+        message: 'Validation failed',
+        meta: {
+          statusCode: 400,
+          message: 'Bad Request',
+          details: errorMessages,
+        },
+      });
     }
 
-    return stakeholders;
+    return {
+      validStakeholders: stakeholders,
+    };
   }
 
   // ***** stakeholders groups end ********** //
