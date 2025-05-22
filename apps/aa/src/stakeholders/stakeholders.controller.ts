@@ -31,7 +31,7 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async bulkAdd(payloads: any) {
-    const normalizedData: AddStakeholdersData[] = Array.isArray(payloads)
+    const normalizedData = Array.isArray(payloads)
       ? payloads
       : Object.values(payloads);
 

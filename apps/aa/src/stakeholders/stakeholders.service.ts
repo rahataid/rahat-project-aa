@@ -1,9 +1,10 @@
 import { ConfigService } from '@nestjs/config';
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
   AddStakeholdersGroups,
+  CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
   GetOneGroup,
@@ -15,6 +16,9 @@ import {
 } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ValidateStakeholdersResponse } from './dto/type';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -58,13 +62,20 @@ export class StakeholdersService {
     });
   }
 
-  async bulkAdd(payloads: AddStakeholdersData[]) {
+  async bulkAdd(payloads: any) {
     this.logger.log('Adding bulk stakeholders...');
+
+    // validate the  parseddata with the stakeholder class
+    const rData = await this.validateStakeholders(payloads);
+
     // Step 1: Clean and normalize input
-    const cleanedPayloads = payloads.map(({ phone, ...rest }) => ({
-      ...rest,
-      phone: phone?.trim() || null,
-    }));
+
+    const cleanedPayloads = rData.validStakeholders.map(
+      ({ phone, ...rest }) => ({
+        ...rest,
+        phone: phone?.trim() || null,
+      })
+    );
 
     // Step 2: Extract non-null phones
     const phonesToCheck = cleanedPayloads
@@ -342,5 +353,67 @@ export class StakeholdersService {
       },
     });
   }
+
+  async validateStakeholders(
+    payload: any[]
+  ): Promise<ValidateStakeholdersResponse> {
+    const data = payload.map((item) => ({
+      name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
+      designation: item['Designation']?.trim() || '',
+      organization: item['Organization']?.trim() || '',
+      district: item['District']?.trim() || '',
+      municipality: item['Municipality']?.trim() || '',
+      phone:
+        item['Mobile #']?.toString().trim() ||
+        item['Phone Number']?.toString().trim() ||
+        '',
+      email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+    }));
+    const validationErrors = [];
+    const stakeholders = [];
+    for (const row of data) {
+      const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
+
+      const errors = await validate(stakeholdersDto);
+      console.log(errors);
+
+      if (errors.length > 0) {
+        validationErrors.push({
+          row,
+          errors: errors.map((error) => Object.values(error.constraints)),
+        });
+      } else {
+        stakeholders.push(row);
+      }
+    }
+    // If any validation errors, throw exception
+
+    if (validationErrors.length > 0) {
+      console.log(validationErrors);
+
+      const errorMessages = validationErrors.map((e, i) => {
+        const flattenedErrors = e.errors.flat().join(', ');
+        return {
+          row: i + 1,
+          errors: flattenedErrors,
+        };
+      });
+
+      throw new RpcException({
+        success: false,
+        message: 'Validation failed',
+        meta: {
+          statusCode: 400,
+          message: 'Bad Request',
+          details: errorMessages,
+        },
+      });
+    }
+
+    return {
+      validStakeholders: stakeholders,
+    };
+  }
+
   // ***** stakeholders groups end ********** //
 }
