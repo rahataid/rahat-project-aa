@@ -29,7 +29,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async disburse(disburseDto: DisburseDto) {
-    return this.stellarService.disburse(disburseDto);
+    return this.stellarService.addDisbursementJobs(disburseDto);
   }
 
   // Send otp to authenticate beneficiary
