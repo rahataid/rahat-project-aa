@@ -66,6 +66,7 @@ export class GetWalletBalanceDto {
 
 export class BeneficiaryRedeemDto {
   @IsString()
+  @ApiProperty({ description: 'Vendor uuid' })
   uuid: string;
 
   @IsNumber()

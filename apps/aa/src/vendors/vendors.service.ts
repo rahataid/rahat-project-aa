@@ -4,7 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
-import { VendorStatsDto } from './dto/vendorStats.dto';
+import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 
@@ -65,6 +65,27 @@ export class VendorsService {
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
       };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getRedemptionRequest(vendorWallet: VendorRedeemDto) {
+    try {
+      const redemptionRequest = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          vendorUid: vendorWallet.uuid,
+        },
+        take: vendorWallet.take || 10,
+        skip: vendorWallet.skip || 0,
+      });
+
+      if (!redemptionRequest.length) {
+        throw new RpcException('No redemption requests found for vendor');
+      }
+
+      return redemptionRequest;
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);

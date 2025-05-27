@@ -101,15 +101,6 @@ export class StellarController {
     return this.stellarService.getWalletStats(address);
   }
 
-  // Returns all redemption requests of a vendor
-  @MessagePattern({
-    cmd: JOBS.STELLAR.GET_REDEMPTION_REQUEST,
-    uuid: process.env.PROJECT_ID,
-  })
-  async getRedemptionRequest(vendorWallet: BeneficiaryRedeemDto) {
-    return this.stellarService.getRedemptionRequest(vendorWallet);
-  }
-
   // Get trigger from on-chain contract
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_ONCHAIN_TRIGGER,

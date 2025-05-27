@@ -473,27 +473,6 @@ export class StellarService {
     };
   }
 
-  async getRedemptionRequest(vendorWallet: BeneficiaryRedeemDto) {
-    try {
-      const redemptionRequest = await this.prisma.beneficiaryRedeem.findMany({
-        where: {
-          vendorUid: vendorWallet.uuid,
-        },
-        take: vendorWallet.take || 10,
-        skip: vendorWallet.skip || 0,
-      });
-
-      if (!redemptionRequest.length) {
-        throw new RpcException('No redemption requests found for vendor');
-      }
-
-      return redemptionRequest;
-    } catch (error) {
-      this.logger.error(error.message);
-      throw new RpcException(error.message);
-    }
-  }
-
   // ---------- Private functions ----------------
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
