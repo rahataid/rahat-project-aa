@@ -48,14 +48,10 @@ export class StellarService {
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue
-  ) {
-    this.receiveService = new ReceiveService();
-    this.transactionService = new TransactionService();
-    this.initializeDisbursementService();
-  }
+    private readonly stellarQueue: Queue,
+    private readonly disbursementService: DisbursementServices
+  ) {}
 
-  private disbursementService: DisbursementServices;
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
@@ -219,6 +215,10 @@ export class StellarService {
           txHash: result.tx.hash,
         },
       });
+
+      return {
+        txHash: result.tx.hash,
+      };
     } catch (error) {
       throw new RpcException(error ? error : 'OTP verification failed');
     }
@@ -614,19 +614,6 @@ export class StellarService {
       this.logger.error(error.message);
       return 0;
     }
-  }
-
-  private async initializeDisbursementService() {
-    const [email, password, tenantName] = await Promise.all([
-      this.getFromSettings('EMAIL'),
-      this.getFromSettings('PASSWORD'),
-      this.getFromSettings('TENANTNAME'),
-    ]);
-    this.disbursementService = new DisbursementServices(
-      email,
-      password,
-      tenantName
-    );
   }
 
   private async getRecentTransaction(address: string) {

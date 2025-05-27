@@ -94,6 +94,7 @@ export const JOBS = {
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
+    DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse_${process.env.PROJECT_ID}`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',

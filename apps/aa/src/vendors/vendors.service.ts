@@ -14,11 +14,10 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 export class VendorsService {
   private readonly logger = new Logger(VendorsService.name);
 
-  receiveService = new ReceiveService();
-
   constructor(
     private prisma: PrismaService,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly receiveService: ReceiveService
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {

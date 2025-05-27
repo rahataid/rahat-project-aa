@@ -60,6 +60,7 @@ export class StellarController {
     return this.stellarService.faucetAndTrustlineService(account);
   }
 
+  // Checks if the wallet address have trustline or not
   @MessagePattern({
     cmd: JOBS.STELLAR.CHECK_TRUSTLINE,
     uuid: process.env.PROJECT_ID,
@@ -68,7 +69,7 @@ export class StellarController {
     return this.stellarService.checkTrustline(account);
   }
 
-  // Returns all the required stats for the disbursement
+  // Returns all the required stats for the disbursement account
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_STELLAR_STATS,
     uuid: process.env.PROJECT_ID,
@@ -77,7 +78,16 @@ export class StellarController {
     return this.stellarService.getDisbursementStats();
   }
 
-  // Return required stats for a vendor address
+  // Returns all the required stats for the wallet
+  @MessagePattern({
+    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getWalletStats(address: GetWalletBalanceDto) {
+    return this.stellarService.getWalletStats(address);
+  }
+
+  // Returns all redemption requests of a vendor
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_REDEMPTION_REQUEST,
     uuid: process.env.PROJECT_ID,
@@ -93,14 +103,6 @@ export class StellarController {
   })
   async getTriggerWithID(trigger: GetTriggerDto) {
     return this.stellarService.getTriggerWithID(trigger);
-  }
-
-  @MessagePattern({
-    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
-    uuid: process.env.PROJECT_ID,
-  })
-  async getWalletStats(address: GetWalletBalanceDto) {
-    return this.stellarService.getWalletStats(address);
   }
 
   // ------ Onchain triggers: Remove after testing ------

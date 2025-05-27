@@ -4,6 +4,7 @@ import { VendorsService } from './vendors.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 
 @Module({
   imports: [
@@ -20,8 +21,14 @@ import { CORE_MODULE } from '../constants';
       },
     ]),
   ],
-  providers: [VendorsService],
+  providers: [
+    VendorsService,
+    {
+      provide: ReceiveService,
+      useValue: new ReceiveService(),
+    },
+  ],
   controllers: [VendorsController],
-  exports: [VendorsService],
+  exports: [VendorsService, ReceiveService],
 })
 export class VendorsModule {}

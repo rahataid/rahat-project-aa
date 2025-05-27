@@ -4,7 +4,7 @@ export class SendOtpDto {
   phoneNumber: string;
 
   @IsOptional()
-  amount: string;
+  amount?: string;
 }
 
 export class SendGroupDto {
