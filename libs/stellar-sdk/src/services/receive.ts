@@ -106,31 +106,36 @@ export class ReceiveService implements IReceiveService {
   }
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
-    const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
-    const server = new Horizon.Server(horizonServer);
+    try {
+      const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
+      const server = new Horizon.Server(horizonServer);
 
-    const senderKeypair = Keypair.fromSecret(senderSk);
-    const senderAccount = await server.loadAccount(senderKeypair.publicKey());
+      const senderKeypair = Keypair.fromSecret(senderSk);
+      const senderAccount = await server.loadAccount(senderKeypair.publicKey());
 
-    const transaction = new TransactionBuilder(senderAccount, {
-      fee: (await server.fetchBaseFee()).toString(),
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: receiverPk,
-          asset,
-          amount,
-        })
-      )
-      .setTimeout(30)
-      .build();
+      const transaction = new TransactionBuilder(senderAccount, {
+        fee: (await server.fetchBaseFee()).toString(),
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          Operation.payment({
+            destination: receiverPk,
+            asset,
+            amount,
+          })
+        )
+        .setTimeout(30)
+        .build();
 
-    transaction.sign(Keypair.fromSecret(senderSk));
+      transaction.sign(Keypair.fromSecret(senderSk));
 
-    const tx = await server.submitTransaction(transaction);
+      const tx = await server.submitTransaction(transaction);
 
-    return { success: 'tokens sent to vendor', tx };
+      return { success: 'tokens sent to vendor', tx };
+    } catch (error: any) {
+      console.log(error.response.data.extras);
+      throw error;
+    }
   }
 
   public async getAccountBalance(wallet: string) {

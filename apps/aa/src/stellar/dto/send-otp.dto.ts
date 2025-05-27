@@ -18,6 +18,12 @@ export class SendAssetDto {
   otp: string;
 }
 
+export class SendAssetByWalletAddressDto {
+  amount: string | number;
+  walletAddress: string;
+  receiverAddress: string;
+}
+
 export class FundAccountDto {
   walletAddress: string;
 

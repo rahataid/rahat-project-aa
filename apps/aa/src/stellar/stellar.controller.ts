@@ -5,6 +5,7 @@ import { JOBS } from '../constants';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  SendAssetByWalletAddressDto,
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
@@ -49,6 +50,19 @@ export class StellarController {
   })
   async sendAssetToVendor(sendAssetDto: SendAssetDto) {
     return this.stellarService.sendAssetToVendor(sendAssetDto);
+  }
+
+  // Send asset to vendor by wallet address
+  @MessagePattern({
+    cmd: JOBS.STELLAR.SEND_ASSET_TO_VENDOR_BY_WALLET,
+    uuid: process.env.PROJECT_ID,
+  })
+  async sendAssetToVendorByWalletAddress(
+    sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
+  ) {
+    return this.stellarService.sendAssetToVendorByWalletAddress(
+      sendAssetByWalletAddressDto
+    );
   }
 
   // Funds account and adds rahat asset trustline

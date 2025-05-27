@@ -7,6 +7,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  SendAssetByWalletAddressDto,
   SendAssetDto,
   SendGroupDto,
   SendOtpDto,
@@ -104,10 +105,15 @@ export class StellarService {
   }
 
   private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+    const beneficiaryRahatAmount = await this.getBenTotal(
+      sendOtpDto?.phoneNumber
+    );
 
-    this.logger.log('Amount: ', amount);
+    const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
+
+    if (Number(amount) > Number(beneficiaryRahatAmount)) {
+      throw new RpcException('Amount is greater than rahat balance');
+    }
 
     if (Number(amount) <= 0) {
       throw new RpcException('Amount must be greater than 0');
@@ -183,15 +189,6 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
-        data: {
-          vendorUid: vendor.uuid,
-          amount: amount as number,
-          transactionType: 'VENDOR',
-          beneficiaryWalletAddress: keys.publicKey,
-        },
-      });
-
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
@@ -206,13 +203,90 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      await this.prisma.beneficiaryRedeem.update({
-        where: {
-          id: beneficiaryRedeem.id,
-        },
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
         data: {
-          hasRedeemed: true,
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
+          hasRedeemed: true,
+        },
+      });
+
+      return {
+        txHash: result.tx.hash,
+      };
+    } catch (error) {
+      throw new RpcException(error ? error : 'OTP verification failed');
+    }
+  }
+
+  async sendAssetToVendorByWalletAddress(
+    sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
+  ) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: sendAssetByWalletAddressDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
+      const beneficiaryRahatAmount = await this.getRahatBalance(
+        sendAssetByWalletAddressDto.walletAddress
+      );
+
+      const amount =
+        sendAssetByWalletAddressDto?.amount || beneficiaryRahatAmount;
+
+      if (Number(amount) > Number(beneficiaryRahatAmount)) {
+        throw new RpcException('Amount is greater than rahat balance');
+      }
+
+      if (Number(amount) <= 0) {
+        throw new RpcException('Amount must be greater than 0');
+      }
+
+      this.logger.log(
+        `Transferring ${amount} to ${sendAssetByWalletAddressDto.receiverAddress}`
+      );
+
+      const keys = await this.getSecretByWallet(
+        sendAssetByWalletAddressDto.walletAddress
+      );
+
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const result = await this.receiveService.sendAsset(
+        keys.privateKey,
+        sendAssetByWalletAddressDto.receiverAddress,
+        amount.toString()
+      );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${sendAssetByWalletAddressDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.tx.hash}`);
+
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          hasRedeemed: true,
         },
       });
 
@@ -515,9 +589,36 @@ export class StellarService {
           { phoneNumber, chain: 'stellar' }
         )
       );
+      this.logger.log(`Beneficiary found: ${ben.address}`);
       return ben;
     } catch (error) {
+      this.logger.log(
+        `Couldn't find secret for phone ${phoneNumber}`,
+        error.message
+      );
       throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
+  }
+
+  private async getSecretByWallet(walletAddress: string) {
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
+          { walletAddress, chain: 'stellar' }
+        )
+      );
+
+      this.logger.log('Beneficiary found: ');
+      return ben;
+    } catch (error) {
+      this.logger.log(
+        `Couldn't find secret for wallet ${walletAddress}`,
+        error.message
+      );
+      throw new RpcException(
+        `Beneficiary with wallet ${walletAddress} not found`
+      );
     }
   }
 
@@ -558,19 +659,24 @@ export class StellarService {
     });
 
     if (!record) {
+      this.logger.log('OTP record not found');
       throw new RpcException('OTP record not found');
     }
 
     const now = new Date();
     if (record.expiresAt < now) {
+      this.logger.log('OTP has expired');
       throw new RpcException('OTP has expired');
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
 
     if (!isValid) {
+      this.logger.log('Invalid OTP or amount mismatch');
       throw new RpcException('Invalid OTP or amount mismatch');
     }
+
+    this.logger.log('OTP verified successfully');
 
     return true;
   }
