@@ -462,11 +462,13 @@ model BeneficiaryRedeem {
   beneficiaryWalletAddress String
   hasRedeemed              Boolean @default(false)
   transactionType          PayoutType
+  amount                   Int   @default(0)
 
   Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
   vendorUid   String?      @db.Uuid()
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
   fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
+  txHash     String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()

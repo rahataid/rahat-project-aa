@@ -27,6 +27,17 @@ export class StakeholdersController {
   }
 
   @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.BULK_ADD,
+    uuid: process.env.PROJECT_ID,
+  })
+  async bulkAdd(payloads: any) {
+    const normalizedData = Array.isArray(payloads)
+      ? payloads
+      : Object.values(payloads);
+
+    return this.stakeholdersService.bulkAdd(normalizedData);
+  }
+  @MessagePattern({
     cmd: JOBS.STAKEHOLDERS.GET_ALL,
     uuid: process.env.PROJECT_ID,
   })
