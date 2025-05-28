@@ -21,6 +21,8 @@ import {
   UpdateTriggerParamsDto,
 } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
+import { DisburseDto } from '../stellar/dto/disburse.dto';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -29,6 +31,7 @@ export class StellarProcessor {
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly beneficiaryService: BeneficiaryService,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
     private readonly stellarService: StellarService
@@ -257,6 +260,55 @@ export class StellarProcessor {
           );
         }
       }
+    }
+  }
+
+  @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
+  async disburseOnchain(job: Job<DisburseDto>) {
+    this.logger.log(
+      'Processing disbursement job...',
+      StellarProcessor.name
+    );
+    const { ...rest } = job.data;
+
+    try {
+      const result = await this.stellarService.disburse(rest);
+
+      this.logger.log(
+        `Disbursement job completed successfully: ${JSON.stringify(
+          result
+        )}`,
+        StellarProcessor.name
+      );
+
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid: rest.groups[0],
+        status: 'STARTED',
+        isDisbursed: false,
+        info: result,
+      });
+
+      // TODO: Add new job to check the status after 3 min 
+
+      return result;
+    } catch (error) {
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid: rest.groups[0],
+        status: 'FAILED',
+        isDisbursed: false,
+        info: {
+          error: error.message,
+          stack: error.stack,
+        }
+      });
+
+      this.logger.error(
+        `Error in disbursement: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+
+      throw error;
     }
   }
 

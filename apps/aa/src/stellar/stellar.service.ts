@@ -56,6 +56,52 @@ export class StellarService {
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
+  async addDisbursementJobs(disburseDto: DisburseDto){
+    const groupUuids =
+      (disburseDto?.groups && disburseDto?.groups.length) > 0
+        ? disburseDto.groups
+        : await this.getGroupsUuids();
+
+    if(groupUuids.length === 0) {
+      this.logger.warn('No groups found for disbursement');
+      return {
+        message: 'No groups found for disbursement',
+        groups: [],
+      }
+    };
+
+    const groups = await this.getGroupsFromUuid(groupUuids);
+
+    this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+
+    this.stellarQueue.addBulk(
+      groups.map(({uuid, tokensReserved}) => ({
+        name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
+        data: {
+          dName: `${tokensReserved.title.toLocaleLowerCase()}_${disburseDto.dName}`,
+          groups: [uuid],
+        },
+        opts: {
+          attempts: 3,
+          delay: 2000,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    )
+
+    return {
+      message: `Disbursement jobs added for ${groups.length} groups`,
+      groups: groups.map((group) => ({
+        uuid: group,
+        status: 'PENDING',
+      })),
+    }
+  }
+
   async disburse(disburseDto: DisburseDto) {
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
@@ -668,14 +714,42 @@ export class StellarService {
 
     return true;
   }
+  private async getGroupsFromUuid(uuids: string[]) {
+    if (!uuids || !uuids.length) {
+      this.logger.warn('No UUIDs provided for group retrieval');
+      return [];
+    }
+    const groups = await this.prisma.beneficiaryGroups.findMany({
+      where: {
+        uuid: {
+          in: uuids,
+        },
+      },
+      include: {
+        tokensReserved: true,
+      },
+    });
+
+    return groups;
+  }
 
   private async getGroupsUuids() {
+
     const benGroups = await this.prisma.beneficiaryGroups.findMany({
       where: {
         tokensReserved: {
-          numberOfTokens: {
-            gt: 0,
-          },
+          AND: [{
+            numberOfTokens: {
+              gt: 0,
+            },
+            // payouts: {
+            //   every: {
+
+            //   }
+            // }
+            
+
+          }]
         },
       },
       select: { uuid: true },
