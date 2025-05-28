@@ -642,6 +642,11 @@ export class StellarService {
       throw new RpcException('OTP record not found');
     }
 
+    if (record.isVerified) {
+      this.logger.log('OTP already verified');
+      throw new RpcException('OTP already verified');
+    }
+
     const now = new Date();
     if (record.expiresAt < now) {
       this.logger.log('OTP has expired');
@@ -656,6 +661,10 @@ export class StellarService {
     }
 
     this.logger.log('OTP verified successfully');
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
 
     return true;
   }
