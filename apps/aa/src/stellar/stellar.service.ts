@@ -7,6 +7,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  SendAssetByWalletAddressDto,
   SendAssetDto,
   SendGroupDto,
   SendOtpDto,
@@ -36,7 +37,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorStatsDto,
+  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
 
@@ -48,14 +49,10 @@ export class StellarService {
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue
-  ) {
-    this.receiveService = new ReceiveService();
-    this.transactionService = new TransactionService();
-    this.initializeDisbursementService();
-  }
+    private readonly stellarQueue: Queue,
+    private readonly disbursementService: DisbursementServices
+  ) {}
 
-  private disbursementService: DisbursementServices;
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
@@ -108,10 +105,15 @@ export class StellarService {
   }
 
   private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const amount =
-      sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
+    const beneficiaryRahatAmount = await this.getBenTotal(
+      sendOtpDto?.phoneNumber
+    );
 
-      this.logger.log('Amount: ', amount);
+    const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
+
+    if (Number(amount) > Number(beneficiaryRahatAmount)) {
+      throw new RpcException('Amount is greater than rahat balance');
+    }
 
     if (Number(amount) <= 0) {
       throw new RpcException('Amount must be greater than 0');
@@ -157,9 +159,23 @@ export class StellarService {
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: verifyOtpDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
       const amount =
         verifyOtpDto?.amount ||
         (await this.getBenTotal(verifyOtpDto?.phoneNumber));
+
+      this.logger.log(
+        `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
+      );
 
       await this.verifyOTP(
         verifyOtpDto.otp,
@@ -169,11 +185,114 @@ export class StellarService {
 
       const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
 
-      return this.receiveService.sendAsset(
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
         amount.toString()
       );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${verifyOtpDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.tx.hash}`);
+
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          hasRedeemed: true,
+        },
+      });
+
+      return {
+        txHash: result.tx.hash,
+      };
+    } catch (error) {
+      throw new RpcException(error ? error : 'OTP verification failed');
+    }
+  }
+
+  async sendAssetToVendorByWalletAddress(
+    sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
+  ) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: sendAssetByWalletAddressDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
+      const beneficiaryRahatAmount = await this.getRahatBalance(
+        sendAssetByWalletAddressDto.walletAddress
+      );
+
+      const amount =
+        sendAssetByWalletAddressDto?.amount || beneficiaryRahatAmount;
+
+      if (Number(amount) > Number(beneficiaryRahatAmount)) {
+        throw new RpcException('Amount is greater than rahat balance');
+      }
+
+      if (Number(amount) <= 0) {
+        throw new RpcException('Amount must be greater than 0');
+      }
+
+      this.logger.log(
+        `Transferring ${amount} to ${sendAssetByWalletAddressDto.receiverAddress}`
+      );
+
+      const keys = await this.getSecretByWallet(
+        sendAssetByWalletAddressDto.walletAddress
+      );
+
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const result = await this.receiveService.sendAsset(
+        keys.privateKey,
+        sendAssetByWalletAddressDto.receiverAddress,
+        amount.toString()
+      );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${sendAssetByWalletAddressDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.tx.hash}`);
+
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          hasRedeemed: true,
+        },
+      });
+
+      return {
+        txHash: result.tx.hash,
+      };
     } catch (error) {
       throw new RpcException(error ? error : 'OTP verification failed');
     }
@@ -214,6 +333,15 @@ export class StellarService {
     return this.computeBeneficiaryTokenDistribution(groups, tokens);
   }
 
+  async getWalletStats(walletBalanceDto: GetWalletBalanceDto) {
+    return {
+      balances: await this.receiveService.getAccountBalance(
+        walletBalanceDto.address
+      ),
+      transactions: await this.getRecentTransaction(walletBalanceDto.address),
+    };
+  }
+
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
       attempts: 3,
@@ -223,13 +351,6 @@ export class StellarService {
         delay: 1000,
       },
     });
-  }
-
-  async getWalletStats(address: GetWalletBalanceDto) {
-    return {
-      balances: await this.receiveService.getAccountBalance(address.address),
-      transactions: await this.getRecentTransaction(address.address),
-    };
   }
 
   async getTriggerWithID(trigger: GetTriggerDto) {
@@ -352,13 +473,6 @@ export class StellarService {
     };
   }
 
-  async getVendorWalletStats(vendorWallet: VendorStatsDto) {
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { uuid: vendorWallet.uuid },
-    });
-    return this.getWalletStats({ address: vendor.walletAddress });
-  }
-
   // ---------- Private functions ----------------
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
@@ -454,9 +568,36 @@ export class StellarService {
           { phoneNumber, chain: 'stellar' }
         )
       );
+      this.logger.log(`Beneficiary found: ${ben.address}`);
       return ben;
     } catch (error) {
+      this.logger.log(
+        `Couldn't find secret for phone ${phoneNumber}`,
+        error.message
+      );
       throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
+  }
+
+  private async getSecretByWallet(walletAddress: string) {
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
+          { walletAddress, chain: 'stellar' }
+        )
+      );
+
+      this.logger.log('Beneficiary found: ');
+      return ben;
+    } catch (error) {
+      this.logger.log(
+        `Couldn't find secret for wallet ${walletAddress}`,
+        error.message
+      );
+      throw new RpcException(
+        `Beneficiary with wallet ${walletAddress} not found`
+      );
     }
   }
 
@@ -468,7 +609,7 @@ export class StellarService {
     const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
     this.logger.log('OTP hash: ', otpHash);
 
-    return await this.prisma.otp.upsert({
+    const otpRes = await this.prisma.otp.upsert({
       where: {
         phoneNumber,
       },
@@ -485,6 +626,10 @@ export class StellarService {
         expiresAt,
       },
     });
+
+    delete otpRes.otpHash;
+
+    return otpRes;
   }
 
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
@@ -493,19 +638,24 @@ export class StellarService {
     });
 
     if (!record) {
+      this.logger.log('OTP record not found');
       throw new RpcException('OTP record not found');
     }
 
     const now = new Date();
     if (record.expiresAt < now) {
+      this.logger.log('OTP has expired');
       throw new RpcException('OTP has expired');
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
 
     if (!isValid) {
+      this.logger.log('Invalid OTP or amount mismatch');
       throw new RpcException('Invalid OTP or amount mismatch');
     }
+
+    this.logger.log('OTP verified successfully');
 
     return true;
   }
@@ -549,19 +699,6 @@ export class StellarService {
       this.logger.error(error.message);
       return 0;
     }
-  }
-
-  private async initializeDisbursementService() {
-    const [email, password, tenantName] = await Promise.all([
-      this.getFromSettings('EMAIL'),
-      this.getFromSettings('PASSWORD'),
-      this.getFromSettings('TENANTNAME'),
-    ]);
-    this.disbursementService = new DisbursementServices(
-      email,
-      password,
-      tenantName
-    );
   }
 
   private async getRecentTransaction(address: string) {

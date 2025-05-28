@@ -5,6 +5,7 @@ import { JOBS } from '../constants';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  SendAssetByWalletAddressDto,
   SendAssetDto,
   SendOtpDto,
 } from './dto/send-otp.dto';
@@ -14,7 +15,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  VendorStatsDto,
+  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
 
@@ -51,6 +52,19 @@ export class StellarController {
     return this.stellarService.sendAssetToVendor(sendAssetDto);
   }
 
+  // Send asset to vendor by wallet address
+  @MessagePattern({
+    cmd: JOBS.STELLAR.SEND_ASSET_TO_VENDOR_BY_WALLET,
+    uuid: process.env.PROJECT_ID,
+  })
+  async sendAssetToVendorByWalletAddress(
+    sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
+  ) {
+    return this.stellarService.sendAssetToVendorByWalletAddress(
+      sendAssetByWalletAddressDto
+    );
+  }
+
   // Funds account and adds rahat asset trustline
   @MessagePattern({
     cmd: JOBS.STELLAR.FUND_STELLAR_ACCOUNT,
@@ -60,6 +74,7 @@ export class StellarController {
     return this.stellarService.faucetAndTrustlineService(account);
   }
 
+  // Checks if the wallet address have trustline or not
   @MessagePattern({
     cmd: JOBS.STELLAR.CHECK_TRUSTLINE,
     uuid: process.env.PROJECT_ID,
@@ -68,7 +83,7 @@ export class StellarController {
     return this.stellarService.checkTrustline(account);
   }
 
-  // Returns all the required stats for the disbursement
+  // Returns all the required stats for the disbursement account
   @MessagePattern({
     cmd: JOBS.STELLAR.GET_STELLAR_STATS,
     uuid: process.env.PROJECT_ID,
@@ -77,13 +92,13 @@ export class StellarController {
     return this.stellarService.getDisbursementStats();
   }
 
-  // Return required stats for a vendor address
+  // Returns all the required stats for the wallet
   @MessagePattern({
-    cmd: JOBS.STELLAR.GET_VENDOR_STATS,
+    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
     uuid: process.env.PROJECT_ID,
   })
-  async getVendorStats(vendorWallet: VendorStatsDto) {
-    return this.stellarService.getVendorWalletStats(vendorWallet);
+  async getWalletStats(address: GetWalletBalanceDto) {
+    return this.stellarService.getWalletStats(address);
   }
 
   // Get trigger from on-chain contract
@@ -93,14 +108,6 @@ export class StellarController {
   })
   async getTriggerWithID(trigger: GetTriggerDto) {
     return this.stellarService.getTriggerWithID(trigger);
-  }
-
-  @MessagePattern({
-    cmd: JOBS.STELLAR.GET_WALLET_BALANCE,
-    uuid: process.env.PROJECT_ID,
-  })
-  async getWalletStats(address: GetWalletBalanceDto) {
-    return this.stellarService.getWalletStats(address);
   }
 
   // ------ Onchain triggers: Remove after testing ------

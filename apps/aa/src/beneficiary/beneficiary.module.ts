@@ -7,10 +7,11 @@ import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { StellarService } from '../stellar/stellar.service';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
+    StellarModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -31,12 +32,7 @@ import { StellarService } from '../stellar/stellar.service';
     }),
   ],
   controllers: [BeneficiaryController],
-  providers: [
-    BeneficiaryService,
-    PrismaService,
-    BeneficiaryStatService,
-    StellarService,
-  ],
+  providers: [BeneficiaryService, PrismaService, BeneficiaryStatService],
   exports: [BeneficiaryService],
 })
 export class BeneficiaryModule {}
