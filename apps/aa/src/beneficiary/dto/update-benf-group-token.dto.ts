@@ -29,5 +29,5 @@ export class UpdateBeneficiaryGroupTokenDto {
     description: 'The disbursement data in JSON format',
   })
   @IsOptional()
-  info: object;
+  info?: object;
 }

@@ -59,29 +59,31 @@ export class StellarService {
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
-  async addDisbursementJobs(disburseDto: DisburseDto){
+  async addDisbursementJobs(disburseDto: DisburseDto) {
     const groupUuids =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
-        : await this.getGroupsUuids();
+        : await this.getDisbursableGroupsUuids();
 
-    if(groupUuids.length === 0) {
+    if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
       return {
         message: 'No groups found for disbursement',
         groups: [],
-      }
-    };
+      };
+    }
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
     this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
 
     this.stellarQueue.addBulk(
-      groups.map(({uuid, tokensReserved}) => ({
+      groups.map(({ uuid, tokensReserved }) => ({
         name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
         data: {
-          dName: `${tokensReserved.title.toLocaleLowerCase()}_${disburseDto.dName}`,
+          dName: `${tokensReserved.title.toLocaleLowerCase()}_${
+            disburseDto.dName
+          }`,
           groups: [uuid],
         },
         opts: {
@@ -94,7 +96,7 @@ export class StellarService {
           },
         },
       }))
-    )
+    );
 
     return {
       message: `Disbursement jobs added for ${groups.length} groups`,
@@ -102,14 +104,14 @@ export class StellarService {
         uuid: group,
         status: 'PENDING',
       })),
-    }
+    };
   }
 
   async disburse(disburseDto: DisburseDto) {
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
-        : await this.getGroupsUuids();
+        : await this.getDisbursableGroupsUuids();
 
     this.logger.log('Token Disburse for: ', groups);
     const bens = await this.getBeneficiaryTokenBalance(groups);
@@ -137,6 +139,10 @@ export class StellarService {
     );
   }
 
+  async getDisbursement(disbursementId: string) {
+    return await this.disbursementService.getDisbursement(disbursementId);
+  }
+
   async sendOtp(sendOtpDto: SendOtpDto) {
     // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
     //   sendOtpDto.phoneNumber
@@ -157,7 +163,7 @@ export class StellarService {
     const amount =
       sendOtpDto?.amount || (await this.getBenTotal(sendOtpDto?.phoneNumber));
 
-      this.logger.log('Amount: ', amount);
+    this.logger.log('Amount: ', amount);
 
     if (Number(amount) <= 0) {
       throw new RpcException('Amount must be greater than 0');
@@ -574,28 +580,31 @@ export class StellarService {
     return groups;
   }
 
-  private async getGroupsUuids() {
-
-    const benGroups = await this.prisma.beneficiaryGroups.findMany({
+  private async getDisbursableGroupsUuids() {
+    const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
-        tokensReserved: {
-          AND: [{
+        AND: [
+          {
             numberOfTokens: {
               gt: 0,
             },
-            // payouts: {
-            //   every: {
-
-            //   }
-            // }
-            
-
-          }]
-        },
+          },
+          { isDisbursed: false },
+          {
+            payout: {
+              is: null,
+            },
+          },
+          {
+            status: {
+              in: ['PENDING', 'FAILED'],
+            },
+          },
+        ],
       },
-      select: { uuid: true },
+      select: { uuid: true, groupId: true },
     });
-    return benGroups.map((group) => group.uuid);
+    return benGroups.map((group) => group.groupId);
   }
 
   private async getFromSettings(key: string) {
@@ -670,13 +679,13 @@ export class StellarService {
         include: {
           tokensReserved: {
             include: {
-              payouts: true,
+              payout: true,
             },
           },
         },
       });
 
-      return beneficiaryGroups.tokensReserved.payouts[0];
+      return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
       throw new Error(`Failed to retrieve payout type: ${error.message}`);
     }

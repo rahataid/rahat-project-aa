@@ -7,6 +7,7 @@ export const DISBURSEMENT = {
   ASSET: '/assets',
   DISBURSEMENT: '/disbursements',
   UPDATE: (disbursementId: string) => `/disbursements/${disbursementId}/status`,
+  GET: (disbursementId: string) => `/disbursements/${disbursementId}`,
   UPLOAD: (disbursementId: string) =>
     `/disbursements/${disbursementId}/instructions`,
 };

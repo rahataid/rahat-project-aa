@@ -1,6 +1,8 @@
 const axios = require('axios');
 import { token } from '../../services/disbursement';
 
+console.log('token', token);
+
 const axiosInstance = axios.create({
   baseURL: process.env['BASE_URL'],
   timeout: 15000,
