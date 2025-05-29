@@ -4,7 +4,7 @@ export class SendOtpDto {
   phoneNumber: string;
 
   @IsOptional()
-  amount: string;
+  amount?: string;
 }
 
 export class SendGroupDto {
@@ -16,6 +16,12 @@ export class SendAssetDto {
   phoneNumber: string;
   receiverAddress: string;
   otp: string;
+}
+
+export class SendAssetByWalletAddressDto {
+  amount: string | number;
+  walletAddress: string;
+  receiverAddress: string;
 }
 
 export class FundAccountDto {

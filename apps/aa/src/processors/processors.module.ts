@@ -9,15 +9,15 @@ import { ContractProcessor } from './contract.processor';
 import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
-import { StellarModule } from '../stellar/stellar.module';
 import { StellarProcessor } from './stellar.processor';
-import { StellarService } from '../stellar/stellar.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
+    StellarModule,
     DataSourceModule,
     PhasesModule,
     BeneficiaryModule,
@@ -45,7 +45,6 @@ import { BQUEUE, CORE_MODULE } from '../constants';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
-    StellarService,
   ],
 })
 export class ProcessorsModule {}
