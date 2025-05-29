@@ -122,6 +122,8 @@ model BeneficiaryGroupTokens {
 
   createdBy String?
 
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt()
   @@map("tbl_beneficiaries_groups_tokens")
 }
 

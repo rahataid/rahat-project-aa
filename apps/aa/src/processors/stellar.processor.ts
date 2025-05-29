@@ -348,11 +348,32 @@ export class StellarProcessor {
         return;
       }
 
+      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
+
+      if(!group) {
+        this.logger.error(`Group ${groupUuid} not found`, StellarProcessor.name);
+        return;
+      }
+
       if (disbursement.status === 'STARTED') {
         this.logger.log(
           `Disbursement ${disbursementID} is in STARTED status, So, adding another queue to check the status of the disbursement after 2 min`,
           StellarProcessor.name
         );
+        // if the group updatedA is more then 60 min, then assume the disbursement is failed
+        if(new Date(group.updatedAt).getTime() > new Date().getTime() - 60 * 60 * 1000) {
+          this.logger.log(`Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`, StellarProcessor.name);
+          await this.beneficiaryService.updateGroupToken({
+            groupUuid,
+            status: 'FAILED',
+            isDisbursed: false,
+            info: {
+              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+              error: 'Something went wrong',
+            },
+          });
+          return;
+        }
 
         // add another queue to check the status of the disbursement after 2 min
         this.stellarQueue.add(
@@ -381,6 +402,7 @@ export class StellarProcessor {
           status: 'FAILED',
           isDisbursed: false,
           info: {
+            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
             error: 'Something went wrong',
           },
         });
@@ -388,7 +410,6 @@ export class StellarProcessor {
         return;
       }
 
-      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
 
       if (disbursement.status === 'COMPLETED') {
         this.logger.log(

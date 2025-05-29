@@ -481,7 +481,10 @@ export class BeneficiaryService {
 
       const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
         where: { groupId: groupUuid },
-        data,
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
       });
 
       this.logger.log(`Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(data)}`);
