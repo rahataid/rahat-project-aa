@@ -62,6 +62,8 @@ export class VendorsService {
       }
 
       return {
+        assignedTokens: await this.getVendorAssignedTokens(vendorWallet.uuid, false),
+        disbursedTokens: await this.getVendorAssignedTokens(vendorWallet.uuid, true),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
       };
@@ -69,6 +71,37 @@ export class VendorsService {
       this.logger.error(error.message);
       throw new RpcException(error.message);
     }
+  }
+
+  async getVendorAssignedTokens(vendorUuid: string, disbursed: boolean = false){
+    try {
+      this.logger.log(`Getting assigned tokens for vendor ${vendorUuid}`);
+
+      const payouts = await this.prisma.payouts.findMany({
+        where: {
+          type: 'VENDOR', 
+          payoutProcessorId: vendorUuid,
+          ...(disbursed && {
+            beneficiaryGroupToken: {
+              isDisbursed: true,
+            }
+          })
+        },
+        include: {
+          beneficiaryGroupToken: true
+        }
+      });
+
+      const totalAssignedTokens = payouts.reduce((acc, payout) => {
+        return acc + Number(payout.beneficiaryGroupToken.numberOfTokens);
+      }, 0);
+
+      return totalAssignedTokens;
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+
   }
 
   async getRedemptionRequest(vendorWallet: VendorRedeemDto) {
@@ -143,4 +176,5 @@ export class VendorsService {
       throw new RpcException(error.message);
     }
   }
+
 }

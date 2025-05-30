@@ -745,11 +745,6 @@ export class StellarService {
               is: null,
             },
           },
-          {
-            status: {
-              in: ['PENDING', 'FAILED'],
-            },
-          },
         ],
       },
       select: { uuid: true, groupId: true },
