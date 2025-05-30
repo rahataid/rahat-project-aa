@@ -3,9 +3,11 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
-import { VendorsService } from '../vendors/vendors.service';
+import { CORE_MODULE } from '../constants';
+import { VendorsModule } from '../vendors/vendors.module';
 @Module({
   imports: [
+    VendorsModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',
@@ -17,9 +19,20 @@ import { VendorsService } from '../vendors/vendors.service';
         },
       },
     ]),
+    ClientsModule.register([
+      {
+        name: CORE_MODULE,
+        transport: Transport.REDIS,
+        options: {
+          host: process.env.REDIS_HOST,
+          port: +process.env.REDIS_PORT,
+          password: process.env.REDIS_PASSWORD,
+        },
+      },
+    ]),
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService, VendorsService],
+  providers: [PayoutsService, PrismaService],
   exports: [PayoutsService],
 })
-export class PayoutsModule {} 
+export class PayoutsModule {}

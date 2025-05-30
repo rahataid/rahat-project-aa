@@ -94,8 +94,10 @@ export const JOBS = {
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
+    DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse_${process.env.PROJECT_ID}`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
     ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
@@ -108,6 +110,7 @@ export const JOBS = {
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
+    GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
