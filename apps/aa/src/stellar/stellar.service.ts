@@ -40,6 +40,7 @@ import {
   BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
+import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Injectable()
 export class StellarService {
@@ -56,29 +57,31 @@ export class StellarService {
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
-  async addDisbursementJobs(disburseDto: DisburseDto){
+  async addDisbursementJobs(disburseDto: DisburseDto) {
     const groupUuids =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
         : await this.getGroupsUuids();
 
-    if(groupUuids.length === 0) {
+    if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
       return {
         message: 'No groups found for disbursement',
         groups: [],
-      }
-    };
+      };
+    }
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
     this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
 
     this.stellarQueue.addBulk(
-      groups.map(({uuid, tokensReserved}) => ({
+      groups.map(({ uuid, tokensReserved }) => ({
         name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
         data: {
-          dName: `${tokensReserved.title.toLocaleLowerCase()}_${disburseDto.dName}`,
+          dName: `${tokensReserved.title.toLocaleLowerCase()}_${
+            disburseDto.dName
+          }`,
           groups: [uuid],
         },
         opts: {
@@ -91,7 +94,7 @@ export class StellarService {
           },
         },
       }))
-    )
+    );
 
     return {
       message: `Disbursement jobs added for ${groups.length} groups`,
@@ -99,7 +102,37 @@ export class StellarService {
         uuid: group,
         status: 'PENDING',
       })),
+    };
+  }
+
+  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+
+    if (typeof beneficiaries === 'string') {
+      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+        beneficiaryWalletAddress: beneficiaries,
+      });
+      return {
+        message: `Transfer to offramp job added for ${beneficiaries}`,
+        beneficiaries: [beneficiaries],
+      };
     }
+
+    beneficiaries.forEach((ben) => {
+      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+        beneficiaryWalletAddress: ben,
+      });
+    });
+
+    return {
+      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+      beneficiaries: beneficiaries.map((ben) => ({
+        walletAddress: ben,
+        status: 'PENDING',
+      })),
+    };
   }
 
   async disburse(disburseDto: DisburseDto) {
@@ -625,7 +658,7 @@ export class StellarService {
     }
   }
 
-  private async getSecretByWallet(walletAddress: string) {
+  public async getSecretByWallet(walletAddress: string) {
     try {
       const ben = await lastValueFrom(
         this.client.send(
@@ -734,22 +767,21 @@ export class StellarService {
   }
 
   private async getGroupsUuids() {
-
     const benGroups = await this.prisma.beneficiaryGroups.findMany({
       where: {
         tokensReserved: {
-          AND: [{
-            numberOfTokens: {
-              gt: 0,
+          AND: [
+            {
+              numberOfTokens: {
+                gt: 0,
+              },
+              // payouts: {
+              //   every: {
+
+              //   }
+              // }
             },
-            // payouts: {
-            //   every: {
-
-            //   }
-            // }
-            
-
-          }]
+          ],
         },
       },
       select: { uuid: true },
@@ -762,7 +794,7 @@ export class StellarService {
     return settings?.value[key];
   }
 
-  private async getRahatBalance(keys) {
+  public async getRahatBalance(keys) {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 

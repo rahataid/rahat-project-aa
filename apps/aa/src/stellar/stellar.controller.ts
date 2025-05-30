@@ -15,9 +15,9 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
+import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Controller('stellar')
 export class StellarController {
@@ -63,6 +63,15 @@ export class StellarController {
     return this.stellarService.sendAssetToVendorByWalletAddress(
       sendAssetByWalletAddressDto
     );
+  }
+
+  // Transfer balance to offramp wallet
+  @MessagePattern({
+    cmd: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async transferToOfframp(transferToOfframpDto: TransferToOfframpDto) {
+    return this.stellarService.transferToOfframpJobs(transferToOfframpDto);
   }
 
   // Funds account and adds rahat asset trustline

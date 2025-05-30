@@ -14,6 +14,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { StellarModule } from '../stellar/stellar.module';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
+    ReceiveService,
   ],
 })
 export class ProcessorsModule {}
