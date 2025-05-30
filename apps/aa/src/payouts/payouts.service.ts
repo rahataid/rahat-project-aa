@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { Payouts } from '@prisma/client';
+import { Payouts, Prisma } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -19,7 +19,8 @@ export class PayoutsService {
     private vendorsService: VendorsService
   ) {}
 
-  async create(createPayoutDto: CreatePayoutDto): Promise<Payouts> {
+  async create(payload: CreatePayoutDto): Promise<Payouts> {
+    const {groupId, ...createPayoutDto} = payload;
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -27,21 +28,21 @@ export class PayoutsService {
 
       const beneficiaryGroup =
         await this.prisma.beneficiaryGroupTokens.findFirst({
-          where: { uuid: createPayoutDto.groupId },
+          where: { uuid: groupId },
         });
 
       if (!beneficiaryGroup) {
         throw new RpcException(
-          `Beneficiary group tokens with UUID '${createPayoutDto.groupId}' not found`
+          `Beneficiary group tokens with UUID '${groupId}' not found`
         );
       }
       const existingPayout = await this.prisma.payouts.findFirst({
-        where: { groupId: createPayoutDto.groupId },
+        where: { beneficiaryGroupToken: { uuid: groupId } },
       });
 
       if (existingPayout) {
         throw new RpcException(
-          `Payout with groupId '${createPayoutDto.groupId}' already exists`
+          `Payout with groupId '${groupId}' already exists`
         );
       }
 
@@ -86,7 +87,12 @@ export class PayoutsService {
       }
 
       const payout = await this.prisma.payouts.create({
-        data: createPayoutDto,
+        data: {
+          ...createPayoutDto,
+          beneficiaryGroupToken: {
+            connect: { uuid: groupId },
+          },
+        },
       });
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
@@ -108,10 +114,15 @@ export class PayoutsService {
 
       const { page, perPage } = payload;
 
-      const query = {
+      const query: Prisma.PayoutsFindManyArgs = {
         include: {
           beneficiaryGroupToken: {
-            include: {
+            select: {
+              uuid: true,
+              status: true,
+              numberOfTokens: true,
+              isDisbursed: true,
+              createdBy: true,
               beneficiaryGroup: {
                 include: {
                   _count: {

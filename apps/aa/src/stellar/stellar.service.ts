@@ -56,11 +56,59 @@ export class StellarService {
   receiveService = new ReceiveService();
   transactionService = new TransactionService();
 
+  async addDisbursementJobs(disburseDto: DisburseDto) {
+    const groupUuids =
+      (disburseDto?.groups && disburseDto?.groups.length) > 0
+        ? disburseDto.groups
+        : await this.getDisbursableGroupsUuids();
+
+    if (groupUuids.length === 0) {
+      this.logger.warn('No groups found for disbursement');
+      return {
+        message: 'No groups found for disbursement',
+        groups: [],
+      };
+    }
+
+    const groups = await this.getGroupsFromUuid(groupUuids);
+
+    this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+
+    this.stellarQueue.addBulk(
+      groups.map(({ uuid, tokensReserved }) => ({
+        name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
+        data: {
+          dName: `${tokensReserved.title.toLocaleLowerCase()}_${
+            disburseDto.dName
+          }`,
+          groups: [uuid],
+        },
+        opts: {
+          attempts: 3,
+          delay: 2000,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    return {
+      message: `Disbursement jobs added for ${groups.length} groups`,
+      groups: groups.map((group) => ({
+        uuid: group,
+        status: 'PENDING',
+      })),
+    };
+  }
+
   async disburse(disburseDto: DisburseDto) {
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
-        : await this.getGroupsUuids();
+        : await this.getDisbursableGroupsUuids();
 
     this.logger.log('Token Disburse for: ', groups);
     const bens = await this.getBeneficiaryTokenBalance(groups);
@@ -86,6 +134,10 @@ export class StellarService {
       `${disburseDto.dName}_file`,
       totalTokens.toString()
     );
+  }
+
+  async getDisbursement(disbursementId: string) {
+    return await this.disbursementService.getDisbursement(disbursementId);
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
@@ -659,19 +711,50 @@ export class StellarService {
 
     return true;
   }
-
-  private async getGroupsUuids() {
-    const benGroups = await this.prisma.beneficiaryGroups.findMany({
+  private async getGroupsFromUuid(uuids: string[]) {
+    if (!uuids || !uuids.length) {
+      this.logger.warn('No UUIDs provided for group retrieval');
+      return [];
+    }
+    const groups = await this.prisma.beneficiaryGroups.findMany({
       where: {
-        tokensReserved: {
-          numberOfTokens: {
-            gt: 0,
-          },
+        uuid: {
+          in: uuids,
         },
       },
-      select: { uuid: true },
+      include: {
+        tokensReserved: true,
+      },
     });
-    return benGroups.map((group) => group.uuid);
+
+    return groups;
+  }
+
+  private async getDisbursableGroupsUuids() {
+    const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: {
+        AND: [
+          {
+            numberOfTokens: {
+              gt: 0,
+            },
+          },
+          { isDisbursed: false },
+          {
+            payout: {
+              is: null,
+            },
+          },
+          {
+            status: {
+              in: ['PENDING', 'FAILED'],
+            },
+          },
+        ],
+      },
+      select: { uuid: true, groupId: true },
+    });
+    return benGroups.map((group) => group.groupId);
   }
 
   private async getFromSettings(key: string) {
@@ -733,13 +816,13 @@ export class StellarService {
         include: {
           tokensReserved: {
             include: {
-              payouts: true,
+              payout: true,
             },
           },
         },
       });
 
-      return beneficiaryGroups.tokensReserved.payouts[0];
+      return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
       throw new Error(`Failed to retrieve payout type: ${error.message}`);
     }

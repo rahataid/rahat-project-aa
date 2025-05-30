@@ -1,10 +1,9 @@
-import { Process, Processor } from '@nestjs/bull';
+import { InjectQueue, Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job, Queue } from 'bull';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
 import { SettingsService } from '@rumsan/settings';
-import { PrismaService } from '@rumsan/prisma';
 import {
   Keypair,
   Networks,
@@ -21,6 +20,12 @@ import {
   UpdateTriggerParamsDto,
 } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
+import {
+  DisburseDto,
+  IDisbursementResultDto,
+} from '../stellar/dto/disburse.dto';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { IDisbursementStatusJob } from './types';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -29,9 +34,11 @@ export class StellarProcessor {
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly beneficiaryService: BeneficiaryService,
     private readonly settingService: SettingsService,
-    private readonly prisma: PrismaService,
-    private readonly stellarService: StellarService
+    private readonly stellarService: StellarService,
+    @InjectQueue(BQUEUE.STELLAR)
+    private readonly stellarQueue: Queue<IDisbursementStatusJob>
   ) {}
 
   @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
@@ -257,6 +264,185 @@ export class StellarProcessor {
           );
         }
       }
+    }
+  }
+
+  @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
+  async disburseOnchain(job: Job<DisburseDto>) {
+    this.logger.log('Processing disbursement job...', StellarProcessor.name);
+    const { ...rest } = job.data;
+
+    const groupUuid = rest.groups[0];
+
+    try {
+      const result: IDisbursementResultDto = await this.stellarService.disburse(
+        rest
+      );
+
+      this.logger.log(
+        `Disbursement job completed successfully: ${JSON.stringify(result)}`,
+        StellarProcessor.name
+      );
+
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid,
+        status: 'STARTED',
+        isDisbursed: false,
+        info: result,
+      });
+
+      // Job to check the status of the disbursement after 3 min
+      this.stellarQueue.add(
+        JOBS.STELLAR.DISBURSEMENT_STATUS_UPDATE,
+        {
+          disbursementID: result.disbursementID,
+          assetIssuer: result.assetIssuer,
+          groupUuid,
+        },
+        {
+          delay: 3 * 60 * 1000, // 3 min
+        }
+      );
+
+      this.logger.log(`Successfully added disbursement status update job for group ${groupUuid}`, StellarProcessor.name);
+
+      return result;
+    } catch (error) {
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid,
+        status: 'FAILED',
+        isDisbursed: false,
+        info: {
+          error: error.message,
+          stack: error.stack,
+        },
+      });
+
+      this.logger.error(
+        `Error in disbursement: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+
+      throw error;
+    }
+  }
+
+  @Process({ name: JOBS.STELLAR.DISBURSEMENT_STATUS_UPDATE, concurrency: 1 })
+  async disbursementStatusUpdate(job: Job<IDisbursementStatusJob>) {
+    try {
+      this.logger.log(
+        'Processing disbursement status update job...',
+        StellarProcessor.name
+      );
+
+      const { disbursementID, assetIssuer, groupUuid } = job.data;
+
+      const disbursement = await this.stellarService.getDisbursement(
+        disbursementID
+      );
+
+      if(!disbursement) {
+        this.logger.error(`Disbursement ${disbursementID} not found`, StellarProcessor.name);
+
+        return;
+      }
+
+      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
+
+      if(!group) {
+        this.logger.error(`Group ${groupUuid} not found`, StellarProcessor.name);
+        return;
+      }
+
+      if (disbursement.status === 'STARTED') {
+        this.logger.log(
+          `Disbursement ${disbursementID} is in STARTED status, So, adding another queue to check the status of the disbursement after 2 min`,
+          StellarProcessor.name
+        );
+        // if the group updatedA is more then 60 min, then assume the disbursement is failed
+        if(new Date(group.updatedAt).getTime() > new Date().getTime() - 60 * 60 * 1000) {
+          this.logger.log(`Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`, StellarProcessor.name);
+          await this.beneficiaryService.updateGroupToken({
+            groupUuid,
+            status: 'FAILED',
+            isDisbursed: false,
+            info: {
+              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+              error: 'Something went wrong',
+            },
+          });
+          return;
+        }
+
+        // add another queue to check the status of the disbursement after 2 min
+        this.stellarQueue.add(
+          JOBS.STELLAR.DISBURSEMENT_STATUS_UPDATE,
+          {
+            disbursementID: disbursementID,
+            assetIssuer: assetIssuer,
+            groupUuid,
+          },
+          {
+            delay: 2 * 60 * 1000, // 2 min
+          }
+        );
+        return;
+      }
+
+      if (disbursement.status === 'FAILED' || disbursement.status === 'ERROR') {
+        this.logger.log(
+          `Disbursement ${disbursementID} is in FAILED status`,
+          StellarProcessor.name
+        );
+
+        // update the status of the disbursement in the database
+        await this.beneficiaryService.updateGroupToken({
+          groupUuid,
+          status: 'FAILED',
+          isDisbursed: false,
+          info: {
+            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+            error: 'Something went wrong',
+          },
+        });
+
+        return;
+      }
+
+
+      if (disbursement.status === 'COMPLETED') {
+        this.logger.log(
+          `Disbursement ${disbursementID} is in COMPLETED status`,
+          StellarProcessor.name
+        );
+
+        // update the status of the disbursement in the database
+        await this.beneficiaryService.updateGroupToken({
+          groupUuid,
+          status: 'COMPLETED',
+          isDisbursed: true,
+          info: {
+            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+            disbursement,
+          }
+        });
+        return;
+      }
+
+      this.logger.log(
+        `Disbursement ${disbursementID} is in ${disbursement.status} status`,
+        StellarProcessor.name
+      );
+      
+      return;
+    } catch (error) {
+      this.logger.error(
+        `Error in disbursement status update: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
     }
   }
 

@@ -85,6 +85,16 @@ export const updateDisbursementStatus = async (disbursementId: string) => {
   });
 };
 
+export const getDisbursement = async (disbursementId: string) => {
+  try {
+    const res = await axiosInstance.get(DISBURSEMENT.GET(disbursementId));
+    return res.data;
+  } catch (error: any) {
+    console.log("Error while getting disbursement", error.message);
+    return null;
+  }
+};
+
 export const uploadDisbursementFile = async (
   disbursementID: string,
   fileBuffer: Buffer,
