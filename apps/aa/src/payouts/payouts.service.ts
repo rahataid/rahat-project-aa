@@ -9,6 +9,8 @@ import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import { AppService } from '../app/app.service';
+import { IPaymentProvider } from './dto/types';
+import { AxiosResponse } from 'axios';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -24,7 +26,7 @@ export class PayoutsService {
   ) {}
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
-    const {groupId, ...createPayoutDto} = payload;
+    const { groupId, ...createPayoutDto } = payload;
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -143,7 +145,7 @@ export class PayoutsService {
           createdAt: 'desc',
         },
       };
-      
+
       const result: PaginatedResult<Payouts> = await paginate(
         this.prisma.payouts,
         query,
@@ -236,23 +238,33 @@ export class PayoutsService {
     }
   }
 
-  async getPaymentProvider(): Promise<any> {
-    const paymentProvider = await this.appService.getSettings({ name: 'OFFRAMP_SETTINGS' });
+  async getPaymentProvider(): Promise<IPaymentProvider[]> {
+    const paymentProvider = await this.appService.getSettings({
+      name: 'OFFRAMP_SETTINGS',
+    });
 
-    if(!paymentProvider) {
+    if (!paymentProvider) {
       throw new RpcException(`Payment provider not found in settings.`);
-    };
+    }
 
     const url = paymentProvider?.value?.url as string;
 
-    if(!url) {
+    if (!url) {
       throw new RpcException(`Payment provider url not found in settings.`);
     }
     try {
-      const { data } = await this.httpService.axiosRef.get(`${url}/payment-provider`);
+      const {
+        data: { data },
+      } = await this.httpService.axiosRef.get<{
+        success: boolean;
+        data: IPaymentProvider[];
+      }>(`${url}/payment-provider`);
+
       return data;
     } catch (error) {
-      throw new RpcException(`Failed to fetch payment provider: ${error.message}`);
+      throw new RpcException(
+        `Failed to fetch payment provider: ${error.message}`
+      );
     }
   }
 }
