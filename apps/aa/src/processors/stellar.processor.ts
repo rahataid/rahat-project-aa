@@ -420,7 +420,7 @@ export class StellarProcessor {
         // update the status of the disbursement in the database
         await this.beneficiaryService.updateGroupToken({
           groupUuid,
-          status: 'COMPLETED',
+          status: 'DISBURSED',
           isDisbursed: true,
           info: {
             ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
@@ -434,7 +434,7 @@ export class StellarProcessor {
         `Disbursement ${disbursementID} is in ${disbursement.status} status`,
         StellarProcessor.name
       );
-      
+
       return;
     } catch (error) {
       this.logger.error(
