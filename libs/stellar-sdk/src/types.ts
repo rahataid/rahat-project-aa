@@ -8,6 +8,20 @@ export interface IDisbursementService {
   getDistributionAddress(tenantName: string): Promise<any>;
 }
 
+export interface IDisbursement {
+  id: string;
+  name: string;
+  status_history: {
+    user_id: string;
+    status: string;
+    timestamp: string;
+  }[];
+  amount_disbursed: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IReceiveService {
   createReceiverAccount(): Promise<any>;
   sendOTP(

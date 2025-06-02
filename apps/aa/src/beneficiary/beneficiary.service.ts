@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
@@ -14,6 +14,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { StellarService } from '../stellar/stellar.service';
+import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -30,13 +31,13 @@ interface PaginateResult<T> {
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
+  private readonly logger = new Logger(BeneficiaryService.name);
   constructor(
     protected prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
     private eventEmitter: EventEmitter2,
-    private readonly stellarService: StellarService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -277,11 +278,13 @@ export class BeneficiaryService {
       )
     );
 
+    const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
+
     data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
       let token = null;
 
       if (benfGroup.tokensReserved) {
-        token = benfGroup.tokensReserved.numberOfTokens;
+        token = Math.floor(benfGroup.tokensReserved.numberOfTokens/totalBenf);
       }
 
       return {
@@ -437,6 +440,14 @@ export class BeneficiaryService {
     };
   }
 
+  async getOneTokenReservationByGroupId(groupId: string) {
+    const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
+      where: { groupId: groupId },
+    });
+    
+    return benfGroupToken;
+  }
+
   async getReservationStats(payload) {
     const totalReservedTokens = await this.prisma.beneficiary.aggregate({
       _sum: {
@@ -463,6 +474,27 @@ export class BeneficiaryService {
           },
         });
       });
+    }
+  }
+
+  async updateGroupToken(payload: UpdateBeneficiaryGroupTokenDto & { groupUuid: string }) {
+    try {
+      const { groupUuid, ...data } = payload;
+
+      const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
+        where: { groupId: groupUuid },
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(`Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(data)}`);
+
+      return benfGroupToken;
+    } catch (error) {
+      this.logger.error(`Error updating group token: ${error}`);
+      throw error;
     }
   }
 
