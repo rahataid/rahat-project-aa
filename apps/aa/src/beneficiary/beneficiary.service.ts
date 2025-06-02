@@ -278,11 +278,13 @@ export class BeneficiaryService {
       )
     );
 
+    const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
+
     data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
       let token = null;
 
       if (benfGroup.tokensReserved) {
-        token = benfGroup.tokensReserved.numberOfTokens;
+        token = Math.floor(benfGroup.tokensReserved.numberOfTokens/totalBenf);
       }
 
       return {
@@ -438,6 +440,14 @@ export class BeneficiaryService {
     };
   }
 
+  async getOneTokenReservationByGroupId(groupId: string) {
+    const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
+      where: { groupId: groupId },
+    });
+    
+    return benfGroupToken;
+  }
+
   async getReservationStats(payload) {
     const totalReservedTokens = await this.prisma.beneficiary.aggregate({
       _sum: {
@@ -470,19 +480,20 @@ export class BeneficiaryService {
   async updateGroupToken(payload: UpdateBeneficiaryGroupTokenDto & { groupUuid: string }) {
     try {
       const { groupUuid, ...data } = payload;
-      const  tokenGroup = await this.prisma.beneficiaryGroupTokens.findUnique({
-        where: { groupId: groupUuid },
-      });
 
       const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
-        where: { uuid: tokenGroup.uuid },
-        data,
+        where: { groupId: groupUuid },
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
       });
 
-      this.logger.log(`Group token with uuid ${tokenGroup.uuid} updated: ${JSON.stringify(data)}`);
+      this.logger.log(`Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(data)}`);
 
       return benfGroupToken;
     } catch (error) {
+      this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
   }

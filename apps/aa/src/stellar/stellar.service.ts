@@ -61,7 +61,7 @@ export class StellarService {
     const groupUuids =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
-        : await this.getGroupsUuids();
+        : await this.getDisbursableGroupsUuids();
 
     if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
@@ -139,7 +139,7 @@ export class StellarService {
     const groups =
       (disburseDto?.groups && disburseDto?.groups.length) > 0
         ? disburseDto.groups
-        : await this.getGroupsUuids();
+        : await this.getDisbursableGroupsUuids();
 
     this.logger.log('Token Disburse for: ', groups);
     const bens = await this.getBeneficiaryTokenBalance(groups);
@@ -165,6 +165,10 @@ export class StellarService {
       `${disburseDto.dName}_file`,
       totalTokens.toString()
     );
+  }
+
+  async getDisbursement(disbursementId: string) {
+    return await this.disbursementService.getDisbursement(disbursementId);
   }
 
   async sendOtp(sendOtpDto: SendOtpDto) {
@@ -766,27 +770,26 @@ export class StellarService {
     return groups;
   }
 
-  private async getGroupsUuids() {
-    const benGroups = await this.prisma.beneficiaryGroups.findMany({
+  private async getDisbursableGroupsUuids() {
+    const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
-        tokensReserved: {
-          AND: [
-            {
-              numberOfTokens: {
-                gt: 0,
-              },
-              // payouts: {
-              //   every: {
-
-              //   }
-              // }
+        AND: [
+          {
+            numberOfTokens: {
+              gt: 0,
             },
-          ],
-        },
+          },
+          { isDisbursed: false },
+          {
+            payout: {
+              is: null,
+            },
+          },
+        ],
       },
-      select: { uuid: true },
+      select: { uuid: true, groupId: true },
     });
-    return benGroups.map((group) => group.uuid);
+    return benGroups.map((group) => group.groupId);
   }
 
   private async getFromSettings(key: string) {
@@ -848,13 +851,13 @@ export class StellarService {
         include: {
           tokensReserved: {
             include: {
-              payouts: true,
+              payout: true,
             },
           },
         },
       });
 
-      return beneficiaryGroups.tokensReserved.payouts[0];
+      return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
       throw new Error(`Failed to retrieve payout type: ${error.message}`);
     }

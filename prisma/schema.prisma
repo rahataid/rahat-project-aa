@@ -117,9 +117,13 @@ model BeneficiaryGroupTokens {
   groupId          String            @unique
   beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
-  payouts Payouts[]
+  payoutId String? @unique
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
+
   createdBy String?
 
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt()
   @@map("tbl_beneficiaries_groups_tokens")
 }
 
@@ -132,9 +136,8 @@ model Payouts {
   status           String?
   extras           Json?
 
-  groupId          String            @unique
   payoutProcessorId String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
-  beneficiaryGroupToken BeneficiaryGroupTokens @relation(fields: [groupId], references: [uuid])
+  beneficiaryGroupToken BeneficiaryGroupTokens?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
