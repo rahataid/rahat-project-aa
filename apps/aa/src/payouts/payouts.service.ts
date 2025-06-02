@@ -237,7 +237,7 @@ export class PayoutsService {
   }
 
   async getPaymentProvider(): Promise<any> {
-    const paymentProvider = await this.appService.getSettings({ name: 'PAYMENT_PROVIDERS' });
+    const paymentProvider = await this.appService.getSettings({ name: 'OFFRAMP_SETTINGS' });
 
     if(!paymentProvider) {
       throw new RpcException(`Payment provider not found in settings.`);

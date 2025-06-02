@@ -11,12 +11,12 @@ export const seedPaymentProvider = async () => {
   const url = process.env.PAYMENT_PROVIDER_URL || 'https://api-offramp-dev.rahat.io/v1';
 
   try {
-    const dataSource = await settings.getPublic('PAYMENT_PROVIDERS');
+    const dataSource = await settings.getPublic('OFFRAMP_SETTINGS');
 
     if (dataSource) {
-      console.log('PAYMENT_PROVIDERS already exists');
-      await settings.delete('PAYMENT_PROVIDERS');
-      console.log('Old PAYMENT_PROVIDERS deleted');
+      console.log('OFFRAMP_SETTINGS already exists');
+      await settings.delete('OFFRAMP_SETTINGS');
+      console.log('Old OFFRAMP_SETTINGS deleted');
     }
     const paymentProviderValue = {
       url,
@@ -24,7 +24,7 @@ export const seedPaymentProvider = async () => {
     };
 
     await settings.create({
-      name: 'PAYMENT_PROVIDERS',
+      name: 'OFFRAMP_SETTINGS',
       value: paymentProviderValue,
       isPrivate: false,
     });
@@ -35,7 +35,7 @@ export const seedPaymentProvider = async () => {
     };
 
     await settings.create({
-      name: 'PAYMENT_PROVIDERS',
+      name: 'OFFRAMP_SETTINGS',
       value: paymentProviderValue,
       isPrivate: false,
     });
