@@ -278,11 +278,13 @@ export class BeneficiaryService {
       )
     );
 
+    const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
+
     data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
       let token = null;
 
       if (benfGroup.tokensReserved) {
-        token = benfGroup.tokensReserved.numberOfTokens;
+        token = Math.floor(benfGroup.tokensReserved.numberOfTokens/totalBenf);
       }
 
       return {
