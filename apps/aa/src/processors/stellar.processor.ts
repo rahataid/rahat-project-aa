@@ -25,6 +25,7 @@ import { DisburseDto } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
 import { ReceiveService } from '@rahataid/stellar-sdk';
+import { SendOtpDto } from '../stellar/dto/send-otp.dto';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -136,34 +137,6 @@ export class StellarProcessor {
     }
   }
 
-  @Process({
-    name: JOBS.STELLAR.FAUCET_TRUSTLINE,
-    concurrency: 10,
-  })
-  async faucetAndTrustline(
-    job: Job<{ walletAddress: string; secretKey: string }>
-  ) {
-    this.logger.log(
-      'Processing faucet and trustline job...',
-      StellarProcessor.name
-    );
-    const { walletAddress, secretKey } = job.data;
-
-    try {
-      await this.stellarService.faucetAndTrustlineService({
-        walletAddress,
-        secretKey,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Error in faucet and trustline: ${JSON.stringify(error)}`,
-        error.stack,
-        StellarProcessor.name
-      );
-      throw error;
-    }
-  }
-
   @Process(JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE)
   async updateTriggerParamsOnchain(job: Job<UpdateTriggerParamsDto>) {
     this.logger.log(
@@ -266,6 +239,34 @@ export class StellarProcessor {
     }
   }
 
+  @Process({
+    name: JOBS.STELLAR.FAUCET_TRUSTLINE,
+    concurrency: 10,
+  })
+  async faucetAndTrustline(
+    job: Job<{ walletAddress: string; secretKey: string }>
+  ) {
+    this.logger.log(
+      'Processing faucet and trustline job...',
+      StellarProcessor.name
+    );
+    const { walletAddress, secretKey } = job.data;
+
+    try {
+      await this.stellarService.faucetAndTrustlineService({
+        walletAddress,
+        secretKey,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error in faucet and trustline: ${JSON.stringify(error)}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
+    }
+  }
+
   @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
   async disburseOnchain(job: Job<DisburseDto>) {
     this.logger.log('Processing disbursement job...', StellarProcessor.name);
@@ -363,24 +364,24 @@ export class StellarProcessor {
     }
   }
 
-  /*
   @Process({ name: JOBS.STELLAR.SEND_GROUP_OTP, concurrency: 1 })
-  async sendGroupOTP(job: Job<{ phoneNumber: string[] }>) {
+  async sendGroupOTP(job: Job<{ ben: SendOtpDto }>) {
     this.logger.log('Processing send group OTP job...', StellarProcessor.name);
-    const { phoneNumber } = job.data;
+    const { ben } = job.data;
 
-    // try {
-    //   await this.stellarService.sendGroupOTP({ phoneNumber });
-    // } catch (error) {
-    //   this.logger.error(
-    //     `Error in send group OTP: ${JSON.stringify(error)}`,
-    //     error.stack,
-    //     StellarProcessor.name
-    //   );
-    //   throw error;
-    // }
+    this.logger.log(`Sending OTP to ${ben.phoneNumber}`);
+
+    try {
+      const otp = await this.stellarService.sendOtpByPhone(ben);
+    } catch (error) {
+      this.logger.error(
+        `Error in send group OTP: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
+    }
   }
-  */
 
   // Private functions
   private async createTransaction(trigger: AddTriggerDto) {

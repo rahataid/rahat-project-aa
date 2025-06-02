@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsJSON, IsOptional, IsString } from 'class-validator';
 
 export class TransferToOfframpDto {
   @ApiProperty({

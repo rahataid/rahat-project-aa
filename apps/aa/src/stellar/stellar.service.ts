@@ -183,7 +183,7 @@ export class StellarService {
     return this.sendOtpByPhone(sendOtpDto);
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+  public async sendOtpByPhone(sendOtpDto: SendOtpDto) {
     const beneficiaryRahatAmount = await this.getBenTotal(
       sendOtpDto?.phoneNumber
     );

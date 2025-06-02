@@ -113,6 +113,7 @@ export const JOBS = {
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
     TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
+    SEND_GROUP_OTP: 'aa.jobs.stellar.sendGroupOtp',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
