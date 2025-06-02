@@ -120,6 +120,7 @@ export const JOBS = {
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',
     UPDATE: 'aa.jobs.payout.update',
+    GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',

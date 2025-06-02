@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { Payouts, Prisma } from '@prisma/client';
@@ -7,6 +8,7 @@ import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
+import { AppService } from '../app/app.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -16,7 +18,9 @@ export class PayoutsService {
 
   constructor(
     private prisma: PrismaService,
-    private vendorsService: VendorsService
+    private vendorsService: VendorsService,
+    private appService: AppService,
+    private httpService: HttpService
   ) {}
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
@@ -229,6 +233,26 @@ export class PayoutsService {
         error.stack
       );
       throw new RpcException(error.message);
+    }
+  }
+
+  async getPaymentProvider(): Promise<any> {
+    const paymentProvider = await this.appService.getSettings({ name: 'PAYMENT_PROVIDERS' });
+
+    if(!paymentProvider) {
+      throw new RpcException(`Payment provider not found in settings.`);
+    };
+
+    const url = paymentProvider?.value?.url as string;
+
+    if(!url) {
+      throw new RpcException(`Payment provider url not found in settings.`);
+    }
+    try {
+      const { data } = await this.httpService.axiosRef.get(`${url}/payment-provider`);
+      return data;
+    } catch (error) {
+      throw new RpcException(`Failed to fetch payment provider: ${error.message}`);
     }
   }
 }

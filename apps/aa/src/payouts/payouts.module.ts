@@ -5,9 +5,13 @@ import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
 import { CORE_MODULE } from '../constants';
 import { VendorsModule } from '../vendors/vendors.module';
+import { AppService } from '../app/app.service';
+import { HttpModule} from '@nestjs/axios';
+
 @Module({
   imports: [
     VendorsModule,
+    HttpModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',
@@ -32,7 +36,7 @@ import { VendorsModule } from '../vendors/vendors.module';
     ]),
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService],
+  providers: [PayoutsService, PrismaService, AppService],
   exports: [PayoutsService],
 })
 export class PayoutsModule {}

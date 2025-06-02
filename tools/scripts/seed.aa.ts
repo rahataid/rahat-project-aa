@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import { seedProject } from '../../prisma/seed-project';
 import { seedStellar } from '../../prisma/seed-stellar';
+import { seedPaymentProvider } from '../../prisma/seed-payment-provider';
 import * as readline from 'readline';
 import * as path from 'path';
 
@@ -386,6 +387,9 @@ async function modifyEnvAndSettings(
     console.log('ProjectInfo seeded successfully.');
     await seedStellar();
     console.log('Stellar seeded successfully.');
+
+    await seedPaymentProvider();
+    console.log('Payment provider seeded successfully.');
 
     console.log(envPath);
     console.log('File updated.');
