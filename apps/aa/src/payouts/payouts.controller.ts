@@ -28,4 +28,9 @@ export class PayoutsController {
   update(@Payload() updatePayoutDto: UpdatePayoutDto & { uuid: string }) {
     return this.payoutsService.update(updatePayoutDto.uuid, updatePayoutDto);
   }
+
+  @MessagePattern({ cmd: JOBS.PAYOUT.GET_PAYMENT_PROVIDERS, uuid: process.env.PROJECT_ID })
+  getPaymentProviders() {
+    return this.payoutsService.getPaymentProvider();
+  }
 } 
