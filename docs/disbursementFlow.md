@@ -1,1 +1,115 @@
-# intro
+
+## 📄 Concept Note
+
+**Modular Disbursement Architecture for Rahat**
+### Background:
+
+The Rahat platform facilitates anticipatory cash and voucher assistance (AA-CVA) through blockchain-based disbursements to beneficiaries. The current implementation leverages the **Stellar blockchain** for its speed, low cost, and stablecoin support (e.g., USDC on Stellar).
+
+However, to expand interoperability and tap into a broader ecosystem of tools, wallets, and integrations in the **Ethereum and EVM-compatible chains**, we propose developing a **modular EVM disbursement package**. This module will function alongside the existing Stellar disbursement module under a unified interface.
+
+### Objective:
+
+To abstract and decouple the disbursement logic from a single blockchain dependency, enabling **plug-and-play disbursement adapters** (Stellar, EVM, or future integrations like Solana, Celo, etc.).
+
+---
+
+### Goals:
+
+* **Maintain the existing Stellar disbursement workflow.**
+* **Introduce a new EVM-compatible disbursement module** as a plug-in package.
+* Create a **common interface and dispatcher logic** to handle multi-chain disbursement logic.
+* Enable **project-level configuration** to select the disbursement method (Stellar, EVM, or custom).
+* Ensure **auditability, reliability, and abstraction** across disbursement systems.
+
+---
+
+### System Components:
+
+1. **Disbursement Interface Layer**
+   Common interface for initiating and tracking disbursements, decoupled from specific blockchain implementations.
+
+2. **Stellar Module**
+   Existing logic with support for token transfer, beneficiary wallet creation, and tracking on Stellar.
+
+3. **EVM Module** *(New)*
+   A new package that:
+
+   * Uses Web3.js/ethers.js for smart contract interactions.
+   * Supports token disbursement via ERC-20 contracts.
+   * Handles wallet verification (EOAs or smart wallets like Safe or Circle).
+
+4. **Dispatcher/Router Logic**
+   Routes the disbursement request to the appropriate module based on project configuration.
+
+---
+
+### Architecture Diagram:
+
+```plaintext
+                      +---------------------+
+                      |     Admin Panel     |
+                      +---------------------+
+                                 |
+                                 v
+                  +-------------------------------+
+                  | Disbursement Interface Layer  |
+                  +-------------------------------+
+                         |                 |
+             +------------------+   +------------------+
+             |  Stellar Module  |   |   EVM Module     |
+             | (Existing Logic) |   | (New Package)    |
+             +------------------+   +------------------+
+                         |                 |
+                         |                 |
+                 +-------------------------------+
+                 | Blockchain Transaction Layer  |
+                 +-------------------------------+
+                         |                 |
+                  Stellar Network     EVM Network(s)
+```
+
+---
+
+### Flow Diagram: Disbursement Process (Abstracted)
+
+```plaintext
+[Start Disbursement Request]
+            |
+            v
++-----------------------------+
+| Load Project Configuration |
++-----------------------------+
+            |
+            v
++-------------------------------+
+| Determine Disbursement Type  |
+|    (Stellar / EVM / Other)   |
++-------------------------------+
+        /              \
+       v                v
+[Stellar Module]     [EVM Module]
+       |                |
+[Send Token]       [Send Token]
+       |                |
+[Track Txn]         [Track Txn]
+       \                /
+            v
+    [Update Disbursement Status]
+            |
+            v
+         [Complete]
+```
+
+
+### Next Steps:
+
+1. Define interface for `DisbursementModule`.
+2. Refactor Stellar module to comply with this interface.
+3. Develop EVM module with:
+
+   * Wallet verification (optional KYC mapping)
+   * ERC20 token disbursement
+   * Smart contract abstraction (upgradeable)
+4. Create dispatch logic based on project config.
+
