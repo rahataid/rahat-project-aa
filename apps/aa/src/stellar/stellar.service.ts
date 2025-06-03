@@ -386,11 +386,32 @@ export class StellarService {
   }
 
   async getWalletStats(walletBalanceDto: GetWalletBalanceDto) {
+    let { address } = walletBalanceDto;
+    // check if address is a phone number or wallet address
+    const isPhone = address.startsWith('+') || address.startsWith('9');
+
+    if (isPhone) {
+      this.logger.log(`Getting wallet stats for phone ${address}`);
+
+      const beneficiary = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
+          address
+        )
+      );
+
+      if (!beneficiary) {
+        throw new RpcException(
+          `Beneficiary not found with wallet ${walletBalanceDto.address}`
+        );
+      }
+
+      address = beneficiary.walletAddress;
+    }
+
     return {
-      balances: await this.receiveService.getAccountBalance(
-        walletBalanceDto.address
-      ),
-      transactions: await this.getRecentTransaction(walletBalanceDto.address),
+      balances: await this.receiveService.getAccountBalance(address),
+      transactions: await this.getRecentTransaction(address),
     };
   }
 
