@@ -7,3 +7,8 @@ export class DisburseDto {
   @IsOptional()
   groups?: string[];
 }
+
+export interface IDisbursementResultDto {
+  disbursementID: string;
+  assetIssuer: string;
+}

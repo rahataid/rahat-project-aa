@@ -30,7 +30,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async disburse(disburseDto: DisburseDto) {
-    return this.stellarService.disburse(disburseDto);
+    return this.stellarService.addDisbursementJobs(disburseDto);
   }
 
   // Send otp to authenticate beneficiary
@@ -98,6 +98,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async getWalletStats(address: GetWalletBalanceDto) {
+    this.logger.log(`Getting wallet stats for ${address.address}`);
     return this.stellarService.getWalletStats(address);
   }
 

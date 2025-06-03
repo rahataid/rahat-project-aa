@@ -7,6 +7,7 @@ import { PaginationBaseDto } from './common';
 import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
+import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -62,9 +63,50 @@ export class VendorsService {
       }
 
       return {
+        assignedTokens: await this.getVendorAssignedTokens(
+          vendorWallet.uuid,
+          false
+        ),
+        disbursedTokens: await this.getVendorAssignedTokens(
+          vendorWallet.uuid,
+          true
+        ),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
       };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorAssignedTokens(
+    vendorUuid: string,
+    disbursed: boolean = false
+  ) {
+    try {
+      this.logger.log(`Getting assigned tokens for vendor ${vendorUuid}`);
+
+      const payouts = await this.prisma.payouts.findMany({
+        where: {
+          type: 'VENDOR',
+          payoutProcessorId: vendorUuid,
+          ...(disbursed && {
+            beneficiaryGroupToken: {
+              isDisbursed: true,
+            },
+          }),
+        },
+        include: {
+          beneficiaryGroupToken: true,
+        },
+      });
+
+      const totalAssignedTokens = payouts.reduce((acc, payout) => {
+        return acc + Number(payout.beneficiaryGroupToken.numberOfTokens);
+      }, 0);
+
+      return totalAssignedTokens;
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);
@@ -86,6 +128,30 @@ export class VendorsService {
       }
 
       return redemptionRequest;
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getTxnAndRedemptionList(payload: VendorRedeemTxnListDto) {
+    try {
+      console.log(payload);
+      const { page, perPage, uuid, txHash } = payload;
+      const query = {
+        where: {
+          vendorUid: uuid,
+          ...(txHash && { txHash }),
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      };
+
+      return paginate(this.prisma.beneficiaryRedeem, query, {
+        page,
+        perPage,
+      });
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);

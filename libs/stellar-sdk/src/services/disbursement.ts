@@ -4,13 +4,14 @@ import {
   createDisbursement,
   updateDisbursementStatus,
   uploadDisbursementFile,
+  getDisbursement,
 } from '../lib/disbursement';
 import { transfer_asset } from '../lib/transferAsset';
 import { AuthService } from '../lib/login';
 import { axiosInstance } from '../lib/axios/axiosInstance';
 import { getDistributionAddress } from '../utils/getDistributionAddress';
 import { STELLAR } from '../constants/routes';
-import { IDisbursementService } from '../types';
+import { IDisbursementService, IDisbursement } from '../types';
 
 export let token: string;
 export class DisbursementServices implements IDisbursementService {
@@ -44,6 +45,18 @@ export class DisbursementServices implements IDisbursementService {
 
   public async getDistributionAddress(tenantName: string) {
     return await getDistributionAddress(tenantName);
+  }
+
+  public async getDisbursement(disbursementId: string): Promise<IDisbursement | null> {
+    const authService = new AuthService(
+      this.tenantName,
+      this.email,
+      this.password
+    );
+
+    token = (await authService.getToken()) as string;
+    const disbursement = await getDisbursement(disbursementId);
+    return disbursement;
   }
 
   // Creates custom asset and fund disbursement account

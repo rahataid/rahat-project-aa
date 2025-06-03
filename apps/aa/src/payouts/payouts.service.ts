@@ -1,12 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { Payouts } from '@prisma/client';
+import { Payouts, Prisma } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
+import { AppService } from '../app/app.service';
+import { IPaymentProvider } from './dto/types';
+import { AxiosResponse } from 'axios';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -16,10 +20,13 @@ export class PayoutsService {
 
   constructor(
     private prisma: PrismaService,
-    private vendorsService: VendorsService
+    private vendorsService: VendorsService,
+    private appService: AppService,
+    private httpService: HttpService
   ) {}
 
-  async create(createPayoutDto: CreatePayoutDto): Promise<Payouts> {
+  async create(payload: CreatePayoutDto): Promise<Payouts> {
+    const { groupId, ...createPayoutDto } = payload;
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -27,21 +34,21 @@ export class PayoutsService {
 
       const beneficiaryGroup =
         await this.prisma.beneficiaryGroupTokens.findFirst({
-          where: { uuid: createPayoutDto.groupId },
+          where: { uuid: groupId },
         });
 
       if (!beneficiaryGroup) {
         throw new RpcException(
-          `Beneficiary group tokens with UUID '${createPayoutDto.groupId}' not found`
+          `Beneficiary group tokens with UUID '${groupId}' not found`
         );
       }
       const existingPayout = await this.prisma.payouts.findFirst({
-        where: { groupId: createPayoutDto.groupId },
+        where: { beneficiaryGroupToken: { uuid: groupId } },
       });
 
       if (existingPayout) {
         throw new RpcException(
-          `Payout with groupId '${createPayoutDto.groupId}' already exists`
+          `Payout with groupId '${groupId}' already exists`
         );
       }
 
@@ -86,7 +93,12 @@ export class PayoutsService {
       }
 
       const payout = await this.prisma.payouts.create({
-        data: createPayoutDto,
+        data: {
+          ...createPayoutDto,
+          beneficiaryGroupToken: {
+            connect: { uuid: groupId },
+          },
+        },
       });
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
@@ -108,10 +120,15 @@ export class PayoutsService {
 
       const { page, perPage } = payload;
 
-      const query = {
+      const query: Prisma.PayoutsFindManyArgs = {
         include: {
           beneficiaryGroupToken: {
-            include: {
+            select: {
+              uuid: true,
+              status: true,
+              numberOfTokens: true,
+              isDisbursed: true,
+              createdBy: true,
               beneficiaryGroup: {
                 include: {
                   _count: {
@@ -128,7 +145,7 @@ export class PayoutsService {
           createdAt: 'desc',
         },
       };
-      
+
       const result: PaginatedResult<Payouts> = await paginate(
         this.prisma.payouts,
         query,
@@ -218,6 +235,36 @@ export class PayoutsService {
         error.stack
       );
       throw new RpcException(error.message);
+    }
+  }
+
+  async getPaymentProvider(): Promise<IPaymentProvider[]> {
+    const paymentProvider = await this.appService.getSettings({
+      name: 'OFFRAMP_SETTINGS',
+    });
+
+    if (!paymentProvider) {
+      throw new RpcException(`Payment provider not found in settings.`);
+    }
+
+    const url = paymentProvider?.value?.url as string;
+
+    if (!url) {
+      throw new RpcException(`Payment provider url not found in settings.`);
+    }
+    try {
+      const {
+        data: { data },
+      } = await this.httpService.axiosRef.get<{
+        success: boolean;
+        data: IPaymentProvider[];
+      }>(`${url}/payment-provider`);
+
+      return data;
+    } catch (error) {
+      throw new RpcException(
+        `Failed to fetch payment provider: ${error.message}`
+      );
     }
   }
 }
