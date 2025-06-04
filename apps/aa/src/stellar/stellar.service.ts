@@ -418,6 +418,7 @@ export class StellarService {
   }
 
   async getWalletStats(walletBalanceDto: GetWalletBalanceDto) {
+    try {
     let { address } = walletBalanceDto;
     // check if address is a phone number or wallet address
     const isPhone = address.startsWith('+') || address.startsWith('9');
@@ -441,10 +442,17 @@ export class StellarService {
       address = beneficiary.walletAddress;
     }
 
+    this.logger.log(`Getting wallet stats for ${address}`);
+
     return {
       balances: await this.receiveService.getAccountBalance(address),
       transactions: await this.getRecentTransaction(address),
     };
+      
+    } catch (error) {
+      this.logger.error('Error getting wallet stats:', error);
+      throw new RpcException(error?.message);
+    }
   }
 
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
