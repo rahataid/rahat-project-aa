@@ -107,6 +107,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async getWalletStats(address: GetWalletBalanceDto) {
+    this.logger.log(`Getting wallet stats for ${address.address}`);
     return this.stellarService.getWalletStats(address);
   }
 
