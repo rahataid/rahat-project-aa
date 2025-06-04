@@ -1,6 +1,8 @@
-import { Horizon } from '@stellar/stellar-sdk';
-import { horizonServer } from '../constants/constant';
+import { Asset, Horizon } from '@stellar/stellar-sdk';
+import { ASSET, horizonServer } from '../constants/constant';
 import { ITransactionService } from '../types';
+import { logger } from '../utils/logger';
+import { transfer_asset } from '../lib/transferAsset';
 
 export class TransactionService implements ITransactionService {
   // Initialize Horizon server
@@ -52,6 +54,13 @@ export class TransactionService implements ITransactionService {
     assetIssuer: string
   ): Promise<boolean> {
     try {
+      const accountExists = await this.checkAccountExists(publicKey);
+
+      if (!accountExists) {
+        logger.warn('Account does not exist');
+        return false;
+      }
+
       const account = await this.server.loadAccount(publicKey);
 
       const trustlineExists = account.balances.some((balance: any) => {
@@ -67,6 +76,45 @@ export class TransactionService implements ITransactionService {
     } catch (error) {
       console.error('Error checking trustline:', error);
       return false;
+    }
+  }
+
+  public async rahatFaucetService(walletAddress: string, amount: string) {
+    try {
+      const accountExists = await this.checkAccountExists(walletAddress);
+
+      if (!accountExists) throw new Error('Account does not exist');
+
+      const hasTrustline = await this.hasTrustline(
+        walletAddress,
+        ASSET.NAME,
+        ASSET.ISSUER
+      );
+
+      if (!hasTrustline) throw new Error('Trustline does not exist');
+
+      await transfer_asset(
+        walletAddress,
+        new Asset(ASSET.NAME, ASSET.ISSUER),
+        amount
+      );
+
+      return { message: 'Funded successfully' };
+    } catch (error: any) {
+      throw new Error(error);
+    }
+  }
+
+  public async checkAccountExists(wallet: string): Promise<boolean> {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      await server.accounts().accountId(wallet).call();
+      return true;
+    } catch (error: any) {
+      if (error.response && error.response.status === 404) {
+        return false;
+      }
+      throw error;
     }
   }
 }

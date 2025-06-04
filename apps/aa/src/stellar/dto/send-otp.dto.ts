@@ -31,6 +31,11 @@ export class FundAccountDto {
   secretKey?: string;
 }
 
+export class RahatFaucetDto {
+  walletAddress: string;
+  amount: string;
+}
+
 export class CheckTrustlineDto {
   walletAddress: string;
 }

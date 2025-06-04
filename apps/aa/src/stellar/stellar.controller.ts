@@ -5,6 +5,7 @@ import { JOBS } from '../constants';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  RahatFaucetDto,
   SendAssetByWalletAddressDto,
   SendAssetDto,
   SendOtpDto,
@@ -136,5 +137,23 @@ export class StellarController {
   })
   async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
     return this.stellarService.updateOnchainTrigger(trigger);
+  }
+
+  // Funds wallet Address with Rahat Asset
+  @MessagePattern({
+    cmd: JOBS.STELLAR.RAHAT_FAUCET,
+    uuid: process.env.PROJECT_ID,
+  })
+  async rahatFaucet(account: RahatFaucetDto) {
+    return this.stellarService.rahatFaucet(account);
+  }
+
+  // ***** Check and verify trustline for all beneficiary ********** //
+  @MessagePattern({
+    cmd: JOBS.STELLAR.CHECK_BULK_TRUSTLINE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async checkBulkTrustline(mode: 'dry' | 'live') {
+    return this.stellarService.checkBulkTrustline(mode);
   }
 }

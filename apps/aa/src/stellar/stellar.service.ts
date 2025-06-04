@@ -7,6 +7,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  RahatFaucetDto,
   SendAssetByWalletAddressDto,
   SendAssetDto,
   SendGroupDto,
@@ -49,6 +50,8 @@ export class StellarService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
+    @InjectQueue(BQUEUE.STELLAR_CHECK_TRUSTLINE)
+    private readonly checkTrustlineQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
     private readonly disbursementService: DisbursementServices
@@ -554,6 +557,36 @@ export class StellarService {
         )
       ),
     };
+  }
+
+  async checkBulkTrustline(mode: 'dry' | 'live') {
+    this.checkTrustlineQueue.add(
+      JOBS.STELLAR.CHECK_BULK_TRUSTLINE_QUEUE,
+      mode,
+      {
+        attempts: 1,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+
+    return {
+      message: 'Check bulk trustline job added',
+    };
+  }
+
+  async rahatFaucet(account: RahatFaucetDto) {
+    try {
+      return this.transactionService.rahatFaucetService(
+        account.walletAddress,
+        account.amount
+      );
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   // ---------- Private functions ----------------

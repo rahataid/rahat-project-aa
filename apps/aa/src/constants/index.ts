@@ -100,6 +100,8 @@ export const JOBS = {
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
+    CHECK_BULK_TRUSTLINE: 'aa.jobs.stellar.checkBulkTrustline',
+    CHECK_BULK_TRUSTLINE_QUEUE: `aa.jobs.stellar.checkBulkTrustlineQueue_${process.env.PROJECT_ID}`,
     ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
     UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
     ADD_ONCHAIN_TRIGGER_QUEUE: `aa.jobs.stellar.getTriggerOnChainQueue_${process.env.PROJECT_ID}`,
@@ -114,6 +116,7 @@ export const JOBS = {
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
     TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
+    RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
@@ -216,6 +219,7 @@ export const BQUEUE = {
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
   STELLAR: 'STELLAR',
+  STELLAR_CHECK_TRUSTLINE: 'STELLAR_CHECK_TRUSTLINE',
 };
 
 export const VULNERABILITY_FIELD = {

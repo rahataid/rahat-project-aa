@@ -14,6 +14,8 @@ import {
 import { add_trustline } from '../lib/addTrustline';
 import axios from 'axios';
 import { IReceiveService } from '../types';
+import { logger } from '../utils/logger';
+import { transfer_asset } from '../lib/transferAsset';
 
 export class ReceiveService implements IReceiveService {
   private assetIssuer: string;
@@ -92,17 +94,29 @@ export class ReceiveService implements IReceiveService {
     walletAddress: string,
     secretKey?: string
   ) {
-    await axios.get(
-      `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
-    );
-    secretKey &&
-      (await add_trustline(
-        walletAddress,
-        secretKey as string,
-        this.assetIssuer,
-        this.assetCode
-      ));
-    return { message: 'Funded successfully' };
+    try {
+      const accountExists = await this.checkAccountExists(walletAddress);
+
+      if (!accountExists) {
+        logger.warn('Funding account');
+        await axios.get(
+          `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
+        );
+      } else {
+        logger.warn('Skipping funding');
+      }
+
+      secretKey &&
+        (await add_trustline(
+          walletAddress,
+          secretKey as string,
+          this.assetIssuer,
+          this.assetCode
+        ));
+      return { message: 'Funded successfully' };
+    } catch (error) {
+      return error;
+    }
   }
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
@@ -139,8 +153,25 @@ export class ReceiveService implements IReceiveService {
   }
 
   public async getAccountBalance(wallet: string) {
-    const server = new Horizon.Server(horizonServer);
-    const account = await server.accounts().accountId(wallet).call();
-    return account.balances;
+    try {
+      const server = new Horizon.Server(horizonServer);
+      const account = await server.accounts().accountId(wallet).call();
+      return account.balances;
+    } catch (error: any) {
+      return error;
+    }
+  }
+
+  public async checkAccountExists(wallet: string): Promise<boolean> {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      await server.accounts().accountId(wallet).call();
+      return true;
+    } catch (error: any) {
+      if (error.response && error.response.status === 404) {
+        return false;
+      }
+      throw error;
+    }
   }
 }

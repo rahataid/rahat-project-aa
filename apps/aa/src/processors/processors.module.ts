@@ -15,6 +15,7 @@ import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
 import { ReceiveService } from '@rahataid/stellar-sdk';
+import { CheckTrustlineProcessor } from './checkTrutline.processor';
 
 @Module({
   imports: [
@@ -37,6 +38,9 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -46,6 +50,7 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
+    CheckTrustlineProcessor,
     ReceiveService,
   ],
 })

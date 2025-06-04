@@ -27,6 +27,9 @@ import { SettingsService } from '@rumsan/settings';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
+    }),
   ],
   controllers: [StellarController],
   providers: [
