@@ -302,6 +302,7 @@ export class StellarService {
         txHash: result.tx.hash,
       };
     } catch (error) {
+      console.log(error);
       throw new RpcException(error ? error : 'OTP verification failed');
     }
   }

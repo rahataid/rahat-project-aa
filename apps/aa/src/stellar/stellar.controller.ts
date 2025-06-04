@@ -65,15 +65,6 @@ export class StellarController {
     );
   }
 
-  // Transfer balance to offramp wallet
-  @MessagePattern({
-    cmd: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
-    uuid: process.env.PROJECT_ID,
-  })
-  async transferToOfframp(transferToOfframpDto: TransferToOfframpDto) {
-    return this.stellarService.transferToOfframpJobs(transferToOfframpDto);
-  }
-
   // Funds account and adds rahat asset trustline
   @MessagePattern({
     cmd: JOBS.STELLAR.FUND_STELLAR_ACCOUNT,
