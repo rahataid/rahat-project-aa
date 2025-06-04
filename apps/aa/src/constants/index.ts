@@ -112,6 +112,7 @@ export const JOBS = {
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
+    TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
   },
   PAYOUT: {

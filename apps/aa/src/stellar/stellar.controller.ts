@@ -15,9 +15,9 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
+import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Controller('stellar')
 export class StellarController {

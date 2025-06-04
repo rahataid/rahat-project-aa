@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StellarModule } from './stellar.module';
-import { StellarService } from './stellar.service';
 import { StellarController } from './stellar.controller';
+import { StellarService } from './stellar.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { PrismaService } from '@rumsan/prisma';
+import { BullModule } from '@nestjs/bull';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 
 describe('StellarModule', () => {
   let module: TestingModule;
@@ -15,59 +18,59 @@ describe('StellarModule', () => {
         EMAIL: 'test@example.com',
         PASSWORD: 'password',
         TENANTNAME: 'test_tenant',
-        SERVER: 'test_server',
-        KEYPAIR: 'test_keypair',
-        CONTRACTID: 'test_contract',
-        VENDORADDRESS: 'test_vendor',
       },
     }),
   };
 
-  const mockBullQueueStellar = {
-    add: jest.fn(),
-    process: jest.fn(),
-    on: jest.fn(),
-  };
+  const mockPrismaService = {};
 
   beforeEach(async () => {
     module = await Test.createTestingModule({
       imports: [
         ClientsModule.register([
           {
-            name: 'RAHAT_CORE_PROJECT_CLIENT',
-            transport: Transport.TCP,
+            name: CORE_MODULE,
+            transport: Transport.REDIS,
             options: {
               host: 'localhost',
-              port: 3000,
+              port: 6379,
             },
           },
         ]),
+        BullModule.registerQueue({
+          name: BQUEUE.STELLAR,
+        }),
       ],
       controllers: [StellarController],
       providers: [
         StellarService,
         {
-          provide: PrismaService,
-          useValue: {
-            beneficiaryGroupTokens: {
-              findMany: jest.fn(),
-            },
-            otp: {
-              upsert: jest.fn(),
-              findUnique: jest.fn(),
-            },
-            beneficiaryGroups: {
-              findMany: jest.fn(),
-            },
-          },
-        },
-        {
           provide: SettingsService,
           useValue: mockSettingsService,
         },
         {
-          provide: 'BullQueue_STELLAR',
-          useValue: mockBullQueueStellar,
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        {
+          provide: ReceiveService,
+          useValue: new ReceiveService(),
+        },
+        {
+          provide: TransactionService,
+          useValue: new TransactionService(),
+        },
+        {
+          provide: DisbursementServices,
+          useFactory: async (settingService: SettingsService) => {
+            const settings = await settingService.getPublic('STELLAR_SETTINGS');
+            const email = settings?.value['EMAIL'];
+            const password = settings?.value['PASSWORD'];
+            const tenantName = settings?.value['TENANTNAME'];
+
+            return new DisbursementServices(email, password, tenantName);
+          },
+          inject: [SettingsService],
         },
       ],
     }).compile();

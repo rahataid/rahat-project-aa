@@ -40,6 +40,7 @@ import {
   BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
+import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Injectable()
 export class StellarService {
@@ -99,6 +100,36 @@ export class StellarService {
       message: `Disbursement jobs added for ${groups.length} groups`,
       groups: groups.map((group) => ({
         uuid: group,
+        status: 'PENDING',
+      })),
+    };
+  }
+
+  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+
+    if (typeof beneficiaries === 'string') {
+      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+        beneficiaryWalletAddress: beneficiaries,
+      });
+      return {
+        message: `Transfer to offramp job added for ${beneficiaries}`,
+        beneficiaries: [beneficiaries],
+      };
+    }
+
+    beneficiaries.forEach((ben) => {
+      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+        beneficiaryWalletAddress: ben,
+      });
+    });
+
+    return {
+      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+      beneficiaries: beneficiaries.map((ben) => ({
+        walletAddress: ben,
         status: 'PENDING',
       })),
     };
@@ -271,6 +302,7 @@ export class StellarService {
         txHash: result.tx.hash,
       };
     } catch (error) {
+      console.log(error);
       throw new RpcException(error ? error : 'OTP verification failed');
     }
   }
@@ -652,7 +684,7 @@ export class StellarService {
     }
   }
 
-  private async getSecretByWallet(walletAddress: string) {
+  public async getSecretByWallet(walletAddress: string) {
     try {
       const ben = await lastValueFrom(
         this.client.send(
@@ -715,6 +747,11 @@ export class StellarService {
       throw new RpcException('OTP record not found');
     }
 
+    if (record.isVerified) {
+      this.logger.log('OTP already verified');
+      throw new RpcException('OTP already verified');
+    }
+
     const now = new Date();
     if (record.expiresAt < now) {
       this.logger.log('OTP has expired');
@@ -729,6 +766,10 @@ export class StellarService {
     }
 
     this.logger.log('OTP verified successfully');
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
 
     return true;
   }
@@ -778,7 +819,7 @@ export class StellarService {
     return settings?.value[key];
   }
 
-  private async getRahatBalance(keys) {
+  public async getRahatBalance(keys) {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
