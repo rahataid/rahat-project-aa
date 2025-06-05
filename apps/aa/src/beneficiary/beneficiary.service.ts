@@ -37,7 +37,7 @@ export class BeneficiaryService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
-    private eventEmitter: EventEmitter2,
+    private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -131,38 +131,73 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto) {
-    const { page, perPage, sort, order, tokenAssigned, search } = dto;
+    const { page, perPage, sort, order, tokenAssigned, search, hasPayout } =
+      dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
-
     const benfGroups = await paginate(
       this.prisma.beneficiaryGroups,
       {
         where: {
-          ...(tokenAssigned === true
-            ? { tokensReserved: { isNot: null } } // only assigned
-            : tokenAssigned === false
-            ? { tokensReserved: null } // only unassigned
-            : {}), // both
-          ...(search && {
-            name: {
-              contains: search,
-              mode: 'insensitive',
-            },
-          }),
+          AND: [
+            { deletedAt: null },
 
-          deletedAt: null,
+            ...(hasPayout === true
+              ? [
+                  {
+                    tokensReserved: {
+                      payoutId: { not: null },
+                    },
+                  },
+                ]
+              : hasPayout === false
+              ? [
+                  {
+                    tokensReserved: {
+                      payoutId: null,
+                    },
+                  },
+                ]
+              : []),
+
+            ...(tokenAssigned === true
+              ? [
+                  {
+                    tokensReserved: {
+                      isNot: null,
+                    },
+                  },
+                ]
+              : tokenAssigned === false
+              ? [
+                  {
+                    tokensReserved: null,
+                  },
+                ]
+              : []),
+
+            ...(search
+              ? [
+                  {
+                    name: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
+                  },
+                ]
+              : []),
+          ],
         },
-      include: {
-        _count: {
-          select: {
-            beneficiaries: true,
+        include: {
+          _count: {
+            select: {
+              beneficiaries: true,
+            },
           },
+          beneficiaries: true,
+          tokensReserved: true,
         },
-        beneficiaries: true,
-        tokensReserved: true,
-      },
         orderBy,
       },
       {
@@ -263,7 +298,7 @@ export class BeneficiaryService {
         tokensReserved: true,
         beneficiaries: {
           include: {
-            beneficiary: true, 
+            beneficiary: true,
           },
         },
       },
@@ -284,7 +319,7 @@ export class BeneficiaryService {
       let token = null;
 
       if (benfGroup.tokensReserved) {
-        token = Math.floor(benfGroup.tokensReserved.numberOfTokens/totalBenf);
+        token = Math.floor(benfGroup.tokensReserved.numberOfTokens / totalBenf);
       }
 
       return {
@@ -305,12 +340,13 @@ export class BeneficiaryService {
       },
     });
 
-    const groupedBeneficiaries = await this.prisma.beneficiaryToGroup.createMany({
-      data: beneficiaryGroupData.groupedBeneficiaries.map((beneficiary) => ({
-        beneficiaryId: beneficiary.beneficiaryId,
-        groupId: beneficiaryGroupData.uuid,
-      })),
-    });
+    const groupedBeneficiaries =
+      await this.prisma.beneficiaryToGroup.createMany({
+        data: beneficiaryGroupData.groupedBeneficiaries.map((beneficiary) => ({
+          beneficiaryId: beneficiary.beneficiaryId,
+          groupId: beneficiaryGroupData.uuid,
+        })),
+      });
 
     return {
       group,
@@ -444,7 +480,7 @@ export class BeneficiaryService {
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
     });
-    
+
     return benfGroupToken;
   }
 
@@ -477,7 +513,9 @@ export class BeneficiaryService {
     }
   }
 
-  async updateGroupToken(payload: UpdateBeneficiaryGroupTokenDto & { groupUuid: string }) {
+  async updateGroupToken(
+    payload: UpdateBeneficiaryGroupTokenDto & { groupUuid: string }
+  ) {
     try {
       const { groupUuid, ...data } = payload;
 
@@ -489,7 +527,11 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(`Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(data)}`);
+      this.logger.log(
+        `Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(
+          data
+        )}`
+      );
 
       return benfGroupToken;
     } catch (error) {
