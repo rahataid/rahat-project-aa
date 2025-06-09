@@ -9,6 +9,7 @@ import {
   Keypair,
   Networks,
   Operation,
+  TimeoutInfinite,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { add_trustline } from '../lib/addTrustline';
@@ -99,9 +100,7 @@ export class ReceiveService implements IReceiveService {
 
       if (!accountExists) {
         logger.warn('Funding account');
-        await axios.get(
-          `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
-        );
+        await this.fundAccount(walletAddress, process.env['FUNDING_AMOUNT']!);
       } else {
         logger.warn('Skipping funding');
       }
@@ -116,6 +115,43 @@ export class ReceiveService implements IReceiveService {
       return { message: 'Funded successfully' };
     } catch (error) {
       return error;
+    }
+  }
+
+  private async fundAccount(receiverPk: string, amount: string) {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      const faucetSecret = process.env['FAUCET_SECRET_KEY']!;
+      const faucetKeypair = Keypair.fromSecret(faucetSecret);
+      const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+
+      const transaction = new TransactionBuilder(faucetAccount, {
+        fee: (await server.fetchBaseFee()).toString(),
+        networkPassphrase:
+          process.env['STELLAR_NETWORK'] === 'mainnet'
+            ? Networks.PUBLIC
+            : Networks.TESTNET,
+      })
+        .addOperation(
+          Operation.createAccount({
+            destination: receiverPk,
+            startingBalance: amount,
+          })
+        )
+        .setTimeout(30)
+        .build();
+
+      transaction.sign(faucetKeypair);
+      const tx = await server.submitTransaction(transaction);
+
+      logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
+      return { success: 'XLM sent to account', tx };
+    } catch (error: any) {
+      logger.error(`Error in fundAccount: ${error.message}`, error.stack);
+      if (error.response?.data?.extras) {
+        logger.error('Stellar error details:', error.response.data.extras);
+      }
+      throw error;
     }
   }
 

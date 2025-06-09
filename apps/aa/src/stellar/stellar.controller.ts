@@ -156,4 +156,13 @@ export class StellarController {
   async checkBulkTrustline(mode: 'dry' | 'live') {
     return this.stellarService.checkBulkTrustline(mode);
   }
+
+  // ***** Remove after internal faucet test ********** //
+  @MessagePattern({
+    cmd: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async internalFaucetAndTrustline(beneficiaries: any) {
+    return this.stellarService.internalFaucetAndTrustline(beneficiaries);
+  }
 }

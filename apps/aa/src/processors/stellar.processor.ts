@@ -26,13 +26,19 @@ import {
 } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { IDisbursementStatusJob } from './types';
+
+type BeneficiaryWallet = {
+  address: string;
+  secret: string;
+};
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
 export class StellarProcessor {
   private readonly logger = Logger;
+  private batchSize = 3;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -40,6 +46,7 @@ export class StellarProcessor {
     private readonly settingService: SettingsService,
     private readonly stellarService: StellarService,
     private readonly receiveService: ReceiveService,
+    private readonly transactionService: TransactionService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>
   ) {}
@@ -158,6 +165,40 @@ export class StellarProcessor {
         walletAddress,
         secretKey,
       });
+    } catch (error) {
+      this.logger.error(
+        `Error in faucet and trustline: ${JSON.stringify(error)}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  @Process({
+    name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+    concurrency: 10,
+  })
+  async internalFaucetAndTrustline(job: Job<BeneficiaryWallet[]>) {
+    this.logger.log(
+      'Processing internal faucet and trustline job...',
+      StellarProcessor.name
+    );
+
+    const wallets = job.data;
+    const walletAddresses = wallets.map((ben) => ben.address);
+
+    const batches = this.batchWalletAddresses(walletAddresses);
+
+    try {
+      Promise.all(
+        batches.map(async (b: string[]) => {
+          await this.transactionService.batchFundAccountXlm(
+            b,
+            process.env.FUNDING_AMOUNT
+          );
+        })
+      );
     } catch (error) {
       this.logger.error(
         `Error in faucet and trustline: ${JSON.stringify(error)}`,
@@ -751,5 +792,13 @@ export class StellarProcessor {
       throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
     }
     return settings.value[key];
+  }
+
+  private batchWalletAddresses(walletAddresses: string[]) {
+    const batches = [];
+    for (let i = 0; i < walletAddresses.length; i += this.batchSize) {
+      batches.push(walletAddresses.slice(i, i + this.batchSize));
+    }
+    return batches;
   }
 }

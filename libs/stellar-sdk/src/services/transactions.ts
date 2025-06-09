@@ -1,4 +1,13 @@
-import { Asset, Horizon } from '@stellar/stellar-sdk';
+import {
+  Asset,
+  Horizon,
+  Keypair,
+  Networks,
+  Operation,
+  StrKey,
+  TimeoutInfinite,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk';
 import { ASSET, horizonServer } from '../constants/constant';
 import { ITransactionService } from '../types';
 import { logger } from '../utils/logger';
@@ -102,6 +111,63 @@ export class TransactionService implements ITransactionService {
       return { message: 'Funded successfully' };
     } catch (error: any) {
       throw new Error(error);
+    }
+  }
+
+  public async batchFundAccountXlm(walletAddresses: string[], amount: string) {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      const faucetSecret = process.env['FAUCET_SECRET_KEY']!;
+      if (!faucetSecret) {
+        logger.error('FAUCET_SECRET_KEY is not set in environment variables');
+      }
+      const faucetKeypair = Keypair.fromSecret(faucetSecret);
+      const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+
+      let txBuilder = new TransactionBuilder(faucetAccount, {
+        fee: (await server.fetchBaseFee()).toString(),
+        networkPassphrase:
+          process.env['STELLAR_NETWORK'] === 'mainnet'
+            ? Networks.PUBLIC
+            : Networks.TESTNET,
+      }).setTimeout(TimeoutInfinite);
+
+      await Promise.all(
+        walletAddresses.map(async (w) => {
+          // Fund Account if account exists
+          if (await this.checkAccountExists(w)) {
+            logger.info(`Account exists, funding account ${w}`);
+            txBuilder.addOperation(
+              Operation.payment({
+                destination: w,
+                asset: Asset.native(),
+                amount,
+              })
+            );
+          } else {
+            // If account doesn't exist, then create account
+            logger.info(`Creating account ${w}`);
+            txBuilder.addOperation(
+              Operation.createAccount({
+                destination: w,
+                startingBalance: amount,
+              })
+            );
+          }
+        })
+      );
+
+      const tx = txBuilder.build();
+
+      tx.sign(faucetKeypair);
+      await server.submitTransaction(tx);
+
+      logger.info('Accounts created or funded successfully');
+
+      return { message: 'Funded successfully' };
+    } catch (error: any) {
+      logger.error(error.response.data.extras);
+      return error;
     }
   }
 

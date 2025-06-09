@@ -112,6 +112,8 @@ export const JOBS = {
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
+    INTERNAL_FAUCET_TRUSTLINE_QUEUE: `aa.jobs.stellar.internalFaucetTrustlineQueue_${process.env.PROJECT_ID}`,
+    INTERNAL_FAUCET_TRUSTLINE: `aa.jobs.stellar.internalFaucetTrustline`,
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
     TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',

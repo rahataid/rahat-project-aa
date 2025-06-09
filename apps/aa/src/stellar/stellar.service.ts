@@ -589,6 +589,22 @@ export class StellarService {
     }
   }
 
+  // ***** Remove after internal faucet test *****
+  async internalFaucetAndTrustline(beneficiaries: any) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+      beneficiaries.wallet,
+      {
+        attempts: 1,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+  }
+
   // ---------- Private functions ----------------
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
