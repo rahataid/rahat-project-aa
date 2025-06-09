@@ -10,7 +10,10 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import { AppService } from '../app/app.service';
 import { IPaymentProvider } from './dto/types';
-import { AxiosResponse } from 'axios';
+import { OfframpService } from './offramp.service';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
+import { BQUEUE, JOBS } from '../constants';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -21,8 +24,10 @@ export class PayoutsService {
   constructor(
     private prisma: PrismaService,
     private vendorsService: VendorsService,
-    private appService: AppService,
-    private httpService: HttpService
+    private offrampService: OfframpService,
+    @InjectQueue(BQUEUE.STELLAR)
+    private readonly stellarQueue: Queue,
+
   ) {}
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
@@ -166,7 +171,13 @@ export class PayoutsService {
     }
   }
 
-  async findOne(uuid: string): Promise<Payouts> {
+  async findOne(uuid: string): Promise<(Payouts & {
+    beneficiaryGroupToken?: {
+      beneficiaryGroup?: {
+        beneficiaries?: any[];
+      };
+    };
+  })> {
     try {
       this.logger.log(`Fetching payout with UUID: '${uuid}'`);
 
@@ -177,10 +188,20 @@ export class PayoutsService {
             include: {
               beneficiaryGroup: {
                 include: {
-                  beneficiaries: true,
+                  beneficiaries: {
+                    include: {
+                      beneficiary: {
+                        select: {
+                          uuid: true,
+                          walletAddress: true,
+                        },
+                      },
+                    },
+                  },
                   _count: {
                     select: {
                       beneficiaries: true,
+
                     },
                   },
                 },
@@ -238,33 +259,64 @@ export class PayoutsService {
     }
   }
 
+
+// fetch addresses
+  async fetchBeneficiaryPayoutWallets(uuid: string): Promise<{ walletAddresses: string[] }> {
+      this.logger.log(`Fetching beneficiary wallet addresses for payout with UUID: '${uuid}'`);
+      
+      const payout = await this.findOne(uuid);
+      
+      if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
+        this.logger.warn(`No beneficiaries found for payout with UUID: '${uuid}'`);
+        return { walletAddresses: [] };
+      }
+      
+      // Extract just the wallet addresses from each beneficiary
+      const walletAddresses = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries
+        .map(benfToGroup => benfToGroup.beneficiary?.walletAddress)
+        .filter(address => address); // Filter out any undefined or null addresses
+      // Check if any wallet addresses are null or undefined after filtering
+      if (walletAddresses.length !== payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length) {
+        this.logger.error(`Some beneficiaries have null or undefined wallet addresses for payout with UUID: '${uuid}'`);
+        throw new RpcException('Some beneficiaries have missing wallet addresses');
+      }
+      
+      this.logger.log(`Successfully fetched ${walletAddresses.length} wallet addresses for payout with UUID: '${uuid}'`);
+      return { walletAddresses };
+    
+  }
+
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
-    const paymentProvider = await this.appService.getSettings({
-      name: 'OFFRAMP_SETTINGS',
-    });
+    return this.offrampService.getPaymentProvider();
+  }
 
-    if (!paymentProvider) {
-      throw new RpcException(`Payment provider not found in settings.`);
-    }
+  async triggerPayout(uuid: string): Promise<any> {
 
-    const url = paymentProvider?.value?.url as string;
+    //TODO: verify trustline of beneficiary wallet addresses
+   
+    const benWalletAddresses = await this.fetchBeneficiaryPayoutWallets(uuid);
+    const offRampWalletAddress = await this.offrampService.getOfframpWalletAddress();
 
-    if (!url) {
-      throw new RpcException(`Payment provider url not found in settings.`);
-    }
-    try {
-      const {
-        data: { data },
-      } = await this.httpService.axiosRef.get<{
-        success: boolean;
-        data: IPaymentProvider[];
-      }>(`${url}/payment-provider`);
+    console.log('Offramp Wallet Address:', offRampWalletAddress);
+    console.log('Beneficiary Wallet Addresses:', benWalletAddresses);
 
-      return data;
-    } catch (error) {
-      throw new RpcException(
-        `Failed to fetch payment provider: ${error.message}`
-      );
-    }
+     // send asset to offramp service`
+    const d= await this.stellarQueue.addBulk(
+      benWalletAddresses.walletAddresses.map((beneficiaryWalletAddress) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: {
+          offRampWalletAddress,
+          beneficiaryWalletAddress,
+          uuid,
+        },
+      }))
+    )
+    console.log('Job added to queue:', d);
+
+    return 'Payout Initiated Successfully';
+
+    // create and execute offramp payout
+
+    this.logger.log(`Payout job added to queue for UUID: ${uuid}`);
   }
 }

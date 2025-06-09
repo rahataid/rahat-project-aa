@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import {
+  ASSET,
   DisbursementServices,
   ReceiveService,
   TransactionService,
@@ -31,10 +32,17 @@ import { SettingsService } from '@rumsan/settings';
   controllers: [StellarController],
   providers: [
     StellarService,
-    {
-      provide: ReceiveService,
-      useValue: new ReceiveService(),
-    },
+       {
+          provide: ReceiveService,
+          useFactory: async (settingsService: SettingsService) => {
+            const stellarSettings = await settingsService.getPublic('STELLAR_SETTINGS');
+            return new ReceiveService(
+              (stellarSettings.value as any).ASSETISSUER || ASSET.ISSUER,
+              (stellarSettings.value as any).ASSETCODE || ASSET.NAME
+            );
+          },
+          inject: [SettingsService]
+        },
     {
       provide: TransactionService,
       useValue: new TransactionService(),

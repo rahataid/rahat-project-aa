@@ -352,24 +352,31 @@ export class StellarProcessor {
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} not found`
         );
       }
+      const asset = await this.getFromSettings('ASSETCODE');
 
       // Get balance and check if the account has rahat balance > 0
       const balance = await this.stellarService.getRahatBalance(
-        payload.beneficiaryWalletAddress
+        payload.beneficiaryWalletAddress,
+        asset
       );
-
       if (balance <= 0) {
         throw new RpcException(
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} has rahat balance <= 0`
         );
       }
-
+  
+      this.logger.log(
+        `Transferring asset from ${keys.publicKey} to ${payload.offRampWalletAddress}`,
+        StellarProcessor.name
+      );
+  
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         payload.offRampWalletAddress,
         balance.toString()
       );
-
+      console.log({result})
+      
       this.logger.log(
         `Transfer to offramp job completed successfully`,
         StellarProcessor.name

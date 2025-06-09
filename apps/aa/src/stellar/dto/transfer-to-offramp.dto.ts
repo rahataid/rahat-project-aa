@@ -12,5 +12,5 @@ export class TransferToOfframpDto {
     description: 'Wallet Address of beneficiaries',
     example: ['GC...', 'GB...'],
   })
-  beneficiaryWalletAddress: string[] | string;
+  beneficiaryWalletAddress: string;
 }

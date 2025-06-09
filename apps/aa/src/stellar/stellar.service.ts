@@ -105,35 +105,35 @@ export class StellarService {
     };
   }
 
-  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
-    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+  // async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+  //   const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
 
-    if (typeof beneficiaries === 'string') {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: beneficiaries,
-      });
-      return {
-        message: `Transfer to offramp job added for ${beneficiaries}`,
-        beneficiaries: [beneficiaries],
-      };
-    }
+  //   if (typeof beneficiaries === 'string') {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: beneficiaries,
+  //     });
+  //     return {
+  //       message: `Transfer to offramp job added for ${beneficiaries}`,
+  //       beneficiaries: [beneficiaries],
+  //     };
+  //   }
 
-    beneficiaries.forEach((ben) => {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: ben,
-      });
-    });
+  //   beneficiaries.forEach((ben) => {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: ben,
+  //     });
+  //   });
 
-    return {
-      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
-      beneficiaries: beneficiaries.map((ben) => ({
-        walletAddress: ben,
-        status: 'PENDING',
-      })),
-    };
-  }
+  //   return {
+  //     message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+  //     beneficiaries: beneficiaries.map((ben) => ({
+  //       walletAddress: ben,
+  //       status: 'PENDING',
+  //     })),
+  //   };
+  // }
 
   async disburse(disburseDto: DisburseDto) {
     const groups =
@@ -827,20 +827,20 @@ export class StellarService {
     return settings?.value[key];
   }
 
-  public async getRahatBalance(keys) {
+  public async getRahatBalance(keys, assetCode = 'RAHAT') {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
       const rahatAsset = accountBalances?.find(
-        (bal: any) => bal.asset_code === 'RAHAT'
+        (bal: any) => bal.asset_code === assetCode
       );
 
       if (!rahatAsset) {
-        this.logger.error('RAHAT asset not found in account balances');
+        this.logger.error(`${assetCode} asset not found in account balances`);
         return 0;
       }
 
-      this.logger.log('RAHAT asset balance:', rahatAsset.balance);
+      this.logger.log(`${assetCode} asset balance:`, rahatAsset.balance);
 
       return Math.floor(parseFloat(rahatAsset?.balance || '0'));
     } catch (error) {

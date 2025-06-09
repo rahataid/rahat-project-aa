@@ -3,10 +3,12 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { VendorsModule } from '../vendors/vendors.module';
 import { AppService } from '../app/app.service';
 import { HttpModule} from '@nestjs/axios';
+import { OfframpService } from './offramp.service';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
@@ -34,9 +36,12 @@ import { HttpModule} from '@nestjs/axios';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService, AppService],
+  providers: [PayoutsService, PrismaService, AppService, OfframpService],
   exports: [PayoutsService],
 })
 export class PayoutsModule {}

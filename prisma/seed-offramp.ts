@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 const prismaService = new PrismaService();
 const settings = new SettingsService(prismaService);
 
-export const seedPaymentProvider = async () => {
+export const seedOfframp = async () => {
   const url = process.env.PAYMENT_PROVIDER_URL || 'https://api-offramp-dev.rahat.io/v1';
 
   try {
@@ -20,6 +20,7 @@ export const seedPaymentProvider = async () => {
     }
     const paymentProviderValue = {
       url,
+      appId: '798f8e97-7aa3-4d19-a42a-32545270baec',
       accessToken: 'sk_test_1234567890',
     };
 
@@ -29,22 +30,13 @@ export const seedPaymentProvider = async () => {
       isPrivate: false,
     });
   } catch (error) {
-    const paymentProviderValue = {
-      url,
-      accessToken: 'sk_test_1234567890',
-    };
-
-    await settings.create({
-      name: 'OFFRAMP_SETTINGS',
-      value: paymentProviderValue,
-      isPrivate: false,
-    });
+    console.log('Error creating OFFRAMP_SETTINGS:', error);
   }
 };
 
 // Keep the standalone execution capability for when run directly
 if (require.main === module) {
-  seedPaymentProvider()
+  seedOfframp()
     .then(async () => {
       await prisma.$disconnect();
     })

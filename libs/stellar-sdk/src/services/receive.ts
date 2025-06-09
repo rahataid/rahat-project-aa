@@ -27,6 +27,10 @@ export class ReceiveService implements IReceiveService {
     this.assetCode = assetCode;
   }
 
+  public async getAssetInfo(): Promise<string> {
+    return `${this.assetCode}:${this.assetIssuer}`;
+  }
+
   public async createReceiverAccount(): Promise<any> {
     const account = Keypair.random();
     const keypair = {
@@ -107,11 +111,15 @@ export class ReceiveService implements IReceiveService {
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
     try {
-      const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
+      console.log({ senderSk, receiverPk, amount });
+      console.log(`Sending ${amount} ${this.assetCode} to ${receiverPk} with issuer ${this.assetIssuer}`);
+      const asset = new Asset(this.assetCode, this.assetIssuer);
+      console.log(`Asset created: ${asset.code} issued by ${asset.issuer}`);
       const server = new Horizon.Server(horizonServer);
 
       const senderKeypair = Keypair.fromSecret(senderSk);
       const senderAccount = await server.loadAccount(senderKeypair.publicKey());
+      console.log(`Sender account loaded: ${senderAccount.accountId}`);
 
       const transaction = new TransactionBuilder(senderAccount, {
         fee: (await server.fetchBaseFee()).toString(),
@@ -131,7 +139,7 @@ export class ReceiveService implements IReceiveService {
 
       const tx = await server.submitTransaction(transaction);
 
-      return { success: 'tokens sent to vendor', tx };
+      return { success: 'tokens sent', tx };
     } catch (error: any) {
       console.log(error.response.data.extras);
       throw error;
