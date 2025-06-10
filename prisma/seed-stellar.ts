@@ -31,8 +31,8 @@ export const seedStellar = async () => {
       password: 'Password123!',
       contractId: 'CDIESPF2SHPYTXTAM4EW55TD4DIIMSYBRS72CCRQH2UDCL4IS4KOZEMK',
       vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
-      assetCode: 'RSDC',
-      assetIssuer: 'GBFJY3DUBEANPGBIWBVSKXIAPSUQESADDNNSIX4LH2ZT4DVJOTUVDJPU',
+      assetCode: 'RAHAT',
+      assetIssuer: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
     };
 
     await settings.create({

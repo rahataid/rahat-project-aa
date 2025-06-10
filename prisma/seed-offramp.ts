@@ -20,7 +20,7 @@ export const seedOfframp = async () => {
     }
     const paymentProviderValue = {
       url,
-      appId: '798f8e97-7aa3-4d19-a42a-32545270baec',
+      appId: '8edff118-d17f-41ff-bb65-5edaf2e004ab',
       accessToken: 'sk_test_1234567890',
     };
 
