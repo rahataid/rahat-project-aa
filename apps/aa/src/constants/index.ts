@@ -115,6 +115,13 @@ export const JOBS = {
     TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
   },
+  OFFRAMP:{
+    CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
+    EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
+    LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
+    GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
+    INSTANT_OFFRAMP: 'aa.jobs.offramp.instantOfframp',
+  },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
     TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
@@ -218,6 +225,7 @@ export const BQUEUE = {
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
   STELLAR: 'STELLAR',
+  OFFRAMP: 'OFFRAMP',
 };
 
 export const VULNERABILITY_FIELD = {

@@ -4,6 +4,8 @@ import { RpcException } from '@nestjs/microservices';
 import { AppService } from '../app/app.service';
 import { IPaymentProvider } from '../payouts/dto/types';
 
+
+//TODO replace API calls with SDK
 @Injectable()
 export class OfframpService {
   private readonly logger = new Logger(OfframpService.name);
@@ -60,7 +62,7 @@ export class OfframpService {
     }
   }
 
-  async getOfframpWalletAddress(){
+  async getOfframpWalletAddress():Promise<string> {
     const offrampSettings = await this.fetchOfframpSettings();
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
@@ -78,6 +80,28 @@ export class OfframpService {
     } catch (error) {
       throw new RpcException(
         `Failed to fetch offramp wallet address: ${error.message}`
+      );
+    }
+  }
+
+  async instantOfframp(offrampPayload) {
+    const offrampSettings = await this.fetchOfframpSettings();
+    const url = offrampSettings.url;
+    const appId = offrampSettings.appId;
+    this.logger.log(`Initiating instant offramp to ${url}/app/${appId}`);
+    try {
+      const {
+            data: { data },
+          } = await this.httpService.axiosRef.post<{
+        success: boolean;
+        data;
+      }>(`${url}/offramp-request/instant`, offrampPayload);
+      console.log(data);
+
+      return data;
+    } catch (error) {
+      throw new RpcException(
+        `Failed to initiate instant offramp: ${error.message}`
       );
     }
   }

@@ -27,12 +27,12 @@ import {
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
 import { ReceiveService } from '@rahataid/stellar-sdk';
-import { IDisbursementStatusJob } from './types';
+import { IDisbursementStatusJob, OfframpTransfer } from './types';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
 export class StellarProcessor {
-  private readonly logger = Logger;
+  private readonly logger = new Logger(StellarProcessor.name);
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -41,7 +41,9 @@ export class StellarProcessor {
     private readonly stellarService: StellarService,
     private readonly receiveService: ReceiveService,
     @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue<IDisbursementStatusJob>
+    private readonly stellarQueue: Queue<IDisbursementStatusJob>,
+    @InjectQueue(BQUEUE.OFFRAMP)
+    private readonly offrampQueue: Queue
   ) {}
 
   @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
@@ -335,7 +337,7 @@ export class StellarProcessor {
   }
 
   @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 1 })
-  async transferToOfframp(job: Job<TransferToOfframpDto>) {
+  async transferToOfframp(job: Job<OfframpTransfer>) {
     this.logger.log(
       'Processing transfer to offramp job...',
       StellarProcessor.name
@@ -366,17 +368,30 @@ export class StellarProcessor {
       }
   
       this.logger.log(
-        `Transferring asset from ${keys.publicKey} to ${payload.offRampWalletAddress}`,
+        `Transferring asset from ${keys.publicKey} to ${payload.offrampWalletAddress}`,
         StellarProcessor.name
       );
   
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
-        payload.offRampWalletAddress,
-        balance.toString()
+        payload.offrampWalletAddress,
+        '1' // temp
+        //balance.toString()
       );
+      //TODO add to failed request transfer fails
+
+      this.offrampQueue.add(
+        JOBS.OFFRAMP.INSTANT_OFFRAMP,
+        {
+          walletAddress: payload.offrampWalletAddress,
+          assetCode: asset,
+          assetIssuer: await this.getFromSettings('ASSETISSUER'),
+          transactionHash: result.tx.hash,
+        }
+      );
+
       console.log({result})
-      
+
       this.logger.log(
         `Transfer to offramp job completed successfully`,
         StellarProcessor.name

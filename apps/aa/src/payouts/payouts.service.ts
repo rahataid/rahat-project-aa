@@ -27,6 +27,8 @@ export class PayoutsService {
     private offrampService: OfframpService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
+    @InjectQueue(BQUEUE.OFFRAMP)
+    private readonly offrampQueue: Queue
 
   ) {}
 
@@ -194,6 +196,7 @@ export class PayoutsService {
                         select: {
                           uuid: true,
                           walletAddress: true,
+                          extras:true,
                         },
                       },
                     },
@@ -293,21 +296,27 @@ export class PayoutsService {
   async triggerPayout(uuid: string): Promise<any> {
 
     //TODO: verify trustline of beneficiary wallet addresses
-   
-    const benWalletAddresses = await this.fetchBeneficiaryPayoutWallets(uuid);
-    const offRampWalletAddress = await this.offrampService.getOfframpWalletAddress();
+   const benWalletAddresses = await this.fetchBeneficiaryPayoutWallets(uuid);
+   const offrampWalletAddress = await this.offrampService.getOfframpWalletAddress();
 
-    console.log('Offramp Wallet Address:', offRampWalletAddress);
-    console.log('Beneficiary Wallet Addresses:', benWalletAddresses);
+   console.log('Offramp Wallet Address:', offrampWalletAddress);
+   console.log('Beneficiary Wallet Addresses:', benWalletAddresses);
 
-     // send asset to offramp service`
-    const d= await this.stellarQueue.addBulk(
-      benWalletAddresses.walletAddresses.map((beneficiaryWalletAddress) => ({
-        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
-        data: {
-          offRampWalletAddress,
+   // send asset to offramp service`
+   const d= await this.stellarQueue.addBulk(
+     benWalletAddresses.walletAddresses.map((beneficiaryWalletAddress) => ({
+       name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+       data: {
+         offrampWalletAddress,
           beneficiaryWalletAddress,
-          uuid,
+          payoutUUID:uuid,
+        },
+        opts: {
+          attempts: 3, // Retry up to 3 times
+          backoff: {
+            type: 'exponential',
+            delay: 1000, // Initial delay of 1 seconds
+          },
         },
       }))
     )

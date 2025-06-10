@@ -39,9 +39,12 @@ import { BullModule } from '@nestjs/bull';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.OFFRAMP,
+    }),
   ],
   controllers: [PayoutsController],
   providers: [PayoutsService, PrismaService, AppService, OfframpService],
-  exports: [PayoutsService],
+  exports: [PayoutsService, OfframpService, AppService,PrismaService],
 })
 export class PayoutsModule {}
