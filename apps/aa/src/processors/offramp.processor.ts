@@ -67,16 +67,7 @@ export class OfframpProcessor {
      console.log('result', result);
       
       // update the transaction record
-    //   if (offrampPayload.uuid && offrampPayload.fromWallet && offrampPayload.toWallet) {
-    //     await this.updateTransactionRecord(
-    //       offrampPayload.uuid,
-    //       offrampPayload.fromWallet,
-    //       offrampPayload.toWallet,
-    //       result
-    //     );
-    //   }
-      
-    //   this.logger.log(`Instant offramp completed: ${JSON.stringify(result)}`);
+
     //   return result;
     } catch (error) {
       this.logger.error(
@@ -86,14 +77,7 @@ export class OfframpProcessor {
       );
       
       // Record failed transaction
-    //   if (job.data.uuid && job.data.fromWallet && job.data.toWallet) {
-    //     await this.recordFailedTransaction(
-    //       job.data.uuid,
-    //       job.data.fromWallet,
-    //       job.data.toWallet,
-    //       error
-    //     );
-     // }
+  
       
       throw new RpcException(`Failed to process instant offramp: ${error.message}`);
     }

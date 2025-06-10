@@ -48,6 +48,19 @@ enum PayoutMode {
   ONLINE
   OFFLINE
 }
+
+enum PayoutTransactionStatus {
+  PENDING
+  TOKEN_TRANSACTION_INITIATED
+  TOKEN_TRANSACTION_COMPLETED
+  TOKEN_TRANSACTION_FAILED
+  FIAT_TRANSACTION_INITIATED
+  FIAT_TRANSACTION_COMPLETED
+  FIAT_TRANSACTION_FAILED
+  COMPLETED
+  FAILED
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -476,6 +489,7 @@ model BeneficiaryRedeem {
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
   fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
   txHash     String?
+
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
