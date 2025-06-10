@@ -62,8 +62,14 @@ export class VendorsService {
       }
 
       return {
-        assignedTokens: await this.getVendorAssignedTokens(vendorWallet.uuid, false),
-        disbursedTokens: await this.getVendorAssignedTokens(vendorWallet.uuid, true),
+        assignedTokens: await this.getVendorAssignedTokens(
+          vendorWallet.uuid,
+          false
+        ),
+        disbursedTokens: await this.getVendorAssignedTokens(
+          vendorWallet.uuid,
+          true
+        ),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
       };
@@ -73,23 +79,26 @@ export class VendorsService {
     }
   }
 
-  async getVendorAssignedTokens(vendorUuid: string, disbursed: boolean = false){
+  async getVendorAssignedTokens(
+    vendorUuid: string,
+    disbursed: boolean = false
+  ) {
     try {
       this.logger.log(`Getting assigned tokens for vendor ${vendorUuid}`);
 
       const payouts = await this.prisma.payouts.findMany({
         where: {
-          type: 'VENDOR', 
+          type: 'VENDOR',
           payoutProcessorId: vendorUuid,
           ...(disbursed && {
             beneficiaryGroupToken: {
               isDisbursed: true,
-            }
-          })
+            },
+          }),
         },
         include: {
-          beneficiaryGroupToken: true
-        }
+          beneficiaryGroupToken: true,
+        },
       });
 
       const totalAssignedTokens = payouts.reduce((acc, payout) => {
@@ -101,7 +110,6 @@ export class VendorsService {
       this.logger.error(error.message);
       throw new RpcException(error.message);
     }
-
   }
 
   async getRedemptionRequest(vendorWallet: VendorRedeemDto) {
@@ -169,6 +177,7 @@ export class VendorsService {
           beneficiaryName: benResponse.find(
             (ben) => ben.walletAddress === txn.beneficiaryWalletAddress
           )?.piiData?.name,
+          txType: txn.txType,
         };
       });
     } catch (error) {
@@ -176,5 +185,4 @@ export class VendorsService {
       throw new RpcException(error.message);
     }
   }
-
 }

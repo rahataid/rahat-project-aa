@@ -41,6 +41,7 @@ import {
   BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
+import { TransactionType } from '@prisma/client';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Injectable()
@@ -297,6 +298,7 @@ export class StellarService {
           transactionType: 'VENDOR',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
+          txType: TransactionType.INCOMING,
           hasRedeemed: true,
         },
       });
@@ -372,6 +374,7 @@ export class StellarService {
           transactionType: 'VENDOR',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
+          txType: TransactionType.INCOMING,
           hasRedeemed: true,
         },
       });
@@ -551,11 +554,10 @@ export class StellarService {
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
-      transactionStats: await this.getRecentTransaction(
-        await this.disbursementService.getDistributionAddress(
-          await this.getFromSettings('TENANTNAME')
-        )
-      ),
+      transactionStats: await this.getRecentTransactionDb({
+        take: 10,
+        skip: 0,
+      }),
     };
   }
 
@@ -750,6 +752,7 @@ export class StellarService {
         amount,
         expiresAt,
         updatedAt: new Date(),
+        isVerified: false,
       },
       create: {
         phoneNumber,
@@ -865,6 +868,56 @@ export class StellarService {
     } catch (error) {
       this.logger.error(error.message);
       return 0;
+    }
+  }
+
+  private async getRecentTransactionDb(walletBalanceDto) {
+    try {
+      const transactions = await this.prisma.beneficiaryRedeem.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: walletBalanceDto.take || 10,
+        skip: walletBalanceDto.skip || 0,
+      });
+
+      if (!transactions) {
+        throw new RpcException(
+          `Transactions not found for vendor with id ${walletBalanceDto.uuid}`
+        );
+      }
+
+      const beneficiaryWalletAddresses = transactions.map(
+        (txn) => txn.beneficiaryWalletAddress
+      );
+
+      const benResponse = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' },
+          beneficiaryWalletAddresses
+        )
+      );
+
+      if (!benResponse) {
+        throw new RpcException(`Failed to get beneficiaries info`);
+      }
+
+      return transactions.map((txn) => {
+        return {
+          title: txn.transactionType,
+          subtitle: txn.beneficiaryWalletAddress,
+          date: txn.createdAt,
+          amount: Number(txn.amount).toFixed(0),
+          hash: txn.txHash,
+          beneficiaryName: benResponse.find(
+            (ben) => ben.walletAddress === txn.beneficiaryWalletAddress
+          )?.piiData?.name,
+          txType: txn.txType,
+        };
+      });
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
     }
   }
 

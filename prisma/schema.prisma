@@ -48,6 +48,12 @@ enum PayoutMode {
   ONLINE
   OFFLINE
 }
+
+enum TransactionType {
+  INCOMING
+  OUTGOING
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -476,6 +482,7 @@ model BeneficiaryRedeem {
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
   fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
   txHash     String?
+  txType     TransactionType @default(INCOMING)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
