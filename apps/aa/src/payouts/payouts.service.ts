@@ -311,6 +311,7 @@ export class PayoutsService {
   async triggerPayout(uuid: string): Promise<any> {
 
     //TODO: verify trustline of beneficiary wallet addresses
+  const payoutDetails = await this.findOne(uuid);
    const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(uuid);
    const offrampWalletAddress = await this.offrampService.getOfframpWalletAddress();
 
@@ -326,6 +327,7 @@ export class PayoutsService {
          beneficiaryWalletAddress: beneficiary.walletAddress,
          beneficiaryBankDetails: beneficiary.bankDetails,
          payoutUUID:uuid,
+         payoutProcessorId: payoutDetails.payoutProcessorId
        },
        opts: {
          attempts: 3, // Retry up to 3 times

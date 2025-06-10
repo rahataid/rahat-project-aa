@@ -7,7 +7,21 @@ import { RpcException } from '@nestjs/microservices';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import { OfframpService } from '../payouts/offramp.service';
-import { OfframpRequest } from './types';
+import { FSPOfframpDetails } from './types';
+
+// {
+//   "tokenAmount": 1,
+//   "paymentProviderId": "0c1d24fc-aba5-40a2-a7ab-75f9ddc3611e",
+// "transactionHash":"8fb9fa59a12ca6c39ca4800735fab46102ccf9c9983d1474409f73a0a5094156", 
+//   "senderAddress": "b4d19024c749d16de416dd108a6d727f571cba6f826cb551a48bfcecc2b7f3b5",
+//    "paymentDetails": {
+//         "creditorAgent":1901,
+//         "endToEndId":"Payment Description",
+//         "creditorBranch":"506",
+//         "creditorAccount":"09107010092348",
+//         "creditorName":"Pratiksha Rai"
+//   }
+// }
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -23,18 +37,36 @@ export class OfframpProcessor {
   ) {}
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
-  async sendInstantOfframpRequest(job: Job<OfframpRequest>) {
+  async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
+
     this.logger.log(
       'Processing offramp request...',
       OfframpProcessor.name
     );
     
     try {
-      const offrampPayload = job.data;
-      this.logger.log(`Initiating instant offramp with payload: ${JSON.stringify(offrampPayload)}`);
-      
-    //  const result = await this.offrampService.instantOfframp(offrampPayload);
-    //  console.log('result', result);
+      const fspOfframpDetails = job.data;
+      this.logger.log(`Initiating instant offramp with payload: ${JSON.stringify(fspOfframpDetails)}`);
+      console.log(fspOfframpDetails)
+      const offrampRequest = {
+        tokenAmount: fspOfframpDetails.amount,
+        paymentProviderId: fspOfframpDetails.payoutProcessorId,
+        transactionHash: fspOfframpDetails.transactionHash,
+        senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
+        paymentDetails: {
+          creditorAgent: Number(fspOfframpDetails.beneficiaryBankDetails.bankName),
+          endToEndId: "Payment Description",
+          creditorBranch: '506',
+          creditorAccount: fspOfframpDetails.beneficiaryBankDetails.accountNumber,
+          creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName
+        }
+        };
+
+        console.log('offrampRequest', offrampRequest);
+      this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
+     const result = await this.offrampService.instantOfframp(offrampRequest);
+     console.log("OFFRAMP RESULT++++++++++++++++++++++++");
+     console.log('result', result);
       
       // update the transaction record
     //   if (offrampPayload.uuid && offrampPayload.fromWallet && offrampPayload.toWallet) {

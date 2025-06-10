@@ -385,7 +385,10 @@ export class StellarProcessor {
         {
          ...payload,
           transactionHash: result.tx.hash,
-          amount: balance.toString(),
+          amount: '1' //balance.toString(),
+        },
+        {
+          delay:1000
         }
       );
 

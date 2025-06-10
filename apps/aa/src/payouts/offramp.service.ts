@@ -78,6 +78,7 @@ export class OfframpService {
 
       return data.wallet;
     } catch (error) {
+      console.log(error);
       throw new RpcException(
         `Failed to fetch offramp wallet address: ${error.message}`
       );
@@ -88,18 +89,23 @@ export class OfframpService {
     const offrampSettings = await this.fetchOfframpSettings();
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
-    this.logger.log(`Initiating instant offramp to ${url}/app/${appId}`);
+    this.logger.log(`Initiating instant offramp to ${url}/offramp-request/instant`);
     try {
       const {
             data: { data },
           } = await this.httpService.axiosRef.post<{
         success: boolean;
         data;
-      }>(`${url}/offramp-request/instant`, offrampPayload);
+      }>(`${url}/offramp-request/instant`, offrampPayload, {
+        headers: {
+          'app-id': appId
+        }
+      });
       console.log(data);
 
       return data;
     } catch (error) {
+        console.log(error);
       throw new RpcException(
         `Failed to initiate instant offramp: ${error.message}`
       );

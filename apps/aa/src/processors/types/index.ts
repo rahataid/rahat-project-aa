@@ -13,9 +13,10 @@ export interface FSPPayoutDetails {
     bankName: string;
   };
   payoutUUID: string;
+  payoutProcessorId: string;
 }
 
-export interface OfframpRequest extends FSPPayoutDetails {
+export interface FSPOfframpDetails extends FSPPayoutDetails {
   transactionHash: string;
   amount: string;
 }
