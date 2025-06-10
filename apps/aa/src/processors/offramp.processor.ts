@@ -7,6 +7,7 @@ import { RpcException } from '@nestjs/microservices';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import { OfframpService } from '../payouts/offramp.service';
+import { OfframpRequest } from './types';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -22,7 +23,7 @@ export class OfframpProcessor {
   ) {}
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
-  async sendInstantOfframpRequest(job: Job<any>) {
+  async sendInstantOfframpRequest(job: Job<OfframpRequest>) {
     this.logger.log(
       'Processing offramp request...',
       OfframpProcessor.name

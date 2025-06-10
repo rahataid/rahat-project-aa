@@ -5,3 +5,14 @@ export interface IPaymentProvider {
   createdAt: string;
   updatedAt: string;
 }
+
+export type bankDetails = {
+  accountName: string;
+  accountNumber: string;
+  bankName: string;
+}
+
+export interface BeneficiaryPayoutDetails {
+  walletAddress: string;
+  bankDetails: bankDetails;
+}

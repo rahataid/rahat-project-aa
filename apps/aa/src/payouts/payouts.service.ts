@@ -9,7 +9,7 @@ import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import { AppService } from '../app/app.service';
-import { IPaymentProvider } from './dto/types';
+import { BeneficiaryPayoutDetails, IPaymentProvider } from './dto/types';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
@@ -64,6 +64,8 @@ export class PayoutsService {
        * we need to check and store the payout processor id
        * it be either id for ConnectIPS, Khalti and so on
        */
+
+      //TODO validate bankdetails of the beneficiary
       if (createPayoutDto.type === 'FSP') {
         if (!createPayoutDto.payoutProcessorId) {
           throw new RpcException(
@@ -264,29 +266,42 @@ export class PayoutsService {
 
 
 // fetch addresses
-  async fetchBeneficiaryPayoutWallets(uuid: string): Promise<{ walletAddresses: string[] }> {
+  async fetchBeneficiaryPayoutDetails(uuid: string): Promise< BeneficiaryPayoutDetails[] > {
       this.logger.log(`Fetching beneficiary wallet addresses for payout with UUID: '${uuid}'`);
       
       const payout = await this.findOne(uuid);
       
       if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
         this.logger.warn(`No beneficiaries found for payout with UUID: '${uuid}'`);
-        return { walletAddresses: [] };
+        return [];
       }
-      
-      // Extract just the wallet addresses from each beneficiary
-      const walletAddresses = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries
-        .map(benfToGroup => benfToGroup.beneficiary?.walletAddress)
-        .filter(address => address); // Filter out any undefined or null addresses
+
+    //   "bank_name": "0401",
+    // "bank_ac_name": "Ankit Neupane",
+    // "bank_ac_number": "08110017501011"
+
+      // Extract the wallet addresses and bank-details from each beneficiary
+      const BeneficiaryPayoutDetails = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries
+        .map(benfToGroup => {
+          return {
+            walletAddress: benfToGroup.beneficiary?.walletAddress,
+            bankDetails: { 
+              accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
+              accountNumber: benfToGroup.beneficiary?.extras?.bank_ac_number || '',
+              bankName: benfToGroup.beneficiary?.extras?.bank_name || '',
+             },
+          };
+        })
+        .filter(address => address.walletAddress); // Filter out any undefined or null addresses
       // Check if any wallet addresses are null or undefined after filtering
-      if (walletAddresses.length !== payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length) {
+      if (BeneficiaryPayoutDetails.length !== payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length) {
         this.logger.error(`Some beneficiaries have null or undefined wallet addresses for payout with UUID: '${uuid}'`);
         throw new RpcException('Some beneficiaries have missing wallet addresses');
       }
-      
-      this.logger.log(`Successfully fetched ${walletAddresses.length} wallet addresses for payout with UUID: '${uuid}'`);
-      return { walletAddresses };
-    
+
+      this.logger.log(`Successfully fetched ${BeneficiaryPayoutDetails.length} wallet addresses for payout with UUID: '${uuid}'`);
+      return BeneficiaryPayoutDetails ;
+
   }
 
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
@@ -296,25 +311,26 @@ export class PayoutsService {
   async triggerPayout(uuid: string): Promise<any> {
 
     //TODO: verify trustline of beneficiary wallet addresses
-   const benWalletAddresses = await this.fetchBeneficiaryPayoutWallets(uuid);
+   const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(uuid);
    const offrampWalletAddress = await this.offrampService.getOfframpWalletAddress();
 
    console.log('Offramp Wallet Address:', offrampWalletAddress);
-   console.log('Beneficiary Wallet Addresses:', benWalletAddresses);
+   console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
 
    // send asset to offramp service`
    const d= await this.stellarQueue.addBulk(
-     benWalletAddresses.walletAddresses.map((beneficiaryWalletAddress) => ({
+     BeneficiaryPayoutDetails.map((beneficiary) => ({
        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
        data: {
          offrampWalletAddress,
-          beneficiaryWalletAddress,
-          payoutUUID:uuid,
-        },
-        opts: {
-          attempts: 3, // Retry up to 3 times
-          backoff: {
-            type: 'exponential',
+         beneficiaryWalletAddress: beneficiary.walletAddress,
+         beneficiaryBankDetails: beneficiary.bankDetails,
+         payoutUUID:uuid,
+       },
+       opts: {
+         attempts: 3, // Retry up to 3 times
+         backoff: {
+           type: 'exponential',
             delay: 1000, // Initial delay of 1 seconds
           },
         },

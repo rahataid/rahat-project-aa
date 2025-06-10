@@ -27,7 +27,7 @@ import {
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
 import { ReceiveService } from '@rahataid/stellar-sdk';
-import { IDisbursementStatusJob, OfframpTransfer } from './types';
+import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -337,7 +337,7 @@ export class StellarProcessor {
   }
 
   @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 1 })
-  async transferToOfframp(job: Job<OfframpTransfer>) {
+  async transferToOfframp(job: Job<FSPPayoutDetails>) {
     this.logger.log(
       'Processing transfer to offramp job...',
       StellarProcessor.name
@@ -383,10 +383,9 @@ export class StellarProcessor {
       this.offrampQueue.add(
         JOBS.OFFRAMP.INSTANT_OFFRAMP,
         {
-          walletAddress: payload.offrampWalletAddress,
-          assetCode: asset,
-          assetIssuer: await this.getFromSettings('ASSETISSUER'),
+         ...payload,
           transactionHash: result.tx.hash,
+          amount: balance.toString(),
         }
       );
 
