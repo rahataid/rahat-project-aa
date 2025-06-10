@@ -47,7 +47,6 @@ export class OfframpProcessor {
     try {
       const fspOfframpDetails = job.data;
       this.logger.log(`Initiating instant offramp with payload: ${JSON.stringify(fspOfframpDetails)}`);
-      console.log(fspOfframpDetails)
       const offrampRequest = {
         tokenAmount: fspOfframpDetails.amount,
         paymentProviderId: fspOfframpDetails.payoutProcessorId,
@@ -62,10 +61,9 @@ export class OfframpProcessor {
         }
         };
 
-        console.log('offrampRequest', offrampRequest);
-      this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
+    console.log('offrampRequest', offrampRequest);
+    this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
      const result = await this.offrampService.instantOfframp(offrampRequest);
-     console.log("OFFRAMP RESULT++++++++++++++++++++++++");
      console.log('result', result);
       
       // update the transaction record

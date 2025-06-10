@@ -392,8 +392,6 @@ export class StellarProcessor {
         }
       );
 
-      console.log({result})
-
       this.logger.log(
         `Transfer to offramp job completed successfully`,
         StellarProcessor.name
