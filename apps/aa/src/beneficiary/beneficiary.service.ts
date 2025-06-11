@@ -77,6 +77,7 @@ export class BeneficiaryService {
         { walletAddress: dto.walletAddress, chain: 'STELLAR' }
       )
     );
+    // TODO: EVM Change
 
     await this.stellarQueue.add(
       JOBS.STELLAR.FAUCET_TRUSTLINE,

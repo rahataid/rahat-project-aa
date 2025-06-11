@@ -269,7 +269,7 @@ export class StellarProcessor {
       }
     }
   }
-
+  //TODO: EVM Change
   @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
   async disburseOnchain(job: Job<DisburseDto>) {
     this.logger.log('Processing disbursement job...', StellarProcessor.name);
