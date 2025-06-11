@@ -8,7 +8,6 @@ import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
-import { AppService } from '../app/app.service';
 import { BeneficiaryPayoutDetails, IPaymentProvider } from './dto/types';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
@@ -27,9 +26,6 @@ export class PayoutsService {
     private offrampService: OfframpService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
-    @InjectQueue(BQUEUE.OFFRAMP)
-    private readonly offrampQueue: Queue
-
   ) {}
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
@@ -175,13 +171,16 @@ export class PayoutsService {
     }
   }
 
-  async findOne(uuid: string): Promise<(Payouts & {
-    beneficiaryGroupToken?: {
-      beneficiaryGroup?: {
-        beneficiaries?: any[];
+  async findOne(uuid: string): Promise<
+    Payouts & {
+      beneficiaryGroupToken?: {
+        numberOfTokens?: number;
+        beneficiaryGroup?: {
+          beneficiaries?: any[];
+        };
       };
-    };
-  })> {
+    }
+  > {
     try {
       this.logger.log(`Fetching payout with UUID: '${uuid}'`);
 
@@ -198,7 +197,7 @@ export class PayoutsService {
                         select: {
                           uuid: true,
                           walletAddress: true,
-                          extras:true,
+                          extras: true,
                         },
                       },
                     },
@@ -206,7 +205,6 @@ export class PayoutsService {
                   _count: {
                     select: {
                       beneficiaries: true,
-
                     },
                   },
                 },
@@ -264,44 +262,61 @@ export class PayoutsService {
     }
   }
 
+  // fetch addresses
+  async fetchBeneficiaryPayoutDetails(
+    uuid: string
+  ): Promise<BeneficiaryPayoutDetails[]> {
+    this.logger.log(
+      `Fetching beneficiary wallet addresses for payout with UUID: '${uuid}'`
+    );
 
-// fetch addresses
-  async fetchBeneficiaryPayoutDetails(uuid: string): Promise< BeneficiaryPayoutDetails[] > {
-      this.logger.log(`Fetching beneficiary wallet addresses for payout with UUID: '${uuid}'`);
-      
-      const payout = await this.findOne(uuid);
-      
-      if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
-        this.logger.warn(`No beneficiaries found for payout with UUID: '${uuid}'`);
-        return [];
-      }
+    const payout = await this.findOne(uuid);
+
+    if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
+      this.logger.warn(
+        `No beneficiaries found for payout with UUID: '${uuid}'`
+      );
+      return [];
+    }
 
     //   "bank_name": "0401",
     // "bank_ac_name": "Ankit Neupane",
     // "bank_ac_number": "08110017501011"
+    const numberOfTokensToTransfer = payout.beneficiaryGroupToken.numberOfTokens / payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
 
-      // Extract the wallet addresses and bank-details from each beneficiary
-      const BeneficiaryPayoutDetails = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries
-        .map(benfToGroup => {
+    // Extract the wallet addresses and bank-details from each beneficiary
+    const BeneficiaryPayoutDetails =
+      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries
+        .map((benfToGroup) => {
           return {
+            amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
-            bankDetails: { 
+            bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
-              accountNumber: benfToGroup.beneficiary?.extras?.bank_ac_number || '',
+              accountNumber:
+                benfToGroup.beneficiary?.extras?.bank_ac_number || '',
               bankName: benfToGroup.beneficiary?.extras?.bank_name || '',
-             },
+            },
           };
         })
-        .filter(address => address.walletAddress); // Filter out any undefined or null addresses
-      // Check if any wallet addresses are null or undefined after filtering
-      if (BeneficiaryPayoutDetails.length !== payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length) {
-        this.logger.error(`Some beneficiaries have null or undefined wallet addresses for payout with UUID: '${uuid}'`);
-        throw new RpcException('Some beneficiaries have missing wallet addresses');
-      }
+        .filter((address) => address.walletAddress); // Filter out any undefined or null addresses
+    // Check if any wallet addresses are null or undefined after filtering
+    if (
+      BeneficiaryPayoutDetails.length !==
+      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length
+    ) {
+      this.logger.error(
+        `Some beneficiaries have null or undefined wallet addresses for payout with UUID: '${uuid}'`
+      );
+      throw new RpcException(
+        'Some beneficiaries have missing wallet addresses'
+      );
+    }
 
-      this.logger.log(`Successfully fetched ${BeneficiaryPayoutDetails.length} wallet addresses for payout with UUID: '${uuid}'`);
-      return BeneficiaryPayoutDetails ;
-
+    this.logger.log(
+      `Successfully fetched ${BeneficiaryPayoutDetails.length} wallet addresses for payout with UUID: '${uuid}'`
+    );
+    return BeneficiaryPayoutDetails;
   }
 
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
@@ -309,41 +324,40 @@ export class PayoutsService {
   }
 
   async triggerPayout(uuid: string): Promise<any> {
-
     //TODO: verify trustline of beneficiary wallet addresses
-  const payoutDetails = await this.findOne(uuid);
-   const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(uuid);
-   const offrampWalletAddress = await this.offrampService.getOfframpWalletAddress();
+    const payoutDetails = await this.findOne(uuid);
+    const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
+      uuid
+    );
+    const offrampWalletAddress =
+      await this.offrampService.getOfframpWalletAddress();
 
-   console.log('Offramp Wallet Address:', offrampWalletAddress);
-   console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
+    console.log('Offramp Wallet Address:', offrampWalletAddress);
+    console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
 
-   // send asset to offramp service`
-   const d= await this.stellarQueue.addBulk(
-     BeneficiaryPayoutDetails.map((beneficiary) => ({
-       name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
-       data: {
-         offrampWalletAddress,
-         beneficiaryWalletAddress: beneficiary.walletAddress,
-         beneficiaryBankDetails: beneficiary.bankDetails,
-         payoutUUID:uuid,
-         payoutProcessorId: payoutDetails.payoutProcessorId
-       },
-       opts: {
-         attempts: 3, // Retry up to 3 times
-         backoff: {
-           type: 'exponential',
+    // send asset to offramp service`
+    const d = await this.stellarQueue.addBulk(
+      BeneficiaryPayoutDetails.map((beneficiary) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: {
+          offrampWalletAddress,
+          beneficiaryWalletAddress: beneficiary.walletAddress,
+          beneficiaryBankDetails: beneficiary.bankDetails,
+          payoutUUID: uuid,
+          payoutProcessorId: payoutDetails.payoutProcessorId,
+          amount: beneficiary.amount,
+        },
+        opts: {
+          attempts: 3, // Retry up to 3 times
+          backoff: {
+            type: 'exponential',
             delay: 1000, // Initial delay of 1 seconds
           },
         },
       }))
-    )
-    console.log('Job added to queue:', d);
-
-    return 'Payout Initiated Successfully';
-
-    // create and execute offramp payout
+    );
 
     this.logger.log(`Payout job added to queue for UUID: ${uuid}`);
+    return 'Payout Initiated Successfully';
   }
 }

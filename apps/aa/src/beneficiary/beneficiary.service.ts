@@ -13,8 +13,8 @@ import {
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { StellarService } from '../stellar/stellar.service';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
+import { Prisma } from '@prisma/client';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -559,5 +559,52 @@ export class BeneficiaryService {
     }
 
     return batches;
+  }
+
+  async updateBeneficiaryRedeem(
+    uuid: string,
+    payload: Prisma.BeneficiaryRedeemUpdateInput
+  ) {
+    try {
+      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.update({
+        where: { uuid },
+        data: payload,
+      });
+
+      this.logger.log(`Beneficiary redeem updated: ${beneficiaryRedeem.uuid}`);
+
+      return beneficiaryRedeem;
+    } catch (error) {
+      this.logger.error(`Error updating beneficiary redeem: ${error}`);
+      throw error;
+    }
+  }
+
+  async createBeneficiaryRedeem(payload: Prisma.BeneficiaryRedeemCreateInput) {
+    try {
+      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
+        data: payload,
+      });
+
+      this.logger.log(`Beneficiary redeem created: ${beneficiaryRedeem.uuid}`);
+
+      return beneficiaryRedeem;
+    } catch (error) {
+      this.logger.error(`Error creating beneficiary redeem: ${error}`);
+      throw error;
+    }
+  }
+
+  async getBeneficiaryRedeem(uuid: string) {
+    try {
+      const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.findUnique({
+        where: { uuid },
+      });
+
+      return beneficiaryRedeem;
+    } catch (error) {
+      this.logger.error(`Error getting beneficiary redeem: ${error}`);
+      throw error;
+    }
   }
 }
