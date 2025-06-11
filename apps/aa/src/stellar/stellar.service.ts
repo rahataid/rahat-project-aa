@@ -266,7 +266,7 @@ export class StellarService {
         amount as number
       );
 
-      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber) as any;
 
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
@@ -291,10 +291,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 
@@ -367,10 +367,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 

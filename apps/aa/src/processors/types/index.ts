@@ -14,9 +14,10 @@ export interface FSPPayoutDetails {
   };
   payoutUUID: string;
   payoutProcessorId: string;
+  beneficiaryRedeemUUID?: string;
+  amount: number;
 }
 
 export interface FSPOfframpDetails extends FSPPayoutDetails {
   transactionHash: string;
-  amount: string;
 }

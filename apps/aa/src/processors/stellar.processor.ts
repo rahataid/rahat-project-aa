@@ -28,6 +28,8 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
+import { PrismaService } from '@rumsan/prisma';
+import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
@@ -43,7 +45,8 @@ export class StellarProcessor {
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>,
     @InjectQueue(BQUEUE.OFFRAMP)
-    private readonly offrampQueue: Queue
+    private readonly offrampQueue: Queue,
+    private readonly prismaService: PrismaService
   ) {}
 
   @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
@@ -343,6 +346,32 @@ export class StellarProcessor {
       StellarProcessor.name
     );
     const { ...payload } = job.data;
+
+    const log = payload.beneficiaryRedeemUUID
+      ? await this.beneficiaryService.getBeneficiaryRedeem(payload.beneficiaryRedeemUUID)
+      : await this.createBeneficiaryRedeemRecord({
+          status: 'TOKEN_TRANSACTION_INITIATED',
+          transactionType: 'TOKEN_TRANSFER',
+          fspId: payload.payoutProcessorId,
+          payout: {
+            connect: {
+              uuid: payload.payoutUUID,
+            },
+          },
+          Beneficiary: {
+            connect: {
+              walletAddress: payload.beneficiaryWalletAddress,
+            },
+          },
+        });
+
+    if (!payload.beneficiaryRedeemUUID) {
+      job.update({
+        ...job.data,
+        beneficiaryRedeemUUID: log.uuid,
+      });
+    }
+
     try {
       // Get Keys of beneficiary with walletAddress
       const keys = await this.stellarService.getSecretByWallet(
@@ -350,45 +379,86 @@ export class StellarProcessor {
       );
 
       if (!keys) {
+        await this.updateBeneficiaryRedeemAsFailed(
+          log.uuid,
+          'Beneficiary with wallet not found',
+          job.attemptsMade + 1
+        );
         throw new RpcException(
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} not found`
         );
       }
+
       const asset = await this.getFromSettings('ASSETCODE');
 
       // Get balance and check if the account has rahat balance > 0
+      // TODO: think about the amount to be transferred
       const balance = await this.stellarService.getRahatBalance(
         payload.beneficiaryWalletAddress,
         asset
       );
-      if (balance <= 0) {
+
+      if(balance < payload.amount) {
+        await this.updateBeneficiaryRedeemAsFailed(
+          log.uuid,
+          `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`,
+          job.attemptsMade + 1
+        );
+
         throw new RpcException(
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} has rahat balance <= 0`
         );
       }
-  
+
+      if (balance <= 0) {
+        await this.updateBeneficiaryRedeemAsFailed(
+          log.uuid,
+          `Beneficiary has ${balance} rahat balance with wallet ${payload.beneficiaryWalletAddress}`,
+          job.attemptsMade + 1
+        );
+
+        throw new RpcException(
+          `Beneficiary with wallet ${payload.beneficiaryWalletAddress} has rahat balance <= 0`
+        );
+      }
+
       this.logger.log(
         `Transferring asset from ${keys.publicKey} to ${payload.offrampWalletAddress}`,
         StellarProcessor.name
       );
-  
+
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         payload.offrampWalletAddress,
         '1' // temp
-        //balance.toString()
+        //payload.amount.toString() <--- will only transfer the amount assigned in fund management
       );
+
       //TODO add to failed request transfer fails
+
+      await this.updateBeneficiaryRedeemAsCompleted({
+        uuid: log.uuid,
+        txHash: result.tx.hash,
+        offrampWalletAddress: payload.offrampWalletAddress,
+        beneficiaryWalletAddress: payload.beneficiaryWalletAddress,
+        amount: payload.amount,
+        numberOfAttempts: job.attemptsMade + 1,
+      });
 
       this.offrampQueue.add(
         JOBS.OFFRAMP.INSTANT_OFFRAMP,
         {
          ...payload,
           transactionHash: result.tx.hash,
-          amount: '1' //balance.toString(),
+          amount: '1' // payload.amount.toString()
         },
         {
-          delay:1000
+          delay:1000,
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
         }
       );
 
@@ -404,6 +474,16 @@ export class StellarProcessor {
         error.stack,
         StellarProcessor.name
       );
+
+      if (!(error instanceof RpcException)) {
+        await this.updateBeneficiaryRedeemAsFailed(
+          log.uuid,
+          error.message,
+          job.attemptsMade + 1
+        );
+      }
+
+      throw error;
     }
   }
 
@@ -537,6 +617,59 @@ export class StellarProcessor {
       );
       throw error;
     }
+  }
+
+  private async updateBeneficiaryRedeemAsFailed(
+    uuid: string,
+    error: string,
+    numberOfAttempts?: number
+  ): Promise<BeneficiaryRedeem> {
+
+    return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
+      status: 'TOKEN_TRANSACTION_FAILED',
+      isCompleted: false,
+      info: {
+        error: error,
+        ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+      },
+    });
+  }
+
+  private async updateBeneficiaryRedeemAsCompleted({
+    uuid,
+    txHash,
+    offrampWalletAddress,
+    beneficiaryWalletAddress,
+    numberOfAttempts,
+    amount
+  }: {
+    uuid: string;
+    txHash: string;
+    offrampWalletAddress: string;
+    beneficiaryWalletAddress: string;
+    numberOfAttempts?: number;
+    amount: number;
+  }): Promise<BeneficiaryRedeem> {
+    return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
+        status: 'TOKEN_TRANSACTION_COMPLETED',
+        isCompleted: true,
+        amount: amount,
+        txHash: txHash,
+        info: {
+          message: 'Token transfer to offramp successful',
+          transactionHash: txHash,
+          offrampWalletAddress: offrampWalletAddress,
+          beneficiaryWalletAddress: beneficiaryWalletAddress,
+          ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+      },
+    });
+
+  }
+
+  private async createBeneficiaryRedeemRecord(
+    data: Prisma.BeneficiaryRedeemCreateInput
+  ): Promise<BeneficiaryRedeem> {
+    return await this.beneficiaryService.createBeneficiaryRedeem(data);
   }
 
   /*

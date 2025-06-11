@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { RpcException } from '@nestjs/microservices';
 import { AppService } from '../app/app.service';
 import { IPaymentProvider } from '../payouts/dto/types';
+import { CipsApiResponse, CipsResponseData } from './dto/types';
 
 
 //TODO replace API calls with SDK
@@ -85,7 +86,7 @@ export class OfframpService {
     }
   }
 
-  async instantOfframp(offrampPayload) {
+  async instantOfframp(offrampPayload): Promise<CipsResponseData> {
     const offrampSettings = await this.fetchOfframpSettings();
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
@@ -93,21 +94,16 @@ export class OfframpService {
     try {
       const {
             data: { data },
-          } = await this.httpService.axiosRef.post<{
-        success: boolean;
-        data;
-      }>(`${url}/offramp-request/instant`, offrampPayload, {
+          } = await this.httpService.axiosRef.post<CipsApiResponse>(`${url}/offramp-request/instant`, offrampPayload, {
         headers: {
           'app-id': appId
         }
       });
-      console.log(data);
 
       return data;
     } catch (error) {
-        console.log(error);
       throw new RpcException(
-        `Failed to initiate instant offramp: ${error.message}`
+        `Failed to initiate instant offramp: ${error?.response?.data?.message || error?.message}`
       );
     }
   }

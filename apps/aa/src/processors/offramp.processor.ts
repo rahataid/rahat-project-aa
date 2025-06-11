@@ -1,168 +1,165 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable } from '@nestjs/common';
-import { Job, Queue } from 'bull';
-import { InjectQueue } from '@nestjs/bull';
+import { Job } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
-import { RpcException } from '@nestjs/microservices';
 import { SettingsService } from '@rumsan/settings';
-import { PrismaService } from '@rumsan/prisma';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
-
-// {
-//   "tokenAmount": 1,
-//   "paymentProviderId": "0c1d24fc-aba5-40a2-a7ab-75f9ddc3611e",
-// "transactionHash":"8fb9fa59a12ca6c39ca4800735fab46102ccf9c9983d1474409f73a0a5094156", 
-//   "senderAddress": "b4d19024c749d16de416dd108a6d727f571cba6f826cb551a48bfcecc2b7f3b5",
-//    "paymentDetails": {
-//         "creditorAgent":1901,
-//         "endToEndId":"Payment Description",
-//         "creditorBranch":"506",
-//         "creditorAccount":"09107010092348",
-//         "creditorName":"Pratiksha Rai"
-//   }
-// }
+import { getBankId } from '../utils/bank';
+import { BeneficiaryRedeem } from '@prisma/client';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { CipsResponseData } from '../payouts/dto/types';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
 export class OfframpProcessor {
   private readonly logger = new Logger(OfframpProcessor.name);
-
   constructor(
-    private readonly settingService: SettingsService,
-    private readonly prismaService: PrismaService,
-     private readonly offrampService: OfframpService,
-    @InjectQueue(BQUEUE.OFFRAMP)
-    private readonly offrampQueue: Queue
+    private readonly offrampService: OfframpService,
+    private readonly beneficiaryService: BeneficiaryService
   ) {}
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
+    const fspOfframpDetails = job.data;
 
-    this.logger.log(
-      'Processing offramp request...',
-      OfframpProcessor.name
-    );
-    
+    this.logger.log(`Processing offramp request for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`);
+
+    const log = fspOfframpDetails.beneficiaryRedeemUUID
+      ? await this.beneficiaryService.getBeneficiaryRedeem(
+          fspOfframpDetails.beneficiaryRedeemUUID
+        )
+      : await this.beneficiaryService.createBeneficiaryRedeem({
+          status: 'FIAT_TRANSACTION_INITIATED',
+          transactionType: 'FIAT_TRANSFER',
+          Beneficiary: {
+            connect: {
+              walletAddress: fspOfframpDetails.beneficiaryWalletAddress,
+            },
+          },
+          fspId: fspOfframpDetails.payoutProcessorId,
+          amount: +fspOfframpDetails.amount,
+          txHash: fspOfframpDetails.transactionHash,
+          payout: {
+            connect: {
+              uuid: fspOfframpDetails.payoutUUID,
+            }
+          },
+          info: {
+            transactionHash: fspOfframpDetails.transactionHash,
+            offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
+            beneficiaryWalletAddress:
+              fspOfframpDetails.beneficiaryWalletAddress,
+            numberOfAttempts: 0,
+          },
+        });
+
     try {
-      const fspOfframpDetails = job.data;
-      this.logger.log(`Initiating instant offramp with payload: ${JSON.stringify(fspOfframpDetails)}`);
+
+      if(!fspOfframpDetails.beneficiaryRedeemUUID) {
+        await job.update({
+          ...fspOfframpDetails,
+          beneficiaryRedeemUUID: log.uuid,
+        })
+      }
+
+      this.logger.log(
+        `Initiating instant offramp with beneficiary bank details: ${JSON.stringify(fspOfframpDetails.beneficiaryBankDetails)}`
+      );
+
+      // TODO: Need to think about fonepay and other payment providers
       const offrampRequest = {
         tokenAmount: fspOfframpDetails.amount,
         paymentProviderId: fspOfframpDetails.payoutProcessorId,
         transactionHash: fspOfframpDetails.transactionHash,
         senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
         paymentDetails: {
-          creditorAgent: Number(fspOfframpDetails.beneficiaryBankDetails.bankName),
-          endToEndId: "Payment Description",
+          creditorAgent: Number(
+            getBankId(fspOfframpDetails.beneficiaryBankDetails.bankName) // <-- TODO: This should be handled by the offramp itself in the future
+          ),
+          endToEndId: 'Payment Description',
           creditorBranch: '506',
-          creditorAccount: fspOfframpDetails.beneficiaryBankDetails.accountNumber,
-          creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName
-        }
-        };
+          creditorAccount:
+            fspOfframpDetails.beneficiaryBankDetails.accountNumber,
+          creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
+        },
+      };
 
-    console.log('offrampRequest', offrampRequest);
-    this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
-     const result = await this.offrampService.instantOfframp(offrampRequest);
-     console.log('result', result);
-      
+      this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
+
+      const result = await this.offrampService.instantOfframp(offrampRequest);
+
       // update the transaction record
+      await this.updateBeneficiaryRedeemAsCompleted({
+        uuid: log.uuid,
+        txHash: fspOfframpDetails.transactionHash,
+        offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
+        beneficiaryWalletAddress: fspOfframpDetails.beneficiaryWalletAddress,
+        numberOfAttempts: job.attemptsMade,
+        cipsResponseData: result,
+      });
 
-    //   return result;
+      return result;
     } catch (error) {
       this.logger.error(
         `Instant offramp failed: ${error.message}`,
         error.stack,
-        OfframpProcessor.name
       );
-      
-      // Record failed transaction
-  
-      
-      throw new RpcException(`Failed to process instant offramp: ${error.message}`);
+
+      await this.updateBeneficiaryRedeemAsFailed(
+        log.uuid,
+        error.message,
+        job.attemptsMade
+      );
+
+      throw error(
+        `Failed to process instant offramp: ${error.message}`
+      );
     }
   }
-  
 
-//   /**
-//    * Updates transaction records in the database
-//    */
-//   private async updateTransactionRecord(
-//     uuid: string | undefined,
-//     fromWallet: string,
-//     toWallet: string,
-//     txResult: any
-//   ) {
-//     try {
-//       if (!uuid) return; // Skip if no UUID provided
-      
-//       // Create a transaction record
-//       await this.prismaService.transaction.create({
-//         data: {
-//           uuid: uuid,
-//           type: 'OFFRAMP_TRANSFER',
-//           status: 'COMPLETED',
-//           from: fromWallet,
-//           to: toWallet,
-//           amount: txResult.amount,
-//           info: {
-//             txId: txResult.id,
-//             timestamp: new Date().toISOString(),
-//             result: txResult
-//           }
-//         }
-//       });
-//     } catch (dbError) {
-//       this.logger.error(
-//         `Failed to update transaction record: ${dbError.message}`,
-//         dbError.stack,
-//         OfframpProcessor.name
-//       );
-//     }
-//   }
+  private async updateBeneficiaryRedeemAsFailed(
+    uuid: string,
+    error: string,
+    numberOfAttempts?: number
+  ): Promise<BeneficiaryRedeem> {
+    return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
+      status: 'FIAT_TRANSACTION_FAILED',
+      isCompleted: false,
+      info: {
+        error: error,
+        ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+      },
+    });
+  }
 
-//   /**
-//    * Records a failed transaction attempt
-//    */
-//   private async recordFailedTransaction(
-//     uuid: string,
-//     fromWallet: string,
-//     toWallet: string,
-//     error: any
-//   ) {
-//     try {
-//       await this.prismaService.transaction.create({
-//         data: {
-//           uuid: uuid,
-//           type: 'OFFRAMP_TRANSFER',
-//           status: 'FAILED',
-//           from: fromWallet,
-//           to: toWallet,
-//           info: {
-//             error: error.message,
-//             stack: error.stack,
-//             timestamp: new Date().toISOString()
-//           }
-//         }
-//       });
-//     } catch (dbError) {
-//       this.logger.error(
-//         `Failed to record failed transaction: ${dbError.message}`,
-//         dbError.stack,
-//         OfframpProcessor.name
-//       );
-//     }
-//   }
-
-  /**
-   * Helper to get settings values
-   */
-  private async getFromSettings(key: string): Promise<string> {
-    try {
-      const stellarSettings = await this.settingService.getPublic('STELLAR_SETTINGS');
-      return (stellarSettings.value as any)[key] || '';
-    } catch (error) {
-      throw new RpcException(`Failed to get ${key} from settings: ${error.message}`);
-    }
+  private async updateBeneficiaryRedeemAsCompleted({
+    uuid,
+    txHash,
+    offrampWalletAddress,
+    beneficiaryWalletAddress,
+    numberOfAttempts,
+    cipsResponseData
+  }: {
+    uuid: string;
+    txHash: string;
+    offrampWalletAddress: string;
+    beneficiaryWalletAddress: string;
+    cipsResponseData: CipsResponseData;
+    numberOfAttempts?: number;
+  }): Promise<BeneficiaryRedeem> {
+    return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
+      status: 'FIAT_TRANSACTION_COMPLETED',
+      isCompleted: true,
+      txHash: txHash,
+      info: {
+        message: 'Fiat transfer to offramp successful',
+        transactionHash: txHash,
+        offrampWalletAddress: offrampWalletAddress,
+        beneficiaryWalletAddress: beneficiaryWalletAddress,
+        cipsResponseData: JSON.parse(JSON.stringify(cipsResponseData)),
+        ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+      },
+    });
   }
 }
