@@ -110,5 +110,5 @@ jobs:
           git config user.email "sandab@rumsan.net"
           git add ${{ env.MANIFEST_FILE1 }}
           git add ${{ env.MANIFEST_FILE2 }}
-          git commit -m "runner: Update Rahat AA Stage UI image tag to aa-stage-${{ needs.deploy.outputs.sha_short }}"
+          git commit -m "runner: Update Rahat AA Stage UI image tag to aa-stage-${{ needs.deploy.outputs.sha_short }}-${{ needs.deploy.outputs.run_id_short }}"
           git push origin main
