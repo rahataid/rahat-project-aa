@@ -9,11 +9,13 @@ import { AppService } from '../app/app.service';
 import { HttpModule} from '@nestjs/axios';
 import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 
 @Module({
   imports: [
     VendorsModule,
     HttpModule,
+    BeneficiaryModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',

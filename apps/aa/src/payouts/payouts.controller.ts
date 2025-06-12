@@ -5,6 +5,7 @@ import { PayoutsService } from './payouts.service';
 import { OfframpService } from './offramp.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
+import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 
 @Controller()
 export class PayoutsController {
@@ -41,5 +42,20 @@ export class PayoutsController {
   @MessagePattern({ cmd: JOBS.PAYOUT.TRIGGER_PAYOUT, uuid: process.env.PROJECT_ID })
   triggerPayout(@Payload() payload: { uuid: string }) {
     return this.payoutsService.triggerPayout(payload.uuid);
+  }
+
+  @MessagePattern({ cmd: JOBS.PAYOUT.TRIGGER_ONE_FAILED_PAYOUT_REQUEST, uuid: process.env.PROJECT_ID })
+  triggerOneFailedPayoutRequest(@Payload() payload: { beneficiaryRedeemUuid: string; payoutUUID: string }) {
+    return this.payoutsService.triggerOneFailedPayoutRequest(payload);
+  }
+
+  @MessagePattern({ cmd: JOBS.PAYOUT.GET_PAYOUT_LOGS, uuid: process.env.PROJECT_ID })
+  getPayoutLogs(@Payload() payload: GetPayoutLogsDto) {
+    return this.payoutsService.getPayoutLogs(payload);
+  }
+
+  @MessagePattern({ cmd: JOBS.PAYOUT.GET_PAYOUT_LOG, uuid: process.env.PROJECT_ID })
+  getPayoutLog(@Payload() payload: { uuid: string }) {
+    return this.payoutsService.getPayoutLog(payload.uuid);
   }
 }

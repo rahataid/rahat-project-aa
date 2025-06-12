@@ -599,6 +599,10 @@ export class BeneficiaryService {
     try {
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.findUnique({
         where: { uuid },
+        include: {
+          payout: true,
+          Beneficiary: true
+        }
       });
 
       return beneficiaryRedeem;

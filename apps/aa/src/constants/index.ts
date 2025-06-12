@@ -125,6 +125,10 @@ export const JOBS = {
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
     TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
+    TRIGGER_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerFailedPayoutRequest',
+    TRIGGER_ONE_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerOneFailedPayoutRequest',
+    GET_PAYOUT_LOGS: 'aa.jobs.payout.getPayoutLogs',
+    GET_PAYOUT_LOG: 'aa.jobs.payout.getPayoutLog',
     CREATE: 'aa.jobs.payout.create',
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',

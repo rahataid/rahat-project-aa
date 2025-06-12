@@ -13,6 +13,8 @@ import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, JOBS } from '../constants';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -26,6 +28,7 @@ export class PayoutsService {
     private offrampService: OfframpService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
+    private readonly beneficiaryService: BeneficiaryService
   ) {}
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
@@ -282,7 +285,9 @@ export class PayoutsService {
     //   "bank_name": "0401",
     // "bank_ac_name": "Ankit Neupane",
     // "bank_ac_number": "08110017501011"
-    const numberOfTokensToTransfer = payout.beneficiaryGroupToken.numberOfTokens / payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+    const numberOfTokensToTransfer =
+      payout.beneficiaryGroupToken.numberOfTokens /
+      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
 
     // Extract the wallet addresses and bank-details from each beneficiary
     const BeneficiaryPayoutDetails =
@@ -323,6 +328,43 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
+  async registerTokenTransferRequest(payload: {
+    uuid: string;
+    offrampWalletAddress: string;
+    BeneficiaryPayoutDetails: BeneficiaryPayoutDetails[];
+    payoutProcessorId: string;
+  }) {
+    const {
+      uuid,
+      offrampWalletAddress,
+      BeneficiaryPayoutDetails,
+      payoutProcessorId,
+    } = payload;
+
+    const d = await this.stellarQueue.addBulk(
+      BeneficiaryPayoutDetails.map((beneficiary) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: {
+          offrampWalletAddress,
+          beneficiaryWalletAddress: beneficiary.walletAddress,
+          beneficiaryBankDetails: beneficiary.bankDetails,
+          payoutUUID: uuid,
+          payoutProcessorId: payoutProcessorId,
+          amount: beneficiary.amount,
+        },
+        opts: {
+          attempts: 3, // Retry up to 3 times
+          backoff: {
+            type: 'exponential',
+            delay: 1000, // Initial delay of 1 seconds
+          },
+        },
+      }))
+    );
+
+    return d;
+  }
+
   async triggerPayout(uuid: string): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
@@ -336,28 +378,129 @@ export class PayoutsService {
     console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
 
     // send asset to offramp service`
-    const d = await this.stellarQueue.addBulk(
-      BeneficiaryPayoutDetails.map((beneficiary) => ({
-        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
-        data: {
-          offrampWalletAddress,
-          beneficiaryWalletAddress: beneficiary.walletAddress,
-          beneficiaryBankDetails: beneficiary.bankDetails,
-          payoutUUID: uuid,
-          payoutProcessorId: payoutDetails.payoutProcessorId,
-          amount: beneficiary.amount,
-        },
-        opts: {
-          attempts: 3, // Retry up to 3 times
-          backoff: {
-            type: 'exponential',
-            delay: 1000, // Initial delay of 1 seconds
-          },
-        },
-      }))
-    );
+    await this.registerTokenTransferRequest({
+      uuid,
+      offrampWalletAddress,
+      BeneficiaryPayoutDetails,
+      payoutProcessorId: payoutDetails.payoutProcessorId,
+    });
 
     this.logger.log(`Payout job added to queue for UUID: ${uuid}`);
     return 'Payout Initiated Successfully';
+  }
+
+  async triggerOneFailedPayoutRequest(payload: {
+    beneficiaryRedeemUuid: string;
+    payoutUUID: string;
+  }): Promise<any> {
+    const { beneficiaryRedeemUuid } = payload;
+
+    this.logger.log(
+      `Triggering payout for failed request with UUID: ${beneficiaryRedeemUuid}`
+    );
+
+    const benfRedeemRequest =
+      await this.beneficiaryService.getBeneficiaryRedeem(beneficiaryRedeemUuid);
+
+    if (!benfRedeemRequest) {
+      throw new RpcException(
+        `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' not found`
+      );
+    }
+
+    if (benfRedeemRequest.isCompleted)
+      throw new RpcException(
+        `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already completed`
+      );
+
+    const transactionType = benfRedeemRequest.transactionType;
+
+    if (transactionType === 'VENDOR_REIMBURSEMENT')
+      throw new RpcException(
+        `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is not a FSP Payout request`
+      );
+
+    if (transactionType === 'TOKEN_TRANSFER') {
+    }
+    if (transactionType === 'FIAT_TRANSFER') {
+    }
+  }
+
+  async getPayoutLogs(payload: GetPayoutLogsDto): Promise<any> {
+
+    const { payoutUUID, transactionType, transactionStatus, page, perPage, sort, order } = payload;
+
+    this.logger.log(`Getting payout logs for payout with UUID: ${payoutUUID}`);
+    try {
+      const payout = await this.findOne(payoutUUID);  
+
+      if (!payout) {
+        throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+      }
+
+      const query: Prisma.BeneficiaryRedeemFindManyArgs = {
+        where: {
+          payoutId: payoutUUID,
+          ...(transactionType && { transactionType }),
+          ...(transactionStatus && { status: transactionStatus }),
+        },
+        ...(sort && {
+          orderBy: {
+            [sort]: order,
+          },
+        }),
+      }
+
+
+
+      const logs = await paginate(
+        this.prisma.beneficiaryRedeem,
+        {
+          ...query
+        },
+        {
+          page,
+          perPage,
+        }
+      );
+      return logs;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get payout log: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getPayoutLog(uuid: string): Promise<any> {
+    this.logger.log(
+      `Getting payout log for beneficiary redeem with UUID: ${uuid}`
+    );
+    try {
+      const log = await this.prisma.beneficiaryRedeem.findUnique({
+        where: {
+          uuid,
+        },
+        include: {
+          Beneficiary: true,
+          payout: true,
+        }
+      });
+
+      if (!log) {
+        throw new RpcException(
+          `Beneficiary redeem log with UUID '${uuid}' not found`
+        );
+      }
+
+      return log;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get payout log: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
   }
 }
