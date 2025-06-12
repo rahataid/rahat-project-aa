@@ -216,6 +216,7 @@ async function seedTriggers(
     console.log('Seeding Triggers');
     console.log('#########################');
     const categories = [
+      'General Action',
       'Early Warning Communication',
       'Cleaning The Drains',
       'Strengthening Embankments By Placing Sand Bags',
@@ -223,6 +224,7 @@ async function seedTriggers(
       'People, Livestock And Property Evacuation',
       'Complaints Handling Mechanism',
       'Managing Drinking Water',
+      'Cash Transfer',
     ];
 
     for (const category of categories) {
