@@ -83,6 +83,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroups(payload) {
+    console.log(payload);
     return this.beneficiaryService.getAllGroups(payload);
   }
 

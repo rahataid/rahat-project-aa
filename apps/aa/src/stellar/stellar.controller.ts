@@ -15,9 +15,9 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { Logger } from '@nestjs/common';
+import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Controller('stellar')
 export class StellarController {
@@ -98,6 +98,7 @@ export class StellarController {
     uuid: process.env.PROJECT_ID,
   })
   async getWalletStats(address: GetWalletBalanceDto) {
+    this.logger.log(`Getting wallet stats for ${address.address}`);
     return this.stellarService.getWalletStats(address);
   }
 

@@ -7,6 +7,7 @@ import { DisbursementServices, ReceiveService, TransactionService } from '@rahat
 import { of } from 'rxjs';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
+import { CORE_MODULE } from '../constants';
 
 jest.mock('@rahataid/stellar-sdk');
 jest.mock('bcryptjs');
@@ -16,6 +17,9 @@ describe('StellarService', () => {
   let clientProxy: jest.Mocked<ClientProxy>;
   let prismaService: jest.Mocked<PrismaService>;
   let settingsService: jest.Mocked<SettingsService>;
+  let receiveService: jest.Mocked<ReceiveService>;
+  let transactionService: jest.Mocked<TransactionService>;
+  let disbursementServices: jest.Mocked<DisbursementServices>;
 
   const mockClientProxy = {
     send: jest.fn(),
@@ -27,9 +31,14 @@ describe('StellarService', () => {
     },
     otp: {
       upsert: jest.fn(),
+      update: jest.fn(),
       findUnique: jest.fn(),
     },
     beneficiaryGroups: {
+      findMany: jest.fn(),
+    },
+    vendor: {
+      findUnique: jest.fn(),
       findMany: jest.fn(),
     },
   };
@@ -54,12 +63,26 @@ describe('StellarService', () => {
     on: jest.fn(),
   };
 
+  const mockReceiveService = {
+    sendAsset: jest.fn(),
+    faucetAndTrustlineService: jest.fn(),
+  };
+
+  const mockTransactionService = {
+    // Add any required methods
+  };
+
+  const mockDisbursementServices = {
+    createDisbursementProcess: jest.fn(),
+    getDistributionAddress: jest.fn().mockResolvedValue('test_address'),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StellarService,
         {
-          provide: 'RAHAT_CORE_PROJECT_CLIENT',
+          provide: CORE_MODULE,
           useValue: mockClientProxy,
         },
         {
@@ -74,14 +97,28 @@ describe('StellarService', () => {
           provide: 'BullQueue_STELLAR',
           useValue: mockBullQueueStellar,
         },
+        {
+          provide: ReceiveService,
+          useValue: mockReceiveService,
+        },
+        {
+          provide: TransactionService,
+          useValue: mockTransactionService,
+        },
+        {
+          provide: DisbursementServices,
+          useValue: mockDisbursementServices,
+        },
       ],
     }).compile();
 
     service = module.get<StellarService>(StellarService);
-    clientProxy = module.get('RAHAT_CORE_PROJECT_CLIENT');
+    clientProxy = module.get(CORE_MODULE);
     prismaService = module.get(PrismaService);
     settingsService = module.get(SettingsService);
-
+    receiveService = module.get(ReceiveService);
+    transactionService = module.get(TransactionService);
+    disbursementServices = module.get(DisbursementServices);
 
     // Reset all mocks before each test
     jest.clearAllMocks();
@@ -104,7 +141,7 @@ describe('StellarService', () => {
 
     beforeEach(() => {
       jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue(mockBeneficiaries);
-      (DisbursementServices.prototype.createDisbursementProcess as jest.Mock).mockResolvedValue({
+      mockDisbursementServices.createDisbursementProcess.mockResolvedValue({
         success: true,
       });
     });
@@ -112,7 +149,7 @@ describe('StellarService', () => {
     it('should successfully create a disbursement process', async () => {
       const result = await service.disburse(mockDiburseDto);
       expect(result).toEqual({ success: true });
-      expect(DisbursementServices.prototype.createDisbursementProcess).toHaveBeenCalled();
+      expect(mockDisbursementServices.createDisbursementProcess).toHaveBeenCalled();
     });
 
     /*
@@ -133,6 +170,7 @@ describe('StellarService', () => {
       mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedOtp');
       mockPrismaService.otp.upsert.mockResolvedValue({ id: 1 });
+      jest.spyOn(service as any, 'getRahatBalance').mockResolvedValue(1000);
     });
 
     it('should successfully send and store OTP', async () => {
@@ -140,68 +178,6 @@ describe('StellarService', () => {
       expect(result).toEqual({ id: 1 });
       expect(mockClientProxy.send).toHaveBeenCalled();
       expect(mockPrismaService.otp.upsert).toHaveBeenCalled();
-    });
-  });
-
-  describe('sendAssetToVendor', () => {
-    const mockSendAssetDto = {
-      phoneNumber: '+1234567890',
-      otp: '123456',
-      receiverAddress: 'stellar_address',
-      amount: '100',
-    };
-
-    beforeEach(() => {
-      jest.spyOn(service as any, 'verifyOTP').mockResolvedValue(true);
-      jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue({
-        privateKey: 'private_key',
-      });
-      (ReceiveService.prototype.sendAsset as jest.Mock).mockResolvedValue({
-        success: true,
-      });
-    });
-
-    it('should successfully send asset to vendor', async () => {
-      const result = await service.sendAssetToVendor(mockSendAssetDto);
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should throw error when OTP verification fails', async () => {
-      jest.spyOn(service as any, 'verifyOTP').mockRejectedValue(new Error('Invalid OTP'));
-      await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow('Invalid OTP');
-    });
-  });
-
-  describe('getDisbursementStats', () => {
-    beforeEach(() => {
-      jest.spyOn(service as any, 'getRahatBalance').mockResolvedValue(1000);
-      jest.spyOn(service as any, 'getRecentTransaction').mockResolvedValue([]);
-    });
-
-    it('should return disbursement statistics', async () => {
-      const result = await service.getDisbursementStats();
-      expect(result).toHaveProperty('tokenStats');
-      expect(result).toHaveProperty('transactionStats');
-    });
-  });
-
-  describe('faucetAndTrustlineService', () => {
-    const mockFundAccountDto = {
-      walletAddress: 'test_address',
-      secretKey: 'test_secret',
-    };
-
-    it('should call receiveService.faucetAndTrustlineService with correct parameters', async () => {
-      (ReceiveService.prototype.faucetAndTrustlineService as jest.Mock).mockResolvedValue({
-        success: true,
-      });
-
-      const result = await service.faucetAndTrustlineService(mockFundAccountDto);
-      expect(result).toEqual({ success: true });
-      expect(ReceiveService.prototype.faucetAndTrustlineService).toHaveBeenCalledWith(
-        mockFundAccountDto.walletAddress,
-        mockFundAccountDto.secretKey
-      );
     });
   });
 

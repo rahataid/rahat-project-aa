@@ -12,9 +12,43 @@ import { BQUEUE } from '../constants';
 import { StatsModule } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SettingsService } from '@rumsan/settings';
+import { DisbursementServices } from '@rahataid/stellar-sdk';
+import { StellarModule } from '../stellar/stellar.module';
 
 describe('BeneficiaryModule', () => {
   it('should compile the module', async () => {
+    const settingsService = {
+      get: jest.fn(),
+      set: jest.fn(),
+      getPublic: jest.fn(),
+      listPublic: jest.fn(),
+      load: jest.fn(),
+      update: jest.fn(),
+      listAll: jest.fn(),
+      listPrivate: jest.fn(),
+      list: jest.fn(),
+      delete: jest.fn(),
+    } as unknown as jest.Mocked<SettingsService>;
+
+    const disbursementServices = {
+      createDisbursementProcess: jest.fn(),
+      getDistributionAddress: jest.fn(),
+      getDisbursement: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      findOne: jest.fn(),
+      findAll: jest.fn(),
+    } as unknown as jest.Mocked<DisbursementServices>;
+
+    const mockCvaDisbursementService = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    } as unknown as jest.Mocked<CvaDisbursementService>;
+
     const module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -28,6 +62,7 @@ describe('BeneficiaryModule', () => {
         }),
         BeneficiaryModule,
       ],
+      providers: [CvaDisbursementService],
     })
       .overrideProvider(PrismaService)
       .useValue({
@@ -60,14 +95,16 @@ describe('BeneficiaryModule', () => {
         update: jest.fn(),
         remove: jest.fn(),
       })
+      .overrideProvider(SettingsService)
+      .useValue(settingsService)
       .overrideProvider(BeneficiaryStatService)
       .useValue({
         updateStats: jest.fn(),
       })
       .overrideProvider(CvaDisbursementService)
-      .useValue({
-        create: jest.fn(),
-      })
+      .useValue(mockCvaDisbursementService)
+      .overrideProvider(DisbursementServices)
+      .useValue(disbursementServices)
       .overrideProvider(StellarService)
       .useValue({
         createAccount: jest.fn(),

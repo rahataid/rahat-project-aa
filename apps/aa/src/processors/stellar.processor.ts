@@ -25,6 +25,8 @@ import {
   IDisbursementResultDto,
 } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 import { IDisbursementStatusJob } from './types';
 
 @Processor(BQUEUE.STELLAR)
@@ -37,6 +39,7 @@ export class StellarProcessor {
     private readonly beneficiaryService: BeneficiaryService,
     private readonly settingService: SettingsService,
     private readonly stellarService: StellarService,
+    private readonly receiveService: ReceiveService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>
   ) {}
@@ -304,7 +307,10 @@ export class StellarProcessor {
         }
       );
 
-      this.logger.log(`Successfully added disbursement status update job for group ${groupUuid}`, StellarProcessor.name);
+      this.logger.log(
+        `Successfully added disbursement status update job for group ${groupUuid}`,
+        StellarProcessor.name
+      );
 
       return result;
     } catch (error) {
@@ -328,6 +334,57 @@ export class StellarProcessor {
     }
   }
 
+  @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 1 })
+  async transferToOfframp(job: Job<TransferToOfframpDto>) {
+    this.logger.log(
+      'Processing transfer to offramp job...',
+      StellarProcessor.name
+    );
+    const { ...payload } = job.data;
+    try {
+      // Get Keys of beneficiary with walletAddress
+      const keys = await this.stellarService.getSecretByWallet(
+        payload.beneficiaryWalletAddress as string
+      );
+
+      if (!keys) {
+        throw new RpcException(
+          `Beneficiary with wallet ${payload.beneficiaryWalletAddress} not found`
+        );
+      }
+
+      // Get balance and check if the account has rahat balance > 0
+      const balance = await this.stellarService.getRahatBalance(
+        payload.beneficiaryWalletAddress
+      );
+
+      if (balance <= 0) {
+        throw new RpcException(
+          `Beneficiary with wallet ${payload.beneficiaryWalletAddress} has rahat balance <= 0`
+        );
+      }
+
+      const result = await this.receiveService.sendAsset(
+        keys.privateKey,
+        payload.offRampWalletAddress,
+        balance.toString()
+      );
+
+      this.logger.log(
+        `Transfer to offramp job completed successfully`,
+        StellarProcessor.name
+      );
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error in transfer to offramp: ${error.message}`,
+        error.stack,
+        StellarProcessor.name
+      );
+    }
+  }
+
   @Process({ name: JOBS.STELLAR.DISBURSEMENT_STATUS_UPDATE, concurrency: 1 })
   async disbursementStatusUpdate(job: Job<IDisbursementStatusJob>) {
     try {
@@ -342,16 +399,25 @@ export class StellarProcessor {
         disbursementID
       );
 
-      if(!disbursement) {
-        this.logger.error(`Disbursement ${disbursementID} not found`, StellarProcessor.name);
+      if (!disbursement) {
+        this.logger.error(
+          `Disbursement ${disbursementID} not found`,
+          StellarProcessor.name
+        );
 
         return;
       }
 
-      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
+      const group =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
 
-      if(!group) {
-        this.logger.error(`Group ${groupUuid} not found`, StellarProcessor.name);
+      if (!group) {
+        this.logger.error(
+          `Group ${groupUuid} not found`,
+          StellarProcessor.name
+        );
         return;
       }
 
@@ -361,8 +427,14 @@ export class StellarProcessor {
           StellarProcessor.name
         );
         // if the group updatedA is more then 60 min, then assume the disbursement is failed
-        if(new Date(group.updatedAt).getTime() > new Date().getTime() - 60 * 60 * 1000) {
-          this.logger.log(`Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`, StellarProcessor.name);
+        if (
+          new Date(group.updatedAt).getTime() >
+          new Date().getTime() - 60 * 60 * 1000
+        ) {
+          this.logger.log(
+            `Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`,
+            StellarProcessor.name
+          );
           await this.beneficiaryService.updateGroupToken({
             groupUuid,
             status: 'FAILED',
@@ -410,7 +482,6 @@ export class StellarProcessor {
         return;
       }
 
-
       if (disbursement.status === 'COMPLETED') {
         this.logger.log(
           `Disbursement ${disbursementID} is in COMPLETED status`,
@@ -425,7 +496,7 @@ export class StellarProcessor {
           info: {
             ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
             disbursement,
-          }
+          },
         });
         return;
       }
