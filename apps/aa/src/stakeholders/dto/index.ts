@@ -30,6 +30,8 @@ export interface GetStakeholdersData {
   district: string;
   municipality: string;
   page: number;
+  order?: string;
+  sort?: string;
   perPage: number;
 }
 
@@ -51,6 +53,9 @@ export interface UpdateStakeholdersGroups {
 export interface GetAllGroups {
   page: number;
   perPage: number;
+  order?: string;
+  sort?: string;
+  search?: string;
 }
 
 export interface GetOneGroup {
@@ -63,4 +68,37 @@ export interface RemoveStakeholdersGroup {
 
 export interface FindStakeholdersGroup {
   uuid: string;
+}
+
+import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+
+export class CreateStakeholderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Name is required' })
+  name: string;
+
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  @Length(7, 20, {
+    message: 'Phone number must be between 7 and 20 characters',
+  })
+  phone: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Designation is required' })
+  designation: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Organization is required' })
+  organization: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'District is required' })
+  district: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Municipality is required' })
+  municipality: string;
 }

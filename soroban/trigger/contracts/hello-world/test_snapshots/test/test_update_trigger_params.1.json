@@ -1,0 +1,622 @@
+{
+  "generators": {
+    "address": 1,
+    "nonce": 0
+  },
+  "auth": [
+    [],
+    [],
+    []
+  ],
+  "ledger": {
+    "protocol_version": 21,
+    "sequence_number": 0,
+    "timestamp": 0,
+    "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "base_reserve": 0,
+    "min_persistent_entry_ttl": 4096,
+    "min_temp_entry_ttl": 16,
+    "max_entry_ttl": 6312000,
+    "ledger_entries": [
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "symbol": "triggers"
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "symbol": "triggers"
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "test3"
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "is_mandatory"
+                            },
+                            "val": {
+                              "bool": false
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "is_triggered"
+                            },
+                            "val": {
+                              "bool": false
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "params_hash"
+                            },
+                            "val": {
+                              "string": "new_hash789"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "phase"
+                            },
+                            "val": {
+                              "string": "monitoring"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "river_basin"
+                            },
+                            "val": {
+                              "string": "amazon"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "source"
+                            },
+                            "val": {
+                              "string": "new_weather_api"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "title"
+                            },
+                            "val": {
+                              "string": "Drought Alert"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "trigger_type"
+                            },
+                            "val": {
+                              "string": "drought"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": "ledger_key_contract_instance",
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": "ledger_key_contract_instance",
+                "durability": "persistent",
+                "val": {
+                  "contract_instance": {
+                    "executable": {
+                      "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    },
+                    "storage": null
+                  }
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_code": {
+            "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_code": {
+                "ext": "v0",
+                "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "code": ""
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ]
+    ]
+  },
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "add_trigger"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "symbol": "test3"
+                },
+                {
+                  "string": "drought"
+                },
+                {
+                  "string": "monitoring"
+                },
+                {
+                  "string": "Drought Alert"
+                },
+                {
+                  "string": "weather_api"
+                },
+                {
+                  "string": "amazon"
+                },
+                {
+                  "string": "old_hash456"
+                },
+                {
+                  "bool": false
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "string": "TriggerEvent"
+              },
+              {
+                "string": "Added"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "symbol": "Added"
+                },
+                {
+                  "symbol": "test3"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "is_mandatory"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "is_triggered"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "params_hash"
+                      },
+                      "val": {
+                        "string": "old_hash456"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "phase"
+                      },
+                      "val": {
+                        "string": "monitoring"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "river_basin"
+                      },
+                      "val": {
+                        "string": "amazon"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "source"
+                      },
+                      "val": {
+                        "string": "weather_api"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Drought Alert"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "trigger_type"
+                      },
+                      "val": {
+                        "string": "drought"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "add_trigger"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "update_trigger_params"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "symbol": "test3"
+                },
+                {
+                  "string": "new_hash789"
+                },
+                {
+                  "string": "new_weather_api"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "string": "TriggerEvent"
+              },
+              {
+                "string": "Updated"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "symbol": "Updated"
+                },
+                {
+                  "symbol": "test3"
+                },
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "is_mandatory"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "is_triggered"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "params_hash"
+                      },
+                      "val": {
+                        "string": "new_hash789"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "phase"
+                      },
+                      "val": {
+                        "string": "monitoring"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "river_basin"
+                      },
+                      "val": {
+                        "string": "amazon"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "source"
+                      },
+                      "val": {
+                        "string": "new_weather_api"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "title"
+                      },
+                      "val": {
+                        "string": "Drought Alert"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "trigger_type"
+                      },
+                      "val": {
+                        "string": "drought"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "update_trigger_params"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "get_trigger"
+              }
+            ],
+            "data": {
+              "symbol": "test3"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "get_trigger"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "is_mandatory"
+                  },
+                  "val": {
+                    "bool": false
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "is_triggered"
+                  },
+                  "val": {
+                    "bool": false
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "params_hash"
+                  },
+                  "val": {
+                    "string": "new_hash789"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "phase"
+                  },
+                  "val": {
+                    "string": "monitoring"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "river_basin"
+                  },
+                  "val": {
+                    "string": "amazon"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "source"
+                  },
+                  "val": {
+                    "string": "new_weather_api"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "title"
+                  },
+                  "val": {
+                    "string": "Drought Alert"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "trigger_type"
+                  },
+                  "val": {
+                    "string": "drought"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
+}

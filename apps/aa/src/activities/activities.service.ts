@@ -582,13 +582,13 @@ export class ActivitiesService {
     const { selectedCommunication } =
       await this.getActivityCommunicationDetails(communicationId, activityId);
 
-    const retryResponse = (
-      await this.commsClient.session.retryIncomplete(
-        selectedCommunication.sessionId
-      )
-    ).data;
+    // const retryResponse = (
+    //   await this.commsClient.session.retryIncomplete(
+    //     selectedCommunication.sessionId
+    //   )
+    // ).data;
 
-    return retryResponse;
+    // return retryResponse;
   }
 
   async getActivityCommunicationDetails(

@@ -1,4 +1,10 @@
+import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
+
 export const NAMESPACE = 'rahat.projects';
+
+export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+
+export const STELLER_UID = 'stellar';
 
 export const DATA_SOURCES = {
   DHM: 'DHM',
@@ -24,13 +30,19 @@ export const CONTROLLERS = {
     LISTONE: NAMESPACE + '.beneficiary.listone',
     UPDATE: NAMESPACE + '.beneficiary.update',
   },
+  PAYOUTS: {
+    CREATE: NAMESPACE + '.payouts.create',
+    LIST: NAMESPACE + '.payouts.list',
+    GET: NAMESPACE + '.payouts.get',
+    UPDATE: NAMESPACE + '.payouts.update',
+    REMOVE: NAMESPACE + '.payouts.remove',
+  },
 };
 
 export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
-
   PROJECT: {
     SETUP: 'rahat.jobs.project.setup',
     CREATE: 'rahat.jobs.project.create',
@@ -44,6 +56,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.beneficiary.list',
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
+    GET_ONE_BENEFICIARY: 'rahat.jobs.beneficiary.find_one_beneficiary',
     UPDATE: 'rahat.jobs.beneficiary.update',
     REFER: 'rahat.jobs.beneficiary.get_referred',
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
@@ -79,8 +92,36 @@ export const JOBS = {
     REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
     COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
   },
+  STELLAR: {
+    DISBURSE: 'aa.jobs.stellar.disburse',
+    DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse_${process.env.PROJECT_ID}`,
+    SEND_OTP: 'aa.jobs.stellar.sendOtp',
+    SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
+    FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
+    CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
+    ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
+    UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
+    ADD_ONCHAIN_TRIGGER_QUEUE: `aa.jobs.stellar.getTriggerOnChainQueue_${process.env.PROJECT_ID}`,
+    UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE: `aa.jobs.stellar.updateTriggerParamsOnChainQueue_${process.env.PROJECT_ID}`,
+    DISBURSE_ONCHAIN_QUEUE: `aa.jobs.stellar.disburseOnChainQueue_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.stellar.disburse_status_update_${process.env.PROJECT_ID}`,
+    GET_ONCHAIN_TRIGGER: 'aa.jobs.stellar.getTriggerOnChain',
+    GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
+    GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
+    FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
+    GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
+    GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
+    TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
+    GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
+  },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    CREATE: 'aa.jobs.payout.create',
+    LIST: 'aa.jobs.payout.list',
+    GET: 'aa.jobs.payout.get',
+    UPDATE: 'aa.jobs.payout.update',
+    GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -111,7 +152,9 @@ export const JOBS = {
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
+    GET_ONE: 'aa.jobs.stakeholders.getOne',
     ADD: 'aa.jobs.stakeholders.add',
+    BULK_ADD: 'aa.jobs.stakeholders.bulkAdd',
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
     GET_ALL_GROUPS: 'aa.jobs.stakeholders.getAllGroups',
@@ -141,6 +184,18 @@ export const JOBS = {
     UPDATE: 'aa.jobs.dailyMonitoring.update',
     REMOVE: 'aa.jobs.dailyMonitoring.remove',
   },
+  VENDOR: {
+    REIMBURSE: {
+      CREATE: 'rahat.jobs.vendor.reimburse.create',
+      LIST: 'rahat.jobs.vendor.reimburse.list',
+      GET: 'rahat.jobs.vendor.reimburse.get',
+    },
+    GET: 'rahat.jobs.vendor.get',
+    LIST: 'rahat.jobs.vendor.list',
+    LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    CREATE: 'rahat.jobs.vendor.create',
+    ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+  },
 };
 
 export const EVENTS = {
@@ -161,6 +216,7 @@ export const BQUEUE = {
   TRIGGER: 'TRIGGER',
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
+  STELLAR: 'STELLAR',
 };
 
 export const VULNERABILITY_FIELD = {

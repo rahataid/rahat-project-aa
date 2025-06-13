@@ -1,9 +1,10 @@
 import { ConfigService } from '@nestjs/config';
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
   AddStakeholdersGroups,
+  CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
   GetOneGroup,
@@ -15,9 +16,11 @@ import {
 } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ValidateStakeholdersResponse } from './dto/type';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
-
 @Injectable()
 export class StakeholdersService {
   private readonly logger = new Logger(StakeholdersService.name);
@@ -59,6 +62,56 @@ export class StakeholdersService {
     });
   }
 
+  async bulkAdd(payloads: any) {
+    this.logger.log('Adding bulk stakeholders...');
+
+    // validate the  parseddata with the stakeholder class
+    const rData = await this.validateStakeholders(payloads);
+
+    // Step 1: Clean and normalize input
+
+    const cleanedPayloads = rData.validStakeholders.map(
+      ({ phone, ...rest }) => ({
+        ...rest,
+        phone: phone?.trim() || null,
+      })
+    );
+
+    // Step 2: Extract non-null phones
+    const phonesToCheck = cleanedPayloads
+      .map((p) => p.phone)
+      .filter((phone): phone is string => !!phone);
+
+    // Step 3: Check for existing phones in DB
+    const existing = await this.prisma.stakeholders.findMany({
+      where: {
+        phone: { in: phonesToCheck },
+      },
+      select: { phone: true },
+    });
+
+    const existingPhones = existing.map((e) => e.phone);
+
+    if (existingPhones.length > 0) {
+      this.logger.warn(
+        `Found ${existingPhones.length} duplicate phone number(s)`
+      );
+      throw new RpcException(
+        `Phone number must be unique, ${existingPhones.join(', ')}`
+      );
+    }
+
+    // Step 4: Insert all if no duplicates
+    const result = await this.prisma.stakeholders.createMany({
+      data: cleanedPayloads,
+    });
+
+    return {
+      successCount: result.count,
+      message: 'All stakeholders successfully added.',
+    };
+  }
+
   async getAll(payload: GetStakeholdersData) {
     const {
       name,
@@ -68,6 +121,8 @@ export class StakeholdersService {
       organization,
       page,
       perPage,
+      order,
+      sort,
     } = payload;
 
     const query = {
@@ -90,9 +145,17 @@ export class StakeholdersService {
       include: {
         stakeholdersGroups: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      ...(order && sort
+        ? {
+            orderBy: {
+              [sort]: order,
+            },
+          }
+        : {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          }),
     };
 
     return paginate(this.prisma.stakeholders, query, {
@@ -101,6 +164,16 @@ export class StakeholdersService {
     });
   }
 
+  async getOne(payload: { uuid: string }) {
+    return this.prisma.stakeholders.findUnique({
+      where: {
+        uuid: payload.uuid,
+      },
+      include: {
+        stakeholdersGroups: true,
+      },
+    });
+  }
   async remove(payload: RemoveStakeholdersData) {
     return await this.prisma.stakeholders.update({
       where: {
@@ -205,11 +278,23 @@ export class StakeholdersService {
   }
 
   async getAllGroups(payload: GetAllGroups) {
-    const { page, perPage } = payload;
+    const { page, perPage, order, search, sort } = payload;
 
     const query = {
       where: {
         isDeleted: false,
+        ...(search && {
+          name: { contains: search, mode: 'insensitive' },
+        }),
+      },
+      orderBy: {
+        ...(order && sort
+          ? {
+              [sort]: order,
+            }
+          : {
+              createdAt: 'desc',
+            }),
       },
       include: {
         _count: {
@@ -232,7 +317,7 @@ export class StakeholdersService {
 
   async getOneGroup(payload: GetOneGroup) {
     const { uuid } = payload;
-    return await this.prisma.stakeholdersGroups.findUnique({
+    return this.prisma.stakeholdersGroups.findUnique({
       where: {
         uuid: uuid,
       },
@@ -268,5 +353,67 @@ export class StakeholdersService {
       },
     });
   }
+
+  async validateStakeholders(
+    payload: any[]
+  ): Promise<ValidateStakeholdersResponse> {
+    const data = payload.map((item) => ({
+      name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
+      designation: item['Designation']?.trim() || '',
+      organization: item['Organization']?.trim() || '',
+      district: item['District']?.trim() || '',
+      municipality: item['Municipality']?.trim() || '',
+      phone:
+        item['Mobile #']?.toString().trim() ||
+        item['Phone Number']?.toString().trim() ||
+        '',
+      email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+    }));
+    const validationErrors = [];
+    const stakeholders = [];
+    for (const row of data) {
+      const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
+
+      const errors = await validate(stakeholdersDto);
+      console.log(errors);
+
+      if (errors.length > 0) {
+        validationErrors.push({
+          row,
+          errors: errors.map((error) => Object.values(error.constraints)),
+        });
+      } else {
+        stakeholders.push(row);
+      }
+    }
+    // If any validation errors, throw exception
+
+    if (validationErrors.length > 0) {
+      console.log(validationErrors);
+
+      const errorMessages = validationErrors.map((e, i) => {
+        const flattenedErrors = e.errors.flat().join(', ');
+        return {
+          row: i + 1,
+          errors: flattenedErrors,
+        };
+      });
+
+      throw new RpcException({
+        success: false,
+        message: 'Validation failed',
+        meta: {
+          statusCode: 400,
+          message: 'Bad Request',
+          details: errorMessages,
+        },
+      });
+    }
+
+    return {
+      validStakeholders: stakeholders,
+    };
+  }
+
   // ***** stakeholders groups end ********** //
 }

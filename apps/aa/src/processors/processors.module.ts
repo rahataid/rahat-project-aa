@@ -9,9 +9,35 @@ import { ContractProcessor } from './contract.processor';
 import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
+import { StellarProcessor } from './stellar.processor';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { BullModule } from '@nestjs/bull';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { StellarModule } from '../stellar/stellar.module';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 
 @Module({
-  imports: [DataSourceModule, PhasesModule, BeneficiaryModule, ActivitiesModule],
+  imports: [
+    StellarModule,
+    DataSourceModule,
+    PhasesModule,
+    BeneficiaryModule,
+    ActivitiesModule,
+    ClientsModule.register([
+      {
+        name: CORE_MODULE,
+        transport: Transport.REDIS,
+        options: {
+          host: process.env.REDIS_HOST,
+          port: +process.env.REDIS_PORT,
+          password: process.env.REDIS_PASSWORD,
+        },
+      },
+    ]),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
+  ],
   providers: [
     ScheduleProcessor,
     TriggerProcessor,
@@ -19,6 +45,8 @@ import { ActivitiesModule } from '../activities/activites.module';
     ContractProcessor,
     CommunicationProcessor,
     StatsProcessor,
+    StellarProcessor,
+    ReceiveService,
   ],
 })
 export class ProcessorsModule {}
