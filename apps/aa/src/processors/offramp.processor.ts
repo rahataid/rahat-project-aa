@@ -69,16 +69,13 @@ export class OfframpProcessor {
 
       // TODO: Need to think about fonepay and other payment providers
       const offrampRequest = {
+        xref: fspOfframpDetails.payoutUUID,
         tokenAmount: fspOfframpDetails.amount,
         paymentProviderId: fspOfframpDetails.payoutProcessorId,
         transactionHash: fspOfframpDetails.transactionHash,
         senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
         paymentDetails: {
-          creditorAgent: Number(
-            getBankId(fspOfframpDetails.beneficiaryBankDetails.bankName) // <-- TODO: This should be handled by the offramp itself in the future
-          ),
-          endToEndId: 'Payment Description',
-          creditorBranch: '506',
+          creditorAgent: getBankId(fspOfframpDetails.beneficiaryBankDetails.bankName), // <-- TODO: This should be handled by the offramp itself in the future
           creditorAccount:
             fspOfframpDetails.beneficiaryBankDetails.accountNumber,
           creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
@@ -88,6 +85,8 @@ export class OfframpProcessor {
       this.logger.log(`Offramp request payload: ${JSON.stringify(offrampRequest)}`);
 
       const result = await this.offrampService.instantOfframp(offrampRequest);
+
+      console.log("result from offramp", result);
 
       // update the transaction record
       await this.updateBeneficiaryRedeemAsCompleted({

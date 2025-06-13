@@ -45,7 +45,7 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.TRIGGER_ONE_FAILED_PAYOUT_REQUEST, uuid: process.env.PROJECT_ID })
-  triggerOneFailedPayoutRequest(@Payload() payload: { beneficiaryRedeemUuid: string; payoutUUID: string }) {
+  triggerOneFailedPayoutRequest(@Payload() payload: { beneficiaryRedeemUuid: string}) {
     return this.payoutsService.triggerOneFailedPayoutRequest(payload);
   }
 

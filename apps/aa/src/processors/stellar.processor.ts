@@ -397,6 +397,7 @@ export class StellarProcessor {
         payload.beneficiaryWalletAddress,
         asset
       );
+      /*
 
       if(balance < payload.amount) {
         await this.updateBeneficiaryRedeemAsFailed(
@@ -409,6 +410,8 @@ export class StellarProcessor {
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} has rahat balance <= 0`
         );
       }
+
+      */
 
       if (balance <= 0) {
         await this.updateBeneficiaryRedeemAsFailed(
@@ -454,7 +457,7 @@ export class StellarProcessor {
         },
         {
           delay:1000,
-          attempts: 3,
+          attempts: 1,
           backoff: {
             type: 'exponential',
             delay: 1000,

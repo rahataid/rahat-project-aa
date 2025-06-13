@@ -391,7 +391,7 @@ export class PayoutsService {
 
   async triggerOneFailedPayoutRequest(payload: {
     beneficiaryRedeemUuid: string;
-    payoutUUID: string;
+    // payoutUUID: string;
   }): Promise<any> {
     const { beneficiaryRedeemUuid } = payload;
 
