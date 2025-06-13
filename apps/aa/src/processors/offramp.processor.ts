@@ -77,8 +77,6 @@ export class OfframpProcessor {
           creditorAgent: Number(
             getBankId(fspOfframpDetails.beneficiaryBankDetails.bankName) // <-- TODO: This should be handled by the offramp itself in the future
           ),
-          endToEndId: 'Payment Description',
-          creditorBranch: '506',
           creditorAccount:
             fspOfframpDetails.beneficiaryBankDetails.accountNumber,
           creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
