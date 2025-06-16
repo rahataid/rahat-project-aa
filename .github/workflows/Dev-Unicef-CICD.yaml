@@ -2,10 +2,10 @@ name: AA Dev UNICEF CI/CD
 on:
   push:
     branches:
-      - 'name-chain-config'
+      - 'new-chain-config'
   pull_request:
     branches:
-      - 'name-chain-config'
+      - 'new-chain-config'
   workflow_dispatch:
 
 env:
