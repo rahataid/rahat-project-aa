@@ -128,7 +128,6 @@ async function main() {
   try {
     const envVariables = await readEnvFile(envPath);
 
-
     const name = await askQuestion('Enter project name: ');
     const description = await askQuestion('Enter project description: ');
     const privateKey = await askQuestion('Enter private key: ');

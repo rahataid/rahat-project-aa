@@ -1,14 +1,13 @@
 import { Asset, Keypair } from '@stellar/stellar-sdk';
-import { ASSET, DISBURSEMENT, WALLETS } from '../constants/constant';
+import { DISBURSEMENT, horizonServer, WALLETS } from '../constants/constant';
 import {
   createDisbursement,
   updateDisbursementStatus,
-  uploadDisbursementFile,
   getDisbursement,
 } from '../lib/disbursement';
 import { transfer_asset } from '../lib/transferAsset';
 import { AuthService } from '../lib/login';
-import { axiosInstance } from '../lib/axios/axiosInstance';
+import { getAxiosInstances } from '../lib/axios/axiosInstance';
 import { getDistributionAddress } from '../utils/getDistributionAddress';
 import { STELLAR } from '../constants/routes';
 import { IDisbursementService, IDisbursement } from '../types';
@@ -17,11 +16,7 @@ export let token: string;
 export class DisbursementServices implements IDisbursementService {
   private walletType: WALLETS;
 
-  constructor(
-    private email: string,
-    private password: string,
-    private tenantName: string
-  ) {
+  constructor(private disbursementValues: any) {
     this.walletType = DISBURSEMENT.WalletType;
   }
 
@@ -32,14 +27,15 @@ export class DisbursementServices implements IDisbursementService {
     amount: string
   ): Promise<any> {
     const authService = new AuthService(
-      this.tenantName,
-      this.email,
-      this.password
+      this.disbursementValues.tenantName,
+      this.disbursementValues.email,
+      this.disbursementValues.password,
+      this.disbursementValues.baseUrl
     );
 
     token = (await authService.getToken()) as string;
 
-    await this.custom_asset(amount.toString());
+    await this.custom_asset(amount.toString(), this.disbursementValues.baseUrl);
     return this.disbursement(fileBuffer, fileName, disbursementName);
   }
 
@@ -47,29 +43,54 @@ export class DisbursementServices implements IDisbursementService {
     return await getDistributionAddress(tenantName);
   }
 
-  public async getDisbursement(disbursementId: string): Promise<IDisbursement | null> {
+  public async getDisbursement(
+    disbursementId: string
+  ): Promise<IDisbursement | null> {
     const authService = new AuthService(
-      this.tenantName,
-      this.email,
-      this.password
+      this.disbursementValues.tenantName,
+      this.disbursementValues.email,
+      this.disbursementValues.password,
+      this.disbursementValues.baseUrl
     );
 
     token = (await authService.getToken()) as string;
-    const disbursement = await getDisbursement(disbursementId);
+    const disbursement = await getDisbursement(
+      disbursementId,
+      this.disbursementValues.baseUrl
+    );
     return disbursement;
   }
 
   // Creates custom asset and fund disbursement account
-  private async custom_asset(amount: string) {
-    const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
-    const asset = new Asset(ASSET.NAME, issuerKeypair.publicKey());
+  private async custom_asset(amount: string, baseUrl: string) {
+    const { axiosInstance } = getAxiosInstances({
+      baseUrl,
+    });
+
+    console.log(this.disbursementValues);
+
+    const issuerKeypair = Keypair.fromSecret(
+      this.disbursementValues.assetSecret
+    );
+    const asset = new Asset(
+      this.disbursementValues.assetCode,
+      issuerKeypair.publicKey()
+    );
 
     await axiosInstance.post(STELLAR.ASSET, {
-      code: ASSET.NAME,
-      issuer: ASSET.ISSUER,
+      code: this.disbursementValues.assetCode,
+      issuer: this.disbursementValues.assetIssuer,
     });
-    const disbursementAddress = await getDistributionAddress(this.tenantName);
-    await transfer_asset(disbursementAddress, asset, amount);
+    const disbursementAddress = await getDistributionAddress(
+      this.disbursementValues.tenantName
+    );
+    await transfer_asset(
+      disbursementAddress,
+      asset,
+      amount,
+      this.disbursementValues.assetSecret,
+      horizonServer
+    );
   }
 
   // Create disbursement and update status
@@ -81,14 +102,18 @@ export class DisbursementServices implements IDisbursementService {
     try {
       const disbursement = await createDisbursement({
         walletType: this.walletType,
-        assetCodes: ASSET.NAME,
+        assetCodes: this.disbursementValues.assetCode,
         disbursement_name: disbursementName,
         fileBuffer,
         fileName,
+        baseUrl: this.disbursementValues.baseUrl,
       });
 
       const disbursementID = disbursement?.disbursementID;
-      await updateDisbursementStatus(disbursementID);
+      await updateDisbursementStatus(
+        disbursementID,
+        this.disbursementValues.baseUrl
+      );
       return disbursement;
     } catch (error) {
       console.log(error);

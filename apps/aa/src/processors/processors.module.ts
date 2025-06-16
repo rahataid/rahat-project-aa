@@ -51,8 +51,6 @@ import { CheckTrustlineProcessor } from './checkTrutline.processor';
     StatsProcessor,
     StellarProcessor,
     CheckTrustlineProcessor,
-    ReceiveService,
-    TransactionService,
   ],
 })
 export class ProcessorsModule {}

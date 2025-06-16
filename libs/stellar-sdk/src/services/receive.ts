@@ -1,33 +1,35 @@
-import { getAuthToken, interactive_url } from '../lib/getTokens';
-import { send_otp } from '../lib/sendOtp';
-import { ag } from '../lib/axios/axiosGuest';
-import { RECEIVER } from '../constants/routes';
-import { ASSET, DISBURSEMENT, horizonServer } from '../constants/constant';
 import {
   Asset,
   Horizon,
   Keypair,
   Networks,
   Operation,
-  TimeoutInfinite,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { add_trustline } from '../lib/addTrustline';
-import axios from 'axios';
 import { IReceiveService } from '../types';
 import { logger } from '../utils/logger';
-import { transfer_asset } from '../lib/transferAsset';
+import { horizonServer } from '../constants';
 
 export class ReceiveService implements IReceiveService {
   private assetIssuer: string;
   private assetCode: string;
+  private network: string;
+  private faucetSecretKey: string;
+  private fundingAmount: string;
 
   constructor(
-    assetIssuer: string = ASSET.ISSUER,
-    assetCode: string = ASSET.NAME
+    assetIssuer: string,
+    assetCode: string,
+    network: string,
+    faucetSecretKey: string,
+    fundingAmount: string
   ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
+    this.network = network;
+    this.faucetSecretKey = faucetSecretKey;
+    this.fundingAmount = fundingAmount;
   }
 
   public async createReceiverAccount(): Promise<any> {
@@ -40,77 +42,42 @@ export class ReceiveService implements IReceiveService {
       keypair.publicKey,
       keypair.secretKey,
       this.assetIssuer,
-      this.assetCode
+      this.assetCode,
+      horizonServer
     );
     return keypair;
   }
 
-  public async sendOTP(
-    tenantName: string,
-    receiverPublicKey: string,
-    phoneNumber: string
-  ): Promise<any> {
-    const auth = await getAuthToken(tenantName, receiverPublicKey);
-
-    const interactive = await interactive_url(
-      receiverPublicKey,
-      auth?.data.token
-    );
-    const url = new URL(interactive?.data.url);
-    const verifyToken = url.searchParams.get('token') as string;
-    try {
-      await send_otp(phoneNumber, auth?.data.token);
-    } catch (error) {
-      console.log(error);
-    }
-
-    return { verifyToken };
-  }
-
-  public async verifyOTP(
-    auth: string,
-    phoneNumber: string,
-    otp: string,
-    verification: string
-  ): Promise<any> {
-    const res = ag.post(
-      RECEIVER.VERIFY_OTP,
-      {
-        phone_number: phoneNumber,
-        otp,
-        verification,
-        verification_type: DISBURSEMENT.VERIFICATION,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${auth}`,
-        },
-      }
-    );
-
-    return 'Success';
-  }
-
   public async faucetAndTrustlineService(
     walletAddress: string,
-    secretKey?: string
+    receiverSecretKey?: string
   ) {
     try {
       const accountExists = await this.checkAccountExists(walletAddress);
 
+      if (!this.faucetSecretKey) {
+        logger.error('Faucet secret key not found');
+        throw new Error('Faucet secret key not found');
+      }
+
       if (!accountExists) {
         logger.warn('Funding account');
-        await this.fundAccount(walletAddress, process.env['FUNDING_AMOUNT']!);
+        await this.fundAccount(
+          walletAddress,
+          this.fundingAmount as string,
+          this.faucetSecretKey as string
+        );
       } else {
         logger.warn('Skipping funding');
       }
 
-      secretKey &&
+      receiverSecretKey &&
         (await add_trustline(
           walletAddress,
-          secretKey as string,
+          receiverSecretKey as string,
           this.assetIssuer,
-          this.assetCode
+          this.assetCode,
+          horizonServer
         ));
       return { message: 'Funded successfully' };
     } catch (error) {
@@ -118,19 +85,20 @@ export class ReceiveService implements IReceiveService {
     }
   }
 
-  private async fundAccount(receiverPk: string, amount: string) {
+  private async fundAccount(
+    receiverPk: string,
+    amount: string,
+    faucetSecretKey: string
+  ) {
     try {
       const server = new Horizon.Server(horizonServer);
-      const faucetSecret = process.env['FAUCET_SECRET_KEY']!;
-      const faucetKeypair = Keypair.fromSecret(faucetSecret);
+      const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
       const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
 
       const transaction = new TransactionBuilder(faucetAccount, {
         fee: (await server.fetchBaseFee()).toString(),
         networkPassphrase:
-          process.env['STELLAR_NETWORK'] === 'mainnet'
-            ? Networks.PUBLIC
-            : Networks.TESTNET,
+          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(
           Operation.createAccount({
@@ -157,7 +125,7 @@ export class ReceiveService implements IReceiveService {
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
     try {
-      const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
+      const asset = new Asset(this.assetCode, this.assetIssuer);
       const server = new Horizon.Server(horizonServer);
 
       const senderKeypair = Keypair.fromSecret(senderSk);

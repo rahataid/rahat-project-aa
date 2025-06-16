@@ -15,6 +15,29 @@ export const seedStellar = async () => {
     );
   }
 
+  const stellarValue = {
+    tenantName: 'sandab',
+    server: 'https://soroban-testnet.stellar.org',
+    keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
+    email: 'owner@sandab.stellar.rahat.io',
+    password: 'Password123!',
+    contractId: 'CDIESPF2SHPYTXTAM4EW55TD4DIIMSYBRS72CCRQH2UDCL4IS4KOZEMK',
+    vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
+    assetCode: 'RAHAT',
+    baseUrl: 'https://api-sdp.stellar.rahat.io',
+    adminBaseUrl: 'https://admin-sdp.stellar.rahat.io',
+    receiverBaseUrl: 'https://anchor.stellar.rahat.io',
+    friendBotUrl: 'https://friendbot.stellar.org/',
+    demoWalletUrl: 'https://demo-wallet-server.stellar.org',
+    horizonUrl: 'https://horizon-testnet.stellar.org',
+    assetCreator: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
+    assetCreatorSecret:
+      'SA5S2EF72XXJTLBD4SZEMY7OUGIACQZ4KXPEB7NSEVWGEKZCDOQDBFBE',
+    fundingAmount: '10',
+    network: 'testnet',
+    faucetSecretKey: 'SAVNF6EBFM56QSBCYBKKNXOCZASR5QEHO5AMAGEM2NJN4KIZBHIMGA6A',
+  };
+
   try {
     const dataSource = await settings.getPublic('STELLAR_SETTINGS');
 
@@ -23,15 +46,6 @@ export const seedStellar = async () => {
       await settings.delete('STELLAR_SETTINGS');
       console.log('Old PROJECTINFO deleted');
     }
-    const stellarValue = {
-      tenantName: 'sandab',
-      server: 'https://soroban-testnet.stellar.org',
-      keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
-      email: 'owner@sandab.stellar.rahat.io',
-      password: 'Password123!',
-      contractId: 'CDIESPF2SHPYTXTAM4EW55TD4DIIMSYBRS72CCRQH2UDCL4IS4KOZEMK',
-      vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
-    };
 
     await settings.create({
       name: 'STELLAR_SETTINGS',
@@ -39,16 +53,6 @@ export const seedStellar = async () => {
       isPrivate: false,
     });
   } catch (error) {
-    const stellarValue = {
-      tenantName: 'sandab',
-      server: 'https://soroban-testnet.stellar.org',
-      keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
-      email: 'owner@sandab.stellar.rahat.io',
-      password: 'Password123!',
-      contractId: 'CAS57GSDGERUYREBA47G4AKPWTNOQRQDXQQBMAT3JXGGKEOTNDGI7AI7',
-      vendorAddress: 'GBNYMT3TSPAV5BMPW6QNRZYXN5U3BMDAZE54O7AWGIIZ5CUDIA7RYAEB',
-    };
-
     await settings.create({
       name: 'STELLAR_SETTINGS',
       value: stellarValue,

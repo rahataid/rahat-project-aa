@@ -1,4 +1,5 @@
 import {
+  BeneficiaryWallet,
   DisbursementServices,
   ReceiveService,
   TransactionService,
@@ -38,9 +39,7 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
-import { ASSET } from '@rahataid/stellar-sdk';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 
 @Injectable()
@@ -54,11 +53,10 @@ export class StellarService {
     private readonly checkTrustlineQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
-    private readonly disbursementService: DisbursementServices
+    private readonly disbursementService: DisbursementServices,
+    private readonly receiveService: ReceiveService,
+    private readonly transactionService: TransactionService
   ) {}
-
-  receiveService = new ReceiveService();
-  transactionService = new TransactionService();
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
     const groupUuids =
@@ -289,23 +287,30 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // todo: create beneficiary redeem while sending otp
-      await this.prisma.beneficiaryRedeem.create({
-        data: {
-          vendorUid: vendor.uuid,
-          amount: amount as number,
-          transactionType: 'VENDOR',
-          beneficiaryWalletAddress: keys.publicKey,
-          txHash: result.tx.hash,
-          hasRedeemed: true,
-        },
-      });
+      try {
+        // todo: create beneficiary redeem while sending otp
+        await this.prisma.beneficiaryRedeem.create({
+          data: {
+            vendorUid: vendor.uuid,
+            amount: amount as number,
+            transactionType: 'VENDOR',
+            beneficiaryWalletAddress: keys.publicKey,
+            txHash: result.tx.hash,
+            hasRedeemed: true,
+          },
+        });
+      } catch (error) {
+        this.logger.error(error);
+        throw new RpcException(error.message);
+      }
 
       return {
         txHash: result.tx.hash,
       };
     } catch (error) {
-      throw new RpcException(error ? error : 'OTP verification failed');
+      throw new RpcException(
+        error ? error : 'Transferring asset to vendor failed'
+      );
     }
   }
 
@@ -386,9 +391,7 @@ export class StellarService {
 
   async checkTrustline(checkTrustlineDto: CheckTrustlineDto) {
     return this.transactionService.hasTrustline(
-      checkTrustlineDto.walletAddress,
-      ASSET.NAME,
-      ASSET.ISSUER
+      checkTrustlineDto.walletAddress
     );
   }
 
@@ -588,12 +591,10 @@ export class StellarService {
       throw new RpcException(error);
     }
   }
-
-  // ***** Remove after internal faucet test *****
   async internalFaucetAndTrustline(beneficiaries: any) {
     return this.stellarQueue.add(
       JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
-      beneficiaries.wallet,
+      beneficiaries.wallets,
       {
         attempts: 1,
         removeOnComplete: true,
@@ -749,6 +750,7 @@ export class StellarService {
         otpHash,
         amount,
         expiresAt,
+        isVerified: false,
         updatedAt: new Date(),
       },
       create: {
@@ -850,16 +852,18 @@ export class StellarService {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
+      const assetCode = await this.getFromSettings('ASSETCODE');
+
       const rahatAsset = accountBalances?.find(
-        (bal: any) => bal.asset_code === 'RAHAT'
+        (bal: any) => bal.asset_code === assetCode
       );
 
       if (!rahatAsset) {
-        this.logger.error('RAHAT asset not found in account balances');
+        this.logger.error(`${assetCode} asset not found in account balances`);
         return 0;
       }
 
-      this.logger.log('RAHAT asset balance:', rahatAsset.balance);
+      this.logger.log(`${assetCode} asset balance:`, rahatAsset.balance);
 
       return Math.floor(parseFloat(rahatAsset?.balance || '0'));
     } catch (error) {
