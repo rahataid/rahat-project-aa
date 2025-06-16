@@ -33,6 +33,7 @@ const updateBeneficiaryDetailsInSheet = async (sheetId: string, sheetName: strin
     }
     const rows = await sheet.getRows();
     for (const row of rows) {
+    //update the field name as per your sheet
       const bankDetails: BankDetails = {
         bankId: row.get('Bank Name'),
         accountName: row.get('Account Name'),
