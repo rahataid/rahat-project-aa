@@ -2,7 +2,6 @@ import { Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
-import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
 import { getBankId } from '../utils/bank';
@@ -50,7 +49,7 @@ export class OfframpProcessor {
             offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
             beneficiaryWalletAddress:
               fspOfframpDetails.beneficiaryWalletAddress,
-            numberOfAttempts: 0,
+            numberOfAttempts: job.attemptsMade + 1,
           },
         });
 
@@ -108,7 +107,8 @@ export class OfframpProcessor {
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
         error.message,
-        job.attemptsMade
+        job.attemptsMade,
+        log.info
       );
 
       throw error(
@@ -120,12 +120,14 @@ export class OfframpProcessor {
   private async updateBeneficiaryRedeemAsFailed(
     uuid: string,
     error: string,
-    numberOfAttempts?: number
+    numberOfAttempts?: number,
+    info?: any
   ): Promise<BeneficiaryRedeem> {
     return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
       status: 'FIAT_TRANSACTION_FAILED',
       isCompleted: false,
       info: {
+        ...(info && { ...info }),
         error: error,
         ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
       },

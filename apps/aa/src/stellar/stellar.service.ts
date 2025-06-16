@@ -37,10 +37,9 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
 import { ASSET } from '@rahataid/stellar-sdk';
-import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
+import { FSPPayoutDetails } from '../processors/types';
 
 @Injectable()
 export class StellarService {
@@ -584,6 +583,31 @@ export class StellarService {
         )
       ),
     };
+  }
+
+  async addBulkToTokenTransferQueue(payload: FSPPayoutDetails[]) {
+    const result = await this.stellarQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: payload,
+        opts: {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    this.logger.log(`Added ${result.length} jobs to offramp queue`);
+
+    return result;
+  }
+
+  async addToTokenTransferQueue(payload: FSPPayoutDetails) {
+    return await this.addBulkToTokenTransferQueue([payload]);
   }
 
   // ---------- Private functions ----------------

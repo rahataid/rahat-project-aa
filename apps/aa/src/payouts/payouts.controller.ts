@@ -49,6 +49,11 @@ export class PayoutsController {
     return this.payoutsService.triggerOneFailedPayoutRequest(payload);
   }
 
+  @MessagePattern({ cmd: JOBS.PAYOUT.TRIGGER_FAILED_PAYOUT_REQUEST, uuid: process.env.PROJECT_ID })
+  triggerFailedPayoutRequest(@Payload() payload: { payoutUUID: string }) {
+    return this.payoutsService.triggerFailedPayoutRequest(payload);
+  }
+
   @MessagePattern({ cmd: JOBS.PAYOUT.GET_PAYOUT_LOGS, uuid: process.env.PROJECT_ID })
   getPayoutLogs(@Payload() payload: GetPayoutLogsDto) {
     return this.payoutsService.getPayoutLogs(payload);

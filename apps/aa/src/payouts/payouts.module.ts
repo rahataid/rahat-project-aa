@@ -10,12 +10,14 @@ import { HttpModule} from '@nestjs/axios';
 import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
     VendorsModule,
     HttpModule,
     BeneficiaryModule,
+    StellarModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',

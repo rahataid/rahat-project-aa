@@ -353,6 +353,7 @@ export class StellarProcessor {
           status: 'TOKEN_TRANSACTION_INITIATED',
           transactionType: 'TOKEN_TRANSFER',
           fspId: payload.payoutProcessorId,
+          amount: payload.amount,
           payout: {
             connect: {
               uuid: payload.payoutUUID,
@@ -363,6 +364,13 @@ export class StellarProcessor {
               walletAddress: payload.beneficiaryWalletAddress,
             },
           },
+          info: {
+            offrampWalletAddress: payload.offrampWalletAddress,
+            beneficiaryWalletAddress: payload.beneficiaryWalletAddress,
+            payoutUUID: payload.payoutUUID,
+            payoutProcessorId: payload.payoutProcessorId,
+            numberOfAttempts: job.attemptsMade + 1,
+          }
         });
 
     if (!payload.beneficiaryRedeemUUID) {
@@ -382,7 +390,8 @@ export class StellarProcessor {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           'Beneficiary with wallet not found',
-          job.attemptsMade + 1
+          job.attemptsMade + 1,
+          log.info,
         );
         throw new RpcException(
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} not found`
@@ -397,13 +406,14 @@ export class StellarProcessor {
         payload.beneficiaryWalletAddress,
         asset
       );
-      /*
+
 
       if(balance < payload.amount) {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`,
-          job.attemptsMade + 1
+          job.attemptsMade + 1,
+          log.info,
         );
 
         throw new RpcException(
@@ -411,13 +421,12 @@ export class StellarProcessor {
         );
       }
 
-      */
-
       if (balance <= 0) {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           `Beneficiary has ${balance} rahat balance with wallet ${payload.beneficiaryWalletAddress}`,
-          job.attemptsMade + 1
+          job.attemptsMade + 1,
+          log.info
         );
 
         throw new RpcException(
@@ -447,6 +456,9 @@ export class StellarProcessor {
         amount: payload.amount,
         numberOfAttempts: job.attemptsMade + 1,
       });
+
+      // delete the beneficiaryRedeemUUID from the payload to avoid sending it to the offramp queue
+      delete payload.beneficiaryRedeemUUID;
 
       this.offrampQueue.add(
         JOBS.OFFRAMP.INSTANT_OFFRAMP,
@@ -482,7 +494,8 @@ export class StellarProcessor {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           error.message,
-          job.attemptsMade + 1
+          job.attemptsMade + 1,
+          log.info,
         );
       }
 
@@ -625,15 +638,17 @@ export class StellarProcessor {
   private async updateBeneficiaryRedeemAsFailed(
     uuid: string,
     error: string,
-    numberOfAttempts?: number
+    numberOfAttempts?: number,
+    info?: any
   ): Promise<BeneficiaryRedeem> {
 
     return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
       status: 'TOKEN_TRANSACTION_FAILED',
       isCompleted: false,
       info: {
-        error: error,
+        ...(info && { ...info }),
         ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+        error: error,
       },
     });
   }

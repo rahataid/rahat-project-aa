@@ -252,6 +252,13 @@ export class BeneficiaryService {
       projectBendata
     );
   }
+
+  async findOneBeneficiaryByWalletAddress(walletAddress: string) {
+    return this.rsprisma.beneficiary.findUnique({
+      where: { walletAddress },
+    });
+  }
+
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
     const rdata = await this.rsprisma.beneficiary.update({
       where: { id: id },
@@ -601,8 +608,8 @@ export class BeneficiaryService {
         where: { uuid },
         include: {
           payout: true,
-          Beneficiary: true
-        }
+          Beneficiary: true,
+        },
       });
 
       return beneficiaryRedeem;
@@ -610,5 +617,33 @@ export class BeneficiaryService {
       this.logger.error(`Error getting beneficiary redeem: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Get failed beneficiary redeem by payout UUID
+   * This is used to get failed beneficiary redeem by payout UUID grouped by status
+   * 
+   * @param payoutUUID - The UUID of the payout
+   * @returns { status: 'FIAT_TRANSACTION_FAILED' | 'TOKEN_TRANSACTION_FAILED', count: number, beneficiaryRedeems: Prisma.BeneficiaryRedeemGetPayload<{ include: { Beneficiary: true; } }>[] }[] - The failed beneficiary redeem
+   */
+  async getFailedBeneficiaryRedeemByPayoutUUID(payoutUUID: string): Promise<{
+    status: 'FIAT_TRANSACTION_FAILED' | 'TOKEN_TRANSACTION_FAILED';
+    count: number;
+    beneficiaryRedeems: Prisma.BeneficiaryRedeemGetPayload<{
+      include: {
+        Beneficiary: true;
+      };
+    }>[];
+  }[]> {
+    return this.prisma.$queryRaw`
+      SELECT
+        status,
+        COUNT(*)::int AS count,
+        json_agg(tbl_beneficiary_redeem) AS "beneficiaryRedeems"
+      FROM public.tbl_beneficiary_redeem
+        WHERE "payoutId" = ${payoutUUID}
+        AND status IN ('FIAT_TRANSACTION_FAILED', 'TOKEN_TRANSACTION_FAILED')
+      GROUP BY status;
+      `;
   }
 }
