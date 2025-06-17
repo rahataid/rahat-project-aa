@@ -196,6 +196,13 @@ export const JOBS = {
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
   },
+  GRIEVANCES: {
+    CREATE: 'aa.jobs.grievances.create',
+    LIST: 'aa.jobs.grievances.list',
+    GET: 'aa.jobs.grievances.get',
+    UPDATE: 'aa.jobs.grievances.update',
+    REMOVE: 'aa.jobs.grievances.remove',
+  },
 };
 
 export const EVENTS = {
