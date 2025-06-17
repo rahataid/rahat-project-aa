@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
-import { PayoutType } from '@prisma/client';
+import { PayoutType , PayoutTransactionType} from '@prisma/client';
 
 export class CreateBeneficiaryRedeemDto {
   @IsString()
@@ -10,9 +10,9 @@ export class CreateBeneficiaryRedeemDto {
   @IsOptional()
   hasRedeemed?: boolean = false;
 
-  @IsEnum(PayoutType)
+  @IsEnum(PayoutTransactionType)
   @IsNotEmpty()
-  transactionType: PayoutType = PayoutType.FSP;
+  transactionType: PayoutTransactionType = PayoutTransactionType.VENDOR_REIMBURSEMENT;
 
   @IsUUID()
   @IsOptional()
