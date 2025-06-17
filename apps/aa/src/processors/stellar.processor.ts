@@ -442,11 +442,8 @@ export class StellarProcessor {
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         payload.offrampWalletAddress,
-        '1' // temp
-        //payload.amount.toString() <--- will only transfer the amount assigned in fund management
+        payload.amount.toString(),
       );
-
-      //TODO add to failed request transfer fails
 
       await this.updateBeneficiaryRedeemAsCompleted({
         uuid: log.uuid,
@@ -465,7 +462,7 @@ export class StellarProcessor {
         {
          ...payload,
           transactionHash: result.tx.hash,
-          amount: '1' // payload.amount.toString()
+          amount: payload.amount.toString()
         },
         {
           delay:1000,

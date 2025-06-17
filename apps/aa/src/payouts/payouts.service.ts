@@ -503,12 +503,20 @@ export class PayoutsService {
 
       const failedFiatRecords = result.find(
         (r) => r.status === 'FIAT_TRANSACTION_FAILED'
-      );
+      ) || {
+        status: 'FIAT_TRANSACTION_FAILED',
+        count: 0,
+        beneficiaryRedeems: [],
+      };
       const failedTokenRecords = result.find(
         (r) => r.status === 'TOKEN_TRANSACTION_FAILED'
-      );
+      ) || {
+        status: 'TOKEN_TRANSACTION_FAILED',
+        count: 0,
+        beneficiaryRedeems: [],
+      };
 
-      if (!failedFiatRecords || !failedTokenRecords) {
+      if (!failedFiatRecords.count && !failedTokenRecords.count) {
         return {
           message: `No failed fiat or token payouts found for payout with UUID '${payoutUUID}'`,
         };
