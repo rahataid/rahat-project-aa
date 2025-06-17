@@ -7,16 +7,28 @@ import {
   Keypair,
 } from '@stellar/stellar-sdk';
 import { logger } from '../utils/logger';
-import { horizonServer } from '../constants/constant';
 
 export const add_trustline = async (
   publicKey: string,
   secretKey: string,
   ASSET_Issuer: string,
-  ASSET_code: string
+  ASSET_code: string,
+  horizonServer: string
 ) => {
   logger.warn('Adding trustline...');
-  const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
+
+  if (!ASSET_code || !ASSET_Issuer) {
+    logger.error('Asset code or issuer not found');
+    throw new Error('Asset code or issuer not found');
+  }
+
+  if (!publicKey || !secretKey) {
+    logger.error('Public key or secret key not found');
+    throw new Error('Public key or secret key not found');
+  }
+
+  const rahatAsset = new Asset(ASSET_code, ASSET_Issuer);
+
   const server = new Horizon.Server(horizonServer);
   const account = await server.loadAccount(publicKey);
 
@@ -26,7 +38,7 @@ export const add_trustline = async (
   })
     .addOperation(
       Operation.changeTrust({
-        asset: usdcAsset,
+        asset: rahatAsset,
       })
     )
     .setTimeout(100)

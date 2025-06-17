@@ -5,6 +5,7 @@ import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
 import { ReceiveService } from '@rahataid/stellar-sdk';
+import { SettingsService } from '@rumsan/settings';
 
 @Module({
   imports: [
@@ -25,7 +26,18 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     VendorsService,
     {
       provide: ReceiveService,
-      useValue: new ReceiveService(),
+      useFactory: async (settingService: SettingsService) => {
+        const settings = await settingService.getPublic('STELLAR_SETTINGS');
+
+        return new ReceiveService(
+          settings?.value['ASSETCREATOR'],
+          settings?.value['ASSETCODE'],
+          settings?.value['NETWORK'],
+          settings?.value['FAUCETSECRETKEY'],
+          settings?.value['FUNDINGAMOUNT']
+        );
+      },
+      inject: [SettingsService],
     },
   ],
   controllers: [VendorsController],

@@ -1,8 +1,3 @@
-import { getAuthToken, interactive_url } from '../lib/getTokens';
-import { send_otp } from '../lib/sendOtp';
-import { ag } from '../lib/axios/axiosGuest';
-import { RECEIVER } from '../constants/routes';
-import { ASSET, DISBURSEMENT, horizonServer } from '../constants/constant';
 import {
   Asset,
   Horizon,
@@ -12,19 +7,29 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { add_trustline } from '../lib/addTrustline';
-import axios from 'axios';
 import { IReceiveService } from '../types';
+import { logger } from '../utils/logger';
+import { horizonServer } from '../constants';
 
 export class ReceiveService implements IReceiveService {
   private assetIssuer: string;
   private assetCode: string;
+  private network: string;
+  private faucetSecretKey: string;
+  private fundingAmount: string;
 
   constructor(
-    assetIssuer: string = ASSET.ISSUER,
-    assetCode: string = ASSET.NAME
+    assetIssuer: string,
+    assetCode: string,
+    network: string,
+    faucetSecretKey: string,
+    fundingAmount: string
   ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
+    this.network = network;
+    this.faucetSecretKey = faucetSecretKey;
+    this.fundingAmount = fundingAmount;
   }
 
   public async createReceiverAccount(): Promise<any> {
@@ -37,77 +42,90 @@ export class ReceiveService implements IReceiveService {
       keypair.publicKey,
       keypair.secretKey,
       this.assetIssuer,
-      this.assetCode
+      this.assetCode,
+      horizonServer
     );
     return keypair;
   }
 
-  public async sendOTP(
-    tenantName: string,
-    receiverPublicKey: string,
-    phoneNumber: string
-  ): Promise<any> {
-    const auth = await getAuthToken(tenantName, receiverPublicKey);
-
-    const interactive = await interactive_url(
-      receiverPublicKey,
-      auth?.data.token
-    );
-    const url = new URL(interactive?.data.url);
-    const verifyToken = url.searchParams.get('token') as string;
-    try {
-      await send_otp(phoneNumber, auth?.data.token);
-    } catch (error) {
-      console.log(error);
-    }
-
-    return { verifyToken };
-  }
-
-  public async verifyOTP(
-    auth: string,
-    phoneNumber: string,
-    otp: string,
-    verification: string
-  ): Promise<any> {
-    const res = ag.post(
-      RECEIVER.VERIFY_OTP,
-      {
-        phone_number: phoneNumber,
-        otp,
-        verification,
-        verification_type: DISBURSEMENT.VERIFICATION,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${auth}`,
-        },
-      }
-    );
-
-    return 'Success';
-  }
-
   public async faucetAndTrustlineService(
     walletAddress: string,
-    secretKey?: string
+    receiverSecretKey?: string
   ) {
-    await axios.get(
-      `${process.env['FRIEND_BOT_STELLAR']}?addr=${walletAddress}`
-    );
-    secretKey &&
-      (await add_trustline(
-        walletAddress,
-        secretKey as string,
-        this.assetIssuer,
-        this.assetCode
-      ));
-    return { message: 'Funded successfully' };
+    try {
+      const accountExists = await this.checkAccountExists(walletAddress);
+
+      if (!this.faucetSecretKey) {
+        logger.error('Faucet secret key not found');
+        throw new Error('Faucet secret key not found');
+      }
+
+      if (!accountExists) {
+        logger.warn('Funding account');
+        await this.fundAccount(
+          walletAddress,
+          this.fundingAmount as string,
+          this.faucetSecretKey as string
+        );
+      } else {
+        logger.warn('Skipping funding');
+      }
+
+      receiverSecretKey &&
+        (await add_trustline(
+          walletAddress,
+          receiverSecretKey as string,
+          this.assetIssuer,
+          this.assetCode,
+          horizonServer
+        ));
+      return { message: 'Funded successfully' };
+    } catch (error) {
+      return error;
+    }
+  }
+
+  private async fundAccount(
+    receiverPk: string,
+    amount: string,
+    faucetSecretKey: string
+  ) {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
+      const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+
+      const transaction = new TransactionBuilder(faucetAccount, {
+        fee: (await server.fetchBaseFee()).toString(),
+        networkPassphrase:
+          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
+      })
+        .addOperation(
+          Operation.createAccount({
+            destination: receiverPk,
+            startingBalance: amount,
+          })
+        )
+        .setTimeout(30)
+        .build();
+
+      transaction.sign(faucetKeypair);
+      const tx = await server.submitTransaction(transaction);
+
+      logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
+      return { success: 'XLM sent to account', tx };
+    } catch (error: any) {
+      logger.error(`Error in fundAccount: ${error.message}`, error.stack);
+      if (error.response?.data?.extras) {
+        logger.error('Stellar error details:', error.response.data.extras);
+      }
+      throw error;
+    }
   }
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
     try {
-      const asset = new Asset(ASSET.NAME, ASSET.ISSUER);
+      const asset = new Asset(this.assetCode, this.assetIssuer);
       const server = new Horizon.Server(horizonServer);
 
       const senderKeypair = Keypair.fromSecret(senderSk);
@@ -139,8 +157,25 @@ export class ReceiveService implements IReceiveService {
   }
 
   public async getAccountBalance(wallet: string) {
-    const server = new Horizon.Server(horizonServer);
-    const account = await server.accounts().accountId(wallet).call();
-    return account.balances;
+    try {
+      const server = new Horizon.Server(horizonServer);
+      const account = await server.accounts().accountId(wallet).call();
+      return account.balances;
+    } catch (error: any) {
+      return error;
+    }
+  }
+
+  public async checkAccountExists(wallet: string): Promise<boolean> {
+    try {
+      const server = new Horizon.Server(horizonServer);
+      await server.accounts().accountId(wallet).call();
+      return true;
+    } catch (error: any) {
+      if (error.response && error.response.status === 404) {
+        return false;
+      }
+      throw error;
+    }
   }
 }

@@ -1,12 +1,8 @@
 import { LOGS } from '../constants/logger';
 import { logger } from '../utils/logger';
-import { axiosInstance } from './axios/axiosInstance';
+import { getAxiosInstances } from './axios/axiosInstance';
 import { DISBURSEMENT } from '../constants/routes';
-import {
-  countryCode,
-  smsRegistrationMessageTemplate,
-  VERIFICATION,
-} from '../constants/constant';
+
 const FormData = require('form-data');
 
 type DisbursementProp = {
@@ -15,16 +11,19 @@ type DisbursementProp = {
   disbursement_name: string;
   fileBuffer: Buffer;
   fileName: string;
+  baseUrl: string;
 };
 
 export const createDisbursement = async ({
-  walletType,
   assetCodes,
   disbursement_name,
   fileBuffer,
-  fileName,
+  baseUrl,
 }: DisbursementProp) => {
   try {
+    const { axiosInstance } = getAxiosInstances({
+      baseUrl,
+    });
     const walletRes = await axiosInstance.get(DISBURSEMENT.WALLET);
 
     const asset_res = await axiosInstance.get(DISBURSEMENT.ASSET);
@@ -79,18 +78,30 @@ export const createDisbursement = async ({
   }
 };
 
-export const updateDisbursementStatus = async (disbursementId: string) => {
+export const updateDisbursementStatus = async (
+  disbursementId: string,
+  baseUrl: string
+) => {
+  const { axiosInstance } = getAxiosInstances({
+    baseUrl,
+  });
   await axiosInstance.patch(DISBURSEMENT.UPDATE(disbursementId), {
     status: 'STARTED',
   });
 };
 
-export const getDisbursement = async (disbursementId: string) => {
+export const getDisbursement = async (
+  disbursementId: string,
+  baseUrl: string
+) => {
   try {
+    const { axiosInstance } = getAxiosInstances({
+      baseUrl,
+    });
     const res = await axiosInstance.get(DISBURSEMENT.GET(disbursementId));
     return res.data;
   } catch (error: any) {
-    console.log("Error while getting disbursement", error.message);
+    console.log('Error while getting disbursement', error.message);
     return null;
   }
 };
@@ -98,8 +109,12 @@ export const getDisbursement = async (disbursementId: string) => {
 export const uploadDisbursementFile = async (
   disbursementID: string,
   fileBuffer: Buffer,
-  fileName: string
+  fileName: string,
+  baseUrl: string
 ) => {
+  const { axiosInstance } = getAxiosInstances({
+    baseUrl,
+  });
   const formData = new FormData();
   formData.append('file', fileBuffer, fileName);
   await axiosInstance.post(DISBURSEMENT.UPLOAD(disbursementID), formData, {

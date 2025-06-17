@@ -26,13 +26,15 @@ import {
 } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { IDisbursementStatusJob } from './types';
+import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
 export class StellarProcessor {
   private readonly logger = Logger;
+  private batchSize = 3;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -40,6 +42,7 @@ export class StellarProcessor {
     private readonly settingService: SettingsService,
     private readonly stellarService: StellarService,
     private readonly receiveService: ReceiveService,
+    private readonly transactionService: TransactionService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>
   ) {}
@@ -50,8 +53,6 @@ export class StellarProcessor {
       'Processing add triggers on-chain job...',
       StellarProcessor.name
     );
-
-    console.log(job.data);
 
     const { triggers } = job.data;
     this.logger.log(
@@ -86,6 +87,7 @@ export class StellarProcessor {
             throw new RpcException(result.errorResult);
           }
 
+          // todo: Use wait for transaction confirmation from stellar-sdk
           await this.waitForTransactionConfirmation(result.hash, trigger.id);
 
           this.logger.log(
@@ -151,6 +153,7 @@ export class StellarProcessor {
       'Processing faucet and trustline job...',
       StellarProcessor.name
     );
+
     const { walletAddress, secretKey } = job.data;
 
     try {
@@ -158,6 +161,42 @@ export class StellarProcessor {
         walletAddress,
         secretKey,
       });
+    } catch (error) {
+      this.logger.error(
+        `Error in faucet and trustline: ${JSON.stringify(error)}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  @Process({
+    name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+    concurrency: 10,
+  })
+  async internalFaucetAndTrustline(job: Job<BeneficiaryWallet[]>) {
+    this.logger.log(
+      'Processing internal faucet and trustline job...',
+      StellarProcessor.name
+    );
+
+    const wallets = job.data;
+
+    const batches = this.batchWalletAddresses(wallets);
+
+    try {
+      for (const batch of batches) {
+        this.logger.log(`Processing batch of ${batch.length} wallets...`);
+        await this.transactionService.batchFundAccountXlm(
+          batch,
+          (await this.getFromSettings('FUNDINGAMOUNT')) as string,
+          (await this.getFromSettings('FAUCETSECRETKEY')) as string,
+          (await this.getFromSettings('NETWORK')) as string,
+          (await this.getFromSettings('SERVER')) as string
+        );
+        this.logger.log(`Completed batch of ${batch.length} wallets`);
+      }
     } catch (error) {
       this.logger.error(
         `Error in faucet and trustline: ${JSON.stringify(error)}`,
@@ -751,5 +790,13 @@ export class StellarProcessor {
       throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
     }
     return settings.value[key];
+  }
+
+  private batchWalletAddresses(walletAddresses: BeneficiaryWallet[]) {
+    const batches = [];
+    for (let i = 0; i < walletAddresses.length; i += this.batchSize) {
+      batches.push(walletAddresses.slice(i, i + this.batchSize));
+    }
+    return batches;
   }
 }

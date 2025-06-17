@@ -8,15 +8,16 @@ import {
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { logger } from '../utils/logger';
-import { ASSET, horizonServer } from '../constants/constant';
 import { LOGS } from '../constants/logger';
 
 export const transfer_asset = async (
   destination_address: string,
   asset: Asset,
-  amount: string
+  amount: string,
+  assetSecret: string,
+  horizonServer: string
 ) => {
-  const issuerKeypair = Keypair.fromSecret(ASSET.SECERT);
+  const issuerKeypair = Keypair.fromSecret(assetSecret);
 
   const server = new Horizon.Server(horizonServer);
   const account = await server.loadAccount(issuerKeypair.publicKey());
