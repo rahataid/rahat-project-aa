@@ -112,7 +112,7 @@ export const JOBS = {
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
-    TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
+    TRANSFER_TO_OFFRAMP: `aa.jobs.stellar.transferToOfframp_${process.env.PROJECT_ID}`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
   },
   OFFRAMP:{
@@ -120,7 +120,7 @@ export const JOBS = {
     EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
     LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
     GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
-    INSTANT_OFFRAMP: 'aa.jobs.offramp.instantOfframp',
+    INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp_${process.env.PROJECT_ID}`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
