@@ -10,6 +10,7 @@ import {
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
+import { GetBenfGroupDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -130,64 +131,55 @@ export class BeneficiaryService {
     );
   }
 
-  async getAllGroups(dto) {
+  async getAllGroups(dto: GetBenfGroupDto) {
     const { page, perPage, sort, order, tokenAssigned, search, hasPayout } =
       dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
+
+    const where: Prisma.BeneficiaryGroupsWhereInput = {
+      AND: [
+        { deletedAt: null },
+        {
+          ...(tokenAssigned === true
+            ? { tokensReserved: { isNot: null } }
+            : tokenAssigned === false
+            ? { tokensReserved: null }
+            : {}),
+        },
+        {
+          ...(hasPayout === true
+            ? {
+                tokensReserved: {
+                  payoutId: { not: null },
+                },
+              }
+            : hasPayout === false
+            ? {
+                tokensReserved: {
+                  payoutId: null,
+                  isDisbursed: true,
+               },
+              }
+            : {}),
+        },
+        {
+          ...(search && {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          }),
+        },
+      ],
+    };
+
     const benfGroups = await paginate(
       this.prisma.beneficiaryGroups,
       {
         where: {
-          AND: [
-            { deletedAt: null },
-
-            ...(hasPayout === true
-              ? [
-                  {
-                    tokensReserved: {
-                      payoutId: { not: null },
-                    },
-                  },
-                ]
-              : hasPayout === false
-              ? [
-                  {
-                    tokensReserved: {
-                      payoutId: null,
-                    },
-                  },
-                ]
-              : []),
-
-            ...(tokenAssigned === true
-              ? [
-                  {
-                    tokensReserved: {
-                      isNot: null,
-                    },
-                  },
-                ]
-              : tokenAssigned === false
-              ? [
-                  {
-                    tokensReserved: null,
-                  },
-                ]
-              : []),
-
-            ...(search
-              ? [
-                  {
-                    name: {
-                      contains: search,
-                      mode: 'insensitive',
-                    },
-                  },
-                ]
-              : []),
-          ],
+          ...where,
         },
         include: {
           _count: {
@@ -622,19 +614,21 @@ export class BeneficiaryService {
   /**
    * Get failed beneficiary redeem by payout UUID
    * This is used to get failed beneficiary redeem by payout UUID grouped by status
-   * 
+   *
    * @param payoutUUID - The UUID of the payout
    * @returns { status: 'FIAT_TRANSACTION_FAILED' | 'TOKEN_TRANSACTION_FAILED', count: number, beneficiaryRedeems: Prisma.BeneficiaryRedeemGetPayload<{ include: { Beneficiary: true; } }>[] }[] - The failed beneficiary redeem
    */
-  async getFailedBeneficiaryRedeemByPayoutUUID(payoutUUID: string): Promise<{
-    status: 'FIAT_TRANSACTION_FAILED' | 'TOKEN_TRANSACTION_FAILED';
-    count: number;
-    beneficiaryRedeems: Prisma.BeneficiaryRedeemGetPayload<{
-      include: {
-        Beneficiary: true;
-      };
-    }>[];
-  }[]> {
+  async getFailedBeneficiaryRedeemByPayoutUUID(payoutUUID: string): Promise<
+    {
+      status: 'FIAT_TRANSACTION_FAILED' | 'TOKEN_TRANSACTION_FAILED';
+      count: number;
+      beneficiaryRedeems: Prisma.BeneficiaryRedeemGetPayload<{
+        include: {
+          Beneficiary: true;
+        };
+      }>[];
+    }[]
+  > {
     return this.prisma.$queryRaw`
       SELECT
         status,

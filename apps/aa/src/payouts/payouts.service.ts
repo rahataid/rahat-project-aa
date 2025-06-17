@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { Payouts, Prisma } from '@prisma/client';
+import {
+  BeneficiaryRedeem,
+  Payouts,
+  Prisma,
+} from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -179,7 +183,7 @@ export class PayoutsService {
   /**
    * Find one payout
    * This is used to find one payout by UUID
-   * 
+   *
    * @param uuid - The UUID of the payout
    * @returns { Payouts & { beneficiaryGroupToken?: { numberOfTokens?: number; beneficiaryGroup?: { beneficiaries?: any[]; }; }; } } - The payout
    */
@@ -193,7 +197,7 @@ export class PayoutsService {
       };
       isCompleted?: boolean;
       hasFailedPayoutRequests?: boolean;
-      hasPayoutTriggered?: boolean;
+      isPayoutTriggered?: boolean;
     }
   > {
     try {
@@ -235,14 +239,20 @@ export class PayoutsService {
         throw new RpcException(`Payout with UUID '${uuid}' not found`);
       }
 
-      const failedPayoutRequests = await this.beneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID(uuid);
+      const failedPayoutRequests =
+        await this.beneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID(
+          uuid
+        );
 
       this.logger.log(`Successfully fetched payout with UUID: '${uuid}'`);
       return {
         ...payout,
-        hasFailedPayoutRequests: failedPayoutRequests.length > 0,
-        isCompleted: payout.beneficiaryRedeem.length > 0 && payout.beneficiaryRedeem.every((r) => r.isCompleted),
-        hasPayoutTriggered: payout.beneficiaryRedeem.length > 0
+        hasFailedPayoutRequests:
+          payout.type === 'VENDOR'
+            ? false
+            : failedPayoutRequests.length > 0,
+        isCompleted: await this.getPayoutCompletedStatus(payout),
+        isPayoutTriggered: payout.beneficiaryRedeem.length > 0,
       };
     } catch (error) {
       this.logger.error(
@@ -251,6 +261,32 @@ export class PayoutsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  async getPayoutCompletedStatus(
+    payout: Payouts & {
+      beneficiaryRedeem: BeneficiaryRedeem[];
+      beneficiaryGroupToken?: {
+        numberOfTokens?: number;
+        beneficiaryGroup?: {
+          beneficiaries?: any[];
+        };
+      };
+    }
+  ): Promise<boolean> {
+    if (payout.type === 'VENDOR') {
+      return (
+        payout.beneficiaryRedeem.length > 0 &&
+        payout.beneficiaryRedeem.length ===
+          payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length &&
+        payout.beneficiaryRedeem.every((r) => r.isCompleted)
+      );
+    }
+
+    return (
+      payout.beneficiaryRedeem.length > 0 &&
+      payout.beneficiaryRedeem.every((r) => r.isCompleted)
+    );
   }
 
   async update(
@@ -381,8 +417,10 @@ export class PayoutsService {
   async triggerPayout(uuid: string): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
-    if(payoutDetails.hasPayoutTriggered) {
-      throw new RpcException(`Payout with UUID '${uuid}' has already been triggered`);
+    if (payoutDetails.isPayoutTriggered) {
+      throw new RpcException(
+        `Payout with UUID '${uuid}' has already been triggered`
+      );
     }
 
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
@@ -471,7 +509,7 @@ export class PayoutsService {
   /**
    * Trigger a failed payout request
    * This is used to trigger a failed payout request for a payout
-   * 
+   *
    * @param payload - The payload containing the payout UUID
    * @returns { message: string } - The result of the trigger
    */
@@ -492,8 +530,10 @@ export class PayoutsService {
         );
       }
 
-      if(!payout.hasPayoutTriggered) {
-        throw new RpcException(`Payout with UUID '${payoutUUID}' has not been triggered`);
+      if (!payout.isPayoutTriggered) {
+        throw new RpcException(
+          `Payout with UUID '${payoutUUID}' has not been triggered`
+        );
       }
 
       const result =
@@ -553,7 +593,7 @@ export class PayoutsService {
   /**
    * Get payout logs
    * This is used to get payout logs for a payout
-   * 
+   *
    * @param payload - The payload containing the payout UUID, transaction type, transaction status, page, perPage, sort, and order
    * @returns { any } - The payout logs
    */
@@ -579,7 +619,10 @@ export class PayoutsService {
           ...(search && {
             OR: [
               {
-                beneficiaryWalletAddress: { contains: search, mode: 'insensitive' },
+                beneficiaryWalletAddress: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
               },
               {
                 txHash: { contains: search, mode: 'insensitive' },
@@ -593,7 +636,7 @@ export class PayoutsService {
               {
                 Vendor: {
                   walletAddress: { contains: search, mode: 'insensitive' },
-                }
+                },
               },
               {
                 Beneficiary: {
@@ -633,7 +676,7 @@ export class PayoutsService {
   /**
    * Get a payout log
    * This is used to get a payout log for a beneficiary redeem
-   * 
+   *
    * @param uuid - The UUID of the beneficiary redeem request
    * @returns { BeneficiaryRedeem } - The payout log
    */
@@ -672,7 +715,7 @@ export class PayoutsService {
   /**
    * Process a failed fiat payout
    * This is used to process a failed fiat payout for a beneficiary redeem
-   * 
+   *
    * @param payload - The payload containing the beneficiary redeem UUID
    * @returns { success: boolean, message: string } - The result of the process
    */
@@ -707,7 +750,7 @@ export class PayoutsService {
   /**
    * Process a failed token transfer payout
    * This is used to process a failed token transfer payout for a beneficiary redeem
-   * 
+   *
    * @param payload - The payload containing the beneficiary redeem UUID
    * @returns { success: boolean, message: string } - The result of the process
    */
@@ -722,7 +765,6 @@ export class PayoutsService {
 
     await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
 
-
     this.logger.log(
       `Added to token transfer queue for beneficiary redeem with UUID: ${beneficiaryRedeemUuid}`
     );
@@ -735,7 +777,7 @@ export class PayoutsService {
   /**
    * Create a bulk failed request payout
    * This is used to create a bulk failed request payout for a beneficiary redeem
-   * 
+   *
    * @param beneficiaryRedeemUuids - The UUIDs of the beneficiary redeem requests
    * @returns (FSPPayoutDetails | FSPOfframpDetails)[] - The bulk failed request payout
    */
@@ -754,12 +796,12 @@ export class PayoutsService {
   }
 
   /**
-  * Create a failed request payout
-  * This is used to create a failed request payout for a beneficiary redeem
-  * 
-  * @param beneficiaryRedeemUuid - The UUID of the beneficiary redeem request
-  * @returns FSPPayoutDetails | FSPOfframpDetails 
-  */
+   * Create a failed request payout
+   * This is used to create a failed request payout for a beneficiary redeem
+   *
+   * @param beneficiaryRedeemUuid - The UUID of the beneficiary redeem request
+   * @returns FSPPayoutDetails | FSPOfframpDetails
+   */
   private async createFailedRequestPayout(
     beneficiaryRedeemUuid: string
   ): Promise<FSPPayoutDetails | FSPOfframpDetails> {
