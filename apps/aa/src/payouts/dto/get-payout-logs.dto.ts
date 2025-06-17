@@ -51,4 +51,8 @@ export class GetPayoutLogsDto {
   @IsString()
   @IsIn(['asc', 'desc'])
   order: 'asc' | 'desc' = 'asc';
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 } 

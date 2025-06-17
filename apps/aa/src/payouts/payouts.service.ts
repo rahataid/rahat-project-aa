@@ -566,33 +566,48 @@ export class PayoutsService {
       perPage,
       sort,
       order,
+      search,
     } = payload;
 
     this.logger.log(`Getting payout logs for payout with UUID: ${payoutUUID}`);
     try {
-      const payout = await this.findOne(payoutUUID);
-
-      if (!payout) {
-        throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
-      }
-
       const query: Prisma.BeneficiaryRedeemFindManyArgs = {
         where: {
-          payoutId: payoutUUID,
+          ...(payoutUUID && { payoutId: payoutUUID }),
           ...(transactionType && { transactionType }),
           ...(transactionStatus && { status: transactionStatus }),
+          ...(search && {
+            OR: [
+              {
+                beneficiaryWalletAddress: { contains: search, mode: 'insensitive' },
+              },
+              {
+                txHash: { contains: search, mode: 'insensitive' },
+              },
+              {
+                info: {
+                  path: ['error'],
+                  string_contains: search,
+                },
+              },
+              {
+                Vendor: {
+                  walletAddress: { contains: search, mode: 'insensitive' },
+                }
+              },
+              {
+                Beneficiary: {
+                  phone: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }),
         },
-        orderBy: {
-          // status: 'asc'
-          isCompleted: 'asc',
-        },
-        /*
         ...(sort && {
           orderBy: {
-            // [sort]: order,
+            [sort]: order,
           },
         }),
-        */
       };
 
       const logs = await paginate(
@@ -634,6 +649,7 @@ export class PayoutsService {
         include: {
           Beneficiary: true,
           payout: true,
+          Vendor: true,
         },
       });
 
