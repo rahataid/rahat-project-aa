@@ -24,7 +24,7 @@ export class GrievancesController {
   }
 
   @MessagePattern({
-    cmd: JOBS.GRIEVANCES.CHANGE_STATUS,
+    cmd: JOBS.GRIEVANCES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
   @UsePipes(
