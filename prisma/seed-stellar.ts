@@ -15,6 +15,7 @@ export const seedStellar = async () => {
     );
   }
 
+  // TODO: Refactor the JSON
   const stellarValue = {
     tenantName: 'sandab',
     server: 'https://soroban-testnet.stellar.org',

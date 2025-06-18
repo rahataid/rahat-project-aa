@@ -1,5 +1,4 @@
 import {
-  BeneficiaryWallet,
   DisbursementServices,
   ReceiveService,
   TransactionService,
@@ -214,7 +213,6 @@ export class StellarService {
   }
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
-    // Get all offline beneficiaries of the vendor
     const offlineBeneficiaries = await this.prisma.vendor.findUnique({
       where: {
         uuid: sendGroupDto.vendorUuid,
@@ -241,6 +239,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
@@ -314,6 +313,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendorByWalletAddress(
     sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
   ) {
@@ -449,6 +449,7 @@ export class StellarService {
 
       this.logger.log(`Getting wallet stats for ${address}`);
 
+      // todo (new-chain-config): Need dynamic method to getAccountBalance and getRecent transactions
       return {
         balances: await this.receiveService.getAccountBalance(address),
         transactions: await this.getRecentTransaction(address),
@@ -459,6 +460,7 @@ export class StellarService {
     }
   }
 
+  // todo (new-chain-config): Make process dynamic
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
       attempts: 3,
@@ -470,6 +472,7 @@ export class StellarService {
     });
   }
 
+  // todo (new-chain-config): Need separate method for evm
   async getTriggerWithID(trigger: GetTriggerDto) {
     try {
       const { server, sourceAccount, contract } =
@@ -532,6 +535,7 @@ export class StellarService {
     }
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
     return this.stellarQueue.add(
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
@@ -547,6 +551,7 @@ export class StellarService {
     );
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async getDisbursementStats() {
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
@@ -609,6 +614,7 @@ export class StellarService {
     };
   }
 
+  // todo (new-chain-config): Need dynamic faucet according to chain
   async rahatFaucet(account: RahatFaucetDto) {
     try {
       return this.transactionService.rahatFaucetService(
@@ -619,6 +625,8 @@ export class StellarService {
       throw new RpcException(error);
     }
   }
+
+  // todo (new-chain-config): Need dynamic queue
   async internalFaucetAndTrustline(beneficiaries: any) {
     return this.stellarQueue.add(
       JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
@@ -635,6 +643,7 @@ export class StellarService {
   }
 
   // ---------- Private functions ----------------
+
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
@@ -721,6 +730,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   private async getSecretByPhone(phoneNumber: string) {
     try {
       const ben = await lastValueFrom(
@@ -740,6 +750,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   public async getSecretByWallet(walletAddress: string) {
     try {
       const ben = await lastValueFrom(
@@ -830,6 +841,7 @@ export class StellarService {
 
     return true;
   }
+
   private async getGroupsFromUuid(uuids: string[]) {
     if (!uuids || !uuids.length) {
       this.logger.warn('No UUIDs provided for group retrieval');
@@ -876,6 +888,7 @@ export class StellarService {
     return settings?.value[key];
   }
 
+  // todo: Make this dynamic for evm
   public async getRahatBalance(keys) {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
@@ -900,6 +913,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
       address,
