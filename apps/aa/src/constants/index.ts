@@ -202,6 +202,7 @@ export const JOBS = {
     GET: 'aa.jobs.grievances.get',
     UPDATE: 'aa.jobs.grievances.update',
     REMOVE: 'aa.jobs.grievances.remove',
+    CHANGE_STATUS: 'aa.jobs.grievances.changeStatus',
   },
 };
 
