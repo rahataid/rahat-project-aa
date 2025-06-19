@@ -172,6 +172,7 @@ export class StellarService {
     return await this.disbursementService.getDisbursement(disbursementId);
   }
 
+  // todo: add payout part
   async sendOtp(sendOtpDto: SendOtpDto) {
     // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
     //   sendOtpDto.phoneNumber

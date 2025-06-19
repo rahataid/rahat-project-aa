@@ -44,7 +44,7 @@ export class ChainQueueService {
   }
 
   async disburse(data: DisburseDto, chainType?: ChainType): Promise<any> {
-    this.logger.log(`Disbursing to ${data.beneficiaries.length} beneficiaries`);
+    this.logger.log(`Disbursing to beneficiaries`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
@@ -172,15 +172,19 @@ export class ChainQueueService {
     assignments: Array<{ address: string; amount: number }>,
     chainType?: ChainType
   ): Promise<any> {
-    const addresses = assignments.map((a) => a.address);
-    const amounts = assignments.map((a) => a.amount);
+    this.logger.log(
+      `Bulk assigning tokens to ${assignments.length} beneficiaries`
+    );
+    return 'ok';
+    // const addresses = assignments.map((a) => a.address);
+    // const amounts = assignments.map((a) => a.amount);
 
-    const data: DisburseDto = {
-      beneficiaries: addresses,
-      amounts,
-    };
+    // const data: DisburseDto = {
+    //   beneficiaries: addresses,
+    //   amounts,
+    // };
 
-    return this.disburse(data, chainType);
+    // return this.disburse(data, chainType);
   }
 
   async transferTokensBetweenAddresses(

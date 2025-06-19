@@ -317,9 +317,13 @@ export class StellarProcessor {
   @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
   async disburseOnchain(job: Job<DisburseDto>) {
     this.logger.log('Processing disbursement job...', StellarProcessor.name);
+
     const { ...rest } = job.data;
 
+    console.log(rest);
     const groupUuid = rest.groups[0];
+
+    console.log(groupUuid);
 
     try {
       const result: IDisbursementResultDto = await this.stellarService.disburse(

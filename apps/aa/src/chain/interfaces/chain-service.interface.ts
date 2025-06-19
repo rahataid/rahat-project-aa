@@ -7,6 +7,9 @@ export interface IChainService {
   disburse(data: DisburseDto): Promise<any>;
   getDisbursementStatus(id: string): Promise<any>;
 
+  // Send otp operations
+  sendOtp(data: SendOtpDto): Promise<any>;
+
   // Account operations
   fundAccount(data: FundAccountDto): Promise<any>;
   checkBalance(address: string): Promise<any>;
@@ -33,11 +36,9 @@ export interface AssignTokensDto {
   metadata?: any;
 }
 
-export interface DisburseDto {
-  beneficiaries: string[];
-  amounts: number[];
-  groupId?: string;
-  metadata?: any;
+export class DisburseDto {
+  dName: string;
+  groups?: string[];
 }
 
 export interface FundAccountDto {
@@ -49,7 +50,6 @@ export interface FundAccountDto {
 export interface SendOtpDto {
   phoneNumber: string;
   amount: number;
-  vendorAddress: string;
 }
 
 export interface TransferTokensDto {

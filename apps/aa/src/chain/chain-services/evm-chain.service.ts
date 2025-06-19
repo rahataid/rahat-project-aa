@@ -60,18 +60,19 @@ export class EvmChainService implements IChainService {
   }
 
   async disburse(data: DisburseDto): Promise<any> {
+    return 'ok';
     // Transform common DTO for batch operations
-    const evmDisburseData = {
-      beneficiaries: data.beneficiaries,
-      amounts: data.amounts,
-      groupId: data.groupId,
-      size: data.beneficiaries.length,
-      start: 0,
-      end: data.beneficiaries.length,
-      ...data.metadata,
-    };
+    // const evmDisburseData = {
+    //   beneficiaries: data.beneficiaries,
+    //   amounts: data.amounts,
+    //   groupId: data.groupId,
+    //   size: data.beneficiaries.length,
+    //   start: 0,
+    //   end: data.beneficiaries.length,
+    //   ...data.metadata,
+    // };
 
-    return this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, evmDisburseData);
+    // return this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, evmDisburseData);
   }
 
   async getDisbursementStatus(id: string): Promise<any> {
