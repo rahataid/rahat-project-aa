@@ -59,7 +59,7 @@ export interface CipsTxnResponse {
   responseMessage: string;
 }
 
-export interface CipsSuccessTransactionResponse {
+export interface CipsTransactionResponse {
   cipsBatchResponse: {
     responseCode: string;
     responseMessage: string;
@@ -74,7 +74,7 @@ export interface CipsResponseData {
   offrampRequest: OfframpRequest;
   // if the transaction is successful, the transaction will be a CipsSuccessTransactionResponse
   // if the transaction is failed, the transaction will be a CipsFailedTransactionResponse  
-  transaction: CipsSuccessTransactionResponse | CipsFailedTransactionResponse;
+  transaction: CipsTransactionResponse;
 }
 
 export interface CipsApiResponse {
