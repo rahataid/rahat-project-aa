@@ -48,6 +48,25 @@ enum PayoutMode {
   ONLINE
   OFFLINE
 }
+
+enum PayoutTransactionType {
+  TOKEN_TRANSFER
+  FIAT_TRANSFER
+  VENDOR_REIMBURSEMENT
+}
+
+enum PayoutTransactionStatus {
+  PENDING
+  TOKEN_TRANSACTION_INITIATED
+  TOKEN_TRANSACTION_COMPLETED
+  TOKEN_TRANSACTION_FAILED
+  FIAT_TRANSACTION_INITIATED
+  FIAT_TRANSACTION_COMPLETED
+  FIAT_TRANSACTION_FAILED
+  COMPLETED
+  FAILED
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -138,6 +157,7 @@ model Payouts {
 
   payoutProcessorId String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
   beneficiaryGroupToken BeneficiaryGroupTokens?
+  beneficiaryRedeem BeneficiaryRedeem[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -466,16 +486,23 @@ model VendorReimbursment {
 model BeneficiaryRedeem {
   id                       Int     @id @default(autoincrement())
   uuid                     String  @unique @default(uuid())
-  beneficiaryWalletAddress String
-  hasRedeemed              Boolean @default(false)
-  transactionType          PayoutType
+  beneficiaryWalletAddress  String
+  isCompleted              Boolean @default(false)
   amount                   Int   @default(0)
 
-  Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  transactionType          PayoutTransactionType
+  status                   PayoutTransactionStatus @default(PENDING)
+  fspId      String?        // refer PaymentProvider Id from rahat-offramp-service
+  txHash     String?
+
+  Beneficiary Beneficiary    @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
   vendorUid   String?      @db.Uuid()
   Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
-  fspId      String?    // refer PaymentProvider Id from rahat-offramp-service
-  txHash     String?
+
+  payoutId   String?       
+  payout     Payouts? @relation(fields: [payoutId], references: [uuid])
+
+  info        Json?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()

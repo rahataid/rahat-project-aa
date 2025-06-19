@@ -32,6 +32,10 @@ export class ReceiveService implements IReceiveService {
     this.fundingAmount = fundingAmount;
   }
 
+  public async getAssetInfo(): Promise<string> {
+    return `${this.assetCode}:${this.assetIssuer}`;
+  }
+
   public async createReceiverAccount(): Promise<any> {
     const account = Keypair.random();
     const keypair = {
@@ -130,6 +134,7 @@ export class ReceiveService implements IReceiveService {
 
       const senderKeypair = Keypair.fromSecret(senderSk);
       const senderAccount = await server.loadAccount(senderKeypair.publicKey());
+      console.log(`Sender account loaded: ${senderAccount.accountId}`);
 
       const transaction = new TransactionBuilder(senderAccount, {
         fee: (await server.fetchBaseFee()).toString(),
@@ -149,7 +154,7 @@ export class ReceiveService implements IReceiveService {
 
       const tx = await server.submitTransaction(transaction);
 
-      return { success: 'tokens sent to vendor', tx };
+      return { success: 'tokens sent', tx };
     } catch (error: any) {
       console.log(error.response.data.extras);
       throw error;

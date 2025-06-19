@@ -40,6 +40,7 @@ import {
   UpdateTriggerParamsDto,
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
+import { FSPPayoutDetails } from '../processors/types';
 
 @Injectable()
 export class StellarService {
@@ -105,35 +106,35 @@ export class StellarService {
     };
   }
 
-  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
-    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+  // async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+  //   const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
 
-    if (typeof beneficiaries === 'string') {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: beneficiaries,
-      });
-      return {
-        message: `Transfer to offramp job added for ${beneficiaries}`,
-        beneficiaries: [beneficiaries],
-      };
-    }
+  //   if (typeof beneficiaries === 'string') {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: beneficiaries,
+  //     });
+  //     return {
+  //       message: `Transfer to offramp job added for ${beneficiaries}`,
+  //       beneficiaries: [beneficiaries],
+  //     };
+  //   }
 
-    beneficiaries.forEach((ben) => {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: ben,
-      });
-    });
+  //   beneficiaries.forEach((ben) => {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: ben,
+  //     });
+  //   });
 
-    return {
-      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
-      beneficiaries: beneficiaries.map((ben) => ({
-        walletAddress: ben,
-        status: 'PENDING',
-      })),
-    };
-  }
+  //   return {
+  //     message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+  //     beneficiaries: beneficiaries.map((ben) => ({
+  //       walletAddress: ben,
+  //       status: 'PENDING',
+  //     })),
+  //   };
+  // }
 
   async disburse(disburseDto: DisburseDto) {
     const groups =
@@ -266,7 +267,9 @@ export class StellarService {
         amount as number
       );
 
-      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      const keys = (await this.getSecretByPhone(
+        verifyOtpDto.phoneNumber
+      )) as any;
 
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
@@ -286,22 +289,17 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      try {
-        // todo: create beneficiary redeem while sending otp
-        await this.prisma.beneficiaryRedeem.create({
-          data: {
-            vendorUid: vendor.uuid,
-            amount: amount as number,
-            transactionType: 'VENDOR',
-            beneficiaryWalletAddress: keys.publicKey,
-            txHash: result.tx.hash,
-            hasRedeemed: true,
-          },
-        });
-      } catch (error) {
-        this.logger.error(error);
-        throw new RpcException(error.message);
-      }
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          isCompleted: true,
+        },
+      });
 
       return {
         txHash: result.tx.hash,
@@ -374,10 +372,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 
@@ -640,6 +638,31 @@ export class StellarService {
         },
       }
     );
+  }
+
+  async addBulkToTokenTransferQueue(payload: FSPPayoutDetails[]) {
+    const result = await this.stellarQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: payload,
+        opts: {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    this.logger.log(`Added ${result.length} jobs to offramp queue`);
+
+    return result;
+  }
+
+  async addToTokenTransferQueue(payload: FSPPayoutDetails) {
+    return await this.addBulkToTokenTransferQueue([payload]);
   }
 
   // ---------- Private functions ----------------
