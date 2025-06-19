@@ -5,7 +5,7 @@ import { SettingsService } from '@rumsan/settings';
 // Import main functions from other seed files
 import { seedProject } from './seed-project';
 import { seedStellar } from './seed-stellar';
-import { seedPaymentProvider } from './seed-payment-provider';
+import { seedOfframp } from './seed-offramp';
 
 const prisma = new PrismaClient();
 const prismaService = new PrismaService();
@@ -35,7 +35,7 @@ const main = async () => {
   await seedStellar();
 
   console.log('Running payment provider seed...');
-  await seedPaymentProvider();
+  await seedOfframp();
 
   console.log('All seed operations completed successfully');
 };

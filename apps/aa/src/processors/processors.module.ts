@@ -10,11 +10,17 @@ import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
+import { OfframpProcessor } from './offramp.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
+import { HttpModule } from '@nestjs/axios';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { PayoutsModule } from '../payouts/payouts.module';
+import { ASSET, ReceiveService } from '@rahataid/stellar-sdk';
+import { SettingsService } from '@rumsan/settings';
+import { OfframpService } from '../payouts/offramp.service';
+import { AppModule } from '../app/app.module';
 
 @Module({
   imports: [
@@ -23,6 +29,7 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     PhasesModule,
     BeneficiaryModule,
     ActivitiesModule,
+    PayoutsModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -37,6 +44,9 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.OFFRAMP,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -46,7 +56,18 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
-    ReceiveService,
+    OfframpProcessor,
+     {
+      provide: ReceiveService,
+      useFactory: async (settingsService: SettingsService) => {
+        const stellarSettings = await settingsService.getPublic('STELLAR_SETTINGS');
+        return new ReceiveService(
+          (stellarSettings.value as any).ASSETISSUER || ASSET.ISSUER,
+          (stellarSettings.value as any).ASSETCODE || ASSET.NAME
+        );
+      },
+      inject: [SettingsService]
+    },
   ],
 })
 export class ProcessorsModule {}

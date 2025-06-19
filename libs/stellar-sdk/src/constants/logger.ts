@@ -12,7 +12,7 @@ export const LOGS = {
         TENANT_SUCCESS: 'Successfully created tenant',
         LOGIN: 'No token found, attempting to login...',
         TRUSTLINE: 'Added trustline to distribution account',
-        TRANSFER_ASSET: "Asset transfer successful",
+        TRANSFER_ASSET: "Intiating Asset Transfer",
         DISBURSEMENT_SUCCESS: "Successfully created disbursement",
         DISBURSEMENT_UPLOAD: "Updated disbursement with disbursement CSV successfully.",
         UPDATE_STATUS: (disbursementId: string, status: string) => `Updated disbursement ${disbursementId} to ${status} successfully`
