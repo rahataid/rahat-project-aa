@@ -1,5 +1,4 @@
 import {
-  BeneficiaryWallet,
   DisbursementServices,
   ReceiveService,
   TransactionService,
@@ -41,6 +40,7 @@ import {
   UpdateTriggerParamsDto,
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
+import { FSPPayoutDetails } from '../processors/types';
 
 @Injectable()
 export class StellarService {
@@ -106,35 +106,35 @@ export class StellarService {
     };
   }
 
-  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
-    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+  // async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+  //   const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
 
-    if (typeof beneficiaries === 'string') {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: beneficiaries,
-      });
-      return {
-        message: `Transfer to offramp job added for ${beneficiaries}`,
-        beneficiaries: [beneficiaries],
-      };
-    }
+  //   if (typeof beneficiaries === 'string') {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: beneficiaries,
+  //     });
+  //     return {
+  //       message: `Transfer to offramp job added for ${beneficiaries}`,
+  //       beneficiaries: [beneficiaries],
+  //     };
+  //   }
 
-    beneficiaries.forEach((ben) => {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: ben,
-      });
-    });
+  //   beneficiaries.forEach((ben) => {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: ben,
+  //     });
+  //   });
 
-    return {
-      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
-      beneficiaries: beneficiaries.map((ben) => ({
-        walletAddress: ben,
-        status: 'PENDING',
-      })),
-    };
-  }
+  //   return {
+  //     message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+  //     beneficiaries: beneficiaries.map((ben) => ({
+  //       walletAddress: ben,
+  //       status: 'PENDING',
+  //     })),
+  //   };
+  // }
 
   async disburse(disburseDto: DisburseDto) {
     const groups =
@@ -214,7 +214,6 @@ export class StellarService {
   }
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
-    // Get all offline beneficiaries of the vendor
     const offlineBeneficiaries = await this.prisma.vendor.findUnique({
       where: {
         uuid: sendGroupDto.vendorUuid,
@@ -241,6 +240,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
@@ -267,7 +267,9 @@ export class StellarService {
         amount as number
       );
 
-      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      const keys = (await this.getSecretByPhone(
+        verifyOtpDto.phoneNumber
+      )) as any;
 
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
@@ -287,22 +289,17 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      try {
-        // todo: create beneficiary redeem while sending otp
-        await this.prisma.beneficiaryRedeem.create({
-          data: {
-            vendorUid: vendor.uuid,
-            amount: amount as number,
-            transactionType: 'VENDOR',
-            beneficiaryWalletAddress: keys.publicKey,
-            txHash: result.tx.hash,
-            hasRedeemed: true,
-          },
-        });
-      } catch (error) {
-        this.logger.error(error);
-        throw new RpcException(error.message);
-      }
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          isCompleted: true,
+        },
+      });
 
       return {
         txHash: result.tx.hash,
@@ -314,6 +311,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendorByWalletAddress(
     sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
   ) {
@@ -374,10 +372,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 
@@ -449,6 +447,7 @@ export class StellarService {
 
       this.logger.log(`Getting wallet stats for ${address}`);
 
+      // todo (new-chain-config): Need dynamic method to getAccountBalance and getRecent transactions
       return {
         balances: await this.receiveService.getAccountBalance(address),
         transactions: await this.getRecentTransaction(address),
@@ -459,6 +458,7 @@ export class StellarService {
     }
   }
 
+  // todo (new-chain-config): Make process dynamic
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
       attempts: 3,
@@ -470,6 +470,7 @@ export class StellarService {
     });
   }
 
+  // todo (new-chain-config): Need separate method for evm
   async getTriggerWithID(trigger: GetTriggerDto) {
     try {
       const { server, sourceAccount, contract } =
@@ -532,6 +533,7 @@ export class StellarService {
     }
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
     return this.stellarQueue.add(
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
@@ -547,6 +549,7 @@ export class StellarService {
     );
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async getDisbursementStats() {
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
@@ -609,6 +612,7 @@ export class StellarService {
     };
   }
 
+  // todo (new-chain-config): Need dynamic faucet according to chain
   async rahatFaucet(account: RahatFaucetDto) {
     try {
       return this.transactionService.rahatFaucetService(
@@ -619,6 +623,8 @@ export class StellarService {
       throw new RpcException(error);
     }
   }
+
+  // todo (new-chain-config): Need dynamic queue
   async internalFaucetAndTrustline(beneficiaries: any) {
     return this.stellarQueue.add(
       JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
@@ -634,7 +640,33 @@ export class StellarService {
     );
   }
 
+  async addBulkToTokenTransferQueue(payload: FSPPayoutDetails[]) {
+    const result = await this.stellarQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: payload,
+        opts: {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    this.logger.log(`Added ${result.length} jobs to offramp queue`);
+
+    return result;
+  }
+
+  async addToTokenTransferQueue(payload: FSPPayoutDetails) {
+    return await this.addBulkToTokenTransferQueue([payload]);
+  }
+
   // ---------- Private functions ----------------
+
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
@@ -721,6 +753,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   private async getSecretByPhone(phoneNumber: string) {
     try {
       const ben = await lastValueFrom(
@@ -740,6 +773,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   public async getSecretByWallet(walletAddress: string) {
     try {
       const ben = await lastValueFrom(
@@ -830,6 +864,7 @@ export class StellarService {
 
     return true;
   }
+
   private async getGroupsFromUuid(uuids: string[]) {
     if (!uuids || !uuids.length) {
       this.logger.warn('No UUIDs provided for group retrieval');
@@ -876,6 +911,7 @@ export class StellarService {
     return settings?.value[key];
   }
 
+  // todo: Make this dynamic for evm
   public async getRahatBalance(keys) {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
@@ -900,6 +936,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
       address,
