@@ -13,7 +13,15 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.CREATE,
     uuid: process.env.PROJECT_ID,
   })
-  create(data: CreateGrievanceDto) {
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: { target: false },
+    })
+  )
+  create(@Payload() data: CreateGrievanceDto) {
     return this.grievancesService.create(data);
   }
 
