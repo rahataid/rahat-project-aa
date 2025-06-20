@@ -1,9 +1,31 @@
 import { Controller, UsePipes, ValidationPipe } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
+import { ValidationError } from 'class-validator';
 import { JOBS } from '../constants';
 import { CreateGrievanceDto } from './dto/create-grievance.dto';
-import { UpdateGrievanceStatusDto } from './dto/udpate-grievance-statuts.dto';
+import { UpdateGrievanceStatusDto } from './dto/update-grievance-statuts.dto';
 import { GrievancesService } from './grievances.service';
+import { FindGrievanceParamsDto } from './dto/find-one.dto';
+import { RemoveGrievanceDto } from './dto/remove-grievance.dto';
+import { UpdateGrievanceDto } from './dto/update-grievance.dto';
+
+// Custom exception factory for validation errors
+const validationExceptionFactory = (errors: ValidationError[]) => {
+  console.log('errors', errors);
+  const formattedErrors = {
+    message: 'Validation Error',
+    errors: errors.map((error) => ({
+      property: error.property,
+      constraints: error.constraints,
+      value: error.value,
+    })),
+  };
+
+  return new RpcException({
+    statusCode: 400,
+    message: formattedErrors,
+  });
+};
 
 @Controller()
 export class GrievancesController {
@@ -19,6 +41,7 @@ export class GrievancesController {
       whitelist: true,
       forbidNonWhitelisted: true,
       validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
     })
   )
   create(@Payload() data: CreateGrievanceDto) {
@@ -40,9 +63,63 @@ export class GrievancesController {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
+      validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
     })
   )
   updateStatus(@Payload() payload: UpdateGrievanceStatusDto) {
     return this.grievancesService.updateStatus(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GRIEVANCES.UPDATE,
+    uuid: process.env.PROJECT_ID,
+  })
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
+    })
+  )
+  update(@Payload() payload: UpdateGrievanceDto) {
+    console.log('grievance update controller');
+    return this.grievancesService.update(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GRIEVANCES.GET,
+    uuid: process.env.PROJECT_ID,
+  })
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
+    })
+  )
+  findOne(@Payload() payload: FindGrievanceParamsDto) {
+    return this.grievancesService.findOne(payload.id);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GRIEVANCES.REMOVE,
+    uuid: process.env.PROJECT_ID,
+  })
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
+    })
+  )
+  remove(@Payload() payload: RemoveGrievanceDto) {
+    return this.grievancesService.remove(payload.id);
   }
 }
