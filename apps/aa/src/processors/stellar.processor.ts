@@ -26,15 +26,17 @@ import {
 } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
+import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
 export class StellarProcessor {
-  private readonly logger = new Logger(StellarProcessor.name);
+  private readonly logger = Logger;
+  private batchSize = 3;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -42,6 +44,7 @@ export class StellarProcessor {
     private readonly settingService: SettingsService,
     private readonly stellarService: StellarService,
     private readonly receiveService: ReceiveService,
+    private readonly transactionService: TransactionService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>,
     @InjectQueue(BQUEUE.OFFRAMP)
@@ -55,8 +58,6 @@ export class StellarProcessor {
       'Processing add triggers on-chain job...',
       StellarProcessor.name
     );
-
-    console.log(job.data);
 
     const { triggers } = job.data;
     this.logger.log(
@@ -91,6 +92,7 @@ export class StellarProcessor {
             throw new RpcException(result.errorResult);
           }
 
+          // todo: Use wait for transaction confirmation from stellar-sdk
           await this.waitForTransactionConfirmation(result.hash, trigger.id);
 
           this.logger.log(
@@ -156,6 +158,7 @@ export class StellarProcessor {
       'Processing faucet and trustline job...',
       StellarProcessor.name
     );
+
     const { walletAddress, secretKey } = job.data;
 
     try {
@@ -163,6 +166,42 @@ export class StellarProcessor {
         walletAddress,
         secretKey,
       });
+    } catch (error) {
+      this.logger.error(
+        `Error in faucet and trustline: ${JSON.stringify(error)}`,
+        error.stack,
+        StellarProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  @Process({
+    name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+    concurrency: 10,
+  })
+  async internalFaucetAndTrustline(job: Job<BeneficiaryWallet[]>) {
+    this.logger.log(
+      'Processing internal faucet and trustline job...',
+      StellarProcessor.name
+    );
+
+    const wallets = job.data;
+
+    const batches = this.batchWalletAddresses(wallets);
+
+    try {
+      for (const batch of batches) {
+        this.logger.log(`Processing batch of ${batch.length} wallets...`);
+        await this.transactionService.batchFundAccountXlm(
+          batch,
+          (await this.getFromSettings('FUNDINGAMOUNT')) as string,
+          (await this.getFromSettings('FAUCETSECRETKEY')) as string,
+          (await this.getFromSettings('NETWORK')) as string,
+          (await this.getFromSettings('SERVER')) as string
+        );
+        this.logger.log(`Completed batch of ${batch.length} wallets`);
+      }
     } catch (error) {
       this.logger.error(
         `Error in faucet and trustline: ${JSON.stringify(error)}`,
@@ -274,13 +313,17 @@ export class StellarProcessor {
       }
     }
   }
-
+  //TODO: EVM Change
   @Process({ name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE, concurrency: 1 })
   async disburseOnchain(job: Job<DisburseDto>) {
     this.logger.log('Processing disbursement job...', StellarProcessor.name);
+
     const { ...rest } = job.data;
 
+    console.log(rest);
     const groupUuid = rest.groups[0];
+
+    console.log(groupUuid);
 
     try {
       const result: IDisbursementResultDto = await this.stellarService.disburse(
@@ -348,7 +391,9 @@ export class StellarProcessor {
     const { ...payload } = job.data;
 
     const log = payload.beneficiaryRedeemUUID
-      ? await this.beneficiaryService.getBeneficiaryRedeem(payload.beneficiaryRedeemUUID)
+      ? await this.beneficiaryService.getBeneficiaryRedeem(
+          payload.beneficiaryRedeemUUID
+        )
       : await this.createBeneficiaryRedeemRecord({
           status: 'TOKEN_TRANSACTION_INITIATED',
           transactionType: 'TOKEN_TRANSFER',
@@ -370,7 +415,7 @@ export class StellarProcessor {
             payoutUUID: payload.payoutUUID,
             payoutProcessorId: payload.payoutProcessorId,
             numberOfAttempts: job.attemptsMade + 1,
-          }
+          },
         });
 
     if (!payload.beneficiaryRedeemUUID) {
@@ -391,29 +436,25 @@ export class StellarProcessor {
           log.uuid,
           'Beneficiary with wallet not found',
           job.attemptsMade + 1,
-          log.info,
+          log.info
         );
         throw new RpcException(
           `Beneficiary with wallet ${payload.beneficiaryWalletAddress} not found`
         );
       }
 
-      const asset = await this.getFromSettings('ASSETCODE');
-
       // Get balance and check if the account has rahat balance > 0
       // TODO: think about the amount to be transferred
       const balance = await this.stellarService.getRahatBalance(
-        payload.beneficiaryWalletAddress,
-        asset
+        payload.beneficiaryWalletAddress
       );
 
-
-      if(balance < payload.amount) {
+      if (balance < payload.amount) {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`,
           job.attemptsMade + 1,
-          log.info,
+          log.info
         );
 
         throw new RpcException(
@@ -442,7 +483,7 @@ export class StellarProcessor {
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         payload.offrampWalletAddress,
-        payload.amount.toString(),
+        payload.amount.toString()
       );
 
       await this.updateBeneficiaryRedeemAsCompleted({
@@ -460,12 +501,12 @@ export class StellarProcessor {
       this.offrampQueue.add(
         JOBS.OFFRAMP.INSTANT_OFFRAMP,
         {
-         ...payload,
+          ...payload,
           transactionHash: result.tx.hash,
-          amount: payload.amount.toString()
+          amount: payload.amount.toString(),
         },
         {
-          delay:1000,
+          delay: 1000,
           attempts: 1,
           backoff: {
             type: 'exponential',
@@ -492,7 +533,7 @@ export class StellarProcessor {
           log.uuid,
           error.message,
           job.attemptsMade + 1,
-          log.info,
+          log.info
         );
       }
 
@@ -638,7 +679,6 @@ export class StellarProcessor {
     numberOfAttempts?: number,
     info?: any
   ): Promise<BeneficiaryRedeem> {
-
     return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
       status: 'TOKEN_TRANSACTION_FAILED',
       isCompleted: false,
@@ -656,7 +696,7 @@ export class StellarProcessor {
     offrampWalletAddress,
     beneficiaryWalletAddress,
     numberOfAttempts,
-    amount
+    amount,
   }: {
     uuid: string;
     txHash: string;
@@ -666,19 +706,18 @@ export class StellarProcessor {
     amount: number;
   }): Promise<BeneficiaryRedeem> {
     return await this.beneficiaryService.updateBeneficiaryRedeem(uuid, {
-        status: 'TOKEN_TRANSACTION_COMPLETED',
-        isCompleted: true,
-        amount: amount,
-        txHash: txHash,
-        info: {
-          message: 'Token transfer to offramp successful',
-          transactionHash: txHash,
-          offrampWalletAddress: offrampWalletAddress,
-          beneficiaryWalletAddress: beneficiaryWalletAddress,
-          ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
+      status: 'TOKEN_TRANSACTION_COMPLETED',
+      isCompleted: true,
+      amount: amount,
+      txHash: txHash,
+      info: {
+        message: 'Token transfer to offramp successful',
+        transactionHash: txHash,
+        offrampWalletAddress: offrampWalletAddress,
+        beneficiaryWalletAddress: beneficiaryWalletAddress,
+        ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
       },
     });
-
   }
 
   private async createBeneficiaryRedeemRecord(
@@ -921,5 +960,13 @@ export class StellarProcessor {
       throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
     }
     return settings.value[key];
+  }
+
+  private batchWalletAddresses(walletAddresses: BeneficiaryWallet[]) {
+    const batches = [];
+    for (let i = 0; i < walletAddresses.length; i += this.batchSize) {
+      batches.push(walletAddresses.slice(i, i + this.batchSize));
+    }
+    return batches;
   }
 }

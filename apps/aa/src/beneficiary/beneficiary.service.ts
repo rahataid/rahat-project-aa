@@ -72,26 +72,6 @@ export class BeneficiaryService {
       data: rest,
     });
 
-    const keys = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.wallet.getSecretByWallet' },
-        { walletAddress: dto.walletAddress, chain: 'STELLAR' }
-      )
-    );
-
-    await this.stellarQueue.add(
-      JOBS.STELLAR.FAUCET_TRUSTLINE,
-      { walletAddress: keys.address, secretKey: keys.privateKey },
-      {
-        attempts: 3,
-        removeOnComplete: true,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      }
-    );
-
     await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
     return rdata;

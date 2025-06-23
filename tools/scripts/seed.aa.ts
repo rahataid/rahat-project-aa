@@ -129,7 +129,6 @@ async function main() {
   try {
     const envVariables = await readEnvFile(envPath);
 
-
     const name = await askQuestion('Enter project name: ');
     const description = await askQuestion('Enter project description: ');
     const privateKey = await askQuestion('Enter private key: ');
@@ -314,7 +313,7 @@ async function seedTriggers(
     console.log('Phases seeded successfully.');
     console.log('--------------------------------');
   } catch (error) {
-    console.error('Error seeding triggers:', error.message);
+    console.error('Error seeding triggers:', error);
     throw error;
   }
 }
