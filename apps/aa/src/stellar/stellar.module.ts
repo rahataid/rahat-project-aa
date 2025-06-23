@@ -34,6 +34,7 @@ import { SettingsService } from '@rumsan/settings';
   controllers: [StellarController],
   providers: [
     StellarService,
+    SettingsService,
     {
       provide: ReceiveService,
       useFactory: async (settingService: SettingsService) => {
