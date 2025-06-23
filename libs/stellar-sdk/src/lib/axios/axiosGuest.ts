@@ -1,16 +1,30 @@
-import axios from "axios";
+import axios from 'axios';
 
-export const ag = axios.create({
-  baseURL: process.env['BASE_URL'],
-  timeout: 50000,
-});
+const createAxiosInstance = (baseURL: string, timeout: number = 5000) => {
+  return axios.create({
+    baseURL,
+    timeout,
+  });
+};
 
-export const as = axios.create({
-  baseURL: process.env['STELLAR_DEMO_WALLET'],
-  timeout: 5000,
-});
+export const getAxiosInstances = (
+  config: {
+    baseUrl?: string;
+    stellarDemoWalletUrl?: string;
+    receiverBaseUrl?: string;
+  } = {}
+) => {
+  const instances: { ag?: any; as?: any; ar?: any } = {};
 
-export const ar = axios.create({
-  baseURL: process.env['RECERIVER_BASE_URL'],
-  timeout: 5000,
-});
+  if (config.baseUrl) {
+    instances.ag = createAxiosInstance(config.baseUrl, 50000);
+  }
+  if (config.stellarDemoWalletUrl) {
+    instances.as = createAxiosInstance(config.stellarDemoWalletUrl);
+  }
+  if (config.receiverBaseUrl) {
+    instances.ar = createAxiosInstance(config.receiverBaseUrl);
+  }
+
+  return instances;
+};

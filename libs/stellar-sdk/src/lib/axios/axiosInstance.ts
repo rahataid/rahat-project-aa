@@ -1,22 +1,37 @@
-const axios = require('axios');
+import axios from 'axios';
 import { token } from '../../services/disbursement';
 
-console.log('token', token);
+const createAxiosInstance = (baseURL: string, timeout: number = 15000) => {
+  const instance = axios.create({
+    baseURL,
+    timeout,
+  });
 
-const axiosInstance = axios.create({
-  baseURL: process.env['BASE_URL'],
-  timeout: 15000,
-});
-axiosInstance.interceptors.request.use(
-  async (config: any) => {
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+  instance.interceptors.request.use(
+    async (config: any) => {
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error: any) => {
+      return Promise.reject(error);
     }
-    return config;
-  },
-  (error: any) => {
-    return Promise.reject(error);
-  }
-);
+  );
 
-export { axiosInstance };
+  return instance;
+};
+
+export const getAxiosInstances = (
+  config: {
+    baseUrl?: string;
+  } = {}
+) => {
+  const instances: { axiosInstance?: any } = {};
+
+  if (config.baseUrl) {
+    instances.axiosInstance = createAxiosInstance(config.baseUrl);
+  }
+
+  return instances;
+};

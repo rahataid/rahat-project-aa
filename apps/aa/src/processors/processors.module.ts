@@ -16,8 +16,9 @@ import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
+import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import { CheckTrustlineProcessor } from './checkTrutline.processor';
 import { PayoutsModule } from '../payouts/payouts.module';
-import { ASSET, ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
@@ -45,6 +46,9 @@ import { AppModule } from '../app/app.module';
       name: BQUEUE.STELLAR,
     }),
     BullModule.registerQueue({
+      name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
+    }),
+    BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
   ],
@@ -56,17 +60,23 @@ import { AppModule } from '../app/app.module';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
+    CheckTrustlineProcessor,
     OfframpProcessor,
-     {
+    {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
-        const stellarSettings = await settingsService.getPublic('STELLAR_SETTINGS');
+        const stellarSettings = await settingsService.getPublic(
+          'STELLAR_SETTINGS'
+        );
         return new ReceiveService(
-          (stellarSettings.value as any).ASSETISSUER || ASSET.ISSUER,
-          (stellarSettings.value as any).ASSETCODE || ASSET.NAME
+          (stellarSettings.value as any).ASSETISSUER,
+          (stellarSettings.value as any).ASSETCODE,
+          (stellarSettings.value as any).NETWORK,
+          (stellarSettings.value as any).FAUCETSECRETKEY,
+          (stellarSettings.value as any).FUNDINGAMOUNT
         );
       },
-      inject: [SettingsService]
+      inject: [SettingsService],
     },
   ],
 })

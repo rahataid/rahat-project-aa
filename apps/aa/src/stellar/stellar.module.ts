@@ -5,7 +5,6 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import {
-  ASSET,
   DisbursementServices,
   ReceiveService,
   TransactionService,
@@ -28,38 +27,64 @@ import { SettingsService } from '@rumsan/settings';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
+    }),
   ],
   controllers: [StellarController],
   providers: [
     StellarService,
-       {
-          provide: ReceiveService,
-          useFactory: async (settingsService: SettingsService) => {
-            const stellarSettings = await settingsService.getPublic('STELLAR_SETTINGS');
-            return new ReceiveService(
-              (stellarSettings.value as any).ASSETISSUER || ASSET.ISSUER,
-              (stellarSettings.value as any).ASSETCODE || ASSET.NAME
-            );
-          },
-          inject: [SettingsService]
-        },
+    {
+      provide: ReceiveService,
+      useFactory: async (settingService: SettingsService) => {
+        const settings = await settingService.getPublic('STELLAR_SETTINGS');
+        return new ReceiveService(
+          settings?.value['ASSETCREATOR'],
+          settings?.value['ASSETCODE'],
+          settings?.value['NETWORK'],
+          settings?.value['FAUCETSECRETKEY'],
+          settings?.value['FUNDINGAMOUNT']
+        );
+      },
+      inject: [SettingsService],
+    },
     {
       provide: TransactionService,
-      useValue: new TransactionService(),
+      useFactory: async (settingService: SettingsService) => {
+        const settings = await settingService.getPublic('STELLAR_SETTINGS');
+        return new TransactionService(
+          settings?.value['ASSETCREATOR'],
+          settings?.value['ASSETCODE'],
+          settings?.value['ASSETCREATORSECRET']
+        );
+      },
+      inject: [SettingsService],
     },
     {
       provide: DisbursementServices,
       useFactory: async (settingService: SettingsService) => {
         const settings = await settingService.getPublic('STELLAR_SETTINGS');
-        const email = settings?.value['EMAIL'];
-        const password = settings?.value['PASSWORD'];
-        const tenantName = settings?.value['TENANTNAME'];
 
-        return new DisbursementServices(email, password, tenantName);
+        const disbursementValues = {
+          email: settings?.value['EMAIL'],
+          password: settings?.value['PASSWORD'],
+          tenantName: settings?.value['TENANTNAME'],
+          baseUrl: settings?.value['BASEURL'],
+          assetCode: settings?.value['ASSETCODE'],
+          assetIssuer: settings?.value['ASSETCREATOR'],
+          assetSecret: settings?.value['ASSETCREATORSECRET'],
+        };
+
+        return new DisbursementServices(disbursementValues);
       },
       inject: [SettingsService],
     },
   ],
-  exports: [DisbursementServices, StellarService],
+  exports: [
+    DisbursementServices,
+    StellarService,
+    ReceiveService,
+    TransactionService,
+  ],
 })
 export class StellarModule {}

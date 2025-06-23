@@ -25,6 +25,7 @@ import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { BQUEUE } from '../constants';
     CommsModule.forRoot(),
     VendorsModule,
     PayoutsModule,
+    ChainModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
