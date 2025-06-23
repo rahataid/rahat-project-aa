@@ -5,7 +5,7 @@ import {
   ChainType,
 } from '../interfaces/chain-service.interface';
 import { StellarChainService } from '../chain-services/stellar-chain.service';
-import { EvmChainService } from '../chain-services/evm-chain.service';
+import { EVMChainService } from '../chain-services/evm-chain.service';
 
 @Injectable()
 export class ChainServiceRegistry {
@@ -15,7 +15,7 @@ export class ChainServiceRegistry {
   constructor(
     private settingsService: SettingsService,
     private stellarChainService: StellarChainService,
-    private evmChainService: EvmChainService
+    private evmChainService: EVMChainService
   ) {
     this.registerServices();
   }
@@ -40,32 +40,62 @@ export class ChainServiceRegistry {
 
   async detectChainFromSettings(): Promise<ChainType> {
     try {
-      const chainSettings = await this.settingsService.getPublic(
+      // Try CHAIN_SETTINGS first, then fall back to CHAIN_CONFIG
+      let chainSettings = await this.settingsService.getPublic(
         'CHAIN_SETTINGS'
       );
+
+      if (!chainSettings?.value) {
+        // Fallback to CHAIN_CONFIG for EVM
+        chainSettings = await this.settingsService.getPublic('CHAIN_CONFIG');
+
+        if (chainSettings?.value && 'rpcUrl' in chainSettings.value) {
+          // If CHAIN_CONFIG exists with rpcUrl, assume EVM
+          this.logger.log('Detected EVM chain from CHAIN_CONFIG');
+          return 'evm';
+        }
+      }
 
       if (
         !chainSettings?.value ||
         typeof chainSettings.value !== 'object' ||
-        !('type' in chainSettings.value)
+        Array.isArray(chainSettings.value)
       ) {
         this.logger.warn('Chain settings not found, defaulting to stellar');
         return 'stellar';
       }
 
-      const chainType = (
-        chainSettings.value as any
-      ).type.toLowerCase() as ChainType;
+      // Check for explicit type field
+      if ('type' in chainSettings.value) {
+        const chainType = (
+          chainSettings.value as any
+        ).type.toLowerCase() as ChainType;
 
-      if (!this.isValidChainType(chainType)) {
-        this.logger.warn(
-          `Invalid chain type: ${chainType}, defaulting to stellar`
-        );
+        if (this.isValidChainType(chainType)) {
+          this.logger.log(`Detected chain type: ${chainType}`);
+          return chainType;
+        }
+      }
+
+      // Auto-detect based on configuration structure
+      if (
+        'rpcUrl' in chainSettings.value ||
+        'projectContractAddress' in chainSettings.value
+      ) {
+        this.logger.log('Auto-detected EVM chain from config structure');
+        return 'evm';
+      }
+
+      if (
+        'NETWORK' in chainSettings.value ||
+        'ASSETCODE' in chainSettings.value
+      ) {
+        this.logger.log('Auto-detected Stellar chain from config structure');
         return 'stellar';
       }
 
-      this.logger.log(`Detected chain type: ${chainType}`);
-      return chainType;
+      this.logger.warn('Unable to detect chain type, defaulting to stellar');
+      return 'stellar';
     } catch (error) {
       this.logger.error('Error detecting chain from settings:', error);
       return 'stellar'; // Default fallback

@@ -6,10 +6,17 @@ import {
   ChainType,
   IChainService,
   AddTriggerDto,
+  DisburseDto,
+  AssignTokensDto,
+  TransferTokensDto,
+  FundAccountDto,
+  SendOtpDto,
+  VerifyOtpDto,
 } from '../interfaces/chain-service.interface';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 import { CORE_MODULE } from '../../constants';
 
 export interface EVMChainConfig {
@@ -27,7 +34,7 @@ export interface EVMChainConfig {
 }
 
 @Injectable()
-export class EVMChainService implements Partial<IChainService> {
+export class EVMChainService implements IChainService {
   private readonly logger = new Logger(EVMChainService.name);
   private provider: ethers.Provider;
 
@@ -316,7 +323,117 @@ export class EVMChainService implements Partial<IChainService> {
     }
   }
 
+  // Required interface methods
+  async assignTokens(data: AssignTokensDto): Promise<any> {
+    const chainConfig = await this.getChainConfig();
+    return this.contractQueue.add(JOBS.CONTRACT.ASSIGN_TOKENS, {
+      beneficiaryAddress: data.beneficiaryAddress,
+      amount: data.amount.toString(),
+      projectContract: chainConfig.projectContractAddress,
+    });
+  }
+
+  async transferTokens(data: TransferTokensDto): Promise<any> {
+    throw new Error('Transfer tokens not implemented for EVM');
+  }
+
+  async disburse(data: DisburseDto): Promise<any> {
+    try {
+      if (!data.groups || data.groups.length === 0) {
+        throw new Error('EVM disburse requires groups to be specified');
+      }
+
+      this.logger.log(
+        `Starting EVM disbursement for groups: ${data.groups.join(', ')}`
+      );
+
+      // Get beneficiaries and amounts for each group
+      const disbursementData = await this.resolveGroupsToAddresses(data.groups);
+
+      if (disbursementData.beneficiaries.length === 0) {
+        throw new Error('No beneficiaries found for the specified groups');
+      }
+
+      // Use first group as groupUuid for tracking
+      const groupUuid = data.groups[0];
+
+      // Call the actual disbursement method
+      return this.disburseBatch(
+        disbursementData.beneficiaries,
+        disbursementData.amounts,
+        groupUuid
+      );
+    } catch (error) {
+      this.logger.error(`Error in EVM disburse: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async getDisbursementStatus(id: string): Promise<any> {
+    return this.getTransactionStatus(id);
+  }
+
+  async sendOtp(data: SendOtpDto): Promise<any> {
+    throw new Error('OTP not supported for EVM');
+  }
+
+  async sendAssetToVendor(data: any): Promise<any> {
+    throw new Error('Send asset to vendor not implemented for EVM');
+  }
+
+  async fundAccount(data: FundAccountDto): Promise<any> {
+    const chainConfig = await this.getChainConfig();
+    return this.contractQueue.add(JOBS.CONTRACT.FUND_ACCOUNT, {
+      walletAddress: data.walletAddress,
+      amount: data.amount,
+    });
+  }
+
+  async verifyOtp(data: VerifyOtpDto): Promise<any> {
+    throw new Error('OTP verification not supported for EVM');
+  }
+
+  validateAddress(address: string): boolean {
+    return ethers.isAddress(address);
+  }
+
   // Helper methods
+  private async resolveGroupsToAddresses(groups: string[]): Promise<{
+    beneficiaries: string[];
+    amounts: string[];
+  }> {
+    try {
+      // Call the beneficiary service to get group data
+      const resolvedData = await lastValueFrom(
+        this.client.send(
+          { cmd: 'aa.jobs.beneficiary.getGroupsWithBeneficiaries' },
+          { groups }
+        )
+      );
+
+      if (!resolvedData || !Array.isArray(resolvedData.beneficiaries)) {
+        throw new Error('Invalid group resolution response');
+      }
+
+      return {
+        beneficiaries: resolvedData.beneficiaries.map(
+          (b: any) => b.walletAddress
+        ),
+        amounts: resolvedData.beneficiaries.map(
+          (b: any) => b.tokenAmount?.toString() || '0'
+        ),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error resolving groups: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        `Failed to resolve groups to addresses: ${error.message}`
+      );
+    }
+  }
+
   private async initializeProvider() {
     try {
       const chainConfig = await this.getChainConfig();
