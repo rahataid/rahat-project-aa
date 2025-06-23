@@ -11,4 +11,8 @@ export class ChainService {
   sendOtp(sendOtpDto: any) {
     return this.chainQueueService.sendOtp(sendOtpDto);
   }
+
+  sendAssetToVendor(sendAssetDto: any) {
+    return this.chainQueueService.sendAssetToVendor(sendAssetDto);
+  }
 }

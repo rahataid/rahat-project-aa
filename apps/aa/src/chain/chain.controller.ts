@@ -21,4 +21,12 @@ export class ChainController {
   sendOtp(data: any) {
     return this.chainService.sendOtp(data);
   }
+
+  @MessagePattern({
+    cmd: 'jobs.chain.sendAsset',
+    uuid: process.env.PROJECT_ID,
+  })
+  sendAssetToVendor(data: any) {
+    return this.chainService.sendAssetToVendor(data);
+  }
 }

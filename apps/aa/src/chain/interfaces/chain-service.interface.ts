@@ -1,3 +1,5 @@
+import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+
 export interface IChainService {
   // Token operations
   assignTokens(data: AssignTokensDto): Promise<any>;
@@ -9,6 +11,7 @@ export interface IChainService {
 
   // Send otp operations
   sendOtp(data: SendOtpDto): Promise<any>;
+  sendAssetToVendor(data: SendAssetDto): Promise<any>;
 
   // Account operations
   fundAccount(data: FundAccountDto): Promise<any>;

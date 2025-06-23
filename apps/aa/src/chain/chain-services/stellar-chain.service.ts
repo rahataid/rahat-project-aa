@@ -21,6 +21,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
+import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 
 @Injectable()
 export class StellarChainService implements IChainService {
@@ -127,6 +128,113 @@ export class StellarChainService implements IChainService {
     // }
 
     return this.sendOtpByPhone(sendOtpDto);
+  }
+
+  async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: verifyOtpDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
+      const amount =
+        verifyOtpDto?.amount ||
+        (await this.getBenTotal(verifyOtpDto?.phoneNumber));
+
+      this.logger.log(
+        `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
+      );
+
+      await this.verifyOTP(
+        verifyOtpDto.otp,
+        verifyOtpDto.phoneNumber,
+        amount as number
+      );
+
+      const keys = (await this.getSecretByPhone(
+        verifyOtpDto.phoneNumber
+      )) as any;
+
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const result = await this.receiveService.sendAsset(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount.toString()
+      );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${verifyOtpDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.tx.hash}`);
+
+      // todo: create beneficiary redeem while sending otp
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendor.uuid,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          beneficiaryWalletAddress: keys.publicKey,
+          txHash: result.tx.hash,
+          // isCompleted: true,
+        },
+      });
+
+      return {
+        txHash: result.tx.hash,
+      };
+    } catch (error) {
+      throw new RpcException(
+        error ? error : 'Transferring asset to vendor failed'
+      );
+    }
+  }
+
+  private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber },
+    });
+
+    if (!record) {
+      this.logger.log('OTP record not found');
+      throw new RpcException('OTP record not found');
+    }
+
+    if (record.isVerified) {
+      this.logger.log('OTP already verified');
+      throw new RpcException('OTP already verified');
+    }
+
+    const now = new Date();
+    if (record.expiresAt < now) {
+      this.logger.log('OTP has expired');
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+
+    if (!isValid) {
+      this.logger.log('Invalid OTP or amount mismatch');
+      throw new RpcException('Invalid OTP or amount mismatch');
+    }
+
+    this.logger.log('OTP verified successfully');
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
+
+    return true;
   }
 
   private async sendOtpByPhone(sendOtpDto: SendOtpDto) {

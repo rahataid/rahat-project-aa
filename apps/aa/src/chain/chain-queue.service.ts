@@ -12,6 +12,7 @@ import {
   AddTriggerDto,
   UpdateTriggerDto,
 } from './interfaces/chain-service.interface';
+import { SendAssetDto } from '../stellar/dto/send-otp.dto';
 
 @Injectable()
 export class ChainQueueService {
@@ -88,6 +89,17 @@ export class ChainQueueService {
       chainType
     );
     return chainService.sendOtp(data);
+  }
+
+  async sendAssetToVendor(
+    data: SendAssetDto,
+    chainType?: ChainType
+  ): Promise<any> {
+    this.logger.log(`Sending asset to vendor ${data.phoneNumber}`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.sendAssetToVendor(data);
   }
 
   async verifyOtp(data: VerifyOtpDto, chainType?: ChainType): Promise<any> {

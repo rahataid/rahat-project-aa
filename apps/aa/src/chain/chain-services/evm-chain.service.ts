@@ -105,6 +105,11 @@ export class EvmChainService implements IChainService {
     throw new Error('OTP functionality not implemented for EVM chains');
   }
 
+  async sendAssetToVendor(data: any): Promise<any> {
+    this.logger.warn('OTP functionality not available for EVM chains');
+    throw new Error('OTP functionality not implemented for EVM chains');
+  }
+
   async verifyOtp(data: VerifyOtpDto): Promise<any> {
     // EVM chains typically don't have built-in OTP mechanisms
     this.logger.warn('OTP verification not available for EVM chains');
