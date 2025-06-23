@@ -189,7 +189,37 @@ export const JOBS = {
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
+    // Token Management
+    ASSIGN_TOKENS: 'aa.jobs.contract.assignTokens',
+    TRANSFER_TOKENS: 'aa.jobs.contract.transferTokens',
+    MINT_TOKENS: 'aa.jobs.contract.mintTokens',
+    BURN_TOKENS: 'aa.jobs.contract.burnTokens',
+
+    // Disbursement Operations
+    DISBURSE_BATCH: `aa.jobs.contract.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.contract.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+
+    // Account Management
+    FUND_ACCOUNT: 'aa.jobs.contract.fundAccount',
+    CHECK_BALANCE: 'aa.jobs.contract.checkBalance',
+
+    // Trigger Management
+    ADD_TRIGGER: 'aa.jobs.contract.addTrigger',
+    UPDATE_TRIGGER_PARAMS: 'aa.jobs.contract.updateTriggerParams',
+    TRIGGER_STATUS: 'aa.jobs.contract.triggerStatus',
+
+    // Project Management
+    CREATE_PROJECT: 'aa.jobs.contract.createProject',
+    ADD_BENEFICIARY: 'aa.jobs.contract.addBeneficiary',
+    REMOVE_BENEFICIARY: 'aa.jobs.contract.removeBeneficiary',
+
+    // Budget Management
     INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget',
+    DECREASE_BUDGET: 'aa.jobs.contract.decreaseBudget',
+
+    // Transaction Monitoring
+    WAIT_FOR_CONFIRMATION: 'aa.jobs.contract.waitForConfirmation',
+    RETRY_TRANSACTION: 'aa.jobs.contract.retryTransaction',
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',

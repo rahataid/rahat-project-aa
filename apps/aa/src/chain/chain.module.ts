@@ -5,7 +5,7 @@ import { ChainController } from './chain.controller';
 import { ChainQueueService } from './chain-queue.service';
 import { ChainServiceRegistry } from './registries/chain-service.registry';
 import { StellarChainService } from './chain-services/stellar-chain.service';
-import { EvmChainService } from './chain-services/evm-chain.service';
+import { EVMChainService } from './chain-services/evm-chain.service';
 import { BQUEUE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
 import { ClientsModule } from '@nestjs/microservices';
@@ -42,7 +42,7 @@ import { SettingsService } from '@rumsan/settings';
     ChainQueueService,
     ChainServiceRegistry,
     StellarChainService,
-    EvmChainService,
+    EVMChainService,
     PrismaService,
     {
       provide: ReceiveService,

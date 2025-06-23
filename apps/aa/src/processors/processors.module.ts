@@ -10,6 +10,7 @@ import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
+import { EVMProcessor } from './evm.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
@@ -60,6 +61,7 @@ import { AppModule } from '../app/app.module';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
+    EVMProcessor,
     CheckTrustlineProcessor,
     OfframpProcessor,
     {

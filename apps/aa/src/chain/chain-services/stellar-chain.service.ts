@@ -24,7 +24,7 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 
 @Injectable()
-export class StellarChainService implements IChainService {
+export class StellarChainService implements Partial<IChainService> {
   private readonly logger = new Logger(StellarChainService.name);
 
   constructor(
