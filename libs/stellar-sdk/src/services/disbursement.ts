@@ -53,6 +53,8 @@ export class DisbursementServices implements IDisbursementService {
       this.disbursementValues.baseUrl
     );
 
+    console.log('settings=>', this.disbursementValues);
+
     token = (await authService.getToken()) as string;
     const disbursement = await getDisbursement(
       disbursementId,
@@ -66,8 +68,6 @@ export class DisbursementServices implements IDisbursementService {
     const { axiosInstance } = getAxiosInstances({
       baseUrl,
     });
-
-    console.log(this.disbursementValues);
 
     const issuerKeypair = Keypair.fromSecret(
       this.disbursementValues.assetSecret
