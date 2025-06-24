@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import {
-  IChainService,
   ChainType,
+  IChainService,
 } from '../interfaces/chain-service.interface';
-import { StellarChainService } from '../chain-services/stellar-chain.service';
-import { EVMChainService } from '../chain-services/evm-chain.service';
 
 interface ChainServiceConfig {
   name: ChainType;
