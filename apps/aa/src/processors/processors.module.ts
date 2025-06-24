@@ -47,6 +47,9 @@ import { AppModule } from '../app/app.module';
       name: BQUEUE.STELLAR,
     }),
     BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
+    BullModule.registerQueue({
       name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
     }),
     BullModule.registerQueue({

@@ -185,7 +185,7 @@ export class StellarChainService implements Partial<IChainService> {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR_REIMBURSEMENT' as PayoutType,
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
           // isCompleted: true,

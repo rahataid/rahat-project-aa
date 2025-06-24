@@ -37,13 +37,13 @@ export class ChainServiceRegistry {
 
   async detectChainFromSettings(): Promise<ChainType> {
     try {
-      // Try CHAIN_SETTINGS first, then fall back to CHAIN_CONFIG
+      // Try CHAIN_SETTINGS first, then fall back to CHAIN_SETTINGS
       let chainSettings = await this.settingsService.getPublic(
         'CHAIN_SETTINGS'
       );
 
       if (!chainSettings?.value) {
-        // Fallback to CHAIN_CONFIG for EVM
+        // Fallback to CHAIN_SETTINGS for EVM
         throw new Error('CHAIN_SETTINGS not found');
       }
 

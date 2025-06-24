@@ -63,13 +63,17 @@ export class EVMProcessor {
 
   private async initializeProvider() {
     try {
-      const chainConfig = await this.getFromSettings('CHAIN_CONFIG');
-      const evmPrivateKey = await this.getFromSettings('EVM_PRIVATE_KEY');
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+
+      console.log(chainConfig);
 
       this.provider = new ethers.JsonRpcProvider(
         chainConfig.rpcUrl || 'http://localhost:8545'
       );
-      this.signer = new ethers.Wallet(evmPrivateKey, this.provider);
+      this.signer = new ethers.Wallet(
+        await this.getFromSettings('DEPLOYER_PRIVATE_KEY'),
+        this.provider
+      );
 
       // Test the connection
       await this.provider.getBlockNumber();
@@ -95,6 +99,8 @@ export class EVMProcessor {
   @Process({ name: JOBS.EVM.ASSIGN_TOKENS, concurrency: 1 })
   async assignTokens(job: Job<EVMDisbursementJob>) {
     try {
+      console.log(job);
+
       this.logger.log('Processing EVM assign tokens...', EVMProcessor.name);
       await this.ensureInitialized();
 
@@ -186,33 +192,18 @@ export class EVMProcessor {
 
   private async getFromSettings(key: string): Promise<any> {
     try {
-      const settings = await this.settingService.getPublic('CHAIN_CONFIG');
+      const settings = await this.settingService.getPublic(
+        key || 'CHAIN_SETTINGS'
+      );
       if (!settings?.value) {
-        throw new Error('CHAIN_CONFIG not found');
+        throw new Error('CHAIN_SETTINGS not found');
       }
 
       const chainConfig = settings.value;
 
-      // Handle different key mappings
-      const keyMappings: Record<string, string> = {
-        CHAIN_CONFIG: 'chainConfig',
-        EVM_PRIVATE_KEY: 'privateKey',
-        TRIGGER_MANAGER_CONTRACT: 'triggerManagerAddress',
-        PROJECT_CONTRACT: 'projectContractAddress',
-        TOKEN_CONTRACT: 'tokenContractAddress',
-      };
-
-      const mappedKey = keyMappings[key] || key;
-
-      if (!chainConfig[mappedKey]) {
-        throw new Error(
-          `Setting ${key} (${mappedKey}) not found in CHAIN_CONFIG`
-        );
-      }
-
-      return chainConfig[mappedKey];
+      return chainConfig;
     } catch (error) {
-      this.logger.error(`Error getting setting ${key}: ${error.message}`);
+      this.logger.error(`Error getting setting `);
       throw error;
     }
   }
