@@ -35,8 +35,8 @@ export interface EVMChainConfig {
 }
 
 @Injectable()
-export class EVMChainService implements IChainService {
-  private readonly logger = new Logger(EVMChainService.name);
+export class EvmChainService implements IChainService {
+  private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
   name = 'evm';
   constructor(
@@ -89,7 +89,7 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `Queued EVM disbursement job ${job.id} for group ${groupUuid}`,
-        EVMChainService.name
+        EvmChainService.name
       );
 
       return {
@@ -106,7 +106,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error queuing EVM disbursement: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -130,7 +130,7 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `Queued EVM add trigger job ${job.id}`,
-        EVMChainService.name
+        EvmChainService.name
       );
 
       return {
@@ -142,7 +142,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error queuing EVM trigger: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -164,7 +164,7 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `Queued EVM update trigger params job ${job.id}`,
-        EVMChainService.name
+        EvmChainService.name
       );
 
       return {
@@ -176,7 +176,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error queuing EVM trigger update: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -203,7 +203,7 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `Queued EVM add beneficiary job ${job.id} for ${beneficiaryAddress}`,
-        EVMChainService.name
+        EvmChainService.name
       );
 
       return {
@@ -215,7 +215,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error queuing EVM add beneficiary: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -237,7 +237,7 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `Queued EVM balance check job ${job.id} for ${address}`,
-        EVMChainService.name
+        EvmChainService.name
       );
 
       return job.finished();
@@ -245,7 +245,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error checking EVM balance: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -279,7 +279,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error getting transaction status: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -319,7 +319,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error getting chain stats: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -354,6 +354,8 @@ export class EVMChainService implements IChainService {
     }
 
     const groups = await this.getGroupsFromUuid(groupUuids);
+
+    console.log(groups);
 
     this.evmQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
@@ -452,13 +454,13 @@ export class EVMChainService implements IChainService {
 
       this.logger.log(
         `EVM provider initialized for ${chainConfig.name} (Chain ID: ${chainConfig.chainId})`,
-        EVMChainService.name
+        EvmChainService.name
       );
     } catch (error) {
       this.logger.error(
         `Failed to initialize EVM provider: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
@@ -466,26 +468,19 @@ export class EVMChainService implements IChainService {
 
   private async getChainConfig(): Promise<EVMChainConfig> {
     try {
-      const settings = await this.settingsService.getPublic('CHAIN_CONFIG');
+      const settings = await this.settingsService.getPublic('CHAIN_SETTINGS');
       if (!settings?.value) {
-        throw new Error('CHAIN_CONFIG not found in settings');
+        throw new Error('CHAIN_SETTINGS not found in settings');
       }
 
       const config = settings.value as unknown as EVMChainConfig;
 
       // Validate required fields
-      const requiredFields = [
-        'rpcUrl',
-        'chainId',
-        'projectContractAddress',
-        'tokenContractAddress',
-        'triggerManagerAddress',
-        'privateKey',
-      ];
+      const requiredFields = ['rpcUrl', 'chainId'];
 
       for (const field of requiredFields) {
         if (!config[field as keyof EVMChainConfig]) {
-          throw new Error(`Missing required field ${field} in CHAIN_CONFIG`);
+          throw new Error(`Missing required field ${field} in CHAIN_SETTINGS`);
         }
       }
       console.log(config);
@@ -494,7 +489,7 @@ export class EVMChainService implements IChainService {
       this.logger.error(
         `Error getting chain config: ${error.message}`,
         error.stack,
-        EVMChainService.name
+        EvmChainService.name
       );
       throw error;
     }
