@@ -140,7 +140,7 @@ export class BeneficiaryService {
                 tokensReserved: {
                   payoutId: null,
                   isDisbursed: true,
-               },
+                },
               }
             : {}),
         },
@@ -456,10 +456,12 @@ export class BeneficiaryService {
   }
 
   async getOneTokenReservationByGroupId(groupId: string) {
+    console.log(groupId);
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
     });
 
+    console.log(benfGroupToken);
     return benfGroupToken;
   }
 

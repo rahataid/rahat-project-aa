@@ -9,6 +9,7 @@ import { ethers } from 'ethers';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { AddTriggerDto } from '../stellar/dto/trigger.dto';
+import { lastValueFrom } from 'rxjs';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -25,10 +26,8 @@ interface EVMTransactionResult {
 }
 
 interface EVMDisbursementJob {
-  beneficiaries: string[];
-  amounts: string[];
-  groupUuid: string;
-  projectContract: string;
+  dName: string;
+  groups: string;
 }
 
 interface EVMTriggerJob {
@@ -99,22 +98,12 @@ export class EVMProcessor {
   @Process({ name: JOBS.EVM.ASSIGN_TOKENS, concurrency: 1 })
   async assignTokens(job: Job<EVMDisbursementJob>) {
     try {
-      console.log(job);
-
       this.logger.log('Processing EVM assign tokens...', EVMProcessor.name);
       await this.ensureInitialized();
 
-      const { beneficiaries, amounts, groupUuid } = job.data;
+      const { groups } = job.data;
 
-      const group =
-        await this.beneficiaryService.getOneTokenReservationByGroupId(
-          groupUuid
-        );
-
-      if (!group) {
-        this.logger.error(`Group ${groupUuid} not found`, EVMProcessor.name);
-        return;
-      }
+      console.log(AAProjectABI);
 
       const aaContract = await this.createContractInstanceSign(
         'AAPROJECT',
@@ -122,22 +111,49 @@ export class EVMProcessor {
         this.signer
       );
 
+      const benGroups =
+        (groups && groups.length) > 0
+          ? groups
+          : await this.getDisbursableGroupsUuids();
+
+      this.logger.log('Token Disburse for: ', groups);
+      const bens = await this.getBeneficiaryTokenBalance([
+        benGroups,
+      ] as string[]);
+
+      const amounts = bens.map((ben) => ben.amount);
+
+      let totalTokens: number = 0;
+
+      if (!bens) {
+        throw new RpcException('Beneficiary Token Balance not found');
+      }
+
+      bens?.forEach((ben) => {
+        this.logger.log(`Beneficiary: ${ben.walletAddress} has ${ben.amount}`);
+        totalTokens += parseInt(ben.amount);
+      });
+
       const assignTokenToBeneficiary = await this.multiSend(
         aaContract,
         'assignTokenToBeneficiary',
-        [beneficiaries, amounts]
+        bens.map((ben) => [ben.walletAddress, ben.amount])
       );
-      const txn = await assignTokenToBeneficiary.wait();
 
-      this.logger.log('contract called with txn hash:', txn.hash);
+      console.log(assignTokenToBeneficiary);
+      // const txn = await assignTokenToBeneficiary.wait();
+
+      // console.log(txn);
+
+      // this.logger.log('contract called with txn hash:', txn.hash);
 
       // TODO: Add the logic to update the group token reservation
-      await this.beneficiaryService.updateGroupToken({
-        groupUuid,
-        status: 'STARTED',
-        isDisbursed: false,
-        info: txn,
-      });
+      // await this.beneficiaryService.updateGroupToken({
+      //   groupUuid,
+      //   status: 'STARTED',
+      //   isDisbursed: false,
+      //   info: txn,
+      // });
 
       // TODO: Add the logic to update the beneficiary token reservation
       // this.evmQueue.add(
@@ -244,5 +260,99 @@ export class EVMProcessor {
     signer: ethers.Signer
   ) {
     return new ethers.Contract(contractName, abi, signer);
+  }
+
+  private async getDisbursableGroupsUuids() {
+    const benGroups = await this.prismaService.beneficiaryGroupTokens.findMany({
+      where: {
+        AND: [
+          {
+            numberOfTokens: {
+              gt: 0,
+            },
+          },
+          { isDisbursed: false },
+          {
+            payout: {
+              is: null,
+            },
+          },
+        ],
+      },
+      select: { uuid: true, groupId: true },
+    });
+    return benGroups.map((group) => group.groupId);
+  }
+
+  async getBeneficiaryTokenBalance(groupUuids: string[]) {
+    if (!groupUuids.length) return [];
+
+    const [groups, tokens] = await Promise.all([
+      this.fetchGroupedBeneficiaries(groupUuids),
+      this.fetchGroupTokenAmounts(groupUuids),
+    ]);
+
+    this.logger.log(`Found ${groups.length} groups`);
+    this.logger.log(`Found ${tokens.length} tokens`);
+
+    return this.computeBeneficiaryTokenDistribution(groups, tokens);
+  }
+
+  private async fetchGroupedBeneficiaries(groupUuids: string[]) {
+    const response = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+        { data: groupUuids.map((uuid) => ({ uuid })) }
+      )
+    );
+
+    return response.data ?? [];
+  }
+
+  private async fetchGroupTokenAmounts(groupUuids: string[]) {
+    return this.prismaService.beneficiaryGroupTokens.findMany({
+      where: { groupId: { in: groupUuids } },
+      select: { numberOfTokens: true, groupId: true },
+    });
+  }
+
+  private computeBeneficiaryTokenDistribution(
+    groups: any[],
+    tokens: { numberOfTokens: number; groupId: string }[]
+  ) {
+    const csvData: Record<
+      string,
+      { phone: string; amount: string; id: string; walletAddress: string }
+    > = {};
+
+    this.logger.log(`Computing beneficiary token distribution`);
+    groups.forEach((group) => {
+      const groupToken = tokens.find((t) => t.groupId === group.uuid);
+      const totalTokens = groupToken?.numberOfTokens ?? 0;
+
+      const totalBeneficiaries = group._count?.groupedBeneficiaries;
+      const tokenPerBeneficiary = totalTokens / totalBeneficiaries;
+
+      group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
+        const phone = Beneficiary.pii.phone;
+        const walletAddress = Beneficiary.walletAddress;
+        const amount = tokenPerBeneficiary;
+
+        if (csvData[phone]) {
+          csvData[phone].amount = (
+            parseFloat(csvData[phone].amount) + amount
+          ).toString();
+        } else {
+          csvData[phone] = {
+            phone,
+            walletAddress,
+            amount: amount.toString(),
+            id: Beneficiary.uuid,
+          };
+        }
+      });
+    });
+
+    return Object.values(csvData);
   }
 }

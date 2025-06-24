@@ -362,7 +362,7 @@ export class EvmChainService implements IChainService {
         name: JOBS.EVM.ASSIGN_TOKENS,
         data: {
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
-          groups: [uuid],
+          groups: uuid,
         },
         opts: {
           attempts: 3,
