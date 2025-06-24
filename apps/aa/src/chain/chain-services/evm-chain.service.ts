@@ -40,7 +40,7 @@ export class EVMChainService implements IChainService {
   private provider: ethers.Provider;
 
   constructor(
-    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService
@@ -70,7 +70,7 @@ export class EVMChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.contractQueue.add(
+      const job = await this.evmQueue.add(
         JOBS.CONTRACT.DISBURSE_BATCH,
         {
           beneficiaries,
@@ -114,7 +114,7 @@ export class EVMChainService implements IChainService {
 
   async addTrigger(data: AddTriggerDto): Promise<any> {
     try {
-      const job = await this.contractQueue.add(
+      const job = await this.evmQueue.add(
         JOBS.CONTRACT.ADD_TRIGGER,
         {
           triggers: [data],
@@ -150,7 +150,7 @@ export class EVMChainService implements IChainService {
 
   async updateTriggerParams(triggerUpdate: any): Promise<any> {
     try {
-      const job = await this.contractQueue.add(
+      const job = await this.evmQueue.add(
         JOBS.CONTRACT.UPDATE_TRIGGER_PARAMS,
         triggerUpdate,
         {
@@ -186,7 +186,7 @@ export class EVMChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.contractQueue.add(
+      const job = await this.evmQueue.add(
         JOBS.CONTRACT.ADD_BENEFICIARY,
         {
           projectContract: chainConfig.projectContractAddress,
@@ -228,7 +228,7 @@ export class EVMChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.contractQueue.add(JOBS.CONTRACT.CHECK_BALANCE, {
+      const job = await this.evmQueue.add(JOBS.CONTRACT.CHECK_BALANCE, {
         address,
         tokenAddress: options?.tokenAddress || chainConfig.tokenContractAddress,
         projectContract:
@@ -328,7 +328,7 @@ export class EVMChainService implements IChainService {
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
     const chainConfig = await this.getChainConfig();
-    return this.contractQueue.add(JOBS.CONTRACT.ASSIGN_TOKENS, {
+    return this.evmQueue.add(JOBS.CONTRACT.ASSIGN_TOKENS, {
       beneficiaryAddress: data.beneficiaryAddress,
       amount: data.amount.toString(),
       projectContract: chainConfig.projectContractAddress,
@@ -355,9 +355,9 @@ export class EVMChainService implements IChainService {
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
-    this.contractQueue.addBulk(
+    this.evmQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
-        name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
+        name: JOBS.EVM.ASSIGN_TOKENS,
         data: {
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
           groups: [uuid],
@@ -391,7 +391,7 @@ export class EVMChainService implements IChainService {
 
   async fundAccount(data: FundAccountDto): Promise<any> {
     const chainConfig = await this.getChainConfig();
-    return this.contractQueue.add(JOBS.CONTRACT.FUND_ACCOUNT, {
+    return this.evmQueue.add(JOBS.CONTRACT.FUND_ACCOUNT, {
       walletAddress: data.walletAddress,
       amount: data.amount,
     });

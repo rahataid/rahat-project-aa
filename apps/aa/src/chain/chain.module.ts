@@ -32,7 +32,7 @@ import { SettingsService } from '@rumsan/settings';
       name: BQUEUE.STELLAR,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.CONTRACT,
+      name: BQUEUE.EVM,
     }),
     StellarModule,
   ],

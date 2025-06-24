@@ -120,6 +120,15 @@ export const JOBS = {
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
   },
+  EVM: {
+    ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
+    DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+    FUND_ACCOUNT: `aa.jobs.evm.fundAccount_${process.env.PROJECT_ID}`,
+    CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
+    ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
+    UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+  },
   OFFRAMP: {
     CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
     EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
@@ -267,6 +276,7 @@ export const BQUEUE = {
   STELLAR: 'STELLAR',
   STELLAR_CHECK_TRUSTLINE: 'STELLAR_CHECK_TRUSTLINE',
   OFFRAMP: 'OFFRAMP',
+  EVM: 'EVM',
 };
 
 export const VULNERABILITY_FIELD = {

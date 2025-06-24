@@ -22,6 +22,7 @@ import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+import { PayoutType } from '@prisma/client';
 
 @Injectable()
 export class StellarChainService implements Partial<IChainService> {
@@ -183,7 +184,7 @@ export class StellarChainService implements Partial<IChainService> {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR_REIMBURSEMENT',
+          transactionType: 'VENDOR_REIMBURSEMENT' as PayoutType,
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
           // isCompleted: true,
