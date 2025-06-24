@@ -10,6 +10,7 @@ import {
   GetStakeholdersData,
   RemoveStakeholdersData,
   RemoveStakeholdersGroup,
+  UpdateStakeholdersData,
   UpdateStakeholdersGroups,
 } from './dto';
 
@@ -57,7 +58,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.UPDATE,
     uuid: process.env.PROJECT_ID,
   })
-  async update(payload: RemoveStakeholdersData) {
+  async update(payload: UpdateStakeholdersData) {
     return this.stakeholdersService.update(payload);
   }
 
