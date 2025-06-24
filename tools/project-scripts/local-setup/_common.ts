@@ -14,14 +14,13 @@ export class ContractLib {
   public deployedContracts: DeployedContractsData;
 
   constructor() {
-    const network = 'http://127.0.0.1:8888';
+    const network =
+      'https://base-sepolia.g.alchemy.com/v2/9U6ZNgBvVAhsXX6Klq4YN4wNLhW8CfJr';
     this.networkSettings = {
       rpcUrl: network,
       chainName: 'localhost',
       chainId: 8888,
-      blockExplorerUrls: [
-        'http://local-explorer.com/',
-      ],
+      blockExplorerUrls: ['http://local-explorer.com/'],
     };
     this.provider = new JsonRpcProvider(network);
     this.deployedContracts = {};
@@ -72,7 +71,6 @@ export class ContractLib {
       startBlock: txBlock?.number || 1,
     };
 
-
     return {
       blockNumber: txBlock?.number || 1,
       contract: new ethers.Contract(address, abi, this.provider),
@@ -92,7 +90,7 @@ export class ContractLib {
     methodName: string,
     args: any[],
     contractAddress: string,
-    signer?: ethers.Signer,
+    signer?: ethers.Signer
   ) {
     //const contractAddress = await this.getDeployedAddress(contractAddressFile, deployedContractName);
     const abi = this.getContractArtifacts(contractName).abi;
@@ -115,16 +113,19 @@ export class ContractLib {
     }
 
     const result = await method(...args);
-    await this.delay(3000)
+    await this.delay(3000);
     return result;
   }
 
   public getDeployedAddress(contractAddressFile: string, contractName: string) {
-    const fileData = readFileSync(`${__dirname}/deployments/${contractAddressFile}.json`, 'utf8');
+    const fileData = readFileSync(
+      `${__dirname}/deployments/${contractAddressFile}.json`,
+      'utf8'
+    );
 
     const data = JSON.parse(fileData);
-    console.log({ data })
-    console.log({ contractName })
+    console.log({ data });
+    console.log({ contractName });
     return data[contractName].address;
   }
 
@@ -134,22 +135,29 @@ export class ContractLib {
     filename: string,
     signer: ethers.Wallet
   ) {
-    const contractAddress = await this.getDeployedAddress(filename, contractName);
+    const contractAddress = await this.getDeployedAddress(
+      filename,
+      contractName
+    );
     const abi = this.getContractArtifacts(contractName).abi;
     const contract = new ethers.Contract(contractAddress, abi, signer);
-    const tx = await contract[
-      'mintTokenAndApprove'
-    ](...args);
+    const tx = await contract['mintTokenAndApprove'](...args);
     tx.wait();
     console.log(tx);
     return tx;
   }
 
-  public async getDeployedContractDetails(contractAddressFile: string, contractName: string[]) {
+  public async getDeployedContractDetails(
+    contractAddressFile: string,
+    contractName: string[]
+  ) {
     const contractDetails: { [key: string]: { address: string; abi: any } } =
       {};
     contractName.map(async (contract) => {
-      const address = await this.getDeployedAddress(contractAddressFile, contract);
+      const address = await this.getDeployedAddress(
+        contractAddressFile,
+        contract
+      );
       const { abi } = this.getContractArtifacts(contract);
       contractDetails[contract] = {
         address,
@@ -175,7 +183,7 @@ export class ContractLib {
       if (existingData) fileData = JSON.parse(existingData);
     }
     fileData = { ...fileData, ...newData };
-    console.log({ fileData })
+    console.log({ fileData });
     writeFileSync(filePath, JSON.stringify(fileData, null, 2));
   }
 
@@ -185,22 +193,24 @@ export class ContractLib {
     return iface;
   }
 
-  public async getContracts(contractName: string, contractAddress: string, privateKey: string) {
+  public async getContracts(
+    contractName: string,
+    contractAddress: string,
+    privateKey: string
+  ) {
     const abi = this.getContractArtifacts(contractName).abi;
 
     const wallet = new ethers.Wallet(privateKey, this.provider);
 
-
-    const contract = new Contract(
-      contractAddress,
-      abi,
-      wallet
-    )
+    const contract = new Contract(contractAddress, abi, wallet);
     return contract;
-
   }
 
-  public async generateMultiCallData(contractName: string, functionName: string, callData: any) {
+  public async generateMultiCallData(
+    contractName: string,
+    functionName: string,
+    callData: any
+  ) {
     const iface = await this.getInterface(contractName);
     const encodedData: any = [];
     if (callData) {

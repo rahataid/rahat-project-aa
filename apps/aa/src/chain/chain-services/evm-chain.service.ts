@@ -18,6 +18,7 @@ import { ethers } from 'ethers';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { CORE_MODULE } from '../../constants';
+import { PrismaService } from '@rumsan/prisma';
 
 export interface EVMChainConfig {
   name: string;
@@ -41,7 +42,8 @@ export class EVMChainService implements IChainService {
   constructor(
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     private readonly settingsService: SettingsService,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly prisma: PrismaService
   ) {
     this.initializeProvider();
   }
@@ -338,35 +340,41 @@ export class EVMChainService implements IChainService {
   }
 
   async disburse(data: DisburseDto): Promise<any> {
-    try {
-      if (!data.groups || data.groups.length === 0) {
-        throw new Error('EVM disburse requires groups to be specified');
-      }
+    const groupUuids =
+      (data?.groups && data?.groups.length) > 0
+        ? data.groups
+        : await this.getDisbursableGroupsUuids();
 
-      this.logger.log(
-        `Starting EVM disbursement for groups: ${data.groups.join(', ')}`
-      );
-
-      // Get beneficiaries and amounts for each group
-      const disbursementData = await this.resolveGroupsToAddresses(data.groups);
-
-      if (disbursementData.beneficiaries.length === 0) {
-        throw new Error('No beneficiaries found for the specified groups');
-      }
-
-      // Use first group as groupUuid for tracking
-      const groupUuid = data.groups[0];
-
-      // Call the actual disbursement method
-      return this.disburseBatch(
-        disbursementData.beneficiaries,
-        disbursementData.amounts,
-        groupUuid
-      );
-    } catch (error) {
-      this.logger.error(`Error in EVM disburse: ${error.message}`, error.stack);
-      throw error;
+    if (groupUuids.length === 0) {
+      this.logger.warn('No groups found for disbursement');
+      return {
+        message: 'No groups found for disbursement',
+        groups: [],
+      };
     }
+
+    const groups = await this.getGroupsFromUuid(groupUuids);
+
+    this.contractQueue.addBulk(
+      groups.map(({ uuid, tokensReserved }) => ({
+        name: JOBS.STELLAR.DISBURSE_ONCHAIN_QUEUE,
+        data: {
+          dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
+          groups: [uuid],
+        },
+        opts: {
+          attempts: 3,
+          delay: 2000,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
   }
 
   async getDisbursementStatus(id: string): Promise<any> {
@@ -490,5 +498,46 @@ export class EVMChainService implements IChainService {
       );
       throw error;
     }
+  }
+
+  private async getDisbursableGroupsUuids() {
+    const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: {
+        AND: [
+          {
+            numberOfTokens: {
+              gt: 0,
+            },
+          },
+          { isDisbursed: false },
+          {
+            payout: {
+              is: null,
+            },
+          },
+        ],
+      },
+      select: { uuid: true, groupId: true },
+    });
+    return benGroups.map((group) => group.groupId);
+  }
+
+  private async getGroupsFromUuid(uuids: string[]) {
+    if (!uuids || !uuids.length) {
+      this.logger.warn('No UUIDs provided for group retrieval');
+      return [];
+    }
+    const groups = await this.prisma.beneficiaryGroups.findMany({
+      where: {
+        uuid: {
+          in: uuids,
+        },
+      },
+      include: {
+        tokensReserved: true,
+      },
+    });
+
+    return groups;
   }
 }

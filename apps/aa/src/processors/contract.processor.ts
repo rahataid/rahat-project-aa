@@ -676,16 +676,7 @@ export class ContractProcessor {
   })
   async processPayoutAssignToken(job: Job) {
     try {
-      const payload = job.data as {
-        size: number;
-        start: number;
-        end: number;
-      };
-
-      const benfs = await this.beneficiaryService.getBenfBetweenIds(
-        payload.start,
-        payload.end
-      );
+      const benfs = [{ walletAddress: '', benTokens: 0 }];
 
       const multicallTxnPayload = [];
       for (const benf of benfs) {
@@ -694,10 +685,10 @@ export class ContractProcessor {
         }
       }
 
-      const {
-        contract: aaContract,
-      } = await this.createContractInstanceSign('AAPROJECT');
-    
+      const { contract: aaContract } = await this.createContractInstanceSign(
+        'AAPROJECT'
+      );
+
       const txn = await this.multiSend(
         aaContract,
         'assignTokenToBeneficiary',
