@@ -121,19 +121,16 @@ export class EVMProcessor {
         'assignTokenToBeneficiary',
         [beneficiaries, amounts]
       );
-      await assignTokenToBeneficiary.wait();
+      const txn = await assignTokenToBeneficiary.wait();
 
-      this.logger.log(
-        'contract called with txn hash:',
-        assignTokenToBeneficiary.hash
-      );
+      this.logger.log('contract called with txn hash:', txn.hash);
 
       // TODO: Add the logic to update the group token reservation
       await this.beneficiaryService.updateGroupToken({
         groupUuid,
         status: 'STARTED',
         isDisbursed: false,
-        info: assignTokenToBeneficiary,
+        info: txn,
       });
 
       // TODO: Add the logic to update the beneficiary token reservation

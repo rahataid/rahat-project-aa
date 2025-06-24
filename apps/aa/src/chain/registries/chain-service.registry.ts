@@ -47,55 +47,17 @@ export class ChainServiceRegistry {
 
       if (!chainSettings?.value) {
         // Fallback to CHAIN_CONFIG for EVM
-        chainSettings = await this.settingsService.getPublic('CHAIN_CONFIG');
-
-        if (chainSettings?.value && 'rpcUrl' in chainSettings.value) {
-          // If CHAIN_CONFIG exists with rpcUrl, assume EVM
-          this.logger.log('Detected EVM chain from CHAIN_CONFIG');
-          return 'evm';
-        }
+        throw new Error('CHAIN_SETTINGS not found');
       }
 
       if (
-        !chainSettings?.value ||
-        typeof chainSettings.value !== 'object' ||
-        Array.isArray(chainSettings.value)
+        typeof chainSettings.value === 'object' &&
+        chainSettings.value !== null &&
+        'type' in chainSettings.value
       ) {
-        this.logger.warn('Chain settings not found, defaulting to stellar');
-        return 'stellar';
+        return (chainSettings.value as { type: string }).type as ChainType;
       }
-
-      // Check for explicit type field
-      if ('type' in chainSettings.value) {
-        const chainType = (
-          chainSettings.value as any
-        ).type.toLowerCase() as ChainType;
-
-        if (this.isValidChainType(chainType)) {
-          this.logger.log(`Detected chain type: ${chainType}`);
-          return chainType;
-        }
-      }
-
-      // Auto-detect based on configuration structure
-      if (
-        'rpcUrl' in chainSettings.value ||
-        'projectContractAddress' in chainSettings.value
-      ) {
-        this.logger.log('Auto-detected EVM chain from config structure');
-        return 'evm';
-      }
-
-      if (
-        'NETWORK' in chainSettings.value ||
-        'ASSETCODE' in chainSettings.value
-      ) {
-        this.logger.log('Auto-detected Stellar chain from config structure');
-        return 'stellar';
-      }
-
-      this.logger.warn('Unable to detect chain type, defaulting to stellar');
-      return 'stellar';
+      throw new Error('Invalid chain settings format');
     } catch (error) {
       this.logger.error('Error detecting chain from settings:', error);
       return 'stellar'; // Default fallback
