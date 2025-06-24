@@ -27,6 +27,7 @@ import { PayoutType } from '@prisma/client';
 @Injectable()
 export class StellarChainService implements Partial<IChainService> {
   private readonly logger = new Logger(StellarChainService.name);
+  name = 'stellar';
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR) private stellarQueue: Queue,

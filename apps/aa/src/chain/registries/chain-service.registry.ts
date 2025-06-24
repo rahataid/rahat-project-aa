@@ -7,24 +7,23 @@ import {
 import { StellarChainService } from '../chain-services/stellar-chain.service';
 import { EVMChainService } from '../chain-services/evm-chain.service';
 
+interface ChainServiceConfig {
+  name: ChainType;
+  service: any;
+}
+
 @Injectable()
 export class ChainServiceRegistry {
   private readonly logger = new Logger(ChainServiceRegistry.name);
   private chainServices = new Map<ChainType, IChainService>();
 
-  constructor(
-    private settingsService: SettingsService,
-    private stellarChainService: StellarChainService,
-    private evmChainService: EVMChainService
-  ) {
-    this.registerServices();
-  }
+  constructor(private settingsService: SettingsService) {}
 
-  private registerServices(): void {
-    this.chainServices.set('stellar', this.stellarChainService);
-    this.chainServices.set('evm', this.evmChainService);
-
-    this.logger.log('Registered chain services: stellar, evm');
+  setServices(services: Map<ChainType, IChainService>): void {
+    this.chainServices = services;
+    this.logger.log(
+      `Registered chain services: ${Array.from(services.keys()).join(', ')}`
+    );
   }
 
   async getChainService(chainType?: ChainType): Promise<IChainService> {
@@ -94,5 +93,26 @@ export class ChainServiceRegistry {
       // Fallback to settings detection
       return this.getChainService();
     }
+  }
+
+  static registerServices(configs: ChainServiceConfig[]) {
+    return {
+      provide: ChainServiceRegistry,
+      useFactory: (
+        settingsService: SettingsService,
+        ...services: IChainService[]
+      ) => {
+        const registry = new ChainServiceRegistry(settingsService);
+        const serviceMap = new Map<ChainType, IChainService>();
+
+        configs.forEach((config, index) => {
+          serviceMap.set(config.name, services[index]);
+        });
+
+        registry.setServices(serviceMap);
+        return registry;
+      },
+      inject: [SettingsService, ...configs.map((config) => config.service)],
+    };
   }
 }

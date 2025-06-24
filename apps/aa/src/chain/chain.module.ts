@@ -40,9 +40,16 @@ import { SettingsService } from '@rumsan/settings';
   providers: [
     ChainService,
     ChainQueueService,
-    ChainServiceRegistry,
-    StellarChainService,
-    EVMChainService,
+    ChainServiceRegistry.registerServices([
+      {
+        name: 'stellar',
+        service: StellarChainService,
+      },
+      {
+        name: 'evm',
+        service: EVMChainService,
+      },
+    ]),
     PrismaService,
     {
       provide: ReceiveService,

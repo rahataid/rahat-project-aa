@@ -38,7 +38,7 @@ export interface EVMChainConfig {
 export class EVMChainService implements IChainService {
   private readonly logger = new Logger(EVMChainService.name);
   private provider: ethers.Provider;
-
+  name = 'evm';
   constructor(
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
