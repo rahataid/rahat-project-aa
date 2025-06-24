@@ -1,14 +1,19 @@
 import { InjectQueue } from '@nestjs/bull';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { BQUEUE } from '@rahataid/sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { Queue } from 'bull';
 import { CORE_MODULE } from '../constants';
 import { handleMicroserviceCall } from '../utils/handleMicroServiceCall';
-import { UpdateGrievanceStatusDto } from './dto/update-grievance-statuts.dto';
+import { CreateGrievanceDto } from './dto/create-grievance.dto';
+import { UpdateGrievanceStatusDto } from './dto/update-grievance-status.dto';
 import { UpdateGrievanceDto } from './dto/update-grievance.dto';
+import {
+  formatCoreCreateGrievancePayload,
+  formatCoreUpdateGrievancePayload,
+} from './utils/grievances.service.utils';
 
 @Injectable()
 export class GrievancesService {
@@ -23,23 +28,28 @@ export class GrievancesService {
     this.rsprisma = prisma.rsclient;
   }
 
-  async create(data: any) {
+  async create(data: CreateGrievanceDto) {
     return this.prisma.$transaction(async (tx) => {
       const grievance = await tx.grievance.create({ data });
-      await handleMicroserviceCall({
+      console.log('Grievance created successfully', grievance);
+
+      return await handleMicroserviceCall({
         client: this.client.send(
           { cmd: 'rahat.jobs.grievance.created' },
-          grievance
+          formatCoreCreateGrievancePayload(grievance)
         ),
         onSuccess: async (res) => {
           console.log('Grievance created successfully', grievance);
+          return res;
         },
-        onError: (error) => {
+        onError: async (error) => {
+          //TODO: remove grievance from db
+          console.log('ERRORssssss', error);
+          await tx.grievance.delete({ where: { id: grievance.id } });
           console.error('Error creating grievance:', error);
+          throw new RpcException(error);
         },
       });
-
-      return grievance;
     });
   }
 
@@ -48,23 +58,37 @@ export class GrievancesService {
   }
 
   async updateStatus(dto: UpdateGrievanceStatusDto) {
-    const { id, ...updateDto } = dto;
+    const { uuid, ...updateDto } = dto;
+
+    const existingGrievance = await this.prisma.grievance.findUnique({
+      where: { uuid },
+    });
+    if (!existingGrievance) {
+      throw new RpcException('Grievance not found');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const grievance = await tx.grievance.update({
-        where: { id },
+        where: { uuid },
         data: updateDto,
       });
+
       await handleMicroserviceCall({
         client: this.client.send(
           { cmd: 'rahat.jobs.grievance.updated' },
-          grievance
+          formatCoreUpdateGrievancePayload(grievance)
         ),
         onSuccess: async (res) => {
           console.log('Grievance updated successfully', grievance);
+          return res;
         },
         onError: (error) => {
           console.error('Error updating grievance:', error);
+          tx.grievance.update({
+            where: { uuid },
+            data: { status: existingGrievance.status },
+          });
+          throw new RpcException(error);
         },
       });
       return grievance;
@@ -72,37 +96,52 @@ export class GrievancesService {
   }
 
   async update(dto: UpdateGrievanceDto) {
-    const { id, ...updateDto } = dto;
+    const { uuid, ...updateDto } = dto;
+
+    const existingGrievance = await this.prisma.grievance.findUnique({
+      where: { uuid },
+    });
+    if (!existingGrievance) {
+      throw new RpcException('Grievance not found');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const grievance = await tx.grievance.update({
-        where: { id },
+        where: { uuid },
         data: updateDto,
       });
       await handleMicroserviceCall({
         client: this.client.send(
           { cmd: 'rahat.jobs.grievance.updated' },
-          grievance
+          formatCoreUpdateGrievancePayload(grievance)
         ),
         onSuccess: async (res) => {
           console.log('Grievance updated successfully', grievance);
+          return res;
         },
         onError: (error) => {
           console.error('Error updating grievance:', error);
+          tx.grievance.update({
+            where: { uuid },
+            data: updateDto,
+          });
+          throw new RpcException(error);
         },
       });
       return grievance;
     });
   }
 
-  async findOne(id: number) {
-    return this.prisma.grievance.findUnique({ where: { id, deletedAt: null } });
+  async findOne(uuid: string) {
+    return this.prisma.grievance.findUnique({
+      where: { uuid, deletedAt: null },
+    });
   }
 
-  async remove(id: number) {
+  async remove(uuid: string) {
     return this.prisma.$transaction(async (tx) => {
       const grievance = await tx.grievance.update({
-        where: { id },
+        where: { uuid },
         data: { deletedAt: new Date() },
       });
       await handleMicroserviceCall({
@@ -112,9 +151,11 @@ export class GrievancesService {
         ),
         onSuccess: async (res) => {
           console.log('Grievance removed successfully', grievance);
+          return res;
         },
         onError: (error) => {
           console.error('Error removing grievance:', error);
+          throw new RpcException(error);
         },
       });
       return grievance;

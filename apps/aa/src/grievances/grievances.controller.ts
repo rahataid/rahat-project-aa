@@ -3,7 +3,7 @@ import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { ValidationError } from 'class-validator';
 import { JOBS } from '../constants';
 import { CreateGrievanceDto } from './dto/create-grievance.dto';
-import { UpdateGrievanceStatusDto } from './dto/update-grievance-statuts.dto';
+import { UpdateGrievanceStatusDto } from './dto/update-grievance-status.dto';
 import { GrievancesService } from './grievances.service';
 import { FindGrievanceParamsDto } from './dto/find-one.dto';
 import { RemoveGrievanceDto } from './dto/remove-grievance.dto';
@@ -103,7 +103,8 @@ export class GrievancesController {
     })
   )
   findOne(@Payload() payload: FindGrievanceParamsDto) {
-    return this.grievancesService.findOne(payload.id);
+    console.log('Grievances Controller findOne', payload.uuid);
+    return this.grievancesService.findOne(payload.uuid);
   }
 
   @MessagePattern({
@@ -120,6 +121,6 @@ export class GrievancesController {
     })
   )
   remove(@Payload() payload: RemoveGrievanceDto) {
-    return this.grievancesService.remove(payload.id);
+    return this.grievancesService.remove(payload.uuid);
   }
 }

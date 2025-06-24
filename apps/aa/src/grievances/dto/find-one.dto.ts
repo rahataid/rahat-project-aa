@@ -1,7 +1,7 @@
 // create-grievance-params.dto.ts
-import { IsNumber } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
 export class FindGrievanceParamsDto {
-  @IsNumber()
-  id: number;
+  @IsUUID()
+  uuid: string;
 }
