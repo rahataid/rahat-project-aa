@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { GrievanceStatus, GrievanceType } from '@prisma/client';
+import {
+  GrievanceStatus,
+  GrievanceType,
+  GrievancePriority,
+} from '@prisma/client';
 import {
   IsEnum,
   IsInt,
@@ -120,4 +124,14 @@ export class CreateGrievanceDto {
   @IsEnum(GrievanceStatus)
   @IsOptional()
   status?: GrievanceStatus;
+
+  @ApiProperty({
+    description: 'Priority of the grievance',
+    enum: GrievancePriority,
+    default: GrievancePriority.LOW,
+    required: false,
+  })
+  @IsEnum(GrievancePriority)
+  @IsOptional()
+  priority?: GrievancePriority;
 }

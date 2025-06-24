@@ -554,11 +554,19 @@ model Grievance {
   type            GrievanceType
   description     String
   status          GrievanceStatus @default(NEW)
+  priority        GrievancePriority @default(LOW)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   deletedAt       DateTime?
 
   @@map("tbl_grievances")
+}
+
+enum GrievancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum GrievanceType {
