@@ -108,9 +108,11 @@ export class OfframpProcessor {
         return result;
       }
 
+      console.log("Offramp request failed from cips", result);
+
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
-        "Offramp request failed from cips",
+        result.transaction.cipsBatchResponse.responseMessage || "Offramp request failed from CIPS.",
         job.attemptsMade,
         log.info
       );
