@@ -67,6 +67,12 @@ enum PayoutTransactionStatus {
   FAILED
 }
 
+enum GroupPurpose {
+  BANK_TRANSFER
+  MOBILE_MONEY
+  COMMUNICATION
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -96,6 +102,8 @@ model BeneficiaryGroups {
   uuid String @unique @default(uuid())
 
   name String
+
+  groupPurpose GroupPurpose?
 
   tokensReserved BeneficiaryGroupTokens?
   beneficiaries BeneficiaryToGroup[]
