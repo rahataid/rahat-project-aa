@@ -123,6 +123,7 @@ export class StakeholdersService {
       perPage,
       order,
       sort,
+      supportArea,
     } = payload;
 
     const query = {
@@ -141,6 +142,7 @@ export class StakeholdersService {
         ...(organization && {
           organization: { contains: organization, mode: 'insensitive' },
         }),
+        ...(supportArea && { supportArea: { hasSome: [supportArea] } }),
       },
       include: {
         stakeholdersGroups: true,
@@ -195,6 +197,7 @@ export class StakeholdersService {
       name,
       organization,
       phone,
+      supportArea,
     } = payload;
     const existingStakeholder = await this.prisma.stakeholders.findUnique({
       where: {
@@ -231,6 +234,7 @@ export class StakeholdersService {
         organization: organization || existingStakeholder.organization,
         district: district || existingStakeholder.district,
         municipality: municipality || existingStakeholder.municipality,
+        supportArea: supportArea || existingStakeholder.supportArea,
         updatedAt: new Date(),
       },
     });
@@ -357,18 +361,37 @@ export class StakeholdersService {
   async validateStakeholders(
     payload: any[]
   ): Promise<ValidateStakeholdersResponse> {
-    const data = payload.map((item) => ({
-      name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
-      designation: item['Designation']?.trim() || '',
-      organization: item['Organization']?.trim() || '',
-      district: item['District']?.trim() || '',
-      municipality: item['Municipality']?.trim() || '',
-      phone:
-        item['Mobile #']?.toString().trim() ||
-        item['Phone Number']?.toString().trim() ||
-        '',
-      email: item['Email ID']?.trim() || item['Email']?.trim() || '',
-    }));
+    const data = payload.map((item) => {
+      // Find the first valid supportArea string value
+      const rawSupportArea =
+        typeof item['Support Area'] === 'string'
+          ? item['Support Area']
+          : typeof item['Support Area #'] === 'string'
+          ? item['Support Area #']
+          : typeof item['Support Area '] === 'string'
+          ? item['Support Area ']
+          : '';
+
+      return {
+        name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
+        designation: item['Designation']?.trim() || '',
+        organization: item['Organization']?.trim() || '',
+        district: item['District']?.trim() || '',
+        municipality: item['Municipality']?.trim() || '',
+        phone:
+          item['Mobile #']?.toString().trim() ||
+          item['Phone Number']?.toString().trim() ||
+          '',
+        supportArea: rawSupportArea
+          ? rawSupportArea
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : [],
+        email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+      };
+    });
+
     const validationErrors = [];
     const stakeholders = [];
     for (const row of data) {
