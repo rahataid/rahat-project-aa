@@ -3,15 +3,21 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { VendorsModule } from '../vendors/vendors.module';
 import { AppService } from '../app/app.service';
 import { HttpModule} from '@nestjs/axios';
+import { OfframpService } from './offramp.service';
+import { BullModule } from '@nestjs/bull';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
     VendorsModule,
     HttpModule,
+    BeneficiaryModule,
+    StellarModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',
@@ -34,9 +40,15 @@ import { HttpModule} from '@nestjs/axios';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.OFFRAMP,
+    }),
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService, AppService],
-  exports: [PayoutsService],
+  providers: [PayoutsService, PrismaService, AppService, OfframpService],
+  exports: [PayoutsService, OfframpService, AppService,PrismaService],
 })
 export class PayoutsModule {}

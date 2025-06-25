@@ -100,6 +100,8 @@ export const JOBS = {
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
+    CHECK_BULK_TRUSTLINE: 'aa.jobs.stellar.checkBulkTrustline',
+    CHECK_BULK_TRUSTLINE_QUEUE: `aa.jobs.stellar.checkBulkTrustlineQueue_${process.env.PROJECT_ID}`,
     ADD_ONCHAIN_TRIGGER: 'aa.jobs.stellar.addTriggerOnChain',
     UPDATE_ONCHAIN_TRIGGER: 'aa.jobs.stellar.updateTriggerOnChain',
     ADD_ONCHAIN_TRIGGER_QUEUE: `aa.jobs.stellar.getTriggerOnChainQueue_${process.env.PROJECT_ID}`,
@@ -110,13 +112,29 @@ export const JOBS = {
     GET_STELLAR_STATS: 'aa.jobs.stellar.getStellarStats',
     GET_TRANSACTIONS: 'aa.jobs.stellar.getTransactions',
     FAUCET_TRUSTLINE: 'aa.jobs.stellar.faucetTrustline',
+    INTERNAL_FAUCET_TRUSTLINE_QUEUE: `aa.jobs.stellar.internalFaucetTrustlineQueue_${process.env.PROJECT_ID}`,
+    INTERNAL_FAUCET_TRUSTLINE: `aa.jobs.stellar.internalFaucetTrustline`,
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
-    TRANSFER_TO_OFFRAMP: 'aa.jobs.stellar.transferToOfframp',
+    TRANSFER_TO_OFFRAMP: `aa.jobs.stellar.transferToOfframp_${process.env.PROJECT_ID}`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
+    RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
+  },
+  OFFRAMP: {
+    CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
+    EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
+    LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
+    GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
+    INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp_${process.env.PROJECT_ID}`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
+    TRIGGER_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerFailedPayoutRequest',
+    TRIGGER_ONE_FAILED_PAYOUT_REQUEST:
+      'aa.jobs.payout.triggerOneFailedPayoutRequest',
+    GET_PAYOUT_LOGS: 'aa.jobs.payout.getPayoutLogs',
+    GET_PAYOUT_LOG: 'aa.jobs.payout.getPayoutLog',
     CREATE: 'aa.jobs.payout.create',
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',
@@ -217,6 +235,8 @@ export const BQUEUE = {
   CONTRACT: 'CONTRACT',
   COMMUNICATION: 'COMMUNICATION',
   STELLAR: 'STELLAR',
+  STELLAR_CHECK_TRUSTLINE: 'STELLAR_CHECK_TRUSTLINE',
+  OFFRAMP: 'OFFRAMP',
 };
 
 export const VULNERABILITY_FIELD = {

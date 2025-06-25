@@ -1,7 +1,14 @@
 import { RECEIVER } from '../constants/routes';
-import { ag } from './axios/axiosGuest';
+import { getAxiosInstances } from './axios/axiosGuest';
 
-export const send_otp = async (phone_number: string, token: string) => {
+export const send_otp = async (
+  phone_number: string,
+  token: string,
+  baseUrl: string
+) => {
+  const { ag } = getAxiosInstances({
+    baseUrl,
+  });
   return ag.post(
     RECEIVER.SEND_OTP,
     {

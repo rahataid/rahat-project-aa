@@ -7,6 +7,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CheckTrustlineDto,
   FundAccountDto,
+  RahatFaucetDto,
   SendAssetByWalletAddressDto,
   SendAssetDto,
   SendGroupDto,
@@ -37,10 +38,9 @@ import {
   GetTriggerDto,
   GetWalletBalanceDto,
   UpdateTriggerParamsDto,
-  BeneficiaryRedeemDto,
 } from './dto/trigger.dto';
-import { ASSET } from '@rahataid/stellar-sdk';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
+import { FSPPayoutDetails } from '../processors/types';
 
 @Injectable()
 export class StellarService {
@@ -49,13 +49,14 @@ export class StellarService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService,
+    @InjectQueue(BQUEUE.STELLAR_CHECK_TRUSTLINE)
+    private readonly checkTrustlineQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
-    private readonly disbursementService: DisbursementServices
+    private readonly disbursementService: DisbursementServices,
+    private readonly receiveService: ReceiveService,
+    private readonly transactionService: TransactionService
   ) {}
-
-  receiveService = new ReceiveService();
-  transactionService = new TransactionService();
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
     const groupUuids =
@@ -105,35 +106,35 @@ export class StellarService {
     };
   }
 
-  async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
-    const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
+  // async transferToOfframpJobs(transferToOfframpDto: TransferToOfframpDto) {
+  //   const beneficiaries = transferToOfframpDto.beneficiaryWalletAddress;
 
-    if (typeof beneficiaries === 'string') {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: beneficiaries,
-      });
-      return {
-        message: `Transfer to offramp job added for ${beneficiaries}`,
-        beneficiaries: [beneficiaries],
-      };
-    }
+  //   if (typeof beneficiaries === 'string') {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: beneficiaries,
+  //     });
+  //     return {
+  //       message: `Transfer to offramp job added for ${beneficiaries}`,
+  //       beneficiaries: [beneficiaries],
+  //     };
+  //   }
 
-    beneficiaries.forEach((ben) => {
-      this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
-        offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
-        beneficiaryWalletAddress: ben,
-      });
-    });
+  //   beneficiaries.forEach((ben) => {
+  //     this.stellarQueue.add(JOBS.STELLAR.TRANSFER_TO_OFFRAMP, {
+  //       offRampWalletAddress: transferToOfframpDto.offRampWalletAddress,
+  //       beneficiaryWalletAddress: ben,
+  //     });
+  //   });
 
-    return {
-      message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
-      beneficiaries: beneficiaries.map((ben) => ({
-        walletAddress: ben,
-        status: 'PENDING',
-      })),
-    };
-  }
+  //   return {
+  //     message: `Transfer to offramp jobs added for ${beneficiaries.length} beneficiaries`,
+  //     beneficiaries: beneficiaries.map((ben) => ({
+  //       walletAddress: ben,
+  //       status: 'PENDING',
+  //     })),
+  //   };
+  // }
 
   async disburse(disburseDto: DisburseDto) {
     const groups =
@@ -171,6 +172,7 @@ export class StellarService {
     return await this.disbursementService.getDisbursement(disbursementId);
   }
 
+  // todo: add payout part
   async sendOtp(sendOtpDto: SendOtpDto) {
     // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
     //   sendOtpDto.phoneNumber
@@ -213,7 +215,6 @@ export class StellarService {
   }
 
   async sendGroupOTP(sendGroupDto: SendGroupDto) {
-    // Get all offline beneficiaries of the vendor
     const offlineBeneficiaries = await this.prisma.vendor.findUnique({
       where: {
         uuid: sendGroupDto.vendorUuid,
@@ -240,6 +241,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
@@ -266,7 +268,9 @@ export class StellarService {
         amount as number
       );
 
-      const keys = await this.getSecretByPhone(verifyOtpDto.phoneNumber);
+      const keys = (await this.getSecretByPhone(
+        verifyOtpDto.phoneNumber
+      )) as any;
 
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
@@ -291,10 +295,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 
@@ -302,11 +306,13 @@ export class StellarService {
         txHash: result.tx.hash,
       };
     } catch (error) {
-      console.log(error);
-      throw new RpcException(error ? error : 'OTP verification failed');
+      throw new RpcException(
+        error ? error : 'Transferring asset to vendor failed'
+      );
     }
   }
 
+  // todo: Make this dynamic for evm
   async sendAssetToVendorByWalletAddress(
     sendAssetByWalletAddressDto: SendAssetByWalletAddressDto
   ) {
@@ -367,10 +373,10 @@ export class StellarService {
         data: {
           vendorUid: vendor.uuid,
           amount: amount as number,
-          transactionType: 'VENDOR',
+          transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          hasRedeemed: true,
+          isCompleted: true,
         },
       });
 
@@ -384,9 +390,7 @@ export class StellarService {
 
   async checkTrustline(checkTrustlineDto: CheckTrustlineDto) {
     return this.transactionService.hasTrustline(
-      checkTrustlineDto.walletAddress,
-      ASSET.NAME,
-      ASSET.ISSUER
+      checkTrustlineDto.walletAddress
     );
   }
 
@@ -419,42 +423,43 @@ export class StellarService {
 
   async getWalletStats(walletBalanceDto: GetWalletBalanceDto) {
     try {
-    let { address } = walletBalanceDto;
-    // check if address is a phone number or wallet address
-    const isPhone = address.startsWith('+') || address.startsWith('9');
+      let { address } = walletBalanceDto;
+      // check if address is a phone number or wallet address
+      const isPhone = address.startsWith('+') || address.startsWith('9');
 
-    if (isPhone) {
-      this.logger.log(`Getting wallet stats for phone ${address}`);
+      if (isPhone) {
+        this.logger.log(`Getting wallet stats for phone ${address}`);
 
-      const beneficiary = await lastValueFrom(
-        this.client.send(
-          { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
-          address
-        )
-      );
-
-      if (!beneficiary) {
-        throw new RpcException(
-          `Beneficiary not found with wallet ${walletBalanceDto.address}`
+        const beneficiary = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
+            address
+          )
         );
+
+        if (!beneficiary) {
+          throw new RpcException(
+            `Beneficiary not found with wallet ${walletBalanceDto.address}`
+          );
+        }
+
+        address = beneficiary.walletAddress;
       }
 
-      address = beneficiary.walletAddress;
-    }
+      this.logger.log(`Getting wallet stats for ${address}`);
 
-    this.logger.log(`Getting wallet stats for ${address}`);
-
-    return {
-      balances: await this.receiveService.getAccountBalance(address),
-      transactions: await this.getRecentTransaction(address),
-    };
-      
+      // todo (new-chain-config): Need dynamic method to getAccountBalance and getRecent transactions
+      return {
+        balances: await this.receiveService.getAccountBalance(address),
+        transactions: await this.getRecentTransaction(address),
+      };
     } catch (error) {
       this.logger.error('Error getting wallet stats:', error);
       throw new RpcException(error?.message);
     }
   }
 
+  // todo (new-chain-config): Make process dynamic
   async addTriggerOnChain(trigger: AddTriggerDto[]) {
     return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
       attempts: 3,
@@ -466,6 +471,7 @@ export class StellarService {
     });
   }
 
+  // todo (new-chain-config): Need separate method for evm
   async getTriggerWithID(trigger: GetTriggerDto) {
     try {
       const { server, sourceAccount, contract } =
@@ -528,6 +534,7 @@ export class StellarService {
     }
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
     return this.stellarQueue.add(
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
@@ -543,6 +550,7 @@ export class StellarService {
     );
   }
 
+  // todo (new-chain-config): Need dynamic method according to chain
   async getDisbursementStats() {
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
@@ -586,7 +594,80 @@ export class StellarService {
     };
   }
 
+  async checkBulkTrustline(mode: 'dry' | 'live') {
+    this.checkTrustlineQueue.add(
+      JOBS.STELLAR.CHECK_BULK_TRUSTLINE_QUEUE,
+      mode,
+      {
+        attempts: 1,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+
+    return {
+      message: 'Check bulk trustline job added',
+    };
+  }
+
+  // todo (new-chain-config): Need dynamic faucet according to chain
+  async rahatFaucet(account: RahatFaucetDto) {
+    try {
+      return this.transactionService.rahatFaucetService(
+        account.walletAddress,
+        account.amount
+      );
+    } catch (error) {
+      throw new RpcException(error);
+    }
+  }
+
+  // todo (new-chain-config): Need dynamic queue
+  async internalFaucetAndTrustline(beneficiaries: any) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+      beneficiaries.wallets,
+      {
+        attempts: 1,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+  }
+
+  async addBulkToTokenTransferQueue(payload: FSPPayoutDetails[]) {
+    const result = await this.stellarQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP,
+        data: payload,
+        opts: {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      }))
+    );
+
+    this.logger.log(`Added ${result.length} jobs to offramp queue`);
+
+    return result;
+  }
+
+  async addToTokenTransferQueue(payload: FSPPayoutDetails) {
+    return await this.addBulkToTokenTransferQueue([payload]);
+  }
+
   // ---------- Private functions ----------------
+
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));
     const keypair = Keypair.fromSecret(await this.getFromSettings('KEYPAIR'));
@@ -673,6 +754,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   private async getSecretByPhone(phoneNumber: string) {
     try {
       const ben = await lastValueFrom(
@@ -692,6 +774,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make chain dynamic
   public async getSecretByWallet(walletAddress: string) {
     try {
       const ben = await lastValueFrom(
@@ -730,6 +813,7 @@ export class StellarService {
         otpHash,
         amount,
         expiresAt,
+        isVerified: false,
         updatedAt: new Date(),
       },
       create: {
@@ -781,6 +865,7 @@ export class StellarService {
 
     return true;
   }
+
   private async getGroupsFromUuid(uuids: string[]) {
     if (!uuids || !uuids.length) {
       this.logger.warn('No UUIDs provided for group retrieval');
@@ -827,20 +912,23 @@ export class StellarService {
     return settings?.value[key];
   }
 
+  // todo: Make this dynamic for evm
   public async getRahatBalance(keys) {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
+      const assetCode = await this.getFromSettings('ASSETCODE');
+
       const rahatAsset = accountBalances?.find(
-        (bal: any) => bal.asset_code === 'RAHAT'
+        (bal: any) => bal.asset_code === assetCode
       );
 
       if (!rahatAsset) {
-        this.logger.error('RAHAT asset not found in account balances');
+        this.logger.error(`${assetCode} asset not found in account balances`);
         return 0;
       }
 
-      this.logger.log('RAHAT asset balance:', rahatAsset.balance);
+      this.logger.log(`${assetCode} asset balance:`, rahatAsset.balance);
 
       return Math.floor(parseFloat(rahatAsset?.balance || '0'));
     } catch (error) {
@@ -849,6 +937,7 @@ export class StellarService {
     }
   }
 
+  // todo: Make this dynamic for evm
   private async getRecentTransaction(address: string) {
     const transactions = await this.transactionService.getTransaction(
       address,

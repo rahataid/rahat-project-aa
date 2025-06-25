@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bull';
-import { Module } from '@nestjs/common';
+import { Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -23,6 +23,9 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
+import { QueueService } from '../queue/queue.service';
+import { BQUEUE } from '../constants';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
@@ -36,11 +39,11 @@ import { PayoutsModule } from '../payouts/payouts.module';
           host: configService.get('REDIS_HOST'),
           port: configService.get('REDIS_PORT'),
           password: configService.get('REDIS_PASSWORD'),
+          connectionName: `nestjs-rahat-aa-${process.env.PROJECT_ID}-${Date.now()}`,
         },
       }),
       inject: [ConfigService],
     }),
-
     ClientsModule.register([
       {
         name: MS_TRIGGER_CLIENTS.RAHAT,
@@ -54,6 +57,24 @@ import { PayoutsModule } from '../payouts/payouts.module';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.OFFRAMP,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.COMMUNICATION,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.TRIGGER,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.SCHEDULE,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.CONTRACT,
+    }),
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
@@ -71,8 +92,39 @@ import { PayoutsModule } from '../payouts/payouts.module';
     CommsModule.forRoot(),
     VendorsModule,
     PayoutsModule,
+    ChainModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, QueueService],
 })
-export class AppModule {}
+
+export class AppModule implements OnModuleInit, OnModuleDestroy {
+  constructor(private readonly queueService: QueueService) {}
+
+  async onModuleInit() {
+    console.log('🚀 Initializing application...');
+    
+    await this.queueService.waitForConnection();
+    
+    await this.setupProcessors();
+    
+    console.log('✅ All queue processors initialized successfully');
+  }
+
+  async onModuleDestroy() {
+    console.log('🔄 Shutting down queue processors...');
+    await this.queueService.closeAllConnections();
+    console.log('✅ All queue connections closed');
+  }
+
+  private async setupProcessors() {
+    try {
+      await this.queueService.verifyProcessorsReady();
+      
+      console.log('📋 Queue processors verification completed');
+    } catch (error) {
+      console.error('❌ Failed to setup processors:', error);
+      throw error;
+    }
+  }
+}

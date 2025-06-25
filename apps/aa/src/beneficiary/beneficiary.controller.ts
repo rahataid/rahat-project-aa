@@ -3,13 +3,13 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { CONTROLLERS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
 import {
-  AddBeneficiaryGroups,
   AddTokenToGroup,
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
+import { GetBenfGroupDto } from './dto/get-group.dto';
 
 @Controller()
 export class BeneficiaryController {
@@ -82,7 +82,7 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
   })
-  async getAllGroups(payload) {
+  async getAllGroups(payload: GetBenfGroupDto) {
     console.log(payload);
     return this.beneficiaryService.getAllGroups(payload);
   }

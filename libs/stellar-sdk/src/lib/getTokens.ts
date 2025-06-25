@@ -1,10 +1,16 @@
 import { RECEIVER } from '../constants/routes';
-import { ar, as } from './axios/axiosGuest';
+import { getAxiosInstances } from './axios/axiosGuest';
 
 export const getAuthToken = async (
   tenant_name: string,
-  receiver_public_key: string
+  receiver_public_key: string,
+  receiverBaseUrl: string,
+  stellarDemoWalletUrl: string
 ) => {
+  const { as, ar } = getAxiosInstances({
+    stellarDemoWalletUrl,
+    receiverBaseUrl,
+  });
   const home_domain = RECEIVER.HOME_DOMAIN(tenant_name);
   const account = await ar.get(RECEIVER.AUTH, {
     params: {
@@ -22,8 +28,10 @@ export const getAuthToken = async (
 
 export const interactive_url = async (
   receiver_public_key: string,
-  token: string
+  token: string,
+  receiverBaseUrl: string
 ) => {
+  const { ar } = getAxiosInstances({ receiverBaseUrl });
   const formdata = new FormData();
 
   formdata.append('asset_code', 'RAHAT');

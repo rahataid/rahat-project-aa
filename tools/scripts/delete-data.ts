@@ -89,8 +89,8 @@ async function clearCoreBeneficiaries(txManager: RawDistributedTransactionManage
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_beneficiaries_pii;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_beneficiaries_group;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_beneficiaries;`);
-  await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_group;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_beneficiary_group;`);
+  await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_group;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_beneficiaries;`);
   
   console.log('Core Beneficiaries deleted successfully.');

@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import { seedProject } from '../../prisma/seed-project';
 import { seedStellar } from '../../prisma/seed-stellar';
-import { seedPaymentProvider } from '../../prisma/seed-payment-provider';
+import { seedOfframp } from '../../prisma/seed-offramp';
 import * as readline from 'readline';
 import * as path from 'path';
 
@@ -128,7 +128,6 @@ async function main() {
 
   try {
     const envVariables = await readEnvFile(envPath);
-
 
     const name = await askQuestion('Enter project name: ');
     const description = await askQuestion('Enter project description: ');
@@ -314,7 +313,7 @@ async function seedTriggers(
     console.log('Phases seeded successfully.');
     console.log('--------------------------------');
   } catch (error) {
-    console.error('Error seeding triggers:', error.message);
+    console.error('Error seeding triggers:', error);
     throw error;
   }
 }
@@ -390,7 +389,7 @@ async function modifyEnvAndSettings(
     await seedStellar();
     console.log('Stellar seeded successfully.');
 
-    await seedPaymentProvider();
+    await seedOfframp();
     console.log('Payment provider seeded successfully.');
 
     console.log(envPath);
