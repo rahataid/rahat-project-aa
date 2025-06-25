@@ -63,16 +63,12 @@ export class EVMProcessor {
   private async initializeProvider() {
     try {
       const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
-
-      console.log(chainConfig);
-
-      this.provider = new ethers.JsonRpcProvider(
-        chainConfig.rpcUrl || 'http://localhost:8545'
+      const deployerPrivateKey = await this.getFromSettings(
+        'DEPLOYER_PRIVATE_KEY'
       );
-      this.signer = new ethers.Wallet(
-        await this.getFromSettings('DEPLOYER_PRIVATE_KEY'),
-        this.provider
-      );
+
+      this.provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+      this.signer = new ethers.Wallet(deployerPrivateKey, this.provider);
 
       // Test the connection
       await this.provider.getBlockNumber();
@@ -103,8 +99,6 @@ export class EVMProcessor {
 
       const { groups } = job.data;
 
-      console.log(AAProjectABI);
-
       const aaContract = await this.createContractInstanceSign(
         'AAPROJECT',
         AAProjectABI,
@@ -121,7 +115,12 @@ export class EVMProcessor {
         benGroups,
       ] as string[]);
 
-      const amounts = bens.map((ben) => ben.amount);
+      const multicallTxnPayload = [];
+      for (const benf of bens) {
+        if (benf.amount) {
+          multicallTxnPayload.push([benf.walletAddress, BigInt(benf.amount)]);
+        }
+      }
 
       let totalTokens: number = 0;
 
@@ -137,15 +136,13 @@ export class EVMProcessor {
       const assignTokenToBeneficiary = await this.multiSend(
         aaContract,
         'assignTokenToBeneficiary',
-        bens.map((ben) => [ben.walletAddress, ben.amount])
+        multicallTxnPayload
       );
 
-      console.log(assignTokenToBeneficiary);
-      // const txn = await assignTokenToBeneficiary.wait();
-
-      // console.log(txn);
-
-      // this.logger.log('contract called with txn hash:', txn.hash);
+      this.logger.log(
+        'contract called with txn hash:',
+        assignTokenToBeneficiary.hash
+      );
 
       // TODO: Add the logic to update the group token reservation
       // await this.beneficiaryService.updateGroupToken({
@@ -208,9 +205,12 @@ export class EVMProcessor {
 
   private async getFromSettings(key: string): Promise<any> {
     try {
-      const settings = await this.settingService.getPublic(
-        key || 'CHAIN_SETTINGS'
-      );
+      const settings = await this.prismaService.setting.findUnique({
+        where: {
+          name: key,
+        },
+      });
+
       if (!settings?.value) {
         throw new Error('CHAIN_SETTINGS not found');
       }
@@ -234,6 +234,7 @@ export class EVMProcessor {
       functionName,
       callData
     );
+    console.log('encodedData', encodedData);
     const tx = await contract.multicall(encodedData);
     const result = await tx.wait();
     return result;
@@ -247,10 +248,12 @@ export class EVMProcessor {
     const encodedData = [];
     for (const call of callData) {
       const encoded = contract.interface.encodeFunctionData(functionName, [
-        call,
+        ...call,
       ]);
+      console.log('encoded', encoded);
       encodedData.push(encoded);
     }
+    console.log(encodedData);
     return encodedData;
   }
 
@@ -259,7 +262,34 @@ export class EVMProcessor {
     abi: any,
     signer: ethers.Signer
   ) {
-    return new ethers.Contract(contractName, abi, signer);
+    const contract = await this.getFromSettings('CONTRACT');
+
+    console.log(contract.AAPROJECT.ADDRESS, 'is contract address');
+
+    const formatedAbi = this.convertABI(contract.AAPROJECT.ABI);
+
+    return new ethers.Contract(contract.AAPROJECT.ADDRESS, formatedAbi, signer);
+  }
+
+  private convertABI(oldABI: any): any {
+    const convertKeysToLowerCase = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(convertKeysToLowerCase);
+      }
+      if (typeof obj === 'object' && obj !== null) {
+        return Object.keys(obj).reduce((acc, key) => {
+          acc[key.toLowerCase()] = convertKeysToLowerCase(obj[key]);
+          return acc;
+        }, {});
+      }
+      return obj;
+    };
+    try {
+      return convertKeysToLowerCase(oldABI);
+    } catch (error) {
+      this.logger.error(`Failed to convert ABI: ${error.message}`);
+      throw new RpcException(`Invalid ABI format: ${error.message}`);
+    }
   }
 
   private async getDisbursableGroupsUuids() {

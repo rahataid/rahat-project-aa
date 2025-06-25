@@ -101,7 +101,8 @@ class ContractSeed extends ContractLib {
         forwarderAddress,
         'RahatToken',
         'RHT',
-        await DonorContract.contract.getAddress(),
+        // await DonorContract.contract.getAddress(),
+        deployerAccount,
         1,
       ],
       deployerKey
@@ -117,7 +118,6 @@ class ContractSeed extends ContractLib {
         'AAProject',
         await RahatToken.contract.getAddress(),
         forwarderAddress,
-        RahatAccessManagerAddress,
         await TriggerManager.contract.getAddress(),
       ],
       deployerKey

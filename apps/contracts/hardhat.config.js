@@ -8,12 +8,13 @@
 require('dotenv').config();
 require('solidity-coverage');
 require('@nomicfoundation/hardhat-ethers');
-require("@nomicfoundation/hardhat-chai-matchers");
-require("hardhat-gas-reporter");
-require("solidity-docgen");
-require("@nomicfoundation/hardhat-verify")
+require('@nomicfoundation/hardhat-chai-matchers');
+require('hardhat-gas-reporter');
+require('solidity-docgen');
+require('@nomicfoundation/hardhat-verify');
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PRIVATE_KEY =
+  '0x416e77da32eeb38714f0e9a9caf0bd14ea29225d07d964aa2aee074575e817eb';
 
 module.exports = {
   solidity: {
@@ -28,17 +29,18 @@ module.exports = {
   gasReporter: {
     token: 'ETH',
     currency: 'USD',
-    gasPriceApi: 'https://api.etherscan.io/api?module=proxy&action=eth_gasPrice',
+    gasPriceApi:
+      'https://api.etherscan.io/api?module=proxy&action=eth_gasPrice',
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
-    enabled: (process.env.REPORT_GAS) ? true : false,
+    enabled: process.env.REPORT_GAS ? true : false,
     showTimeSpent: true,
     showMethodSig: true,
     outputFile: 'gas-report.txt',
-    noColors: true
+    noColors: true,
   },
   docgen: {
     outputDir: './docs',
-    pages: 'files'
+    pages: 'files',
   },
 
   networks: {
@@ -49,30 +51,30 @@ module.exports = {
             berlin: 10000000,
             london: 20000000,
           },
-        }
-      }
+        },
+      },
     },
     sepolia: {
-      url: "https://eth-sepolia.g.alchemy.com/v2/WSfPp7PZYjX8uXeDOFfk_GFBBSCrCyxg",
-      accounts: [PRIVATE_KEY]
+      url: 'https://eth-sepolia.g.alchemy.com/v2/WSfPp7PZYjX8uXeDOFfk_GFBBSCrCyxg',
+      accounts: [PRIVATE_KEY],
     },
     polygonMumbai: {
-      url: "https://polygon-mumbai.infura.io/v3/f1758a52ca744a9081a25196d3128ea0",
+      url: 'https://polygon-mumbai.infura.io/v3/f1758a52ca744a9081a25196d3128ea0',
       accounts: [PRIVATE_KEY],
-      timeout: 60000000
+      timeout: 60000000,
     },
     arbiGoerli: {
-      url: "https://goerli-rollup.arbitrum.io/rpc",
-      accounts: [PRIVATE_KEY]
+      url: 'https://goerli-rollup.arbitrum.io/rpc',
+      accounts: [PRIVATE_KEY],
     },
     arbiSepolia: {
-      url: "https://billowing-long-ensemble.arbitrum-sepolia.quiknode.pro/e0c76079c7d67ed114812420ba1d4472a30c93fa",
-      accounts: [PRIVATE_KEY]
+      url: 'https://billowing-long-ensemble.arbitrum-sepolia.quiknode.pro/e0c76079c7d67ed114812420ba1d4472a30c93fa',
+      accounts: [PRIVATE_KEY],
     },
     amoyPolygon: {
-      url: "https://rpc-amoy.polygon.technology/",
-      accounts: [PRIVATE_KEY]
-    }
+      url: 'https://rpc-amoy.polygon.technology/',
+      accounts: [PRIVATE_KEY],
+    },
   },
   paths: {
     sources: './src',
@@ -81,42 +83,40 @@ module.exports = {
     artifacts: './build/artifacts',
   },
 
-  etherscan:
-  {
+  etherscan: {
     apiKey: {
       arbiGoerli: process.env.ARBISCAN_KEY,
       arbiSepolia: process.env.ARBISCAN_KEY,
       polygonMumbai: process.env.POLYGONSCAN_KEY,
       sepolia: process.env.ETHERSCAN_KEY,
-      amoyPolygon: process.env.POLYGONSCAN_KEY
-
+      amoyPolygon: process.env.POLYGONSCAN_KEY,
     },
     customChains: [
       {
-        network: "arbiGoerli",
+        network: 'arbiGoerli',
         chainId: 421613,
         urls: {
-          apiURL: "https://goerli-rollup.arbitrum.io/rpc",
-          browserURL: "https://goerli.arbiscan.io"
-        }
+          apiURL: 'https://goerli-rollup.arbitrum.io/rpc',
+          browserURL: 'https://goerli.arbiscan.io',
+        },
       },
       {
-        network: "arbiSepolia",
+        network: 'arbiSepolia',
         chainId: 421614,
         urls: {
-          apiURL: "https://billowing-long-ensemble.arbitrum-sepolia.quiknode.pro/e0c76079c7d67ed114812420ba1d4472a30c93fa",
-          browserURL: "https://sepolia.arbiscan.io"
-        }
+          apiURL:
+            'https://billowing-long-ensemble.arbitrum-sepolia.quiknode.pro/e0c76079c7d67ed114812420ba1d4472a30c93fa',
+          browserURL: 'https://sepolia.arbiscan.io',
+        },
       },
       {
-        network: "amoyPolygon",
+        network: 'amoyPolygon',
         chainId: 80002,
         urls: {
-          apiURL: "https://rpc-amoy.polygon.technology/",
-          browserURL: "https://amoy.polygonscan.com"
-        }
-      }
-    ]
-  }
-
+          apiURL: 'https://rpc-amoy.polygon.technology/',
+          browserURL: 'https://amoy.polygonscan.com',
+        },
+      },
+    ],
+  },
 };
