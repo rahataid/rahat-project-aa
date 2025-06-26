@@ -16,10 +16,7 @@ import { StellarModule } from '../stellar/stellar.module';
 @Module({
   imports: [
     // Import queue modules for both chains
-    BullModule.registerQueue(
-      { name: BQUEUE.STELLAR },
-      { name: BQUEUE.CONTRACT }
-    ),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR }, { name: BQUEUE.EVM }),
     // Import stellar module for stellar service dependencies
     StellarModule,
   ],
