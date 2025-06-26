@@ -93,11 +93,10 @@ export class EVMProcessor {
 
   @Process({ name: JOBS.EVM.ASSIGN_TOKENS, concurrency: 1 })
   async assignTokens(job: Job<EVMDisbursementJob>) {
+    const { groups } = job.data;
     try {
       this.logger.log('Processing EVM assign tokens...', EVMProcessor.name);
       await this.ensureInitialized();
-
-      const { groups } = job.data;
 
       const aaContract = await this.createContractInstanceSign(
         'AAPROJECT',
@@ -145,25 +144,23 @@ export class EVMProcessor {
       );
 
       // TODO: Add the logic to update the group token reservation
-      // await this.beneficiaryService.updateGroupToken({
-      //   groupUuid,
-      //   status: 'STARTED',
-      //   isDisbursed: false,
-      //   info: txn,
-      // });
-
-      // TODO: Add the logic to update the beneficiary token reservation
-      // this.evmQueue.add(
-      //   JOBS.EVM.DISBURSEMENT_STATUS_UPDATE,
-      //   {
-      //     txHash: assignTokenToBeneficiary.hash,
-      //     groupUuid,
-      //   },
-      //   {
-      //     delay: 3 * 60 * 1000, // 3 min
-      //   }
-      // );
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid: groups,
+        status: 'STARTED',
+        isDisbursed: false,
+        info: assignTokenToBeneficiary.hash,
+      });
     } catch (error) {
+      await this.beneficiaryService.updateGroupToken({
+        groupUuid: groups,
+        status: 'FAILED',
+        isDisbursed: false,
+        info: {
+          error: error.message,
+          stack: error.stack,
+        },
+      });
+
       this.logger.error(
         `Error in EVM assign tokens: ${error.message}`,
         error.stack,
@@ -234,7 +231,6 @@ export class EVMProcessor {
       functionName,
       callData
     );
-    console.log('encodedData', encodedData);
     const tx = await contract.multicall(encodedData);
     const result = await tx.wait();
     return result;
@@ -250,10 +246,8 @@ export class EVMProcessor {
       const encoded = contract.interface.encodeFunctionData(functionName, [
         ...call,
       ]);
-      console.log('encoded', encoded);
       encodedData.push(encoded);
     }
-    console.log(encodedData);
     return encodedData;
   }
 
@@ -263,8 +257,6 @@ export class EVMProcessor {
     signer: ethers.Signer
   ) {
     const contract = await this.getFromSettings('CONTRACT');
-
-    console.log(contract.AAPROJECT.ADDRESS, 'is contract address');
 
     const formatedAbi = this.convertABI(contract.AAPROJECT.ABI);
 

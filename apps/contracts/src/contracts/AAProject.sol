@@ -95,11 +95,11 @@ contract AAProject is
     address _address,
     uint _amount
   ) public {
-    // require(
-    //   IERC20(defaultToken).balanceOf(address(this)) >=
-    //     totalClaimsAssigned() + _amount,
-    //   'not enough tokens'
-    // );
+    require(
+      IERC20(defaultToken).balanceOf(address(this)) >=
+        totalClaimsAssigned() + _amount,
+      'not enough tokens'
+    );
     _addBeneficiary(_address);
     benTokens[_address] = benTokens[_address] + _amount;
     emit BenTokensAssigned(_address, _amount);
