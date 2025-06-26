@@ -9,7 +9,7 @@ dataSources:
     network: base-sepolia
     source:
       abi: AAProject
-      address: '0x5138eE47D646810b44c0B4f9b57AA8feae8c21B5'
+      address: "0x5138eE47D646810b44c0B4f9b57AA8feae8c21B5"
       startBlock: 1
     mapping:
       kind: ethereum/events
@@ -56,7 +56,7 @@ dataSources:
     network: base-sepolia
     source:
       abi: RahatToken
-      address: '0x144fdacD59388c6324C9BD9E22e2147EFd46b38D'
+      address: "0x144fdacD59388c6324C9BD9E22e2147EFd46b38D"
       startBlock: 1
     mapping:
       kind: ethereum/events
@@ -91,7 +91,7 @@ dataSources:
     network: base-sepolia
     source:
       abi: RahatDonor
-      address: '0x122AB653fd2dD02053570685cA478D13cd26993F'
+      address: "0x122AB653fd2dD02053570685cA478D13cd26993F"
       startBlock: 1
     mapping:
       kind: ethereum/events
