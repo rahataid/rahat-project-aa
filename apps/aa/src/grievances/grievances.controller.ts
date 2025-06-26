@@ -8,6 +8,7 @@ import { GrievancesService } from './grievances.service';
 import { FindGrievanceParamsDto } from './dto/find-one.dto';
 import { RemoveGrievanceDto } from './dto/remove-grievance.dto';
 import { UpdateGrievanceDto } from './dto/update-grievance.dto';
+import { ListGrievanceDto } from './dto/list-grievance.dto';
 
 // Custom exception factory for validation errors
 const validationExceptionFactory = (errors: ValidationError[]) => {
@@ -49,9 +50,18 @@ export class GrievancesController {
   }
 
   @MessagePattern({ cmd: JOBS.GRIEVANCES.LIST, uuid: process.env.PROJECT_ID })
-  listAll() {
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: { target: false },
+      exceptionFactory: validationExceptionFactory,
+    })
+  )
+  listAll(@Payload() payload: ListGrievanceDto) {
     console.log('Grievances Controller listAll');
-    return this.grievancesService.listAll();
+    return this.grievancesService.listAll(payload);
   }
 
   @MessagePattern({

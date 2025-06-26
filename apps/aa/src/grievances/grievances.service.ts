@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { BQUEUE } from '@rahataid/sdk';
-import { PrismaService } from '@rumsan/prisma';
+import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { Queue } from 'bull';
 import { CORE_MODULE } from '../constants';
 import { handleMicroserviceCall } from '../utils/handleMicroServiceCall';
@@ -14,6 +14,12 @@ import {
   formatCoreCreateGrievancePayload,
   formatCoreUpdateGrievancePayload,
 } from './utils/grievances.service.utils';
+import { ListGrievanceDto } from './dto/list-grievance.dto';
+import { Prisma } from '@prisma/client';
+
+const paginate: PaginatorTypes.PaginateFunction = paginator({
+  perPage: 20,
+});
 
 @Injectable()
 export class GrievancesService {
@@ -53,8 +59,34 @@ export class GrievancesService {
     });
   }
 
-  async listAll() {
-    return this.prisma.grievance.findMany({ where: { deletedAt: null } });
+  async listAll(payload: ListGrievanceDto) {
+    const where: Prisma.GrievanceWhereInput = {
+      deletedAt: null,
+    };
+
+    const orderBy: Prisma.GrievanceOrderByWithRelationInput = {
+      [payload.sort]: payload.order,
+    };
+
+    if (payload.title) {
+      where.title = {
+        contains: payload.title,
+        mode: 'insensitive',
+      };
+    }
+
+    const { page, perPage } = payload;
+    return paginate(
+      this.prisma.grievance,
+      {
+        where,
+        orderBy,
+      },
+      {
+        page,
+        perPage,
+      }
+    );
   }
 
   async updateStatus(dto: UpdateGrievanceStatusDto) {
