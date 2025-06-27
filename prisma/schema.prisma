@@ -87,11 +87,11 @@ model Beneficiary {
 
   isVerified Boolean @default(false)
 
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime?           @updatedAt()
-  deletedAt         DateTime?
-  BeneficiaryRedeem BeneficiaryRedeem[]
-  BeneficiaryGroup  BeneficiaryGroup[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  BeneficiaryGroup   BeneficiaryGroup[]
   BeneficiaryToGroup BeneficiaryToGroup[]
 
   @@map("tbl_beneficiaries")
@@ -106,7 +106,7 @@ model BeneficiaryGroups {
   groupPurpose GroupPurpose?
 
   tokensReserved BeneficiaryGroupTokens?
-  beneficiaries BeneficiaryToGroup[]
+  beneficiaries  BeneficiaryToGroup[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -116,15 +116,15 @@ model BeneficiaryGroups {
 }
 
 model BeneficiaryToGroup {
-  id              Int               @id @default(autoincrement()) @db.Integer()
-  uuid            String            @unique @default(uuid())
-  beneficiary      Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
-  beneficiaryId    String            @db.Uuid()
-  group           BeneficiaryGroups @relation(fields: [groupId], references: [uuid]) 
-  groupId         String
+  id            Int               @id @default(autoincrement()) @db.Integer()
+  uuid          String            @unique @default(uuid())
+  beneficiary   Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
+  beneficiaryId String            @db.Uuid()
+  group         BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  groupId       String
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime?         @updatedAt()
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
 
   @@unique([beneficiaryId, groupId])
   @@map("tbl_beneficiaries_to_groups")
@@ -137,35 +137,36 @@ model BeneficiaryGroupTokens {
   title          String
   numberOfTokens Int    @default(0)
 
-  status         String @default("NOT_DISBURSED")
-  isDisbursed    Boolean @default(false)
-  info           Json?
+  status      String  @default("NOT_DISBURSED")
+  isDisbursed Boolean @default(false)
+  info        Json?
 
   groupId          String            @unique
   beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
 
-  payoutId String? @unique
+  payoutId String?  @unique
   payout   Payouts? @relation(fields: [payoutId], references: [uuid])
 
   createdBy String?
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime?         @updatedAt()
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
   @@map("tbl_beneficiaries_groups_tokens")
 }
 
 model Payouts {
-  int   Int    @id @default(autoincrement()) @db.Integer()
-  uuid  String @unique @default(uuid())
+  int  Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
 
-  type             PayoutType
-  mode             PayoutMode
-  status           String?
-  extras           Json?
+  type   PayoutType
+  mode   PayoutMode
+  status String?
+  extras Json?
 
-  payoutProcessorId String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
+  payoutProcessorId     String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
   beneficiaryGroupToken BeneficiaryGroupTokens?
-  beneficiaryRedeem BeneficiaryRedeem[]
+  beneficiaryRedeem     BeneficiaryRedeem[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -195,11 +196,12 @@ model Stakeholders {
 
   name         String
   email        String?
-  phone        String? @unique
+  phone        String?  @unique
   designation  String
   organization String
   district     String
   municipality String
+  supportArea  String[]
 
   stakeholdersGroups StakeholdersGroups[]
 
@@ -319,9 +321,9 @@ model Triggers {
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
   phaseId String?
 
-  isMandatory Boolean @default(false)
-  isTriggered Boolean @default(false)
-  isDeleted   Boolean @default(false)
+  isMandatory      Boolean @default(false)
+  isTriggered      Boolean @default(false)
+  isDeleted        Boolean @default(false)
   isOnchainSuccess Boolean @default(false)
 
   triggeredBy String?
@@ -494,23 +496,23 @@ model VendorReimbursment {
 model BeneficiaryRedeem {
   id                       Int     @id @default(autoincrement())
   uuid                     String  @unique @default(uuid())
-  beneficiaryWalletAddress  String
+  beneficiaryWalletAddress String
   isCompleted              Boolean @default(false)
-  amount                   Int   @default(0)
+  amount                   Int     @default(0)
 
-  transactionType          PayoutTransactionType
-  status                   PayoutTransactionStatus @default(PENDING)
-  fspId      String?        // refer PaymentProvider Id from rahat-offramp-service
-  txHash     String?
+  transactionType PayoutTransactionType
+  status          PayoutTransactionStatus @default(PENDING)
+  fspId           String? // refer PaymentProvider Id from rahat-offramp-service
+  txHash          String?
 
-  Beneficiary Beneficiary    @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
-  vendorUid   String?      @db.Uuid()
-  Vendor      Vendor?      @relation(fields: [vendorUid], references: [uuid])
+  Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  vendorUid   String?     @db.Uuid()
+  Vendor      Vendor?     @relation(fields: [vendorUid], references: [uuid])
 
-  payoutId   String?       
-  payout     Payouts? @relation(fields: [payoutId], references: [uuid])
+  payoutId String?
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
 
-  info        Json?
+  info Json?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -563,12 +565,13 @@ model Otp {
   amount      Float
   expiresAt   DateTime
 
-  isVerified Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map(name: "tbl_otp")
 }
+
 // ============== End OTP SCHEMAS ================
 
 enum Gender {
@@ -577,4 +580,3 @@ enum Gender {
   OTHER
   UNKNOWN
 }
-
