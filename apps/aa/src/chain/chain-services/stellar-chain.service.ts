@@ -20,7 +20,11 @@ import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import {
+  DisbursementServices,
+  ReceiveService,
+  TransactionService,
+} from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import { PayoutType } from '@prisma/client';
 
@@ -36,7 +40,9 @@ export class StellarChainService implements Partial<IChainService> {
     private settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private receiveService: ReceiveService,
-    private settingService: SettingsService
+    private settingService: SettingsService,
+    private readonly disbursementService: DisbursementServices,
+    private readonly transactionService: TransactionService
   ) {}
 
   getChainType(): ChainType {
@@ -200,6 +206,65 @@ export class StellarChainService implements Partial<IChainService> {
         error ? error : 'Transferring asset to vendor failed'
       );
     }
+  }
+
+  async getDisbursementStats() {
+    const disbursementAddress =
+      await this.disbursementService.getDistributionAddress(
+        await this.getFromSettings('TENANTNAME')
+      );
+
+    const disbursementBalance = await this.getRahatBalance(disbursementAddress);
+
+    const vendors = await this.prisma.vendor.findMany({
+      select: { walletAddress: true },
+    });
+
+    let totalVendorBalance = 0;
+
+    await Promise.all(
+      vendors.map(async (vendor) => {
+        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
+      })
+    );
+
+    return {
+      tokenStats: [
+        {
+          name: 'Disbursement Balance',
+          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
+        },
+        {
+          name: 'Disbursed Balance',
+          amount: totalVendorBalance.toLocaleString(),
+        },
+        {
+          name: 'Remaining Balance',
+          amount: disbursementBalance.toLocaleString(),
+        },
+        { name: 'Token Price', amount: 'Rs 10' },
+      ],
+      transactionStats: await this.getRecentTransaction(disbursementAddress),
+    };
+  }
+
+  private async getRecentTransaction(address: string) {
+    const transactions = await this.transactionService.getTransaction(
+      address,
+      10,
+      'desc'
+    );
+
+    return transactions.map((txn) => {
+      return {
+        title: txn.asset,
+        subtitle: txn.source,
+        date: txn.created_at,
+        amount: Number(txn.amount).toFixed(0),
+        amtColor: txn.amtColor,
+        hash: txn.hash,
+      };
+    });
   }
 
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {

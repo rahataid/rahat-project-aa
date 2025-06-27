@@ -19,6 +19,8 @@ import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { CORE_MODULE } from '../../constants';
 import { PrismaService } from '@rumsan/prisma';
+import { querySubgraph } from '../../utils/subgraph';
+import { getBeneficiaryAdded } from '@rahataid/subgraph';
 
 export interface EVMChainConfig {
   name: string;
@@ -377,6 +379,33 @@ export class EvmChainService implements IChainService {
     );
 
     this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+  }
+
+  async getDisbursementStats() {
+    const subgraphUrl = await this.settingsService.getPublic('SUBGRAPH_URL');
+
+    const response = await querySubgraph(
+      subgraphUrl.value as string,
+      getBeneficiaryAdded({ first: 10, skip: 0 })
+    );
+
+    return {
+      tokenStats: [
+        {
+          name: 'Remaining Balance',
+          amount: response.benTokensAssigneds.length.toLocaleString(),
+        },
+        { name: 'Token Price', amount: 'Rs 10' },
+      ],
+      transactionStats: response.benTokensAssigneds.map((item) => ({
+        title: item.id,
+        subtitle: item.beneficiary,
+        date: new Date(item.blockTimestamp * 1000),
+        amount: Number(item.amount).toFixed(0),
+        amtColor: 'green',
+        hash: item.transactionHash,
+      })),
+    };
   }
 
   async getDisbursementStatus(id: string): Promise<any> {

@@ -48,6 +48,9 @@ contract AAProject is
   /// @dev key-value pair of token address and registered status
   mapping(address => uint) public benTokens;
 
+  /// @notice tracks the total number of tokens assigned to beneficiaries
+  uint public totalTotalAssigned;
+
   ///@notice constructor
   ///@param _name name of the project
   ///@param _defaultToken address of the default token(ERC20)
@@ -102,6 +105,7 @@ contract AAProject is
     );
     _addBeneficiary(_address);
     benTokens[_address] = benTokens[_address] + _amount;
+    totalTotalAssigned = totalTotalAssigned + _amount;
     emit BenTokensAssigned(_address, _amount);
   }
 

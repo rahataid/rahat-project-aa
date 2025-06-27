@@ -28,6 +28,9 @@ export interface IChainService {
   // Utility methods
   validateAddress(address: string): boolean;
   getChainType(): ChainType;
+
+  // Stats
+  getDisbursementStats?(): Promise<any>;
 }
 
 export type ChainType = 'stellar' | 'evm';

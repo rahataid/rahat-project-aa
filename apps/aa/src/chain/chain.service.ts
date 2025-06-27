@@ -15,4 +15,8 @@ export class ChainService {
   sendAssetToVendor(sendAssetDto: any) {
     return this.chainQueueService.sendAssetToVendor(sendAssetDto);
   }
+
+  getDisbursementStats() {
+    return this.chainQueueService.getDisbursementStats();
+  }
 }

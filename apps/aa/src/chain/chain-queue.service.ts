@@ -102,6 +102,14 @@ export class ChainQueueService {
     return chainService.sendAssetToVendor(data);
   }
 
+  async getDisbursementStats(chainType?: ChainType): Promise<any> {
+    this.logger.log(`Getting disbursement stats`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.getDisbursementStats();
+  }
+
   async verifyOtp(data: VerifyOtpDto, chainType?: ChainType): Promise<any> {
     this.logger.log(`Verifying OTP for ${data.phoneNumber}`);
     const chainService = await this.chainServiceRegistry.getChainService(
