@@ -125,7 +125,7 @@ export const JOBS = {
     EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
     LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
     GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
-    INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp_${process.env.PROJECT_ID}`,
+    INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
@@ -230,13 +230,13 @@ export const EVENTS = {
 };
 
 export const BQUEUE = {
-  SCHEDULE: 'SCHEDULE',
-  TRIGGER: 'TRIGGER',
-  CONTRACT: 'CONTRACT',
-  COMMUNICATION: 'COMMUNICATION',
-  STELLAR: 'STELLAR',
-  STELLAR_CHECK_TRUSTLINE: 'STELLAR_CHECK_TRUSTLINE',
-  OFFRAMP: 'OFFRAMP',
+  SCHEDULE: `SCHEDULE_${process.env.PROJECT_ID}`,
+  TRIGGER: `TRIGGER_${process.env.PROJECT_ID}`,
+  CONTRACT: `CONTRACT_${process.env.PROJECT_ID}`,
+  COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
+  STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
+  STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
+  OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
