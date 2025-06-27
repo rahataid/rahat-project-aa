@@ -60,12 +60,10 @@ export class GrievancesService {
   }
 
   async listAll(payload: ListGrievanceDto) {
+    const { page, perPage } = payload;
+
     const where: Prisma.GrievanceWhereInput = {
       deletedAt: null,
-    };
-
-    const orderBy: Prisma.GrievanceOrderByWithRelationInput = {
-      [payload.sort]: payload.order,
     };
 
     if (payload.title) {
@@ -75,7 +73,18 @@ export class GrievancesService {
       };
     }
 
-    const { page, perPage } = payload;
+    if (payload.status) {
+      where.status = payload.status;
+    }
+
+    if (payload.priority) {
+      where.priority = payload.priority;
+    }
+
+    const orderBy: Prisma.GrievanceOrderByWithRelationInput = {
+      [payload.sort]: payload.order,
+    };
+
     return paginate(
       this.prisma.grievance,
       {
