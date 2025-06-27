@@ -6,6 +6,7 @@ export interface AddStakeholdersData {
   organization: string;
   district: string;
   municipality: string;
+  supportArea: string[];
 }
 
 export interface UpdateStakeholdersData {
@@ -17,6 +18,7 @@ export interface UpdateStakeholdersData {
   organization?: string;
   district?: string;
   municipality?: string;
+  supportArea?: string[];
 }
 
 export interface RemoveStakeholdersData {
@@ -29,6 +31,7 @@ export interface GetStakeholdersData {
   organization: string;
   district: string;
   municipality: string;
+  supportArea: string;
   page: number;
   order?: string;
   sort?: string;
@@ -70,7 +73,14 @@ export interface FindStakeholdersGroup {
   uuid: string;
 }
 
-import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+} from 'class-validator';
 
 export class CreateStakeholderDto {
   @IsString()
@@ -101,4 +111,21 @@ export class CreateStakeholderDto {
   @IsString()
   @IsNotEmpty({ message: 'Municipality is required' })
   municipality: string;
+
+  @IsOptional()
+  @IsArray({ message: 'supportArea must be an array of strings' })
+  @IsString({ each: true, message: 'Each supportArea must be a string' })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter((v) => v); // filter out empty
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => (typeof v === 'string' ? v.trim() : v));
+    }
+    return value;
+  })
+  supportArea?: string[];
 }
