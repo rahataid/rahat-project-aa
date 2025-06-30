@@ -1,3 +1,4 @@
+import { GroupPurpose } from '@prisma/client';
 import { BaseBeneficiaryDto } from '@rahat-project/cva';
 import { Enums } from '@rahataid/sdk';
 import { IsEnum, IsNumber, IsOptional } from 'class-validator';
@@ -37,6 +38,7 @@ export interface AddTokenToGroup {
   totalTokensReserved: number;
   title: string;
   user?: any;
+  groupPurpose: GroupPurpose;
 }
 
 export interface AssignBenfGroupToProject {
@@ -44,6 +46,7 @@ export interface AssignBenfGroupToProject {
     id: number;
     uuid: string;
     name: string;
+    groupPurpose: GroupPurpose;
     groupedBeneficiaries?: Array<{
       id: number;
       uuid: string;
