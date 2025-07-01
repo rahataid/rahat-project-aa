@@ -10,5 +10,8 @@ ALTER TABLE "tbl_wallet_replace_log" DROP CONSTRAINT "tbl_wallet_replace_log_ben
 -- AlterTable
 ALTER TABLE "tbl_wallet_replace_log" DROP COLUMN "beneficiaryWalletAddress";
 
+-- Convert uuid column from TEXT to UUID type
+ALTER TABLE "tbl_wallet_replace_log" ALTER COLUMN "uuid" TYPE UUID USING "uuid"::UUID;
+
 -- AddForeignKey
 ALTER TABLE "tbl_wallet_replace_log" ADD CONSTRAINT "tbl_wallet_replace_log_uuid_fkey" FOREIGN KEY ("uuid") REFERENCES "tbl_beneficiaries"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;

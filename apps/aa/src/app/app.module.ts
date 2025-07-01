@@ -24,6 +24,7 @@ import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { ChainModule } from '../chain/chain.module';
+import { GrievancesModule } from '../grievances/grievances.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { ChainModule } from '../chain/chain.module';
     VendorsModule,
     PayoutsModule,
     ChainModule,
+    GrievancesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
