@@ -209,12 +209,11 @@ export class StellarChainService implements Partial<IChainService> {
   }
 
   async getDisbursementStats() {
-    const disbursementAddress =
+    const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
         await this.getFromSettings('TENANTNAME')
-      );
-
-    const disbursementBalance = await this.getRahatBalance(disbursementAddress);
+      )
+    );
 
     const vendors = await this.prisma.vendor.findMany({
       select: { walletAddress: true },
@@ -228,23 +227,30 @@ export class StellarChainService implements Partial<IChainService> {
       })
     );
 
+    const totalDisbursedTokens =
+      await this.getTotalDisbursedTokensAcrossAllGroups();
+
     return {
       tokenStats: [
         {
-          name: 'Disbursement Balance',
-          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
+          name: 'Disbursed Balance',
+          amount: totalDisbursedTokens.toLocaleString(),
         },
         {
-          name: 'Disbursed Balance',
+          name: 'Total claimed',
           amount: totalVendorBalance.toLocaleString(),
         },
         {
           name: 'Remaining Balance',
-          amount: disbursementBalance.toLocaleString(),
+          amount: (totalDisbursedTokens - totalVendorBalance).toLocaleString(),
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
-      transactionStats: await this.getRecentTransaction(disbursementAddress),
+      transactionStats: await this.getRecentTransaction(
+        await this.disbursementService.getDistributionAddress(
+          await this.getFromSettings('TENANTNAME')
+        )
+      ),
     };
   }
 
@@ -592,5 +598,33 @@ export class StellarChainService implements Partial<IChainService> {
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
       updateData
     );
+  }
+
+  private async getTotalDisbursedTokensAcrossAllGroups(): Promise<number> {
+    try {
+      const result = await this.prisma.beneficiaryGroupTokens.aggregate({
+        where: {
+          AND: [{ status: 'DISBURSED' }, { isDisbursed: true }],
+        },
+        _sum: {
+          numberOfTokens: true,
+        },
+      });
+
+      const totalDisbursedTokens = result._sum.numberOfTokens || 0;
+
+      this.logger.log(
+        `Total disbursed tokens across all groups: ${totalDisbursedTokens}`
+      );
+      return totalDisbursedTokens;
+    } catch (error) {
+      this.logger.error(
+        'Error getting total disbursed tokens across all groups:',
+        error.message
+      );
+      throw new RpcException(
+        `Failed to get total disbursed tokens: ${error.message}`
+      );
+    }
   }
 }

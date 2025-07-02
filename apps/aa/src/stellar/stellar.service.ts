@@ -570,19 +570,22 @@ export class StellarService {
       })
     );
 
+    const totalDisbursedTokens =
+      await this.getTotalDisbursedTokensAcrossAllGroups();
+
     return {
       tokenStats: [
         {
-          name: 'Disbursement Balance',
-          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
+          name: 'Disbursed Balance',
+          amount: totalDisbursedTokens.toLocaleString(),
         },
         {
-          name: 'Disbursed Balance',
+          name: 'Total claimed',
           amount: totalVendorBalance.toLocaleString(),
         },
         {
           name: 'Remaining Balance',
-          amount: disbursementBalance.toLocaleString(),
+          amount: (totalDisbursedTokens - totalVendorBalance).toLocaleString(),
         },
         { name: 'Token Price', amount: 'Rs 10' },
       ],
@@ -979,6 +982,34 @@ export class StellarService {
       return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
       throw new Error(`Failed to retrieve payout type: ${error.message}`);
+    }
+  }
+
+  private async getTotalDisbursedTokensAcrossAllGroups(): Promise<number> {
+    try {
+      const result = await this.prisma.beneficiaryGroupTokens.aggregate({
+        where: {
+          AND: [{ status: 'DISBURSED' }, { isDisbursed: true }],
+        },
+        _sum: {
+          numberOfTokens: true,
+        },
+      });
+
+      const totalDisbursedTokens = result._sum.numberOfTokens || 0;
+
+      this.logger.log(
+        `Total disbursed tokens across all groups: ${totalDisbursedTokens}`
+      );
+      return totalDisbursedTokens;
+    } catch (error) {
+      this.logger.error(
+        'Error getting total disbursed tokens across all groups:',
+        error.message
+      );
+      throw new RpcException(
+        `Failed to get total disbursed tokens: ${error.message}`
+      );
     }
   }
 }

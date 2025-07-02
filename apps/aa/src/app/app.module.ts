@@ -26,6 +26,7 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
+import { GrievancesModule } from '../grievances/grievances.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { ChainModule } from '../chain/chain.module';
     VendorsModule,
     PayoutsModule,
     ChainModule,
+    GrievancesModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
