@@ -15,7 +15,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
-import { Prisma } from '@prisma/client';
+import { GroupPurpose, Prisma } from '@prisma/client';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -125,7 +125,10 @@ export class BeneficiaryService {
           ...(tokenAssigned === true
             ? { tokensReserved: { isNot: null } }
             : tokenAssigned === false
-            ? { tokensReserved: null }
+            ? {
+                tokensReserved: null,
+                groupPurpose: { not: GroupPurpose.COMMUNICATION },
+              }
             : {}),
         },
         {
@@ -316,6 +319,7 @@ export class BeneficiaryService {
       data: {
         uuid: beneficiaryGroupData.uuid,
         name: beneficiaryGroupData.name,
+        groupPurpose: beneficiaryGroupData.groupPurpose,
       },
     });
 
@@ -340,6 +344,7 @@ export class BeneficiaryService {
       title,
       totalTokensReserved,
       user,
+      groupPurpose,
     } = payload;
 
     if (beneficiaryGroupId) {
@@ -351,6 +356,15 @@ export class BeneficiaryService {
       if (isAlreadyReserved) {
         throw new RpcException('Token already reserved.');
       }
+    }
+
+    if (
+      groupPurpose !== GroupPurpose.BANK_TRANSFER &&
+      groupPurpose !== GroupPurpose.MOBILE_MONEY
+    ) {
+      throw new RpcException(
+        `Invalid group purpose ${groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
+      );
     }
 
     return this.prisma.$transaction(async () => {

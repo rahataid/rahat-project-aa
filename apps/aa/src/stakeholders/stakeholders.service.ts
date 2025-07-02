@@ -71,10 +71,20 @@ export class StakeholdersService {
     // Step 1: Clean and normalize input
 
     const cleanedPayloads = rData.validStakeholders.map(
-      ({ phone, ...rest }) => ({
-        ...rest,
-        phone: phone?.trim() || null,
-      })
+      ({ phone, email, ...rest }) => {
+        let cleanedPhone = phone?.trim() || null;
+
+        // Normalize if it's a 10-digit number
+        if (/^\d{10}$/.test(cleanedPhone)) {
+          cleanedPhone = `+977${cleanedPhone}`;
+        }
+        let cleanedEmail = email?.trim().toLowerCase() || null;
+        return {
+          ...rest,
+          email: cleanedEmail,
+          phone: cleanedPhone,
+        };
+      }
     );
 
     // Step 2: Extract non-null phones
@@ -82,22 +92,48 @@ export class StakeholdersService {
       .map((p) => p.phone)
       .filter((phone): phone is string => !!phone);
 
+    // Extract non-null email
+    const emailsToCheck = cleanedPayloads
+      .map((p) => p.email)
+      .filter((email): email is string => !!email);
+
     // Step 3: Check for existing phones in DB
-    const existing = await this.prisma.stakeholders.findMany({
+    const existingPhones = await this.prisma.stakeholders.findMany({
       where: {
         phone: { in: phonesToCheck },
       },
       select: { phone: true },
     });
 
-    const existingPhones = existing.map((e) => e.phone);
+    // Step 4: Check for existing emails if provided
+    const existingEmails = emailsToCheck.length
+      ? await this.prisma.stakeholders.findMany({
+          where: {
+            email: { in: emailsToCheck },
+          },
+          select: { email: true },
+        })
+      : [];
+    const duplicates = {
+      phones: existingPhones.map((e) => e.phone),
+      emails: existingEmails.map((e) => e.email),
+    };
 
-    if (existingPhones.length > 0) {
+    const duplicateMessages = [];
+
+    if (duplicates.phones.length > 0) {
+      duplicateMessages.push(`Phone(s): ${duplicates.phones.join(', ')}`);
+    }
+    if (duplicates.emails.length > 0) {
+      duplicateMessages.push(`Email(s): ${duplicates.emails.join(', ')}`);
+    }
+
+    if (duplicateMessages.length > 0) {
       this.logger.warn(
-        `Found ${existingPhones.length} duplicate phone number(s)`
+        `Found duplicate entries: ${duplicateMessages.join(' | ')}`
       );
       throw new RpcException(
-        `Phone number must be unique, ${existingPhones.join(', ')}`
+        `Duplicate(s) found: ${duplicateMessages.join(' | ')}`
       );
     }
 
@@ -123,6 +159,7 @@ export class StakeholdersService {
       perPage,
       order,
       sort,
+      supportArea,
     } = payload;
 
     const query = {
@@ -141,6 +178,7 @@ export class StakeholdersService {
         ...(organization && {
           organization: { contains: organization, mode: 'insensitive' },
         }),
+        ...(supportArea && { supportArea: { hasSome: [supportArea] } }),
       },
       include: {
         stakeholdersGroups: true,
@@ -195,6 +233,7 @@ export class StakeholdersService {
       name,
       organization,
       phone,
+      supportArea,
     } = payload;
     const existingStakeholder = await this.prisma.stakeholders.findUnique({
       where: {
@@ -231,6 +270,7 @@ export class StakeholdersService {
         organization: organization || existingStakeholder.organization,
         district: district || existingStakeholder.district,
         municipality: municipality || existingStakeholder.municipality,
+        supportArea: supportArea || existingStakeholder.supportArea,
         updatedAt: new Date(),
       },
     });
@@ -357,18 +397,37 @@ export class StakeholdersService {
   async validateStakeholders(
     payload: any[]
   ): Promise<ValidateStakeholdersResponse> {
-    const data = payload.map((item) => ({
-      name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
-      designation: item['Designation']?.trim() || '',
-      organization: item['Organization']?.trim() || '',
-      district: item['District']?.trim() || '',
-      municipality: item['Municipality']?.trim() || '',
-      phone:
-        item['Mobile #']?.toString().trim() ||
-        item['Phone Number']?.toString().trim() ||
-        '',
-      email: item['Email ID']?.trim() || item['Email']?.trim() || '',
-    }));
+    const data = payload.map((item) => {
+      // Find the first valid supportArea string value
+      const rawSupportArea =
+        typeof item['Support Area'] === 'string'
+          ? item['Support Area']
+          : typeof item['Support Area #'] === 'string'
+          ? item['Support Area #']
+          : typeof item['Support Area '] === 'string'
+          ? item['Support Area ']
+          : '';
+
+      return {
+        name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
+        designation: item['Designation']?.trim() || '',
+        organization: item['Organization']?.trim() || '',
+        district: item['District']?.trim() || '',
+        municipality: item['Municipality']?.trim() || '',
+        phone:
+          item['Mobile #']?.toString().trim() ||
+          item['Phone Number']?.toString().trim() ||
+          '',
+        supportArea: rawSupportArea
+          ? rawSupportArea
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : [],
+        email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+      };
+    });
+
     const validationErrors = [];
     const stakeholders = [];
     for (const row of data) {
