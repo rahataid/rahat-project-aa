@@ -1,17 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import {
-  BeneficiaryRedeem,
-  Payouts,
-  Prisma,
-} from '@prisma/client';
+import { BeneficiaryRedeem, Payouts, Prisma } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
-import { BeneficiaryPayoutDetails, IPaymentProvider } from './dto/types';
+import {
+  BeneficiaryPayoutDetails,
+  IPaymentProvider,
+  PayoutStats,
+} from './dto/types';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
@@ -36,6 +36,57 @@ export class PayoutsService {
     private readonly stellarQueue: Queue,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
+
+  /**
+   * Find payout stats
+   * This is used to find the payout stats including counts by payout type
+   * and isCompleted status.
+   */
+  async getPayoutStats(): Promise<PayoutStats> {
+    try {
+      const [fspCount, vendorCount, notCompleted, completed] =
+        await Promise.all([
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              payout: {
+                type: 'FSP',
+              },
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              payout: {
+                type: 'VENDOR',
+              },
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              isCompleted: false,
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              isCompleted: true,
+            },
+          }),
+        ]);
+
+      return {
+        payoutTypes: {
+          FSP: fspCount,
+          VENDOR: vendorCount,
+        },
+        completionStatus: {
+          COMPLETED: completed,
+          NOT_COMPLETED: notCompleted,
+        },
+      };
+    } catch (error) {
+      console.error('Failed to fetch payout stats:', error);
+      throw new Error('Failed to fetch payout stats');
+    }
+  }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
     const { groupId, ...createPayoutDto } = payload;
@@ -248,9 +299,7 @@ export class PayoutsService {
       return {
         ...payout,
         hasFailedPayoutRequests:
-          payout.type === 'VENDOR'
-            ? false
-            : failedPayoutRequests.length > 0,
+          payout.type === 'VENDOR' ? false : failedPayoutRequests.length > 0,
         isCompleted: await this.getPayoutCompletedStatus(payout),
         isPayoutTriggered: payout.beneficiaryRedeem.length > 0,
       };
