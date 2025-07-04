@@ -58,11 +58,12 @@ import { SettingsService } from '@rumsan/settings';
       useFactory: async (settingService: SettingsService) => {
         const settings = await settingService.getPublic('STELLAR_SETTINGS');
         return new ReceiveService(
-          settings?.value['ASSETCREATOR'] || '',
-          settings?.value['ASSETCODE'] || '',
-          settings?.value['NETWORK'] || '',
-          settings?.value['FAUCETSECRETKEY'] || '',
-          settings?.value['FUNDINGAMOUNT'] || 0
+          settings?.value['ASSETCREATOR'],
+          settings?.value['ASSETCODE'],
+          settings?.value['NETWORK'],
+          settings?.value['FAUCETSECRETKEY'],
+          settings?.value['FAUCETAUTHKEY'],
+          settings?.value['FAUCETBASEURL']
         );
       },
       inject: [SettingsService],

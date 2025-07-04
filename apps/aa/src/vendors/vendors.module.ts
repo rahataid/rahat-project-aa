@@ -34,7 +34,8 @@ import { SettingsService } from '@rumsan/settings';
           settings?.value['ASSETCODE'],
           settings?.value['NETWORK'],
           settings?.value['FAUCETSECRETKEY'],
-          settings?.value['FUNDINGAMOUNT']
+          settings?.value['FAUCETAUTHKEY'],
+          settings?.value['FAUCETBASEURL']
         );
       },
       inject: [SettingsService],

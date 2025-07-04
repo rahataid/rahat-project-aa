@@ -34,9 +34,12 @@ export const seedStellar = async () => {
     assetCreator: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
     assetCreatorSecret:
       'SA5S2EF72XXJTLBD4SZEMY7OUGIACQZ4KXPEB7NSEVWGEKZCDOQDBFBE',
-    fundingAmount: '10',
+    faucetBaseUrl: 'http://localhost:3232',
     network: 'testnet',
     faucetSecretKey: 'SAVNF6EBFM56QSBCYBKKNXOCZASR5QEHO5AMAGEM2NJN4KIZBHIMGA6A',
+    faucetAuthKey:
+      'faucet_80e6c024c1780d6a8657606215c5cbf6bedb1a2c6d315066ea6c1b40cbfeb592',
+    faucetBaseUrl: 'http://localhost:3232',
   };
 
   try {

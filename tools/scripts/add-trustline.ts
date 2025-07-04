@@ -12,7 +12,7 @@ import { stdin as input, stdout as output } from 'process';
 
 // Constants for the asset (e.g., Rahat on testnet)
 const ASSET_CODE = 'RAHAT';
-const ASSET_ISSUER = 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE'; // Testnet Rahat issuer
+const ASSET_ISSUER = 'GCCZSP4KZVKIJLTY7HZS6TVNBFN6VB55A42HOLJHKCBVQRKDEVETUHHH'; // Testnet Rahat issuer
 
 // Function to add trustline
 export const add_trustline = async (
@@ -24,13 +24,18 @@ export const add_trustline = async (
   try {
     // console.log('Public Key:', publicKey);
     // await axios.get(`https://friendbot.stellar.org/?addr=${publicKey}`);
+    const network = Networks.PUBLIC;
     const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
-    const server = new Horizon.Server('https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server(
+      network === Networks.PUBLIC
+        ? 'https://horizon.stellar.org'
+        : 'https://horizon-testnet.stellar.org'
+    );
     const account = await server.loadAccount(publicKey);
 
     const transaction = new TransactionBuilder(account, {
       fee: (await server.fetchBaseFee()).toString(),
-      networkPassphrase: Networks.TESTNET,
+      networkPassphrase: network,
     })
       .addOperation(
         Operation.changeTrust({
@@ -60,15 +65,6 @@ const main = async () => {
 
     const keypair = Keypair.fromSecret(secretKey);
     const publicKey = keypair.publicKey();
-    console.log('Public Key:', publicKey);
-    // Fund account using Friendbot
-    try {
-      const friendbotUrl = `https://friendbot.stellar.org?addr=${publicKey}`;
-      await axios.get(friendbotUrl);
-      console.log(`Account ${publicKey} funded via Friendbot.`);
-    } catch (error) {
-      console.log('Account already funded, skipping funding.');
-    }
 
     // Add trustline for USDC
     await add_trustline(publicKey, secretKey, ASSET_ISSUER, ASSET_CODE);

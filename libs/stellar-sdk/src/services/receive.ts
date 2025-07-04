@@ -6,6 +6,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
+import axios from 'axios';
 import { add_trustline } from '../lib/addTrustline';
 import { IReceiveService } from '../types';
 import { logger } from '../utils/logger';
@@ -16,20 +17,23 @@ export class ReceiveService implements IReceiveService {
   private assetCode: string;
   private network: string;
   private faucetSecretKey: string;
-  private fundingAmount: string;
+  private faucetAuthKey: string;
+  private faucetBaseUrl: string;
 
   constructor(
     assetIssuer: string,
     assetCode: string,
     network: string,
     faucetSecretKey: string,
-    fundingAmount: string
+    fundingAmount: string,
+    faucetBaseUrl: string
   ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
     this.network = network;
     this.faucetSecretKey = faucetSecretKey;
-    this.fundingAmount = fundingAmount;
+    this.faucetAuthKey = fundingAmount;
+    this.faucetBaseUrl = faucetBaseUrl;
   }
 
   public async getAssetInfo(): Promise<string> {
@@ -66,11 +70,7 @@ export class ReceiveService implements IReceiveService {
 
       if (!accountExists) {
         logger.warn('Funding account');
-        await this.fundAccount(
-          walletAddress,
-          this.fundingAmount as string,
-          this.faucetSecretKey as string
-        );
+        await this.fundAccount(walletAddress);
       } else {
         logger.warn('Skipping funding');
       }
@@ -89,43 +89,72 @@ export class ReceiveService implements IReceiveService {
     }
   }
 
-  private async fundAccount(
-    receiverPk: string,
-    amount: string,
-    faucetSecretKey: string
-  ) {
+  private async fundAccount(receiverPk: string): Promise<any> {
     try {
-      const server = new Horizon.Server(horizonServer);
-      const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
-      const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+      logger.warn(`Requesting faucet funding for ${receiverPk}...`);
 
-      const transaction = new TransactionBuilder(faucetAccount, {
-        fee: (await server.fetchBaseFee()).toString(),
-        networkPassphrase:
-          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
-      })
-        .addOperation(
-          Operation.createAccount({
-            destination: receiverPk,
-            startingBalance: amount,
-          })
-        )
-        .setTimeout(30)
-        .build();
+      const networkName =
+        this.network === 'mainnet' ? 'stellar_mainnet' : 'stellar_testnet';
+      const faucetUrl = `${this.faucetBaseUrl}/faucet/${networkName}/${receiverPk}`;
 
-      transaction.sign(faucetKeypair);
-      const tx = await server.submitTransaction(transaction);
+      const response = await axios.get(faucetUrl, {
+        headers: {
+          Authorization: `Bearer ${this.faucetAuthKey}`,
+        },
+      });
 
-      logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
-      return { success: 'XLM sent to account', tx };
+      logger.warn(`Successfully funded ${receiverPk} from external faucet`);
+      return {
+        success: 'XLM sent to account from external faucet',
+        response: response.data,
+      };
     } catch (error: any) {
       logger.error(`Error in fundAccount: ${error.message}`, error.stack);
-      if (error.response?.data?.extras) {
-        logger.error('Stellar error details:', error.response.data.extras);
+      if (error.response?.data) {
+        logger.error('Faucet API error details:', error.response.data);
       }
       throw error;
     }
   }
+
+  // Use this for internal faucet
+  // private async fundAccount(
+  //   receiverPk: string,
+  //   amount: string,
+  //   faucetSecretKey: string
+  // ) {
+  //   try {
+  //     const server = new Horizon.Server(horizonServer);
+  //     const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
+  //     const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+
+  //     const transaction = new TransactionBuilder(faucetAccount, {
+  //       fee: (await server.fetchBaseFee()).toString(),
+  //       networkPassphrase:
+  //         this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
+  //     })
+  //       .addOperation(
+  //         Operation.createAccount({
+  //           destination: receiverPk,
+  //           startingBalance: amount,
+  //         })
+  //       )
+  //       .setTimeout(30)
+  //       .build();
+
+  //     transaction.sign(faucetKeypair);
+  //     const tx = await server.submitTransaction(transaction);
+
+  //     logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
+  //     return { success: 'XLM sent to account', tx };
+  //   } catch (error: any) {
+  //     logger.error(`Error in fundAccount: ${error.message}`, error.stack);
+  //     if (error.response?.data?.extras) {
+  //       logger.error('Stellar error details:', error.response.data.extras);
+  //     }
+  //     throw error;
+  //   }
+  // }
 
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
     try {

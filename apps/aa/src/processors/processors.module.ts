@@ -70,15 +70,14 @@ import { AppModule } from '../app/app.module';
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
-        const stellarSettings = await settingsService.getPublic(
-          'STELLAR_SETTINGS'
-        );
+        const settings = await settingsService.getPublic('STELLAR_SETTINGS');
         return new ReceiveService(
-          (stellarSettings.value as any).ASSETISSUER,
-          (stellarSettings.value as any).ASSETCODE,
-          (stellarSettings.value as any).NETWORK,
-          (stellarSettings.value as any).FAUCETSECRETKEY,
-          (stellarSettings.value as any).FUNDINGAMOUNT
+          settings?.value['ASSETCREATOR'],
+          settings?.value['ASSETCODE'],
+          settings?.value['NETWORK'],
+          settings?.value['FAUCETSECRETKEY'],
+          settings?.value['FAUCETAUTHKEY'],
+          settings?.value['FAUCETBASEURL']
         );
       },
       inject: [SettingsService],
