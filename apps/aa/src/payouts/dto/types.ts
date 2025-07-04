@@ -1,4 +1,10 @@
-export type OfframpStatus = 'PENDING' | 'PROCESSING' | 'FAILED' | 'CANCELLED' | 'REJECTED' | 'SUCCESS';
+export type OfframpStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'REJECTED'
+  | 'SUCCESS';
 
 export interface IPaymentProvider {
   id: string;
@@ -12,7 +18,7 @@ export type bankDetails = {
   accountName: string;
   accountNumber: string;
   bankName: string;
-}
+};
 
 export interface BeneficiaryPayoutDetails {
   walletAddress: string;
@@ -73,11 +79,22 @@ export interface CipsTransactionResponse {
 export interface CipsResponseData {
   offrampRequest: OfframpRequest;
   // if the transaction is successful, the transaction will be a CipsSuccessTransactionResponse
-  // if the transaction is failed, the transaction will be a CipsFailedTransactionResponse  
+  // if the transaction is failed, the transaction will be a CipsFailedTransactionResponse
   transaction: CipsTransactionResponse;
 }
 
 export interface CipsApiResponse {
   success: boolean;
   data: CipsResponseData;
-} 
+}
+
+export type PayoutStats = {
+  payoutTypes: {
+    FSP: number;
+    VENDOR: number;
+  };
+  completionStatus: {
+    COMPLETED: number;
+    NOT_COMPLETED: number;
+  };
+};
