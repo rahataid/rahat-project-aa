@@ -31,6 +31,7 @@ import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
 import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
+import { canProcessJob } from '../utils/bullUtils';
 
 interface BatchInfo {
   batchIndex: number;
@@ -189,11 +190,25 @@ export class StellarProcessor {
 
   @Process({
     name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
-    concurrency: 10,
+    concurrency: 1,
   })
   async internalFaucetAndTrustline(job: Job<InternalFaucetBatchJob>) {
     const { wallets, batchInfo } = job.data;
-    
+
+
+    const canProceed = await canProcessJob({
+      ...job,
+      data: {
+        ...job.data,
+        ...batchInfo
+      },
+    }, this.logger);
+
+    if (!canProceed) {
+      this.logger.warn('Skipping job due to high load');
+      return;
+    }
+
     this.logger.log(
       `Processing faucet and trustline batch ${batchInfo.batchIndex}/${batchInfo.totalBatches} with ${wallets.length} wallets...`,
       StellarProcessor.name
@@ -219,6 +234,7 @@ export class StellarProcessor {
           },
         });
 
+
         if (beneficiary) {
           return await this.prismaService.beneficiary.update({
             where: {
@@ -232,6 +248,8 @@ export class StellarProcessor {
             },
           });
         }
+
+        this.logger.warn(`Beneficiary ${wallet.address} not found`);
       }));
 
       this.logger.log(

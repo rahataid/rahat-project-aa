@@ -136,7 +136,16 @@ export class TransactionService implements ITransactionService {
       // Wait for transaction confirmation
       await this.waitForTransactionConfirmation(txHash, sorobanServer);
 
-      // Add trustline for all wallet addresses
+      // // Add trustline for all wallet addresses
+      // for (const k of keys) {
+      //   await add_trustline(
+      //     k.address,
+      //     k.secret,
+      //     this.assetIssuer,
+      //     this.assetCode,
+      //     horizonServer
+      //   );
+      // }
       await Promise.all(
         keys.map(async (k) => {
           await add_trustline(
@@ -152,7 +161,6 @@ export class TransactionService implements ITransactionService {
         message: `Funded successfully for ${keys.length} wallets: ${txHash}`,
       };
     } catch (error: any) {
-      logger.error(error?.response);
       return error?.response;
     }
   }
