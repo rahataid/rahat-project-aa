@@ -38,7 +38,6 @@ export interface AddTokenToGroup {
   totalTokensReserved: number;
   title: string;
   user?: any;
-  groupPurpose: GroupPurpose;
 }
 
 export interface AssignBenfGroupToProject {

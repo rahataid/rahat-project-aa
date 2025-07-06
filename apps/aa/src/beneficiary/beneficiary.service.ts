@@ -344,10 +344,8 @@ export class BeneficiaryService {
       title,
       totalTokensReserved,
       user,
-      groupPurpose,
     } = payload;
 
-    if (beneficiaryGroupId) {
       const isAlreadyReserved =
         await this.prisma.beneficiaryGroupTokens.findUnique({
           where: { groupId: beneficiaryGroupId },
@@ -356,14 +354,23 @@ export class BeneficiaryService {
       if (isAlreadyReserved) {
         throw new RpcException('Token already reserved.');
       }
+
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: {
+        uuid: beneficiaryGroupId,
+      }
+    });
+
+    if(!benfGroup) {
+      throw new RpcException('Beneficiary group not found.');
     }
 
     if (
-      groupPurpose !== GroupPurpose.BANK_TRANSFER ||
-      groupPurpose !== GroupPurpose.MOBILE_MONEY
+      benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
+      benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
       throw new RpcException(
-        `Invalid group purpose ${groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
+        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
       );
     }
 
