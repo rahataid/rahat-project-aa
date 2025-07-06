@@ -359,7 +359,7 @@ export class BeneficiaryService {
     }
 
     if (
-      groupPurpose !== GroupPurpose.BANK_TRANSFER &&
+      groupPurpose !== GroupPurpose.BANK_TRANSFER ||
       groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
       throw new RpcException(
