@@ -13,7 +13,7 @@ export const generateCSV = async (
       .map((beneficiary) => {
         const phone = `${beneficiary.phone.replace(/"/g, '""')}`;
         const amount = parseFloat(beneficiary.amount);
-        if (isNaN(amount) || amount <= 1) {
+        if (isNaN(amount) || amount < 1) {
           throw new Error(
             `Invalid amount for beneficiary ${beneficiary.id}: must be greater than 1`
           );
