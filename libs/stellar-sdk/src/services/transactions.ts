@@ -171,7 +171,6 @@ export class TransactionService implements ITransactionService {
         message: `Funded successfully for ${keys.length} wallets: ${txHash}`,
       };
     } catch (error: any) {
-      logger.error(error?.response);
       return error?.response;
     }
   }
