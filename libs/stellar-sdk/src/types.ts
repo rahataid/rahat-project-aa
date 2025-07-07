@@ -52,10 +52,6 @@ export interface ITransactionService {
   ): Promise<boolean>;
 }
 
-export interface ICreateTenantService {
-  createTenant(): Promise<any>;
-}
-
 export type BeneficiaryWallet = {
   address: string;
   secret: string;

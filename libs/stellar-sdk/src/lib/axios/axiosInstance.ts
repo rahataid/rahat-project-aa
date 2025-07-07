@@ -1,7 +1,12 @@
 import axios from 'axios';
 import { token } from '../../services/disbursement';
+import { sdpAuth } from '../../constants/constant';
 
-const createAxiosInstance = (baseURL: string, timeout: number = 15000) => {
+const createAxiosInstance = (
+  baseURL: string,
+  timeout: number = 15000,
+  useAdminAuth: boolean = false
+) => {
   const instance = axios.create({
     baseURL,
     timeout,
@@ -9,8 +14,18 @@ const createAxiosInstance = (baseURL: string, timeout: number = 15000) => {
 
   instance.interceptors.request.use(
     async (config: any) => {
-      if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
+      if (useAdminAuth) {
+        // Use admin authentication (Basic Auth)
+        const credentials = `${sdpAuth.USERNAME}:${sdpAuth.API_KEY}`;
+        const encodedCredentials = Buffer.from(credentials).toString('base64');
+        if (encodedCredentials) {
+          config.headers['Authorization'] = `Basic ${encodedCredentials}`;
+        }
+      } else {
+        // Use Bearer token authentication
+        if (token) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
       }
       return config;
     },
@@ -25,12 +40,21 @@ const createAxiosInstance = (baseURL: string, timeout: number = 15000) => {
 export const getAxiosInstances = (
   config: {
     baseUrl?: string;
+    adminBaseUrl?: string;
   } = {}
 ) => {
-  const instances: { axiosInstance?: any } = {};
+  const instances: { axiosInstance?: any; adminAxiosInstance?: any } = {};
 
   if (config.baseUrl) {
     instances.axiosInstance = createAxiosInstance(config.baseUrl);
+  }
+
+  if (config.adminBaseUrl) {
+    instances.adminAxiosInstance = createAxiosInstance(
+      config.adminBaseUrl,
+      15000,
+      true
+    );
   }
 
   return instances;

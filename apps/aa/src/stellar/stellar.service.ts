@@ -42,6 +42,26 @@ import {
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
 
+interface BatchInfo {
+  batchIndex: number;
+  totalBatches: number;
+  batchSize: number;
+  totalWallets: number;
+}
+
+interface InternalFaucetBatchJob {
+  wallets: any[];
+  batchInfo: BatchInfo;
+  beneficiaryGroupId: string;
+}
+
+interface InternalFaucetResponse {
+  message: string;
+  batchesCreated: number;
+  totalWallets?: number;
+  jobIds?: any[];
+}
+
 @Injectable()
 export class StellarService {
   private readonly logger = new Logger(StellarService.name);
@@ -626,19 +646,59 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Need dynamic queue
-  async internalFaucetAndTrustline(beneficiaries: any) {
-    return this.stellarQueue.add(
-      JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
-      beneficiaries.wallets,
-      {
-        attempts: 1,
-        removeOnComplete: true,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      }
+  async internalFaucetAndTrustline(beneficiaries: { wallets: any[], beneficiaryGroupId: string }): Promise<InternalFaucetResponse> {
+    const { wallets, beneficiaryGroupId } = beneficiaries;
+    
+    if (!wallets || wallets.length === 0) {
+      this.logger.warn('No wallets provided for faucet and trustline');
+      return {
+        message: 'No wallets provided for processing',
+        batchesCreated: 0,
+      };
+    }
+
+    const batchSize = await this.getBatchSizeFromSettings();
+    const batches = this.createWalletBatches(wallets, batchSize);
+    
+    this.logger.log(
+      `Creating ${batches.length} batch jobs for ${wallets.length} wallets (batch size: ${batchSize})`
     );
+
+    const jobs = await this.stellarQueue.addBulk(
+      batches.map((batch, index) => ({
+        name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
+        data: {
+          wallets: batch,
+          batchInfo: {
+            batchIndex: index + 1,
+            totalBatches: batches.length,
+            batchSize: batch.length,
+            totalWallets: wallets.length,
+          },
+          beneficiaryGroupId,
+        } as InternalFaucetBatchJob,
+        opts: {
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+          delay: index * 1000, // Stagger job execution slightly to avoid overwhelming the network
+        },
+      }))
+    );
+
+    this.logger.log(
+      `Successfully added ${jobs.length} faucet and trustline batch jobs to queue`
+    );
+
+    return {
+      message: `Created ${batches.length} batch jobs for ${wallets.length} wallets`,
+      batchesCreated: batches.length,
+      totalWallets: wallets.length,
+      jobIds: jobs.map(job => job.id),
+    };
   }
 
   async addBulkToTokenTransferQueue(payload: FSPPayoutDetails[]) {
@@ -667,6 +727,33 @@ export class StellarService {
   }
 
   // ---------- Private functions ----------------
+
+  private async getBatchSizeFromSettings(): Promise<number> {
+    try {
+      const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
+      const settingsValue = settings?.value as Record<string, any>;
+      const batchSize = settingsValue?.FAUCET_BATCH_SIZE;
+      return batchSize && !isNaN(Number(batchSize)) ? Number(batchSize) : 3;
+    } catch (error) {
+      this.logger.warn('Failed to get batch size from settings, using default value of 3');
+      return 3;
+    }
+  }
+
+  private getBatchSize(): number {
+    return 3; // Default batch size, used for synchronous calls
+  }
+
+  private createWalletBatches(wallets: any[], batchSize?: number): any[][] {
+    const size = batchSize || this.getBatchSize();
+    const batches: any[][] = [];
+    
+    for (let i = 0; i < wallets.length; i += size) {
+      batches.push(wallets.slice(i, i + size));
+    }
+    
+    return batches;
+  }
 
   private async getStellarObjects() {
     const server = new StellarRpc.Server(await this.getFromSettings('SERVER'));

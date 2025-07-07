@@ -1,5 +1,5 @@
 import { Asset, Keypair } from '@stellar/stellar-sdk';
-import { DISBURSEMENT, horizonServer, WALLETS } from '../constants/constant';
+import { DISBURSEMENT, WALLETS } from '../constants/constant';
 import {
   createDisbursement,
   updateDisbursementStatus,
@@ -15,9 +15,17 @@ import { IDisbursementService, IDisbursement } from '../types';
 export let token: string;
 export class DisbursementServices implements IDisbursementService {
   private walletType: WALLETS;
+  private horizonServer: string;
+  private network: string;
 
-  constructor(private disbursementValues: any) {
+  constructor(
+    private disbursementValues: any,
+    horizonServer: string,
+    network: string
+  ) {
     this.walletType = DISBURSEMENT.WalletType;
+    this.horizonServer = horizonServer;
+    this.network = network;
   }
 
   public async createDisbursementProcess(
@@ -40,7 +48,10 @@ export class DisbursementServices implements IDisbursementService {
   }
 
   public async getDistributionAddress(tenantName: string) {
-    return await getDistributionAddress(tenantName);
+    return await getDistributionAddress(
+      tenantName,
+      this.disbursementValues.baseUrl
+    );
   }
 
   public async getDisbursement(
@@ -52,8 +63,6 @@ export class DisbursementServices implements IDisbursementService {
       this.disbursementValues.password,
       this.disbursementValues.baseUrl
     );
-
-    console.log('settings=>', this.disbursementValues);
 
     token = (await authService.getToken()) as string;
     const disbursement = await getDisbursement(
@@ -72,6 +81,7 @@ export class DisbursementServices implements IDisbursementService {
     const issuerKeypair = Keypair.fromSecret(
       this.disbursementValues.assetSecret
     );
+
     const asset = new Asset(
       this.disbursementValues.assetCode,
       issuerKeypair.publicKey()
@@ -82,14 +92,16 @@ export class DisbursementServices implements IDisbursementService {
       issuer: this.disbursementValues.assetIssuer,
     });
     const disbursementAddress = await getDistributionAddress(
-      this.disbursementValues.tenantName
+      this.disbursementValues.tenantName,
+      this.disbursementValues.baseUrl
     );
     await transfer_asset(
       disbursementAddress,
       asset,
       amount,
       this.disbursementValues.assetSecret,
-      horizonServer
+      this.horizonServer,
+      this.network
     );
   }
 
