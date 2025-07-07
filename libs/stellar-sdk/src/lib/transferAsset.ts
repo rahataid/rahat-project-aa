@@ -15,7 +15,8 @@ export const transfer_asset = async (
   asset: Asset,
   amount: string,
   assetSecret: string,
-  horizonServer: string
+  horizonServer: string,
+  network: string
 ) => {
   const issuerKeypair = Keypair.fromSecret(assetSecret);
 
@@ -24,7 +25,8 @@ export const transfer_asset = async (
 
   const transaction = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: Networks.TESTNET,
+    networkPassphrase:
+      network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
   })
     .addOperation(
       Operation.payment({
