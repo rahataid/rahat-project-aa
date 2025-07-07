@@ -12,7 +12,7 @@ import { stdin as input, stdout as output } from 'process';
 
 // Constants for the asset (e.g., Rahat on testnet)
 const ASSET_CODE = 'RAHAT';
-const ASSET_ISSUER = 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE'; // Testnet Rahat issuer
+const ASSET_ISSUER = 'GCCZSP4KZVKIJLTY7HZS6TVNBFN6VB55A42HOLJHKCBVQRKDEVETUHHH'; // Testnet Rahat issuer
 
 // Function to add trustline
 export const add_trustline = async (
@@ -25,12 +25,12 @@ export const add_trustline = async (
     // console.log('Public Key:', publicKey);
     // await axios.get(`https://friendbot.stellar.org/?addr=${publicKey}`);
     const usdcAsset = new Asset(ASSET_code, ASSET_Issuer);
-    const server = new Horizon.Server('https://horizon-testnet.stellar.org');
+    const server = new Horizon.Server('https://horizon.stellar.org');
     const account = await server.loadAccount(publicKey);
 
     const transaction = new TransactionBuilder(account, {
       fee: (await server.fetchBaseFee()).toString(),
-      networkPassphrase: Networks.TESTNET,
+      networkPassphrase: Networks.PUBLIC,
     })
       .addOperation(
         Operation.changeTrust({

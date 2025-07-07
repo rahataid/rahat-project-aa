@@ -43,7 +43,8 @@ import { SettingsService } from '@rumsan/settings';
           settings?.value['ASSETCODE'],
           settings?.value['NETWORK'],
           settings?.value['FAUCETSECRETKEY'],
-          settings?.value['FUNDINGAMOUNT']
+          settings?.value['FUNDINGAMOUNT'],
+          settings?.value['HORIZONURL']
         );
       },
       inject: [SettingsService],
@@ -55,7 +56,9 @@ import { SettingsService } from '@rumsan/settings';
         return new TransactionService(
           settings?.value['ASSETCREATOR'],
           settings?.value['ASSETCODE'],
-          settings?.value['ASSETCREATORSECRET']
+          settings?.value['ASSETCREATORSECRET'],
+          settings?.value['HORIZONURL'],
+          settings?.value['NETWORK']
         );
       },
       inject: [SettingsService],
@@ -70,12 +73,17 @@ import { SettingsService } from '@rumsan/settings';
           password: settings?.value['PASSWORD'],
           tenantName: settings?.value['TENANTNAME'],
           baseUrl: settings?.value['BASEURL'],
+          adminBaseUrl: settings?.value['ADMINBASEURL'],
           assetCode: settings?.value['ASSETCODE'],
           assetIssuer: settings?.value['ASSETCREATOR'],
           assetSecret: settings?.value['ASSETCREATORSECRET'],
         };
 
-        return new DisbursementServices(disbursementValues);
+        return new DisbursementServices(
+          disbursementValues,
+          settings?.value['HORIZONURL'],
+          settings?.value['NETWORK']
+        );
       },
       inject: [SettingsService],
     },

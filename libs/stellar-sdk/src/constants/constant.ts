@@ -22,5 +22,3 @@ export const DISBURSEMENT: DisbursementType = {
 export const countryCode = 'ASM';
 
 export const smsRegistrationMessageTemplate = '';
-
-export const horizonServer = 'https://horizon-testnet.stellar.org';
