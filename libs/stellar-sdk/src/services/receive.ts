@@ -9,7 +9,6 @@ import {
 import { add_trustline } from '../lib/addTrustline';
 import { IReceiveService } from '../types';
 import { logger } from '../utils/logger';
-import { horizonServer } from '../constants';
 
 export class ReceiveService implements IReceiveService {
   private assetIssuer: string;
@@ -17,19 +16,22 @@ export class ReceiveService implements IReceiveService {
   private network: string;
   private faucetSecretKey: string;
   private fundingAmount: string;
+  private horizonServer: string;
 
   constructor(
     assetIssuer: string,
     assetCode: string,
     network: string,
     faucetSecretKey: string,
-    fundingAmount: string
+    fundingAmount: string,
+    horizonServer: string
   ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
     this.network = network;
     this.faucetSecretKey = faucetSecretKey;
     this.fundingAmount = fundingAmount;
+    this.horizonServer = horizonServer;
   }
 
   public async getAssetInfo(): Promise<string> {
@@ -47,7 +49,8 @@ export class ReceiveService implements IReceiveService {
       keypair.secretKey,
       this.assetIssuer,
       this.assetCode,
-      horizonServer
+      this.horizonServer,
+      this.network
     );
     return keypair;
   }
@@ -66,6 +69,7 @@ export class ReceiveService implements IReceiveService {
 
       if (!accountExists) {
         logger.warn('Funding account');
+
         await this.fundAccount(
           walletAddress,
           this.fundingAmount as string,
@@ -81,7 +85,8 @@ export class ReceiveService implements IReceiveService {
           receiverSecretKey as string,
           this.assetIssuer,
           this.assetCode,
-          horizonServer
+          this.horizonServer,
+          this.network
         ));
       return { message: 'Funded successfully' };
     } catch (error) {
@@ -95,7 +100,7 @@ export class ReceiveService implements IReceiveService {
     faucetSecretKey: string
   ) {
     try {
-      const server = new Horizon.Server(horizonServer);
+      const server = new Horizon.Server(this.horizonServer);
       const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
       const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
 
@@ -119,6 +124,7 @@ export class ReceiveService implements IReceiveService {
       logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
       return { success: 'XLM sent to account', tx };
     } catch (error: any) {
+      console.log(error.response);
       logger.error(`Error in fundAccount: ${error.message}`, error.stack);
       if (error.response?.data?.extras) {
         logger.error('Stellar error details:', error.response.data.extras);
@@ -130,7 +136,7 @@ export class ReceiveService implements IReceiveService {
   public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
     try {
       const asset = new Asset(this.assetCode, this.assetIssuer);
-      const server = new Horizon.Server(horizonServer);
+      const server = new Horizon.Server(this.horizonServer);
 
       const senderKeypair = Keypair.fromSecret(senderSk);
       const senderAccount = await server.loadAccount(senderKeypair.publicKey());
@@ -138,7 +144,8 @@ export class ReceiveService implements IReceiveService {
 
       const transaction = new TransactionBuilder(senderAccount, {
         fee: (await server.fetchBaseFee()).toString(),
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase:
+          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(
           Operation.payment({
@@ -163,7 +170,7 @@ export class ReceiveService implements IReceiveService {
 
   public async getAccountBalance(wallet: string) {
     try {
-      const server = new Horizon.Server(horizonServer);
+      const server = new Horizon.Server(this.horizonServer);
       const account = await server.accounts().accountId(wallet).call();
       return account.balances;
     } catch (error: any) {
@@ -173,7 +180,7 @@ export class ReceiveService implements IReceiveService {
 
   public async checkAccountExists(wallet: string): Promise<boolean> {
     try {
-      const server = new Horizon.Server(horizonServer);
+      const server = new Horizon.Server(this.horizonServer);
       await server.accounts().accountId(wallet).call();
       return true;
     } catch (error: any) {

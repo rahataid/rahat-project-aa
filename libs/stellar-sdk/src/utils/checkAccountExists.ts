@@ -1,7 +1,9 @@
 import { Horizon } from '@stellar/stellar-sdk';
-import { horizonServer } from '../constants';
 
-export const checkAccountExists = async (wallet: string): Promise<boolean> => {
+export const checkAccountExists = async (
+  wallet: string,
+  horizonServer: string
+): Promise<boolean> => {
   try {
     const server = new Horizon.Server(horizonServer);
     await server.accounts().accountId(wallet).call();

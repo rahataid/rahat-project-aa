@@ -25,6 +25,7 @@ export const RECEIVER = {
 export const STELLAR = {
   ASSET: '/assets',
   TENANATS: '/tenants',
+  ORGANIZATION: '/organization',
 };
 
 export const TENANATS = {

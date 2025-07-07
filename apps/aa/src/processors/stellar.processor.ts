@@ -197,7 +197,6 @@ export class StellarProcessor {
           batch,
           (await this.getFromSettings('FUNDINGAMOUNT')) as string,
           (await this.getFromSettings('FAUCETSECRETKEY')) as string,
-          (await this.getFromSettings('NETWORK')) as string,
           (await this.getFromSettings('SERVER')) as string
         );
         this.logger.log(`Completed batch of ${batch.length} wallets`);

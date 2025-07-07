@@ -7,7 +7,6 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { BeneficiaryWallet } from '../types';
-import { horizonServer } from '../constants';
 import { logger } from '../utils/logger';
 import { checkAccountExists } from '../utils/checkAccountExists';
 
@@ -15,7 +14,8 @@ export const fundAccountXlm = async (
   keys: BeneficiaryWallet[],
   amount: string,
   faucetSecretKey: string,
-  network: string
+  network: string,
+  horizonServer: string
 ): Promise<string> => {
   const server = new Horizon.Server(horizonServer);
   if (!faucetSecretKey) {
@@ -33,7 +33,7 @@ export const fundAccountXlm = async (
   await Promise.all(
     keys.map(async (k) => {
       // Skip if account exists
-      if (await checkAccountExists(k.address)) {
+      if (await checkAccountExists(k.address, horizonServer)) {
         logger.info(`Account exists, skipping funding ${k.address}`);
       } else {
         // If account doesn't exist, then create account

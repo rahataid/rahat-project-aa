@@ -11,10 +11,10 @@ import {
 import { BeneficiaryWallet, ITransactionService } from '../types';
 import { logger } from '../utils/logger';
 import { transfer_asset } from '../lib/transferAsset';
-import { horizonServer } from '../constants';
 import { add_trustline } from '../lib/addTrustline';
 import { fundAccountXlm } from '../lib/internalXlmFaucet';
 import { checkAccountExists } from '../utils/checkAccountExists';
+import { sleep } from '../utils/sleep';
 
 export class TransactionService implements ITransactionService {
   // Initialize Horizon server
@@ -22,11 +22,21 @@ export class TransactionService implements ITransactionService {
   private assetIssuer: string;
   private assetCode: string;
   private assetSecret: string;
+  private horizonServer: string;
+  private network: string;
 
-  constructor(assetIssuer: string, assetCode: string, assetSecret: string) {
+  constructor(
+    assetIssuer: string,
+    assetCode: string,
+    assetSecret: string,
+    horizonServer: string,
+    network: string
+  ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
     this.assetSecret = assetSecret;
+    this.horizonServer = horizonServer;
+    this.network = network;
     this.server = new Horizon.Server(horizonServer);
   }
 
@@ -68,7 +78,10 @@ export class TransactionService implements ITransactionService {
 
   public async hasTrustline(publicKey: string): Promise<boolean> {
     try {
-      const accountExists = await checkAccountExists(publicKey);
+      const accountExists = await checkAccountExists(
+        publicKey,
+        this.horizonServer
+      );
 
       if (!accountExists) {
         logger.warn('Account does not exist');
@@ -95,7 +108,10 @@ export class TransactionService implements ITransactionService {
 
   public async rahatFaucetService(walletAddress: string, amount: string) {
     try {
-      const accountExists = await checkAccountExists(walletAddress);
+      const accountExists = await checkAccountExists(
+        walletAddress,
+        this.horizonServer
+      );
 
       if (!accountExists) throw new Error('Account does not exist');
 
@@ -108,7 +124,8 @@ export class TransactionService implements ITransactionService {
         new Asset(this.assetCode, this.assetIssuer),
         amount,
         this.assetSecret,
-        horizonServer
+        this.horizonServer,
+        this.network
       );
 
       return { message: 'Funded successfully' };
@@ -121,7 +138,6 @@ export class TransactionService implements ITransactionService {
     keys: BeneficiaryWallet[],
     amount: string,
     faucetSecretKey: string,
-    network: string,
     sorobanServer: string
   ) {
     try {
@@ -130,13 +146,15 @@ export class TransactionService implements ITransactionService {
         keys,
         amount,
         faucetSecretKey,
-        network
+        this.network,
+        this.horizonServer
       );
 
       // Wait for transaction confirmation
-      await this.waitForTransactionConfirmation(txHash, sorobanServer);
+      await this.waitForTransactionConfirmation(txHash);
 
       // Add trustline for all wallet addresses
+
       await Promise.all(
         keys.map(async (k) => {
           await add_trustline(
@@ -144,7 +162,8 @@ export class TransactionService implements ITransactionService {
             k.secret,
             this.assetIssuer,
             this.assetCode,
-            horizonServer
+            this.horizonServer,
+            this.network
           );
         })
       );
@@ -158,32 +177,38 @@ export class TransactionService implements ITransactionService {
   }
 
   private async waitForTransactionConfirmation(
-    transactionHash: string,
-    sorobanServer: string
+    transactionHash: string
   ): Promise<any> {
-    const server = new StellarRpc.Server(sorobanServer);
+    const server = new Horizon.Server(this.horizonServer);
     const startTime = Date.now();
     const timeoutMs = 60000;
     while (Date.now() - startTime < timeoutMs) {
       try {
-        const txResponse = await server.getTransaction(transactionHash);
+        const txResponse = await server
+          .transactions()
+          .transaction(transactionHash)
+          .call();
         logger.info(
-          `Transaction status for transaction ${transactionHash}: ${txResponse.status}`
+          `Transaction status for transaction ${transactionHash}: ${txResponse.successful}`
         );
 
-        if (txResponse.status === 'SUCCESS') {
+        if (txResponse.successful) {
           return txResponse;
-        } else if (txResponse.status === 'FAILED') {
-          logger.error(`Transaction failed: ${JSON.stringify(txResponse)}`);
         } else {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          logger.info(`Retrying ${transactionHash}`);
+          logger.error(`Transaction failed: ${JSON.stringify(txResponse)}`);
+          throw new Error(`Transaction failed: ${txResponse.result_xdr}`);
         }
       } catch (error: any) {
-        logger.error(
-          `Error checking transaction status for transaction ${transactionHash}: ${error.message}`
-        );
-        throw error;
+        if (error.response && error.response.status === 404) {
+          // Transaction not found yet, wait and retry
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          logger.info(`Transaction not found yet, retrying ${transactionHash}`);
+        } else {
+          logger.error(
+            `Error checking transaction status for transaction ${transactionHash}: ${error.message}`
+          );
+          throw error;
+        }
       }
     }
     throw new Error(

@@ -13,7 +13,8 @@ export const add_trustline = async (
   secretKey: string,
   ASSET_Issuer: string,
   ASSET_code: string,
-  horizonServer: string
+  horizonServer: string,
+  network: string
 ) => {
   logger.warn('Adding trustline...');
 
@@ -34,7 +35,8 @@ export const add_trustline = async (
 
   const transaction = new TransactionBuilder(account, {
     fee: (await server.fetchBaseFee()).toString(),
-    networkPassphrase: Networks.TESTNET,
+    networkPassphrase:
+      network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
   })
     .addOperation(
       Operation.changeTrust({
