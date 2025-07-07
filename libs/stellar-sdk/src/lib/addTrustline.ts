@@ -15,6 +15,7 @@ export const add_trustline = async (
   ASSET_code: string,
   horizonServer: string
 ) => {
+  try {
   logger.warn('Adding trustline...');
 
   if (!ASSET_code || !ASSET_Issuer) {
@@ -48,4 +49,9 @@ export const add_trustline = async (
 
   await server.submitTransaction(transaction);
   logger.warn('Added trustline successfully.');
+    
+  } catch (error) {
+    logger.error('Error adding trustline:', error);
+    throw error;
+  }
 };

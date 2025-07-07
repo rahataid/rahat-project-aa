@@ -31,12 +31,24 @@ import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
 import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
+import { canProcessJob } from '../utils/bullUtils';
+
+interface BatchInfo {
+  batchIndex: number;
+  totalBatches: number;
+  batchSize: number;
+  totalWallets: number;
+}
+
+interface InternalFaucetBatchJob {
+  wallets: BeneficiaryWallet[];
+  batchInfo: BatchInfo;
+}
 
 @Processor(BQUEUE.STELLAR)
 @Injectable()
 export class StellarProcessor {
   private readonly logger = Logger;
-  private batchSize = 3;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -178,33 +190,84 @@ export class StellarProcessor {
 
   @Process({
     name: JOBS.STELLAR.INTERNAL_FAUCET_TRUSTLINE_QUEUE,
-    concurrency: 10,
+    concurrency: 1,
   })
-  async internalFaucetAndTrustline(job: Job<BeneficiaryWallet[]>) {
+  async internalFaucetAndTrustline(job: Job<InternalFaucetBatchJob>) {
+    const { wallets, batchInfo } = job.data;
+
+
+    const canProceed = await canProcessJob({
+      ...job,
+      data: {
+        ...job.data,
+        ...batchInfo
+      },
+    }, this.logger);
+
+    if (!canProceed) {
+      this.logger.warn('Skipping job due to high load');
+      return;
+    }
+
     this.logger.log(
-      'Processing internal faucet and trustline job...',
+      `Processing faucet and trustline batch ${batchInfo.batchIndex}/${batchInfo.totalBatches} with ${wallets.length} wallets...`,
       StellarProcessor.name
     );
 
-    const wallets = job.data;
-
-    const batches = this.batchWalletAddresses(wallets);
+    const startTime = Date.now();
 
     try {
-      for (const batch of batches) {
-        this.logger.log(`Processing batch of ${batch.length} wallets...`);
-        await this.transactionService.batchFundAccountXlm(
-          batch,
-          (await this.getFromSettings('FUNDINGAMOUNT')) as string,
-          (await this.getFromSettings('FAUCETSECRETKEY')) as string,
-          (await this.getFromSettings('NETWORK')) as string,
-          (await this.getFromSettings('SERVER')) as string
-        );
-        this.logger.log(`Completed batch of ${batch.length} wallets`);
-      }
+      await this.transactionService.batchFundAccountXlm(
+        wallets,
+        (await this.getFromSettings('FUNDINGAMOUNT')) as string,
+        (await this.getFromSettings('FAUCETSECRETKEY')) as string,
+        (await this.getFromSettings('NETWORK')) as string,
+        (await this.getFromSettings('SERVER')) as string
+      );
+
+      const duration = Date.now() - startTime;
+
+      await Promise.all(wallets.map(async (wallet) => {
+        const beneficiary = await this.prismaService.beneficiary.findFirst({
+          where: {
+            walletAddress: wallet.address,
+          },
+        });
+
+
+        if (beneficiary) {
+          return await this.prismaService.beneficiary.update({
+            where: {
+              uuid: beneficiary.uuid,
+            },
+            data: {
+              extras: {
+                ...(beneficiary.extras as Record<string, any>),
+                trustlineAdded: true,
+              },
+            },
+          });
+        }
+
+        this.logger.warn(`Beneficiary ${wallet.address} not found`);
+      }));
+
+      this.logger.log(
+        `Successfully completed batch ${batchInfo.batchIndex}/${batchInfo.totalBatches} with ${wallets.length} wallets in ${duration}ms`,
+        StellarProcessor.name
+      );
+
+      const completedWallets = (batchInfo.batchIndex - 1) * batchInfo.batchSize + wallets.length;
+      const progressPercentage = Math.round((completedWallets / batchInfo.totalWallets) * 100);
+      
+      this.logger.log(
+        `Progress: ${completedWallets}/${batchInfo.totalWallets} wallets (${progressPercentage}%)`,
+        StellarProcessor.name
+      );
+
     } catch (error) {
       this.logger.error(
-        `Error in faucet and trustline: ${JSON.stringify(error)}`,
+        `Error in faucet and trustline batch ${batchInfo.batchIndex}/${batchInfo.totalBatches}: ${JSON.stringify(error)}`,
         error.stack,
         StellarProcessor.name
       );
@@ -585,7 +648,7 @@ export class StellarProcessor {
         // if the group updatedA is more then 60 min, then assume the disbursement is failed
         if (
           new Date(group.updatedAt).getTime() >
-          new Date().getTime() - 60 * 60 * 1000
+          new Date().getTime() - 24 * 60 * 60 * 1000
         ) {
           this.logger.log(
             `Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`,
@@ -962,11 +1025,5 @@ export class StellarProcessor {
     return settings.value[key];
   }
 
-  private batchWalletAddresses(walletAddresses: BeneficiaryWallet[]) {
-    const batches = [];
-    for (let i = 0; i < walletAddresses.length; i += this.batchSize) {
-      batches.push(walletAddresses.slice(i, i + this.batchSize));
-    }
-    return batches;
-  }
+
 }
