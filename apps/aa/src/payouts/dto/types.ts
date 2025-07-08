@@ -1,3 +1,5 @@
+import { Payouts, PayoutTransactionStatus } from '@prisma/client';
+
 export type OfframpStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -97,4 +99,9 @@ export type PayoutStats = {
     COMPLETED: number;
     NOT_COMPLETED: number;
   };
+};
+
+export type EnrichedPayout = Payouts & {
+  beneficiaryRedeem?: { status: PayoutTransactionStatus }[];
+  redeemStatus: 'FAILED' | 'COMPLETED' | 'NOT_STARTED' | 'PENDING';
 };

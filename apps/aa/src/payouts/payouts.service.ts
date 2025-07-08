@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { BeneficiaryRedeem, Payouts, Prisma } from '@prisma/client';
+import { BeneficiaryRedeem, Payouts, PayoutType, Prisma } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -9,6 +9,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
+  EnrichedPayout,
   IPaymentProvider,
   PayoutStats,
 } from './dto/types';
@@ -20,6 +21,7 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
+import { ListPayoutDto } from './dto/list-payout.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -177,15 +179,32 @@ export class PayoutsService {
     }
   }
 
-  async findAll(
-    payload: { page?: number; perPage?: number } = { page: 1, perPage: 10 }
-  ): Promise<PaginatedResult<Payouts>> {
+  async findAll(payload: ListPayoutDto): Promise<PaginatedResult<Payouts>> {
     try {
       this.logger.log('Fetching all payouts');
 
-      const { page, perPage } = payload;
+      const { page, perPage, groupName, payoutType } = payload;
+      const where: Prisma.PayoutsWhereInput = {
+        ...(groupName && {
+          beneficiaryGroupToken: {
+            beneficiaryGroup: {
+              name: {
+                contains: groupName,
+                mode: 'insensitive',
+              },
+            },
+          },
+        }),
+      };
 
+      if (
+        payoutType &&
+        Object.values(PayoutType).includes(payoutType as PayoutType)
+      ) {
+        where.type = payoutType as PayoutType;
+      }
       const query: Prisma.PayoutsFindManyArgs = {
+        where,
         include: {
           beneficiaryGroupToken: {
             select: {
@@ -205,13 +224,18 @@ export class PayoutsService {
               },
             },
           },
+          beneficiaryRedeem: {
+            select: {
+              status: true,
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
         },
       };
 
-      const result: PaginatedResult<Payouts> = await paginate(
+      const result: PaginatedResult<EnrichedPayout> = await paginate(
         this.prisma.payouts,
         query,
         {
@@ -221,7 +245,51 @@ export class PayoutsService {
       );
 
       this.logger.log(`Successfully fetched ${result.data.length} payouts`);
-      return result;
+      const enriched: PaginatedResult<EnrichedPayout> = {
+        ...result,
+        data: result.data.map((payout) => {
+          const statuses = payout.beneficiaryRedeem.map((r) => r.status);
+
+          const redeemStatus:
+            | 'FAILED'
+            | 'COMPLETED'
+            | 'NOT_STARTED'
+            | 'PENDING' = statuses.some((s) =>
+            [
+              'FAILED',
+              'FIAT_TRANSACTION_FAILED',
+              'TOKEN_TRANSACTION_FAILED',
+            ].includes(s)
+          )
+            ? 'FAILED'
+            : statuses.length > 0 &&
+              statuses.every((s) =>
+                [
+                  'COMPLETED',
+                  'FIAT_TRANSACTION_COMPLETED',
+                  'TOKEN_TRANSACTION_COMPLETED',
+                ].includes(s)
+              )
+            ? 'COMPLETED'
+            : statuses.some((s) =>
+                [
+                  'FIAT_TRANSACTION_INITIATED',
+                  'TOKEN_TRANSACTION_INITIATED',
+                ].includes(s)
+              )
+            ? 'PENDING'
+            : 'NOT_STARTED';
+
+          const { beneficiaryRedeem, ...rest } = payout;
+
+          return {
+            ...rest,
+            redeemStatus,
+          };
+        }),
+      };
+
+      return enriched;
     } catch (error) {
       this.logger.error(
         `Failed to fetch payouts: ${error.message}`,
