@@ -28,8 +28,6 @@ export const seedStellar = async () => {
     baseUrl: 'https://api-sdp.stellar.rahat.io',
     adminBaseUrl: 'https://admin-sdp.stellar.rahat.io',
     receiverBaseUrl: 'https://anchor.stellar.rahat.io',
-    friendBotUrl: 'https://friendbot.stellar.org/',
-    demoWalletUrl: 'https://demo-wallet-server.stellar.org',
     horizonUrl: 'https://horizon-testnet.stellar.org',
     assetCreator: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
     assetCreatorSecret:
