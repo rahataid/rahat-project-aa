@@ -65,7 +65,11 @@ export class OfframpService {
       } = await this.httpService.axiosRef.get<{
         success: boolean;
         data: IPaymentProvider[];
-      }>(`${offrampSettings.url}/payment-provider`);
+      }>(`${offrampSettings.url}/payment-provider`, {
+        headers: {
+          'APP_ID': offrampSettings.appId,
+        },
+      });
 
       return data;
     } catch (error) {
@@ -86,7 +90,11 @@ export class OfframpService {
       } = await this.httpService.axiosRef.get<{
         success: boolean;
         data;
-      }>(`${url}/app/${appId}`);
+      }>(`${url}/app/${appId}`, {
+        headers: {
+            'APP_ID': appId,
+        }
+      });
       console.log(data);
 
       return data.wallet;
