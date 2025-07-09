@@ -15,7 +15,6 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
-  EnrichedPayout,
   IPaymentProvider,
   PayoutStats,
 } from './dto/types';
@@ -351,7 +350,8 @@ export class PayoutsService {
         this.logger.warn(`Payout not found with UUID: '${uuid}'`);
         throw new RpcException(`Payout with UUID '${uuid}' not found`);
       }
-
+      const calculatedStatus = calculatePayoutStatus(payout);
+      await this.syncPayoutStatus(payout, calculatedStatus);
       const failedPayoutRequests =
         await this.beneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID(
           uuid
@@ -396,7 +396,9 @@ export class PayoutsService {
 
     return (
       payout.beneficiaryRedeem.length > 0 &&
-      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2 &&
+      payout.beneficiaryRedeem.length ===
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
+          2 &&
       payout.beneficiaryRedeem.every((r) => r.isCompleted)
     );
   }
