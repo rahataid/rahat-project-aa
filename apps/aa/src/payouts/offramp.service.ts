@@ -113,7 +113,7 @@ export class OfframpService {
         offrampPayload,
         {
           headers: {
-            'app-id': appId,
+            'APP_ID': appId,
           },
         }
       );
