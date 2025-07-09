@@ -225,6 +225,25 @@ export class PayoutsService {
               createdBy: true,
               beneficiaryGroup: {
                 select: {
+                  name: true,
+                  tokensReserved: {
+                    select: {
+                      numberOfTokens: true,
+                      isDisbursed: true,
+                      payoutId: true,
+                      id: true,
+                      uuid: true,
+                      title: true,
+                      status: true,
+                      groupId: true,
+                      createdBy: true,
+                      createdAt: true,
+                      updatedAt: true,
+                    },
+                  },
+                  groupPurpose: true,
+                  id: true,
+                  uuid: true,
                   _count: {
                     select: { beneficiaries: true },
                   },
