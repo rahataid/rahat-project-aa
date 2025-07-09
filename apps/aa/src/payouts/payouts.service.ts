@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { BeneficiaryRedeem, Payouts, Prisma } from '@prisma/client';
+import {
+  BeneficiaryRedeem,
+  Payouts,
+  PayoutTransactionStatus,
+  PayoutType,
+  Prisma,
+} from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -20,6 +26,12 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
+import { ListPayoutDto } from './dto/list-payout.dto';
+import {
+  calculatePayoutStatus,
+  PayoutWithRelations,
+  RedeemStatus,
+} from '../utils/getBeneficiaryRedemStatus';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -178,14 +190,31 @@ export class PayoutsService {
   }
 
   async findAll(
-    payload: { page?: number; perPage?: number } = { page: 1, perPage: 10 }
-  ): Promise<PaginatedResult<Payouts>> {
+    payload: ListPayoutDto
+  ): Promise<PaginatedResult<Omit<PayoutWithRelations, 'beneficiaryRedeem'>>> {
     try {
-      this.logger.log('Fetching all payouts');
+      const { page, perPage, groupName, payoutType } = payload;
 
-      const { page, perPage } = payload;
+      this.logger.log('Fetching all payouts');
+      const where: Prisma.PayoutsWhereInput = {
+        ...(groupName && {
+          beneficiaryGroupToken: {
+            beneficiaryGroup: {
+              name: {
+                contains: groupName,
+                mode: 'insensitive',
+              },
+            },
+          },
+        }),
+        ...(payoutType &&
+          Object.values(PayoutType).includes(payoutType as PayoutType) && {
+            type: payoutType as PayoutType,
+          }),
+      };
 
       const query: Prisma.PayoutsFindManyArgs = {
+        where,
         include: {
           beneficiaryGroupToken: {
             select: {
@@ -195,39 +224,71 @@ export class PayoutsService {
               isDisbursed: true,
               createdBy: true,
               beneficiaryGroup: {
-                include: {
+                select: {
                   _count: {
-                    select: {
-                      beneficiaries: true,
-                    },
+                    select: { beneficiaries: true },
                   },
                 },
               },
             },
           },
+          beneficiaryRedeem: {
+            select: { status: true },
+          },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
       };
 
-      const result: PaginatedResult<Payouts> = await paginate(
-        this.prisma.payouts,
-        query,
-        {
-          page,
-          perPage,
-        }
+      const result = await paginate(this.prisma.payouts, query, {
+        page: page,
+        perPage: perPage,
+      });
+
+      const enrichedData = await Promise.all(
+        result.data.map(async (payout: PayoutWithRelations) => {
+          //  Skip calculation if already completed
+          if (payout.status === 'COMPLETED') {
+            return payout;
+          }
+          const calculatedStatus = calculatePayoutStatus(payout);
+          await this.syncPayoutStatus(payout, calculatedStatus);
+
+          // Remove beneficiaryRedeem from result, add redeemStatus
+          const { beneficiaryRedeem, ...rest } = payout;
+          return {
+            ...rest,
+          };
+        })
       );
 
-      this.logger.log(`Successfully fetched ${result.data.length} payouts`);
-      return result;
-    } catch (error) {
+      this.logger.log(
+        `Successfully fetched and synced ${enrichedData.length} payouts`
+      );
+
+      return {
+        ...result,
+        data: enrichedData,
+      };
+    } catch (error: any) {
       this.logger.error(
         `Failed to fetch payouts: ${error.message}`,
         error.stack
       );
       throw error;
+    }
+  }
+
+  //  Sync payout status in DB if changed, and update object
+  async syncPayoutStatus(
+    payout: PayoutWithRelations,
+    newStatus: RedeemStatus
+  ): Promise<void> {
+    if (payout.status !== newStatus) {
+      await this.prisma.payouts.update({
+        where: { uuid: payout.uuid },
+        data: { status: newStatus },
+      });
+      payout.status = newStatus;
     }
   }
 
@@ -289,7 +350,8 @@ export class PayoutsService {
         this.logger.warn(`Payout not found with UUID: '${uuid}'`);
         throw new RpcException(`Payout with UUID '${uuid}' not found`);
       }
-
+      const calculatedStatus = calculatePayoutStatus(payout);
+      await this.syncPayoutStatus(payout, calculatedStatus);
       const failedPayoutRequests =
         await this.beneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID(
           uuid
@@ -334,6 +396,9 @@ export class PayoutsService {
 
     return (
       payout.beneficiaryRedeem.length > 0 &&
+      payout.beneficiaryRedeem.length ===
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
+          2 &&
       payout.beneficiaryRedeem.every((r) => r.isCompleted)
     );
   }

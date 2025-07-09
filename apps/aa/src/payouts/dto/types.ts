@@ -1,3 +1,5 @@
+import { Payouts, PayoutTransactionStatus } from '@prisma/client';
+
 export type OfframpStatus =
   | 'PENDING'
   | 'PROCESSING'
