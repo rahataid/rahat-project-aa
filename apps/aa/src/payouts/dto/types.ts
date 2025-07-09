@@ -23,6 +23,7 @@ export type bankDetails = {
 export interface BeneficiaryPayoutDetails {
   walletAddress: string;
   amount: number;
+  phoneNumber: string;
   bankDetails: bankDetails;
 }
 
