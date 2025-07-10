@@ -19,6 +19,7 @@ export const seedStellar = async () => {
   const stellarValue = {
     tenantName: 'sandab',
     server: 'https://soroban-testnet.stellar.org',
+    // server: 'https://mainnet.sorobanrpc.com',
     keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
     email: 'owner@sandab.stellar.rahat.io',
     password: 'Password123!',
