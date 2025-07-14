@@ -170,7 +170,7 @@ export class BeneficiaryService {
               beneficiaries: true,
             },
           },
-          beneficiaries: true,
+          // beneficiaries: true,
           tokensReserved: true,
         },
         orderBy,
@@ -181,27 +181,29 @@ export class BeneficiaryService {
       }
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        benfGroups
-      )
-    );
+    return benfGroups;
 
-    res.data = res.data.map((group) => {
-      let updatedGroup = group;
-      benfGroups.data.forEach((benfGroup: any) => {
-        if (group.uuid === benfGroup.uuid) {
-          updatedGroup = {
-            ...group,
-            tokensReserved: benfGroup.tokensReserved,
-          };
-        }
-      });
-      return updatedGroup;
-    });
+    // const res = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+    //     benfGroups
+    //   )
+    // );
 
-    return res;
+    // res.data = res.data.map((group) => {
+    //   let updatedGroup = group;
+    //   benfGroups.data.forEach((benfGroup: any) => {
+    //     if (group.uuid === benfGroup.uuid) {
+    //       updatedGroup = {
+    //         ...group,
+    //         tokensReserved: benfGroup.tokensReserved,
+    //       };
+    //     }
+    //   });
+    //   return updatedGroup;
+    // });
+
+    // return res;
   }
 
   async findByUUID(uuid: UUID) {
@@ -346,22 +348,22 @@ export class BeneficiaryService {
       user,
     } = payload;
 
-      const isAlreadyReserved =
-        await this.prisma.beneficiaryGroupTokens.findUnique({
-          where: { groupId: beneficiaryGroupId },
-        });
+    const isAlreadyReserved =
+      await this.prisma.beneficiaryGroupTokens.findUnique({
+        where: { groupId: beneficiaryGroupId },
+      });
 
-      if (isAlreadyReserved) {
-        throw new RpcException('Token already reserved.');
-      }
+    if (isAlreadyReserved) {
+      throw new RpcException('Token already reserved.');
+    }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: beneficiaryGroupId,
-      }
+      },
     });
 
-    if(!benfGroup) {
+    if (!benfGroup) {
       throw new RpcException('Beneficiary group not found.');
     }
 
