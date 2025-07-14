@@ -9,6 +9,7 @@ import {
 import { add_trustline } from '../lib/addTrustline';
 import { IReceiveService } from '../types';
 import { logger } from '../utils/logger';
+import axios from 'axios';
 
 export class ReceiveService implements IReceiveService {
   private assetIssuer: string;
@@ -17,6 +18,8 @@ export class ReceiveService implements IReceiveService {
   private faucetSecretKey: string;
   private fundingAmount: string;
   private horizonServer: string;
+  private faucetBaseUrl: string;
+  private faucetAuthKey: string;
 
   constructor(
     assetIssuer: string,
@@ -24,7 +27,9 @@ export class ReceiveService implements IReceiveService {
     network: string,
     faucetSecretKey: string,
     fundingAmount: string,
-    horizonServer: string
+    horizonServer: string,
+    faucetBaseUrl: string,
+    faucetAuthKey: string
   ) {
     this.assetIssuer = assetIssuer;
     this.assetCode = assetCode;
@@ -32,6 +37,8 @@ export class ReceiveService implements IReceiveService {
     this.faucetSecretKey = faucetSecretKey;
     this.fundingAmount = fundingAmount;
     this.horizonServer = horizonServer;
+    this.faucetBaseUrl = faucetBaseUrl;
+    this.faucetAuthKey = faucetAuthKey;
   }
 
   public async getAssetInfo(): Promise<string> {
@@ -100,34 +107,27 @@ export class ReceiveService implements IReceiveService {
     faucetSecretKey: string
   ) {
     try {
-      const server = new Horizon.Server(this.horizonServer);
-      const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
-      const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+      logger.warn(`Requesting faucet funding for ${receiverPk}...`);
 
-      const transaction = new TransactionBuilder(faucetAccount, {
-        fee: (await server.fetchBaseFee()).toString(),
-        networkPassphrase:
-          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
-      })
-        .addOperation(
-          Operation.createAccount({
-            destination: receiverPk,
-            startingBalance: amount,
-          })
-        )
-        .setTimeout(30)
-        .build();
+      const networkName =
+        this.network === 'mainnet' ? 'stellar_mainnet' : 'stellar_testnet';
+      const faucetUrl = `${this.faucetBaseUrl}/faucet/${networkName}/${receiverPk}`;
 
-      transaction.sign(faucetKeypair);
-      const tx = await server.submitTransaction(transaction);
+      const response = await axios.get(faucetUrl, {
+        headers: {
+          Authorization: `Bearer ${this.faucetAuthKey}`,
+        },
+      });
 
-      logger.warn(`Funded ${receiverPk} with ${amount} XLM`);
-      return { success: 'XLM sent to account', tx };
+      logger.warn(`Successfully funded ${receiverPk} from external faucet`);
+      return {
+        success: 'XLM sent to account from external faucet',
+        response: response.data,
+      };
     } catch (error: any) {
-      console.log(error.response);
       logger.error(`Error in fundAccount: ${error.message}`, error.stack);
-      if (error.response?.data?.extras) {
-        logger.error('Stellar error details:', error.response.data.extras);
+      if (error.response?.data) {
+        logger.error('Faucet API error details:', error.response.data);
       }
       throw error;
     }

@@ -646,9 +646,12 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Need dynamic queue
-  async internalFaucetAndTrustline(beneficiaries: { wallets: any[], beneficiaryGroupId: string }): Promise<InternalFaucetResponse> {
+  async internalFaucetAndTrustline(beneficiaries: {
+    wallets: any[];
+    beneficiaryGroupId: string;
+  }): Promise<InternalFaucetResponse> {
     const { wallets, beneficiaryGroupId } = beneficiaries;
-    
+
     if (!wallets || wallets.length === 0) {
       this.logger.warn('No wallets provided for faucet and trustline');
       return {
@@ -659,10 +662,18 @@ export class StellarService {
 
     const batchSize = await this.getBatchSizeFromSettings();
     const batches = this.createWalletBatches(wallets, batchSize);
-    
+
     this.logger.log(
       `Creating ${batches.length} batch jobs for ${wallets.length} wallets (batch size: ${batchSize})`
     );
+
+    // Debug: Log batch creation
+    this.logger.log(
+      `Creating ${batches.length} batches for ${wallets.length} wallets`
+    );
+    batches.forEach((batch, index) => {
+      this.logger.log(`Batch ${index + 1}: ${batch.length} wallets`);
+    });
 
     const jobs = await this.stellarQueue.addBulk(
       batches.map((batch, index) => ({
@@ -697,7 +708,7 @@ export class StellarService {
       message: `Created ${batches.length} batch jobs for ${wallets.length} wallets`,
       batchesCreated: batches.length,
       totalWallets: wallets.length,
-      jobIds: jobs.map(job => job.id),
+      jobIds: jobs.map((job) => job.id),
     };
   }
 
@@ -733,9 +744,11 @@ export class StellarService {
       const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
       const settingsValue = settings?.value as Record<string, any>;
       const batchSize = settingsValue?.FAUCET_BATCH_SIZE;
-      return batchSize && !isNaN(Number(batchSize)) ? Number(batchSize) : 3;
+      return batchSize && !isNaN(Number(batchSize)) ? Number(batchSize) : 2;
     } catch (error) {
-      this.logger.warn('Failed to get batch size from settings, using default value of 3');
+      this.logger.warn(
+        'Failed to get batch size from settings, using default value of 3'
+      );
       return 3;
     }
   }
@@ -747,11 +760,11 @@ export class StellarService {
   private createWalletBatches(wallets: any[], batchSize?: number): any[][] {
     const size = batchSize || this.getBatchSize();
     const batches: any[][] = [];
-    
+
     for (let i = 0; i < wallets.length; i += size) {
       batches.push(wallets.slice(i, i + size));
     }
-    
+
     return batches;
   }
 

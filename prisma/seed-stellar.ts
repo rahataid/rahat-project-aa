@@ -36,6 +36,8 @@ export const seedStellar = async () => {
     fundingAmount: '10',
     network: 'testnet',
     faucetSecretKey: 'SAVNF6EBFM56QSBCYBKKNXOCZASR5QEHO5AMAGEM2NJN4KIZBHIMGA6A',
+    faucetBaseUrl: 'https://api-faucet.rumsan.com',
+    faucetAuthKey: 'faucet_auth_key_1234567890',
   };
 
   try {

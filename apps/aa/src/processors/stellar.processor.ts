@@ -223,7 +223,10 @@ export class StellarProcessor {
         wallets,
         (await this.getFromSettings('FUNDINGAMOUNT')) as string,
         (await this.getFromSettings('FAUCETSECRETKEY')) as string,
-        (await this.getFromSettings('SERVER')) as string
+        (await this.getFromSettings('SERVER')) as string,
+        (await this.getFromSettings('FAUCETBASEURL')) as string,
+        (await this.getFromSettings('FAUCETAUTHKEY')) as string,
+        'external'
       );
 
       const duration = Date.now() - startTime;
@@ -267,6 +270,12 @@ export class StellarProcessor {
 
       this.logger.log(
         `Progress: ${completedWallets}/${batchInfo.totalWallets} wallets (${progressPercentage}%)`,
+        StellarProcessor.name
+      );
+
+      // Debug: Log batch details
+      this.logger.log(
+        `Batch ${batchInfo.batchIndex}/${batchInfo.totalBatches} completed. Batch size: ${batchInfo.batchSize}, Actual wallets in this batch: ${wallets.length}`,
         StellarProcessor.name
       );
     } catch (error) {

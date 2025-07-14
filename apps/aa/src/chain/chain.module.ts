@@ -54,7 +54,9 @@ import { SettingsService } from '@rumsan/settings';
           settings?.value['NETWORK'] || '',
           settings?.value['FAUCETSECRETKEY'] || '',
           settings?.value['FUNDINGAMOUNT'] || 0,
-          settings?.value['HORIZONURL'] || ''
+          settings?.value['HORIZONURL'] || '',
+          settings?.value['FAUCETBASEURL'] || '',
+          settings?.value['FAUCETAUTHKEY'] || ''
         );
       },
       inject: [SettingsService],
