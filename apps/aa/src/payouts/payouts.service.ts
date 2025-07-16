@@ -35,6 +35,7 @@ import {
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
+const ONE_TOKEN_VALUE = 12;
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
@@ -56,42 +57,72 @@ export class PayoutsService {
    */
   async getPayoutStats(): Promise<PayoutStats> {
     try {
-      const [fspCount, vendorCount, notCompleted, completed] =
-        await Promise.all([
-          this.prisma.beneficiaryRedeem.count({
-            where: {
-              payout: {
-                type: 'FSP',
-              },
+      const [
+        fspCount,
+        vendorCount,
+        notCompleted,
+        completed,
+        tokenAssigned,
+        totalTokenDisbursed,
+      ] = await Promise.all([
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            payout: {
+              type: 'FSP',
             },
-          }),
-          this.prisma.beneficiaryRedeem.count({
-            where: {
-              payout: {
-                type: 'VENDOR',
-              },
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            payout: {
+              type: 'VENDOR',
             },
-          }),
-          this.prisma.beneficiaryRedeem.count({
-            where: {
-              isCompleted: false,
-            },
-          }),
-          this.prisma.beneficiaryRedeem.count({
-            where: {
-              isCompleted: true,
-            },
-          }),
-        ]);
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            isCompleted: false,
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            isCompleted: true,
+          },
+        }),
+        this.prisma.beneficiaryGroupTokens.aggregate({
+          _sum: {
+            numberOfTokens: true,
+          },
+        }),
+
+        this.prisma.beneficiaryGroupTokens.aggregate({
+          where: {
+            status: 'DISBURSED',
+          },
+          _sum: {
+            numberOfTokens: true,
+          },
+        }),
+      ]);
 
       return {
-        payoutTypes: {
-          FSP: fspCount,
-          VENDOR: vendorCount,
+        payoutOverview: {
+          payoutTypes: {
+            FSP: fspCount,
+            VENDOR: vendorCount,
+          },
+          completionStatus: {
+            COMPLETED: completed,
+            NOT_COMPLETED: notCompleted,
+          },
         },
-        completionStatus: {
-          COMPLETED: completed,
-          NOT_COMPLETED: notCompleted,
+        payoutStats: {
+          tokenAssigned: tokenAssigned._sum.numberOfTokens,
+          tokenDisbursed: totalTokenDisbursed._sum.numberOfTokens,
+          oneTokenValue: `Rs. ${ONE_TOKEN_VALUE}`,
+          amountDisbursed:
+            totalTokenDisbursed._sum.numberOfTokens * ONE_TOKEN_VALUE,
+          projectBalance: tokenAssigned._sum.numberOfTokens * ONE_TOKEN_VALUE,
         },
       };
     } catch (error) {
