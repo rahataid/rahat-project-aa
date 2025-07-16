@@ -272,6 +272,7 @@ export class BeneficiaryService {
   }
 
   // *****  beneficiary groups ********** //
+  //not recommended
   async getOneGroup(uuid: UUID) {
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
@@ -313,6 +314,27 @@ export class BeneficiaryService {
     });
 
     return data;
+  }
+
+  //recommended for better performance
+  async getOneGroupV2(uuid: UUID) {
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: {
+        uuid: uuid,
+        deletedAt: null,
+      },
+      include: {
+        tokensReserved: true,
+        beneficiaries: {
+          include: {
+            beneficiary: true,
+          },
+        },
+      },
+    });
+
+    if (!benfGroup) throw new RpcException('Beneficiary group not found.');
+    return benfGroup;
   }
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
@@ -377,9 +399,9 @@ export class BeneficiaryService {
     }
 
     return this.prisma.$transaction(async () => {
-      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
+      const group = await this.getOneGroupV2(beneficiaryGroupId as UUID);
 
-      if (!group || !group?.groupedBeneficiaries) {
+      if (!group || !group?.beneficiaries) {
         throw new RpcException(
           'No beneficiaries found in the specified group.'
         );
@@ -395,9 +417,7 @@ export class BeneficiaryService {
       //     throw new RpcException('Token already assigned to beneficiary.');
       // }
 
-      const benfIds = group?.groupedBeneficiaries?.map(
-        (d: any) => d?.beneficiaryId
-      );
+      const benfIds = group?.beneficiaries?.map((d: any) => d?.beneficiaryId);
 
       await this.prisma.beneficiary.updateMany({
         where: {
@@ -445,11 +465,11 @@ export class BeneficiaryService {
     );
 
     const formattedData: Array<
-      DataItem & { group: ReturnType<typeof this.getOneGroup> }
+      DataItem & { group: ReturnType<typeof this.getOneGroupV2> }
     > = [];
 
     for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID);
+      const group = await this.getOneGroupV2(d['groupId'] as UUID);
       formattedData.push({
         ...d,
         group,
@@ -470,7 +490,9 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    const groupDetails = await this.getOneGroupV2(
+      benfGroupToken.groupId as UUID
+    );
 
     return {
       ...benfGroupToken,
