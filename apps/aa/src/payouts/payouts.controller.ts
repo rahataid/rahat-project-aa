@@ -6,6 +6,7 @@ import { OfframpService } from './offramp.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
+import { ListPayoutDto } from './dto/list-payout.dto';
 
 @Controller()
 export class PayoutsController {
@@ -20,8 +21,8 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.LIST, uuid: process.env.PROJECT_ID })
-  findAll() {
-    return this.payoutsService.findAll();
+  findAll(@Payload() payload: ListPayoutDto) {
+    return this.payoutsService.findAll(payload);
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET, uuid: process.env.PROJECT_ID })

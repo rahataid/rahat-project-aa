@@ -12,8 +12,10 @@ export interface FSPPayoutDetails {
     accountNumber: string;
     bankName: string;
   };
+  beneficiaryPhoneNumber?: string;
   payoutUUID: string;
   payoutProcessorId: string;
+  offrampType: string;
   beneficiaryRedeemUUID?: string;
   amount: number;
 }
