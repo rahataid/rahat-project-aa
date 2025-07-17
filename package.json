@@ -84,6 +84,7 @@
     "openmeteo": "^1.1.3",
     "redis-lock": "^1.0.0",
     "reflect-metadata": "^0.1.14",
+    "rpc": "link:@stellar/stellar-sdk/rpc",
     "rxjs": "^7.8.1",
     "tslib": "^2.6.2",
     "winston": "^3.17.0"

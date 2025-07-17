@@ -5,6 +5,7 @@ import {
   Operation,
   TimeoutInfinite,
   TransactionBuilder,
+  rpc,
 } from '@stellar/stellar-sdk';
 import { BeneficiaryWallet } from '../types';
 import { logger } from '../utils/logger';
@@ -61,12 +62,13 @@ const fundAccountsInternal = async (
   network: string,
   horizonServer: string
 ): Promise<string> => {
+  const rpcServer = new rpc.Server('https://soroban-testnet.stellar.org/');
   const server = new Horizon.Server(horizonServer);
   if (!faucetSecretKey) {
     logger.error('FAUCET_SECRET_KEY is not set in environment variables');
   }
   const faucetKeypair = Keypair.fromSecret(faucetSecretKey);
-  const faucetAccount = await server.loadAccount(faucetKeypair.publicKey());
+  const faucetAccount = await rpcServer.getAccount(faucetKeypair.publicKey());
 
   let txBuilder = new TransactionBuilder(faucetAccount, {
     fee: (await server.fetchBaseFee()).toString(),
@@ -95,7 +97,7 @@ const fundAccountsInternal = async (
 
   const tx = txBuilder.build();
   tx.sign(faucetKeypair);
-  const txnResult = await server.submitTransaction(tx);
+  const txnResult = await rpcServer.sendTransaction(tx);
 
   logger.info(`Accounts created or funded successfully: ${txnResult.hash}`);
   return txnResult.hash;

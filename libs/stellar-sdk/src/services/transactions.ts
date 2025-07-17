@@ -141,7 +141,7 @@ export class TransactionService implements ITransactionService {
     sorobanServer: string,
     faucetBaseUrl?: string,
     faucetAuthKey?: string,
-    faucetType: 'internal' | 'external' = 'internal'
+    faucetType: 'internal' | 'external' = 'external'
   ) {
     try {
       // Fund account with XLM

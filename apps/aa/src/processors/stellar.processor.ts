@@ -226,7 +226,7 @@ export class StellarProcessor {
         (await this.getFromSettings('SERVER')) as string,
         (await this.getFromSettings('FAUCETBASEURL')) as string,
         (await this.getFromSettings('FAUCETAUTHKEY')) as string,
-        'external'
+        'internal'
       );
 
       const duration = Date.now() - startTime;
