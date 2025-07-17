@@ -380,6 +380,7 @@ export class PayoutsService {
                           uuid: true,
                           walletAddress: true,
                           extras: true,
+                          phone: true,
                         },
                       },
                     },
@@ -516,6 +517,7 @@ export class PayoutsService {
           return {
             amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
+            phoneNumber: benfToGroup.beneficiary?.phone || benfToGroup.beneficiary?.extras?.phone,
             bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
               accountNumber:
@@ -553,12 +555,14 @@ export class PayoutsService {
     offrampWalletAddress: string;
     BeneficiaryPayoutDetails: BeneficiaryPayoutDetails[];
     payoutProcessorId: string;
+    offrampType: string;
   }) {
     const {
       uuid,
       offrampWalletAddress,
       BeneficiaryPayoutDetails,
       payoutProcessorId,
+      offrampType,
     } = payload;
 
     const stellerOfframpQueuePayload: FSPPayoutDetails[] =
@@ -569,6 +573,7 @@ export class PayoutsService {
         payoutUUID: uuid,
         payoutProcessorId: payoutProcessorId,
         offrampWalletAddress,
+        offrampType,
       }));
 
     const d = await this.stellarService.addBulkToTokenTransferQueue(
@@ -587,6 +592,11 @@ export class PayoutsService {
       );
     }
 
+    const payoutExtras = payoutDetails.extras as {
+      paymentProviderType: string;
+      paymentProviderName: string;
+    };
+
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
@@ -603,7 +613,9 @@ export class PayoutsService {
         beneficiaryBankDetails: beneficiary.bankDetails,
         payoutUUID: uuid,
         payoutProcessorId: payoutDetails.payoutProcessorId,
+        beneficiaryPhoneNumber: beneficiary.phoneNumber,
         offrampWalletAddress,
+        offrampType: payoutExtras.paymentProviderType,
       }));
 
     await this.stellarService.addBulkToTokenTransferQueue(
@@ -989,6 +1001,7 @@ export class PayoutsService {
       beneficiaryWalletAddress: string;
       numberOfAttempts: number;
       transactionHash?: string;
+      offrampType: string;
       error: string;
     };
 
@@ -999,13 +1012,17 @@ export class PayoutsService {
       );
     }
 
+    const beneficiaryPhoneNumber = benfRedeemRequest.Beneficiary.phone || (benfRedeemRequest.Beneficiary.extras as any)?.phone;
+
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
+      offrampType: info.offrampType,
       beneficiaryBankDetails: {
         accountName: benfExtras.bank_ac_name,
         accountNumber: benfExtras.bank_ac_number,
         bankName: benfExtras.bank_name,
       },
+      beneficiaryPhoneNumber,
       beneficiaryWalletAddress: benfRedeemRequest.beneficiaryWalletAddress,
       offrampWalletAddress: info.offrampWalletAddress,
       payoutUUID: benfRedeemRequest.payoutId,

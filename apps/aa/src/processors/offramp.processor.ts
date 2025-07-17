@@ -7,9 +7,7 @@ import { FSPOfframpDetails } from './types';
 import { getBankId } from '../utils/bank';
 import { BeneficiaryRedeem } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import {
-  CipsResponseData,
-} from '../payouts/dto/types';
+import { CipsResponseData } from '../payouts/dto/types';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -25,7 +23,7 @@ export class OfframpProcessor {
     const fspOfframpDetails = job.data;
 
     this.logger.log(
-      `Processing offramp request for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
+      `Processing offramp request of type ${fspOfframpDetails.offrampType} for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
     );
 
     const log = fspOfframpDetails.beneficiaryRedeemUUID
@@ -51,6 +49,7 @@ export class OfframpProcessor {
           info: {
             transactionHash: fspOfframpDetails.transactionHash,
             offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
+            offrampType: fspOfframpDetails.offrampType, // <--- It's a offramp process type like CIPS, VPA, etc.
             beneficiaryWalletAddress:
               fspOfframpDetails.beneficiaryWalletAddress,
             numberOfAttempts: job.attemptsMade + 1,
@@ -71,22 +70,10 @@ export class OfframpProcessor {
         )}`
       );
 
-      // TODO: Need to think about fonepay and other payment providers
-      const offrampRequest = {
-        xref: fspOfframpDetails.payoutUUID,
-        tokenAmount: fspOfframpDetails.amount,
-        paymentProviderId: fspOfframpDetails.payoutProcessorId,
-        transactionHash: fspOfframpDetails.transactionHash,
-        senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
-        paymentDetails: {
-          creditorAgent: getBankId(
-            fspOfframpDetails.beneficiaryBankDetails.bankName
-          ), // <-- TODO: This should be handled by the offramp itself in the future
-          creditorAccount:
-            fspOfframpDetails.beneficiaryBankDetails.accountNumber,
-          creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
-        },
-      };
+      const offrampRequest = await this.generateOfframpPayload(
+        fspOfframpDetails.offrampType,
+        fspOfframpDetails
+      );
 
       this.logger.log(
         `Offramp request payload: ${JSON.stringify(offrampRequest)}`
@@ -112,7 +99,8 @@ export class OfframpProcessor {
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
-        result.transaction.cipsBatchResponse.responseMessage || "Offramp request failed from CIPS.",
+        result.transaction.cipsBatchResponse.responseMessage ||
+          'Offramp request failed from CIPS.',
         job.attemptsMade,
         log.info
       );
@@ -150,6 +138,40 @@ export class OfframpProcessor {
         ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
       },
     });
+  }
+
+  private async generateOfframpPayload(
+    offrampType: string,
+    fspOfframpDetails: FSPOfframpDetails
+  ): Promise<any> {
+    this.logger.log(
+      `Generating offramp payload for ${offrampType} with details: ${JSON.stringify(
+        fspOfframpDetails
+      )}`
+    );
+
+    let offrampRequest: any = {
+      tokenAmount: fspOfframpDetails.amount,
+      paymentProviderId: fspOfframpDetails.payoutProcessorId,
+      transactionHash: fspOfframpDetails.transactionHash,
+      senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
+      xref: fspOfframpDetails.payoutUUID,
+      paymentDetails: {
+        creditorAgent: getBankId(
+          fspOfframpDetails.beneficiaryBankDetails.bankName
+        ),
+        creditorAccount: fspOfframpDetails.beneficiaryBankDetails.accountNumber,
+        creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
+      },
+    };
+
+    if (offrampType.toLocaleLowerCase() === 'vpa') {
+      offrampRequest.paymentDetails = {
+        vpa: fspOfframpDetails.beneficiaryPhoneNumber,
+      };
+    }
+
+    return offrampRequest;
   }
 
   private async updateBeneficiaryRedeemAsCompleted({
