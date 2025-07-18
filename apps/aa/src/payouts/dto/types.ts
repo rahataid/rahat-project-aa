@@ -1,3 +1,5 @@
+import { Payouts, PayoutTransactionStatus } from '@prisma/client';
+
 export type OfframpStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -23,6 +25,7 @@ export type bankDetails = {
 export interface BeneficiaryPayoutDetails {
   walletAddress: string;
   amount: number;
+  phoneNumber: string;
   bankDetails: bankDetails;
 }
 
@@ -89,12 +92,21 @@ export interface CipsApiResponse {
 }
 
 export type PayoutStats = {
-  payoutTypes: {
-    FSP: number;
-    VENDOR: number;
+  payoutOverview: {
+    payoutTypes: {
+      FSP: number;
+      VENDOR: number;
+    };
+    completionStatus: {
+      COMPLETED: number;
+      NOT_COMPLETED: number;
+    };
   };
-  completionStatus: {
-    COMPLETED: number;
-    NOT_COMPLETED: number;
+  payoutStats: {
+    tokenAssigned: number;
+    tokenDisbursed: number;
+    oneTokenValue: string;
+    amountDisbursed: number;
+    projectBalance: number;
   };
 };
