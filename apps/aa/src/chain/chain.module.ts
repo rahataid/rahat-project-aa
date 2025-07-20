@@ -53,7 +53,8 @@ import { SettingsService } from '@rumsan/settings';
           settings?.value['ASSETCODE'] || '',
           settings?.value['NETWORK'] || '',
           settings?.value['FAUCETSECRETKEY'] || '',
-          settings?.value['FUNDINGAMOUNT'] || 0
+          settings?.value['FUNDINGAMOUNT'] || 0,
+          settings?.value['HORIZONURL'] || ''
         );
       },
       inject: [SettingsService],
