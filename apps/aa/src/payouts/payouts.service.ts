@@ -35,7 +35,7 @@ import {
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
-const ONE_TOKEN_VALUE = 12;
+const ONE_TOKEN_VALUE = 1;
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
