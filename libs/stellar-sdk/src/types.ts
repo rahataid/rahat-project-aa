@@ -22,23 +22,6 @@ export interface IDisbursement {
   updatedAt: string;
 }
 
-export interface IReceiveService {
-  // createReceiverAccount(): Promise<any>;
-  // sendOTP(
-  //   tenantName: string,
-  //   receiverPublicKey: string,
-  //   phoneNumber: string
-  // ): Promise<any>;
-  // verifyOTP(
-  //   auth: string,
-  //   phoneNumber: string,
-  //   otp: string,
-  //   verification: string
-  // ): Promise<any>;
-  sendAsset(senderSk: string, receiverPk: string, amount: string): Promise<any>;
-  getAccountBalance(wallet: string): Promise<any>;
-}
-
 export interface ITransactionService {
   getTransaction(
     pk: string,
@@ -50,6 +33,20 @@ export interface ITransactionService {
     assetCode: string,
     assetIssuer: string
   ): Promise<boolean>;
+  rahatFaucetService(walletAddress: string, amount: string): Promise<any>;
+  batchFundAccountXlm(
+    keys: BeneficiaryWallet[],
+    amount: string,
+    faucetSecretKey: string,
+    sorobanServer: string,
+    faucetBaseUrl?: string,
+    faucetAuthKey?: string,
+    faucetType?: 'internal' | 'external'
+  ): Promise<any>;
+  sendAsset(senderSk: string, receiverPk: string, amount: string): Promise<any>;
+  getAccountBalance(wallet: string): Promise<any>;
+  checkAccountExists(wallet: string): Promise<boolean>;
+  getAssetInfo(): Promise<string>;
 }
 
 export type BeneficiaryWallet = {

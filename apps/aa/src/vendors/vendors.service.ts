@@ -6,7 +6,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
 import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { TransactionService } from '@rahataid/stellar-sdk-v2';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -18,7 +18,7 @@ export class VendorsService {
   constructor(
     private prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly receiveService: ReceiveService
+    private readonly transactionService: TransactionService
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
@@ -52,7 +52,7 @@ export class VendorsService {
         throw new RpcException(`Vendor with id ${vendorWallet.uuid} not found`);
       }
 
-      const vendorBalance = await this.receiveService.getAccountBalance(
+      const vendorBalance = await this.transactionService.getAccountBalance(
         vendor.walletAddress
       );
 

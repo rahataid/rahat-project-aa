@@ -16,7 +16,7 @@ import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
-import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import { TransactionService } from '@rahataid/stellar-sdk-v2';
 import { CheckTrustlineProcessor } from './checkTrutline.processor';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { SettingsService } from '@rumsan/settings';
@@ -62,25 +62,6 @@ import { AppModule } from '../app/app.module';
     StellarProcessor,
     CheckTrustlineProcessor,
     OfframpProcessor,
-    {
-      provide: ReceiveService,
-      useFactory: async (settingsService: SettingsService) => {
-        const stellarSettings = await settingsService.getPublic(
-          'STELLAR_SETTINGS'
-        );
-        return new ReceiveService(
-          (stellarSettings.value as any).ASSETISSUER,
-          (stellarSettings.value as any).ASSETCODE,
-          (stellarSettings.value as any).NETWORK,
-          (stellarSettings.value as any).FAUCETSECRETKEY,
-          (stellarSettings.value as any).FUNDINGAMOUNT,
-          (stellarSettings.value as any).HORIZONURL,
-          (stellarSettings.value as any).FAUCETBASEURL,
-          (stellarSettings.value as any).FAUCETAUTHKEY
-        );
-      },
-      inject: [SettingsService],
-    },
   ],
 })
 export class ProcessorsModule {}

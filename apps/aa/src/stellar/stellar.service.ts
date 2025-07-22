@@ -1,8 +1,7 @@
 import {
-  DisbursementServices,
-  ReceiveService,
+  DisbursementService,
   TransactionService,
-} from '@rahataid/stellar-sdk';
+} from '@rahataid/stellar-sdk-v2';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CheckTrustlineDto,
@@ -73,8 +72,7 @@ export class StellarService {
     private readonly checkTrustlineQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
-    private readonly disbursementService: DisbursementServices,
-    private readonly receiveService: ReceiveService,
+    private readonly disbursementService: DisbursementService,
     private readonly transactionService: TransactionService
   ) {}
 
@@ -296,7 +294,7 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      const result = await this.receiveService.sendAsset(
+      const result = await this.transactionService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
         amount.toString()
@@ -374,7 +372,7 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      const result = await this.receiveService.sendAsset(
+      const result = await this.transactionService.sendAsset(
         keys.privateKey,
         sendAssetByWalletAddressDto.receiverAddress,
         amount.toString()
@@ -416,13 +414,54 @@ export class StellarService {
 
   async faucetAndTrustlineService(account: FundAccountDto) {
     try {
-      return this.receiveService.faucetAndTrustlineService(
-        account.walletAddress,
-        account?.secretKey
+      // Step 1: Fund account
+      this.logger.log(
+        `Funding account ${account.walletAddress}...`,
+        StellarService.name
       );
+      const fundingResult = await this.transactionService.fundAccounts(
+        [{ address: account.walletAddress, secret: account.secretKey }],
+        (await this.getFromSettings('FUNDINGAMOUNT')) as string,
+        (await this.getFromSettings('FAUCETSECRETKEY')) as string,
+        (await this.getFromSettings('SERVER')) as string,
+        (await this.getFromSettings('FAUCETBASEURL')) as string,
+        (await this.getFromSettings('FAUCETAUTHKEY')) as string,
+        'external'
+      );
+
+      this.logger.log(
+        `Funding completed: ${fundingResult.message}`,
+        StellarService.name
+      );
+
+      // Step 2: Add trustline if funding was successful
+      if (
+        fundingResult.successfulKeys &&
+        fundingResult.successfulKeys.length > 0
+      ) {
+        this.logger.log(
+          `Adding trustline for ${account.walletAddress}...`,
+          StellarService.name
+        );
+        const trustlineResult = await this.transactionService.addTrustlines(
+          fundingResult.successfulKeys,
+          (await this.getFromSettings('SERVER')) as string
+        );
+        this.logger.log(
+          `Trustline completed: ${trustlineResult.message}`,
+          StellarService.name
+        );
+        return trustlineResult;
+      } else {
+        this.logger.warn(
+          'Account funding failed, skipping trustline addition',
+          StellarService.name
+        );
+        return fundingResult;
+      }
     } catch (error) {
       throw new RpcException(
-        `Failed to add trustline: ${JSON.stringify(error)}`
+        `Failed to fund account and add trustline: ${JSON.stringify(error)}`
       );
     }
   }
@@ -470,7 +509,7 @@ export class StellarService {
 
       // todo (new-chain-config): Need dynamic method to getAccountBalance and getRecent transactions
       return {
-        balances: await this.receiveService.getAccountBalance(address),
+        balances: await this.transactionService.getAccountBalance(address),
         transactions: await this.getRecentTransaction(address),
       };
     } catch (error) {
@@ -577,6 +616,8 @@ export class StellarService {
         await this.getFromSettings('TENANTNAME')
       )
     );
+
+    console.log('disbursementBalance', disbursementBalance);
 
     const vendors = await this.prisma.vendor.findMany({
       select: { walletAddress: true },
@@ -1015,7 +1056,9 @@ export class StellarService {
   // todo: Make this dynamic for evm
   public async getRahatBalance(keys) {
     try {
-      const accountBalances = await this.receiveService.getAccountBalance(keys);
+      const accountBalances = await this.transactionService.getAccountBalance(
+        keys
+      );
 
       const assetCode = await this.getFromSettings('ASSETCODE');
 

@@ -4,7 +4,7 @@ import { VendorsService } from './vendors.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { TransactionService, AuthService } from '@rahataid/stellar-sdk-v2';
 import { SettingsService } from '@rumsan/settings';
 
 @Module({
@@ -25,25 +25,28 @@ import { SettingsService } from '@rumsan/settings';
   providers: [
     VendorsService,
     {
-      provide: ReceiveService,
+      provide: TransactionService,
       useFactory: async (settingService: SettingsService) => {
         const settings = await settingService.getPublic('STELLAR_SETTINGS');
-
-        return new ReceiveService(
+        const authService = new AuthService({
+          email: settings?.value['EMAIL'],
+          password: settings?.value['PASSWORD'],
+          tenantName: settings?.value['TENANTNAME'],
+          baseUrl: settings?.value['BASEURL'],
+        });
+        return new TransactionService(
+          authService,
           settings?.value['ASSETCREATOR'],
           settings?.value['ASSETCODE'],
-          settings?.value['NETWORK'],
-          settings?.value['FAUCETSECRETKEY'],
-          settings?.value['FUNDINGAMOUNT'],
+          settings?.value['ASSETCREATORSECRET'],
           settings?.value['HORIZONURL'],
-          settings?.value['FAUCETBASEURL'],
-          settings?.value['FAUCETAUTHKEY']
+          settings?.value['NETWORK']
         );
       },
       inject: [SettingsService],
     },
   ],
   controllers: [VendorsController],
-  exports: [VendorsService, ReceiveService],
+  exports: [VendorsService, TransactionService],
 })
 export class VendorsModule {}

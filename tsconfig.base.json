@@ -17,6 +17,7 @@
       "@rahat-project/cva": ["libs/cva/src/index.ts"],
       "@rahataid/stellar-sdk": ["libs/stellar-sdk/src/index.ts"],
       "@rahataid/stellar": ["libs/stellar-sdk/src/index.ts"],
+      "@rahataid/stellar-sdk-v2": ["libs/stellar-sdk-v2/src/index.ts"],
       "@rahataid/wallet": ["libs/wallet/src/index.ts"]
     }
   },

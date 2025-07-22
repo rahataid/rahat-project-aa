@@ -5,7 +5,10 @@ import { StellarService } from './stellar.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import {
+  DisbursementService,
+  TransactionService,
+} from '@rahataid/stellar-sdk-v2';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 
@@ -53,22 +56,24 @@ describe('StellarModule', () => {
           useValue: mockPrismaService,
         },
         {
-          provide: ReceiveService,
-          useValue: new ReceiveService(),
-        },
-        {
           provide: TransactionService,
-          useValue: new TransactionService(),
+          useValue: new TransactionService({} as any),
         },
         {
-          provide: DisbursementServices,
+          provide: DisbursementService,
           useFactory: async (settingService: SettingsService) => {
             const settings = await settingService.getPublic('STELLAR_SETTINGS');
-            const email = settings?.value['EMAIL'];
-            const password = settings?.value['PASSWORD'];
-            const tenantName = settings?.value['TENANTNAME'];
-
-            return new DisbursementServices(email, password, tenantName);
+            return new DisbursementService({
+              email: settings?.value['EMAIL'],
+              password: settings?.value['PASSWORD'],
+              tenantName: settings?.value['TENANTNAME'],
+              baseUrl: settings?.value['BASEURL'],
+              assetCode: settings?.value['ASSETCODE'],
+              assetIssuer: settings?.value['ASSETCREATOR'],
+              assetSecret: settings?.value['ASSETCREATORSECRET'],
+              horizonServer: settings?.value['HORIZONURL'],
+              network: settings?.value['NETWORK'],
+            });
           },
           inject: [SettingsService],
         },

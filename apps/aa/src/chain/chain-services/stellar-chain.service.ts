@@ -20,7 +20,7 @@ import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { TransactionService } from '@rahataid/stellar-sdk-v2';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 
 @Injectable()
@@ -33,7 +33,7 @@ export class StellarChainService implements IChainService {
     private stellarService: StellarService,
     private settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private receiveService: ReceiveService,
+    private transactionService: TransactionService,
     private settingService: SettingsService
   ) {}
 
@@ -164,7 +164,7 @@ export class StellarChainService implements IChainService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      const result = await this.receiveService.sendAsset(
+      const result = await this.transactionService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
         amount.toString()
@@ -293,7 +293,9 @@ export class StellarChainService implements IChainService {
 
   public async getRahatBalance(keys) {
     try {
-      const accountBalances = await this.receiveService.getAccountBalance(keys);
+      const accountBalances = await this.transactionService.getAccountBalance(
+        keys
+      );
 
       const assetCode = await this.getFromSettings('ASSETCODE');
 

@@ -13,7 +13,7 @@ import { StatsModule } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
-import { DisbursementServices } from '@rahataid/stellar-sdk';
+import { DisbursementService } from '@rahataid/stellar-sdk-v2';
 import { StellarModule } from '../stellar/stellar.module';
 
 describe('BeneficiaryModule', () => {
@@ -39,7 +39,7 @@ describe('BeneficiaryModule', () => {
       update: jest.fn(),
       findOne: jest.fn(),
       findAll: jest.fn(),
-    } as unknown as jest.Mocked<DisbursementServices>;
+    } as unknown as jest.Mocked<DisbursementService>;
 
     const mockCvaDisbursementService = {
       create: jest.fn(),
@@ -103,12 +103,11 @@ describe('BeneficiaryModule', () => {
       })
       .overrideProvider(CvaDisbursementService)
       .useValue(mockCvaDisbursementService)
-      .overrideProvider(DisbursementServices)
+      .overrideProvider(DisbursementService)
       .useValue(disbursementServices)
       .overrideProvider(StellarService)
       .useValue({
         createAccount: jest.fn(),
-        faucetAndTrustlineService: jest.fn(),
       })
       .overrideProvider(EventEmitter2)
       .useValue({
@@ -117,23 +116,30 @@ describe('BeneficiaryModule', () => {
       .compile();
 
     expect(module).toBeDefined();
-    
-    const beneficiaryController = module.get<BeneficiaryController>(BeneficiaryController);
+
+    const beneficiaryController = module.get<BeneficiaryController>(
+      BeneficiaryController
+    );
     expect(beneficiaryController).toBeDefined();
-    
-    const beneficiaryService = module.get<BeneficiaryService>(BeneficiaryService);
+
+    const beneficiaryService =
+      module.get<BeneficiaryService>(BeneficiaryService);
     expect(beneficiaryService).toBeDefined();
-    
-    const beneficiaryStatService = module.get<BeneficiaryStatService>(BeneficiaryStatService);
+
+    const beneficiaryStatService = module.get<BeneficiaryStatService>(
+      BeneficiaryStatService
+    );
     expect(beneficiaryStatService).toBeDefined();
-    
+
     const prismaService = module.get<PrismaService>(PrismaService);
     expect(prismaService).toBeDefined();
-    
-    const cvaDisbursementService = module.get<CvaDisbursementService>(CvaDisbursementService);
+
+    const cvaDisbursementService = module.get<CvaDisbursementService>(
+      CvaDisbursementService
+    );
     expect(cvaDisbursementService).toBeDefined();
-    
+
     const stellarService = module.get<StellarService>(StellarService);
     expect(stellarService).toBeDefined();
   });
-}); 
+});

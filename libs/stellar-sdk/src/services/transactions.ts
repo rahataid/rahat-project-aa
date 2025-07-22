@@ -15,6 +15,7 @@ import { add_trustline } from '../lib/addTrustline';
 import { fundAccountXlm } from '../lib/xlmFaucet';
 import { checkAccountExists } from '../utils/checkAccountExists';
 import { sleep } from '../utils/sleep';
+import axios from 'axios';
 
 export class TransactionService implements ITransactionService {
   // Initialize Horizon server
@@ -40,6 +41,7 @@ export class TransactionService implements ITransactionService {
     this.server = new Horizon.Server(horizonServer);
   }
 
+  // Returns transactions for a wallet address
   public async getTransaction(
     pk: string,
     limit: number,
@@ -76,6 +78,7 @@ export class TransactionService implements ITransactionService {
     );
   }
 
+  // Checks if the account has a trustline for the asset
   public async hasTrustline(publicKey: string): Promise<boolean> {
     try {
       const accountExists = await checkAccountExists(
@@ -106,6 +109,7 @@ export class TransactionService implements ITransactionService {
     }
   }
 
+  // Transfer Rahat token to a wallet address
   public async rahatFaucetService(walletAddress: string, amount: string) {
     try {
       const accountExists = await checkAccountExists(
@@ -134,6 +138,7 @@ export class TransactionService implements ITransactionService {
     }
   }
 
+  // Fund multiple wallet addresses with XLM
   public async batchFundAccountXlm(
     keys: BeneficiaryWallet[],
     amount: string,
@@ -185,6 +190,68 @@ export class TransactionService implements ITransactionService {
     } catch (error: any) {
       return error?.response;
     }
+  }
+
+  public async sendAsset(senderSk: string, receiverPk: string, amount: string) {
+    try {
+      const asset = new Asset(this.assetCode, this.assetIssuer);
+      const server = new Horizon.Server(this.horizonServer);
+
+      const senderKeypair = Keypair.fromSecret(senderSk);
+      const senderAccount = await server.loadAccount(senderKeypair.publicKey());
+      console.log(`Sender account loaded: ${senderAccount.accountId}`);
+
+      const transaction = new TransactionBuilder(senderAccount, {
+        fee: (await server.fetchBaseFee()).toString(),
+        networkPassphrase:
+          this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
+      })
+        .addOperation(
+          Operation.payment({
+            destination: receiverPk,
+            asset,
+            amount,
+          })
+        )
+        .setTimeout(30)
+        .build();
+
+      transaction.sign(Keypair.fromSecret(senderSk));
+
+      const tx = await server.submitTransaction(transaction);
+
+      return { success: 'tokens sent', tx };
+    } catch (error: any) {
+      console.log(error.response.data.extras);
+      throw error;
+    }
+  }
+
+  public async getAccountBalance(wallet: string) {
+    try {
+      const server = new Horizon.Server(this.horizonServer);
+      const account = await server.accounts().accountId(wallet).call();
+      return account.balances;
+    } catch (error: any) {
+      return error;
+    }
+  }
+
+  public async checkAccountExists(wallet: string): Promise<boolean> {
+    try {
+      const server = new Horizon.Server(this.horizonServer);
+      await server.accounts().accountId(wallet).call();
+      return true;
+    } catch (error: any) {
+      if (error.response && error.response.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  public async getAssetInfo(): Promise<string> {
+    return `${this.assetCode}:${this.assetIssuer}`;
   }
 
   private async waitForTransactionConfirmation(

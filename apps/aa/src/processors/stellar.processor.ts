@@ -26,9 +26,9 @@ import {
 } from '../stellar/dto/disburse.dto';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { TransferToOfframpDto } from '../stellar/dto/transfer-to-offramp.dto';
-import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import { TransactionService } from '@rahataid/stellar-sdk-v2';
 import { IDisbursementStatusJob, FSPPayoutDetails } from './types';
-import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
+import { IBeneficiaryWallet } from '@rahataid/stellar-sdk-v2';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { canProcessJob } from '../utils/bullUtils';
@@ -41,7 +41,7 @@ interface BatchInfo {
 }
 
 interface InternalFaucetBatchJob {
-  wallets: BeneficiaryWallet[];
+  wallets: IBeneficiaryWallet[];
   batchInfo: BatchInfo;
 }
 
@@ -55,7 +55,6 @@ export class StellarProcessor {
     private readonly beneficiaryService: BeneficiaryService,
     private readonly settingService: SettingsService,
     private readonly stellarService: StellarService,
-    private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>,
@@ -219,7 +218,9 @@ export class StellarProcessor {
     const startTime = Date.now();
 
     try {
-      await this.transactionService.batchFundAccountXlm(
+      // Step 1: Fund accounts
+      this.logger.log('Starting account funding...', StellarProcessor.name);
+      const fundingResult = await this.transactionService.fundAccounts(
         wallets,
         (await this.getFromSettings('FUNDINGAMOUNT')) as string,
         (await this.getFromSettings('FAUCETSECRETKEY')) as string,
@@ -229,10 +230,41 @@ export class StellarProcessor {
         'external'
       );
 
+      this.logger.log(
+        `Funding completed: ${fundingResult.message}`,
+        StellarProcessor.name
+      );
+
+      // Step 2: Add trustlines for successfully funded accounts
+      if (
+        fundingResult.successfulKeys &&
+        fundingResult.successfulKeys.length > 0
+      ) {
+        this.logger.log(
+          `Adding trustlines for ${fundingResult.successfulKeys.length} accounts...`,
+          StellarProcessor.name
+        );
+        const trustlineResult = await this.transactionService.addTrustlines(
+          fundingResult.successfulKeys,
+          (await this.getFromSettings('SERVER')) as string
+        );
+        this.logger.log(
+          `Trustlines completed: ${trustlineResult.message}`,
+          StellarProcessor.name
+        );
+      } else {
+        this.logger.warn(
+          'No accounts were successfully funded, skipping trustline addition',
+          StellarProcessor.name
+        );
+      }
+
       const duration = Date.now() - startTime;
 
+      // Update beneficiary records for successfully funded accounts
+      const accountsToUpdate = fundingResult.successfulKeys || wallets;
       await Promise.all(
-        wallets.map(async (wallet) => {
+        accountsToUpdate.map(async (wallet) => {
           const beneficiary = await this.prismaService.beneficiary.findFirst({
             where: {
               walletAddress: wallet.address,
@@ -558,7 +590,7 @@ export class StellarProcessor {
         StellarProcessor.name
       );
 
-      const result = await this.receiveService.sendAsset(
+      const result = await this.transactionService.sendAsset(
         keys.privateKey,
         payload.offrampWalletAddress,
         payload.amount.toString()

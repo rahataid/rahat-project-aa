@@ -3,7 +3,10 @@ import { StellarService } from './stellar.service';
 import { ClientProxy } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
-import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import {
+  DisbursementService,
+  TransactionService,
+} from '@rahataid/stellar-sdk-v2';
 import { of } from 'rxjs';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
@@ -17,9 +20,8 @@ describe('StellarService', () => {
   let clientProxy: jest.Mocked<ClientProxy>;
   let prismaService: jest.Mocked<PrismaService>;
   let settingsService: jest.Mocked<SettingsService>;
-  let receiveService: jest.Mocked<ReceiveService>;
   let transactionService: jest.Mocked<TransactionService>;
-  let disbursementServices: jest.Mocked<DisbursementServices>;
+  let disbursementServices: jest.Mocked<DisbursementService>;
 
   const mockClientProxy = {
     send: jest.fn(),
@@ -65,7 +67,6 @@ describe('StellarService', () => {
 
   const mockReceiveService = {
     sendAsset: jest.fn(),
-    faucetAndTrustlineService: jest.fn(),
   };
 
   const mockTransactionService = {
@@ -98,15 +99,11 @@ describe('StellarService', () => {
           useValue: mockBullQueueStellar,
         },
         {
-          provide: ReceiveService,
-          useValue: mockReceiveService,
-        },
-        {
           provide: TransactionService,
           useValue: mockTransactionService,
         },
         {
-          provide: DisbursementServices,
+          provide: DisbursementService,
           useValue: mockDisbursementServices,
         },
       ],
@@ -116,9 +113,8 @@ describe('StellarService', () => {
     clientProxy = module.get(CORE_MODULE);
     prismaService = module.get(PrismaService);
     settingsService = module.get(SettingsService);
-    receiveService = module.get(ReceiveService);
     transactionService = module.get(TransactionService);
-    disbursementServices = module.get(DisbursementServices);
+    disbursementServices = module.get(DisbursementService);
 
     // Reset all mocks before each test
     jest.clearAllMocks();
@@ -135,12 +131,24 @@ describe('StellarService', () => {
     };
 
     const mockBeneficiaries = [
-      { walletAddress: 'addr1', amount: '100', phone: '9841234567', id: 'ben1' },
-      { walletAddress: 'addr2', amount: '200', phone: '9847654321', id: 'ben2' },
+      {
+        walletAddress: 'addr1',
+        amount: '100',
+        phone: '9841234567',
+        id: 'ben1',
+      },
+      {
+        walletAddress: 'addr2',
+        amount: '200',
+        phone: '9847654321',
+        id: 'ben2',
+      },
     ];
 
     beforeEach(() => {
-      jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue(mockBeneficiaries);
+      jest
+        .spyOn(service as any, 'getBeneficiaryTokenBalance')
+        .mockResolvedValue(mockBeneficiaries);
       mockDisbursementServices.createDisbursementProcess.mockResolvedValue({
         success: true,
       });
@@ -149,7 +157,9 @@ describe('StellarService', () => {
     it('should successfully create a disbursement process', async () => {
       const result = await service.disburse(mockDiburseDto);
       expect(result).toEqual({ success: true });
-      expect(mockDisbursementServices.createDisbursementProcess).toHaveBeenCalled();
+      expect(
+        mockDisbursementServices.createDisbursementProcess
+      ).toHaveBeenCalled();
     });
 
     /*

@@ -1,10 +1,12 @@
-import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
+import { API_ROUTES } from 'libs/stellar-sdk-v2/src/constants/routes';
 
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 
 export const STELLER_UID = 'stellar';
+
+export const STELLAR = API_ROUTES.STELLAR;
 
 export const DATA_SOURCES = {
   DHM: 'DHM',
