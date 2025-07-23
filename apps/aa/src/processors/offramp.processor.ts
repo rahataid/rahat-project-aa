@@ -16,7 +16,7 @@ export class OfframpProcessor {
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService
-  ) {}
+  ) { }
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
@@ -28,33 +28,49 @@ export class OfframpProcessor {
 
     const log = fspOfframpDetails.beneficiaryRedeemUUID
       ? await this.beneficiaryService.getBeneficiaryRedeem(
-          fspOfframpDetails.beneficiaryRedeemUUID
-        )
+        fspOfframpDetails.beneficiaryRedeemUUID
+      )
       : await this.beneficiaryService.createBeneficiaryRedeem({
-          status: 'FIAT_TRANSACTION_INITIATED',
-          transactionType: 'FIAT_TRANSFER',
-          Beneficiary: {
-            connect: {
-              walletAddress: fspOfframpDetails.beneficiaryWalletAddress,
-            },
+        status: 'FIAT_TRANSACTION_INITIATED',
+        transactionType: 'FIAT_TRANSFER',
+        Beneficiary: {
+          connect: {
+            walletAddress: fspOfframpDetails.beneficiaryWalletAddress,
           },
-          fspId: fspOfframpDetails.payoutProcessorId,
-          amount: +fspOfframpDetails.amount,
-          txHash: fspOfframpDetails.transactionHash,
-          payout: {
-            connect: {
-              uuid: fspOfframpDetails.payoutUUID,
-            },
+        },
+        fspId: fspOfframpDetails.payoutProcessorId,
+        amount: +fspOfframpDetails.amount,
+        txHash: fspOfframpDetails.transactionHash,
+        payout: {
+          connect: {
+            uuid: fspOfframpDetails.payoutUUID,
           },
-          info: {
-            transactionHash: fspOfframpDetails.transactionHash,
-            offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
-            offrampType: fspOfframpDetails.offrampType, // <--- It's a offramp process type like CIPS, VPA, etc.
-            beneficiaryWalletAddress:
-              fspOfframpDetails.beneficiaryWalletAddress,
-            numberOfAttempts: job.attemptsMade + 1,
-          },
-        });
+        },
+        info: {
+          transactionHash: fspOfframpDetails.transactionHash,
+          offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
+          offrampType: fspOfframpDetails.offrampType, // <--- It's a offramp process type like CIPS, VPA, etc.
+          beneficiaryWalletAddress:
+            fspOfframpDetails.beneficiaryWalletAddress,
+          numberOfAttempts: job.attemptsMade + 1,
+        },
+      });
+
+    const attemptsMade = ((log.info as any)?.numberOfAttempts || 0) + 1;
+
+    if (log.isCompleted) {
+      this.logger.log(
+        `Beneficiary redeem is already completed for ${fspOfframpDetails.beneficiaryRedeemUUID}`
+      );
+      return;
+    }
+
+    // mark the beneficiary redeem as initiated
+    if (log.status !== 'FIAT_TRANSACTION_INITIATED') {
+      await this.beneficiaryService.updateBeneficiaryRedeem(log.uuid, {
+        status: 'FIAT_TRANSACTION_INITIATED',
+      });
+    }
 
     try {
       if (!fspOfframpDetails.beneficiaryRedeemUUID) {
@@ -88,20 +104,20 @@ export class OfframpProcessor {
           txHash: fspOfframpDetails.transactionHash,
           offrampWalletAddress: fspOfframpDetails.offrampWalletAddress,
           beneficiaryWalletAddress: fspOfframpDetails.beneficiaryWalletAddress,
-          numberOfAttempts: job.attemptsMade,
+          numberOfAttempts: attemptsMade,
           cipsResponseData: result,
         });
 
         return result;
       }
 
-      console.log("Offramp request failed from cips", result);
+      console.log('Offramp request failed from cips', result);
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
         result.transaction.cipsBatchResponse.responseMessage ||
-          'Offramp request failed from CIPS.',
-        job.attemptsMade,
+        'Offramp request failed from CIPS.',
+        attemptsMade,
         log.info
       );
 
@@ -112,10 +128,11 @@ export class OfframpProcessor {
         error.stack
       );
 
+
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
         error.message,
-        job.attemptsMade,
+        attemptsMade,
         log.info
       );
 

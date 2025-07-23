@@ -494,6 +494,21 @@ export class StellarProcessor {
       });
     }
 
+    const attemptsMade = ((log.info as any)?.numberOfAttempts || 0) + 1;
+
+    if (log.isCompleted) {
+      this.logger.log(
+        `Beneficiary redeem is already completed for ${payload.beneficiaryRedeemUUID}`
+      );
+      return;
+    }
+
+    if (log.status !== 'TOKEN_TRANSACTION_INITIATED') {
+      await this.beneficiaryService.updateBeneficiaryRedeem(log.uuid, {
+        status: 'TOKEN_TRANSACTION_INITIATED',
+      });
+    }
+
     try {
       // Get Keys of beneficiary with walletAddress
       const keys = await this.stellarService.getSecretByWallet(
@@ -504,7 +519,7 @@ export class StellarProcessor {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           'Beneficiary with wallet not found',
-          job.attemptsMade + 1,
+          attemptsMade,
           log.info
         );
         throw new RpcException(
@@ -522,7 +537,7 @@ export class StellarProcessor {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`,
-          job.attemptsMade + 1,
+          attemptsMade,
           log.info
         );
 
@@ -561,7 +576,7 @@ export class StellarProcessor {
         offrampWalletAddress: payload.offrampWalletAddress,
         beneficiaryWalletAddress: payload.beneficiaryWalletAddress,
         amount: payload.amount,
-        numberOfAttempts: job.attemptsMade + 1,
+        numberOfAttempts: attemptsMade,
       });
 
       // delete the beneficiaryRedeemUUID from the payload to avoid sending it to the offramp queue
@@ -601,7 +616,7 @@ export class StellarProcessor {
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           error.message,
-          job.attemptsMade + 1,
+          attemptsMade,
           log.info
         );
       }
@@ -652,9 +667,11 @@ export class StellarProcessor {
           StellarProcessor.name
         );
         // if the group updatedA is more then 60 min, then assume the disbursement is failed
+        const groupUpdatedAt = new Date(group.updatedAt);
+        const currentDate = new Date();
         if (
-          new Date(group.updatedAt).getTime() >
-          new Date().getTime() - 24 * 60 * 60 * 1000
+          groupUpdatedAt.getTime() >
+          currentDate.getTime() - 24 * 60 * 60 * 1000
         ) {
           this.logger.log(
             `Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`,
