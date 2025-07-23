@@ -4,6 +4,8 @@ import { UpdatePayoutDto } from './dto/update-payout.dto';
 import {
   BeneficiaryRedeem,
   Payouts,
+  PayoutTransactionStatus,
+  PayoutType,
   Prisma,
 } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
@@ -11,7 +13,11 @@ import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
-import { BeneficiaryPayoutDetails, IPaymentProvider } from './dto/types';
+import {
+  BeneficiaryPayoutDetails,
+  IPaymentProvider,
+  PayoutStats,
+} from './dto/types';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
@@ -20,9 +26,16 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
+import { ListPayoutDto } from './dto/list-payout.dto';
+import {
+  calculatePayoutStatus,
+  PayoutWithRelations,
+  RedeemStatus,
+} from '../utils/getBeneficiaryRedemStatus';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
+const ONE_TOKEN_VALUE = 1;
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
@@ -36,6 +49,87 @@ export class PayoutsService {
     private readonly stellarQueue: Queue,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
+
+  /**
+   * Find payout stats
+   * This is used to find the payout stats including counts by payout type
+   * and isCompleted status.
+   */
+  async getPayoutStats(): Promise<PayoutStats> {
+    try {
+      const [
+        fspCount,
+        vendorCount,
+        notCompleted,
+        completed,
+        tokenAssigned,
+        totalTokenDisbursed,
+      ] = await Promise.all([
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            payout: {
+              type: 'FSP',
+            },
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            payout: {
+              type: 'VENDOR',
+            },
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            isCompleted: false,
+          },
+        }),
+        this.prisma.beneficiaryRedeem.count({
+          where: {
+            isCompleted: true,
+          },
+        }),
+        this.prisma.beneficiaryGroupTokens.aggregate({
+          _sum: {
+            numberOfTokens: true,
+          },
+        }),
+
+        this.prisma.beneficiaryGroupTokens.aggregate({
+          where: {
+            status: 'DISBURSED',
+          },
+          _sum: {
+            numberOfTokens: true,
+          },
+        }),
+      ]);
+
+      return {
+        payoutOverview: {
+          payoutTypes: {
+            FSP: fspCount,
+            VENDOR: vendorCount,
+          },
+          completionStatus: {
+            COMPLETED: completed,
+            NOT_COMPLETED: notCompleted,
+          },
+        },
+        payoutStats: {
+          tokenAssigned: tokenAssigned._sum.numberOfTokens,
+          tokenDisbursed: totalTokenDisbursed._sum.numberOfTokens,
+          oneTokenValue: `Rs. ${ONE_TOKEN_VALUE}`,
+          amountDisbursed:
+            totalTokenDisbursed._sum.numberOfTokens * ONE_TOKEN_VALUE,
+          projectBalance: tokenAssigned._sum.numberOfTokens * ONE_TOKEN_VALUE,
+        },
+      };
+    } catch (error) {
+      console.error('Failed to fetch payout stats:', error);
+      throw new Error('Failed to fetch payout stats');
+    }
+  }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
     const { groupId, ...createPayoutDto } = payload;
@@ -127,14 +221,31 @@ export class PayoutsService {
   }
 
   async findAll(
-    payload: { page?: number; perPage?: number } = { page: 1, perPage: 10 }
-  ): Promise<PaginatedResult<Payouts>> {
+    payload: ListPayoutDto
+  ): Promise<PaginatedResult<Omit<PayoutWithRelations, 'beneficiaryRedeem'>>> {
     try {
-      this.logger.log('Fetching all payouts');
+      const { page, perPage, groupName, payoutType } = payload;
 
-      const { page, perPage } = payload;
+      this.logger.log('Fetching all payouts');
+      const where: Prisma.PayoutsWhereInput = {
+        ...(groupName && {
+          beneficiaryGroupToken: {
+            beneficiaryGroup: {
+              name: {
+                contains: groupName,
+                mode: 'insensitive',
+              },
+            },
+          },
+        }),
+        ...(payoutType &&
+          Object.values(PayoutType).includes(payoutType as PayoutType) && {
+            type: payoutType as PayoutType,
+          }),
+      };
 
       const query: Prisma.PayoutsFindManyArgs = {
+        where,
         include: {
           beneficiaryGroupToken: {
             select: {
@@ -144,39 +255,90 @@ export class PayoutsService {
               isDisbursed: true,
               createdBy: true,
               beneficiaryGroup: {
-                include: {
-                  _count: {
+                select: {
+                  name: true,
+                  tokensReserved: {
                     select: {
-                      beneficiaries: true,
+                      numberOfTokens: true,
+                      isDisbursed: true,
+                      payoutId: true,
+                      id: true,
+                      uuid: true,
+                      title: true,
+                      status: true,
+                      groupId: true,
+                      createdBy: true,
+                      createdAt: true,
+                      updatedAt: true,
                     },
+                  },
+                  groupPurpose: true,
+                  id: true,
+                  uuid: true,
+                  _count: {
+                    select: { beneficiaries: true },
                   },
                 },
               },
             },
           },
+          beneficiaryRedeem: {
+            select: { status: true },
+          },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
       };
 
-      const result: PaginatedResult<Payouts> = await paginate(
-        this.prisma.payouts,
-        query,
-        {
-          page,
-          perPage,
-        }
+      const result = await paginate(this.prisma.payouts, query, {
+        page: page,
+        perPage: perPage,
+      });
+
+      const enrichedData = await Promise.all(
+        result.data.map(async (payout: PayoutWithRelations) => {
+          //  Skip calculation if already completed
+          if (payout.status === 'COMPLETED') {
+            return payout;
+          }
+          const calculatedStatus = calculatePayoutStatus(payout);
+          await this.syncPayoutStatus(payout, calculatedStatus);
+
+          // Remove beneficiaryRedeem from result, add redeemStatus
+          const { beneficiaryRedeem, ...rest } = payout;
+          return {
+            ...rest,
+          };
+        })
       );
 
-      this.logger.log(`Successfully fetched ${result.data.length} payouts`);
-      return result;
-    } catch (error) {
+      this.logger.log(
+        `Successfully fetched and synced ${enrichedData.length} payouts`
+      );
+
+      return {
+        ...result,
+        data: enrichedData,
+      };
+    } catch (error: any) {
       this.logger.error(
         `Failed to fetch payouts: ${error.message}`,
         error.stack
       );
       throw error;
+    }
+  }
+
+  //  Sync payout status in DB if changed, and update object
+  async syncPayoutStatus(
+    payout: PayoutWithRelations,
+    newStatus: RedeemStatus
+  ): Promise<void> {
+    if (payout.status !== newStatus) {
+      await this.prisma.payouts.update({
+        where: { uuid: payout.uuid },
+        data: { status: newStatus },
+      });
+      payout.status = newStatus;
     }
   }
 
@@ -218,6 +380,7 @@ export class PayoutsService {
                           uuid: true,
                           walletAddress: true,
                           extras: true,
+                          phone: true,
                         },
                       },
                     },
@@ -238,7 +401,8 @@ export class PayoutsService {
         this.logger.warn(`Payout not found with UUID: '${uuid}'`);
         throw new RpcException(`Payout with UUID '${uuid}' not found`);
       }
-
+      const calculatedStatus = calculatePayoutStatus(payout);
+      await this.syncPayoutStatus(payout, calculatedStatus);
       const failedPayoutRequests =
         await this.beneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID(
           uuid
@@ -248,9 +412,7 @@ export class PayoutsService {
       return {
         ...payout,
         hasFailedPayoutRequests:
-          payout.type === 'VENDOR'
-            ? false
-            : failedPayoutRequests.length > 0,
+          payout.type === 'VENDOR' ? false : failedPayoutRequests.length > 0,
         isCompleted: await this.getPayoutCompletedStatus(payout),
         isPayoutTriggered: payout.beneficiaryRedeem.length > 0,
       };
@@ -285,6 +447,9 @@ export class PayoutsService {
 
     return (
       payout.beneficiaryRedeem.length > 0 &&
+      payout.beneficiaryRedeem.length ===
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
+          2 &&
       payout.beneficiaryRedeem.every((r) => r.isCompleted)
     );
   }
@@ -352,6 +517,7 @@ export class PayoutsService {
           return {
             amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
+            phoneNumber: benfToGroup.beneficiary?.phone || benfToGroup.beneficiary?.extras?.phone,
             bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
               accountNumber:
@@ -389,12 +555,14 @@ export class PayoutsService {
     offrampWalletAddress: string;
     BeneficiaryPayoutDetails: BeneficiaryPayoutDetails[];
     payoutProcessorId: string;
+    offrampType: string;
   }) {
     const {
       uuid,
       offrampWalletAddress,
       BeneficiaryPayoutDetails,
       payoutProcessorId,
+      offrampType,
     } = payload;
 
     const stellerOfframpQueuePayload: FSPPayoutDetails[] =
@@ -405,6 +573,7 @@ export class PayoutsService {
         payoutUUID: uuid,
         payoutProcessorId: payoutProcessorId,
         offrampWalletAddress,
+        offrampType,
       }));
 
     const d = await this.stellarService.addBulkToTokenTransferQueue(
@@ -423,6 +592,11 @@ export class PayoutsService {
       );
     }
 
+    const payoutExtras = payoutDetails.extras as {
+      paymentProviderType: string;
+      paymentProviderName: string;
+    };
+
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
@@ -439,7 +613,9 @@ export class PayoutsService {
         beneficiaryBankDetails: beneficiary.bankDetails,
         payoutUUID: uuid,
         payoutProcessorId: payoutDetails.payoutProcessorId,
+        beneficiaryPhoneNumber: beneficiary.phoneNumber,
         offrampWalletAddress,
+        offrampType: payoutExtras.paymentProviderType,
       }));
 
     await this.stellarService.addBulkToTokenTransferQueue(
@@ -825,6 +1001,7 @@ export class PayoutsService {
       beneficiaryWalletAddress: string;
       numberOfAttempts: number;
       transactionHash?: string;
+      offrampType: string;
       error: string;
     };
 
@@ -835,13 +1012,17 @@ export class PayoutsService {
       );
     }
 
+    const beneficiaryPhoneNumber = benfRedeemRequest.Beneficiary.phone || (benfRedeemRequest.Beneficiary.extras as any)?.phone;
+
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
+      offrampType: info.offrampType,
       beneficiaryBankDetails: {
         accountName: benfExtras.bank_ac_name,
         accountNumber: benfExtras.bank_ac_number,
         bankName: benfExtras.bank_name,
       },
+      beneficiaryPhoneNumber,
       beneficiaryWalletAddress: benfRedeemRequest.beneficiaryWalletAddress,
       offrampWalletAddress: info.offrampWalletAddress,
       payoutUUID: benfRedeemRequest.payoutId,
