@@ -8,6 +8,7 @@ import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
+import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -204,6 +205,155 @@ export class VendorsService {
           )?.piiData?.name,
         };
       });
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
+    try {
+      this.logger.log(
+        `Getting beneficiaries for vendor ${payload.vendorUuid} with payout mode ${payload.payoutMode}`
+      );
+
+      // First verify the vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: payload.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `Vendor with id ${payload.vendorUuid} not found`
+        );
+      }
+
+      let payoutsQuery: any;
+
+      if (payload.payoutMode === 'ONLINE') {
+        payoutsQuery = {
+          where: {
+            type: 'VENDOR',
+            mode: 'ONLINE',
+            beneficiaryGroupToken: {
+              isNot: null,
+            },
+          },
+        };
+      } else if (payload.payoutMode === 'OFFLINE') {
+        payoutsQuery = {
+          where: {
+            type: 'VENDOR',
+            mode: 'OFFLINE',
+            payoutProcessorId: payload.vendorUuid,
+            beneficiaryGroupToken: {
+              isNot: null,
+            },
+          },
+        };
+      } else {
+        throw new RpcException(`Invalid payout mode: ${payload.payoutMode}`);
+      }
+
+      // Get payouts that match the criteria
+      const payouts = await this.prisma.payouts.findMany({
+        ...payoutsQuery,
+      });
+      this.logger.log('Payouts found: ' + JSON.stringify(payouts));
+
+      if (!payouts.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      }
+
+      // Get all beneficiary group tokens that are associated with these payouts
+      const payoutIds = payouts.map((payout) => payout.uuid);
+      const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+        where: {
+          payoutId: {
+            in: payoutIds,
+          },
+        },
+      });
+      this.logger.log('Group tokens found: ' + JSON.stringify(groupTokens));
+
+      if (!groupTokens.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      }
+
+      // Get group IDs from tokens
+      const groupIds = groupTokens.map((token) => token.groupId);
+      this.logger.log(
+        'Group IDs for beneficiary query: ' + JSON.stringify(groupIds)
+      );
+
+      // Fetch group details and filter by purpose (exclude COMMUNICATION)
+      const groups = await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          uuid: { in: groupIds },
+          groupPurpose: { not: 'COMMUNICATION' },
+        },
+      });
+      const payoutGroupIds = groups.map((g) => g.uuid);
+      this.logger.log(
+        'Filtered payout group IDs: ' + JSON.stringify(payoutGroupIds)
+      );
+
+      if (!payoutGroupIds.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      }
+
+      // Use only payout-eligible group IDs for beneficiary query
+      const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
+        where: {
+          groupId: { in: payoutGroupIds },
+        },
+        include: {
+          beneficiary: {
+            select: {
+              uuid: true,
+              walletAddress: true,
+              phone: true,
+              gender: true,
+              benTokens: true,
+              isVerified: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      // Extract beneficiary data
+      const allBeneficiaries = beneficiaries.map(
+        (beneficiaryToGroup) => beneficiaryToGroup.beneficiary
+      );
+
+      // Remove duplicates based on UUID
+      const uniqueBeneficiaries = allBeneficiaries.filter(
+        (beneficiary, index, self) =>
+          index === self.findIndex((b) => b.uuid === beneficiary.uuid)
+      );
+
+      // Use the reusable paginator
+      return paginate(
+        {
+          findMany: async () => uniqueBeneficiaries,
+          count: async () => uniqueBeneficiaries.length,
+        },
+        {},
+        { page: payload.page, perPage: payload.perPage }
+      );
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);

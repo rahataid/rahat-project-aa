@@ -1067,10 +1067,22 @@ export class StellarService {
         throw new RpcException('Beneficiary not found');
       }
 
+      // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
+      const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
+        (g) => g.groupPurpose !== 'COMMUNICATION'
+      );
+
+      if (!payoutEligibleGroups.length) {
+        this.logger.error('No payout-eligible group found for beneficiary');
+        throw new RpcException(
+          'No payout-eligible group found for beneficiary'
+        );
+      }
+
+      // Use the first payout-eligible group for the lookup
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
-          // Assuming unique beneficiary in group
-          uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
+          uuid: payoutEligibleGroups[0].beneficiaryGroupId,
         },
         include: {
           tokensReserved: {

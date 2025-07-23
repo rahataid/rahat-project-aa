@@ -212,6 +212,7 @@ export const JOBS = {
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    GET_BENEFICIARIES: 'rahat.jobs.vendor.get_beneficiaries',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
   },
