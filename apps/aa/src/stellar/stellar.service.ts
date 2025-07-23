@@ -1050,6 +1050,35 @@ export class StellarService {
         this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
       );
 
+      const payouts = await this.prisma.payouts.findMany({
+        where: {
+          payoutProcessorId: 'asfasfaf',
+          type: 'VENDOR',
+          mode: 'OFFLINE',
+          beneficiaryGroupToken: {
+            beneficiaryGroup: {
+              groupPurpose: {
+                notIn: ['COMMUNICATION']
+              }
+            }
+          }
+        },
+        include: {
+          beneficiaryGroupToken: {
+            include: {
+              beneficiaryGroup: {
+                include: {
+                  beneficiaries: {
+                  },
+                }
+              }
+            },
+          },
+        },
+      })
+
+      const beneficiaryGroupIds = payouts.map((payout) => payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries);
+
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
           uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
