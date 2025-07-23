@@ -194,17 +194,24 @@ export class StellarService {
 
   // todo: add payout part
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
-    //   sendOtpDto.phoneNumber
-    // );
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
+    );
 
-    // if (payoutType.type != 'VENDOR') {
-    //   throw new RpcException('Payout type is not VENDOR');
-    // }
+    if (!payoutType) {
+      this.logger.error('Payout not initiated');
+      throw new RpcException('Payout not initiated');
+    }
 
-    // if (payoutType.mode === 'OFFLINE') {
-    //   throw new RpcException('Payout mode is not ONLINE');
-    // }
+    if (payoutType.type != 'VENDOR') {
+      this.logger.error('Payout type is not VENDOR');
+      throw new RpcException('Payout type is not VENDOR');
+    }
+
+    if (payoutType.mode != 'ONLINE') {
+      this.logger.error('Payout mode is not ONLINE');
+      throw new RpcException('Payout mode is not ONLINE');
+    }
 
     return this.sendOtpByPhone(sendOtpDto);
   }
@@ -646,9 +653,12 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Need dynamic queue
-  async internalFaucetAndTrustline(beneficiaries: { wallets: any[], beneficiaryGroupId: string }): Promise<InternalFaucetResponse> {
+  async internalFaucetAndTrustline(beneficiaries: {
+    wallets: any[];
+    beneficiaryGroupId: string;
+  }): Promise<InternalFaucetResponse> {
     const { wallets, beneficiaryGroupId } = beneficiaries;
-    
+
     if (!wallets || wallets.length === 0) {
       this.logger.warn('No wallets provided for faucet and trustline');
       return {
@@ -659,7 +669,7 @@ export class StellarService {
 
     const batchSize = await this.getBatchSizeFromSettings();
     const batches = this.createWalletBatches(wallets, batchSize);
-    
+
     this.logger.log(
       `Creating ${batches.length} batch jobs for ${wallets.length} wallets (batch size: ${batchSize})`
     );
@@ -697,7 +707,7 @@ export class StellarService {
       message: `Created ${batches.length} batch jobs for ${wallets.length} wallets`,
       batchesCreated: batches.length,
       totalWallets: wallets.length,
-      jobIds: jobs.map(job => job.id),
+      jobIds: jobs.map((job) => job.id),
     };
   }
 
@@ -735,7 +745,9 @@ export class StellarService {
       const batchSize = settingsValue?.FAUCET_BATCH_SIZE;
       return batchSize && !isNaN(Number(batchSize)) ? Number(batchSize) : 3;
     } catch (error) {
-      this.logger.warn('Failed to get batch size from settings, using default value of 3');
+      this.logger.warn(
+        'Failed to get batch size from settings, using default value of 3'
+      );
       return 3;
     }
   }
@@ -747,11 +759,11 @@ export class StellarService {
   private createWalletBatches(wallets: any[], batchSize?: number): any[][] {
     const size = batchSize || this.getBatchSize();
     const batches: any[][] = [];
-    
+
     for (let i = 0; i < wallets.length; i += size) {
       batches.push(wallets.slice(i, i + size));
     }
-    
+
     return batches;
   }
 
@@ -1050,8 +1062,14 @@ export class StellarService {
         this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
       );
 
+      if (!beneficiary) {
+        this.logger.error('Beneficiary not found');
+        throw new RpcException('Beneficiary not found');
+      }
+
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
+          // Assuming unique beneficiary in group
           uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
         },
         include: {
@@ -1063,9 +1081,21 @@ export class StellarService {
         },
       });
 
+      if (!beneficiaryGroups) {
+        this.logger.error('Beneficiary group not found');
+        throw new RpcException('Beneficiary group not found');
+      }
+
+      if (!beneficiaryGroups.tokensReserved) {
+        this.logger.error('Tokens not reserved for the group');
+        throw new RpcException('Tokens not reserved for the group');
+      }
+
       return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
-      throw new Error(`Failed to retrieve payout type: ${error.message}`);
+      throw new RpcException(
+        `Failed to retrieve payout type: ${error.message}`
+      );
     }
   }
 }
