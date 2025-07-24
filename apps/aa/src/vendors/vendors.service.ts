@@ -137,18 +137,19 @@ export class VendorsService {
 
   async getTxnAndRedemptionList(payload: VendorRedeemTxnListDto) {
     try {
-      console.log(payload);
-      const { page, perPage, uuid, txHash } = payload;
+      const { page, perPage, uuid, txHash, status } = payload;
       const query = {
         where: {
           vendorUid: uuid,
           ...(txHash && { txHash }),
+          ...(status === 'success' && { status: 'TOKEN_TRANSACTION_COMPLET' }),
         },
         orderBy: {
           createdAt: 'desc',
         },
       };
 
+      // Get paginated transactions
       return paginate(this.prisma.beneficiaryRedeem, query, {
         page,
         perPage,
@@ -345,11 +346,32 @@ export class VendorsService {
           index === self.findIndex((b) => b.uuid === beneficiary.uuid)
       );
 
+      // Get beneficiary UUIDs
+      const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
+      let benResponse = [];
+      if (beneficiaryUuids.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+            beneficiaryUuids
+          )
+        );
+      }
+
+      // Attach beneficiary name to each beneficiary
+      const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
+        const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
+        return {
+          ...ben,
+          name: benInfo?.name || null,
+        };
+      });
+
       // Use the reusable paginator
       return paginate(
         {
-          findMany: async () => uniqueBeneficiaries,
-          count: async () => uniqueBeneficiaries.length,
+          findMany: async () => enrichedBeneficiaries,
+          count: async () => enrichedBeneficiaries.length,
         },
         {},
         { page: payload.page, perPage: payload.perPage }
