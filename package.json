@@ -2,11 +2,6 @@
   "name": "@rahat-project/aa",
   "version": "0.0.0",
   "license": "MIT",
-  "pnpm": {
-    "overrides": {
-      "stylus": "0.0.1-security"
-    }
-  },
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
     "start": "nx serve aa",
