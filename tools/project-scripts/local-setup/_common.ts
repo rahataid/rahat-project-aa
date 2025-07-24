@@ -117,16 +117,31 @@ export class ContractLib {
     return result;
   }
 
+  /**
+   * Returns the deployed address for a contract from the deployment file.
+   * Handles both { CONTRACTS: { ContractName: { address: ... } } } and legacy { ContractName: { address: ... } } structures.
+   */
   public getDeployedAddress(contractAddressFile: string, contractName: string) {
     const fileData = readFileSync(
       `${__dirname}/deployments/${contractAddressFile}.json`,
       'utf8'
     );
-
     const data = JSON.parse(fileData);
-    console.log({ data });
-    console.log({ contractName });
-    return data[contractName].address;
+    // Prefer the CONTRACTS section
+    if (
+      data.CONTRACTS &&
+      data.CONTRACTS[contractName] &&
+      data.CONTRACTS[contractName].address
+    ) {
+      return data.CONTRACTS[contractName].address;
+    }
+    // Fallback to top-level (legacy)
+    if (data[contractName] && data[contractName].address) {
+      return data[contractName].address;
+    }
+    throw new Error(
+      `Contract address for ${contractName} not found in deployment file ${contractAddressFile}.json`
+    );
   }
 
   public async mintVouchers(
