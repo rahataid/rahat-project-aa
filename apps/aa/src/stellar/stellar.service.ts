@@ -377,21 +377,35 @@ export class StellarService {
       });
 
       if (!existingRedeem) {
-        throw new RpcException('No pending BeneficiaryRedeem record found');
+        this.logger.warn(
+          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+        );
+        // Create a new record since the transfer was successful
+        await this.prisma.beneficiaryRedeem.create({
+          data: {
+            beneficiaryWalletAddress: keys.publicKey,
+            vendorUid: vendor.uuid,
+            amount: amount as number,
+            transactionType: 'VENDOR_REIMBURSEMENT',
+            txHash: result.tx.hash,
+            isCompleted: true,
+            status: 'COMPLETED',
+          },
+        });
+      } else {
+        // Update the existing BeneficiaryRedeem record with transaction details
+        await this.prisma.beneficiaryRedeem.update({
+          where: {
+            uuid: existingRedeem.uuid,
+          },
+          data: {
+            vendorUid: vendor.uuid,
+            txHash: result.tx.hash,
+            isCompleted: true,
+            status: 'COMPLETED',
+          },
+        });
       }
-
-      // Update the BeneficiaryRedeem record with transaction details
-      await this.prisma.beneficiaryRedeem.update({
-        where: {
-          uuid: existingRedeem.uuid,
-        },
-        data: {
-          vendorUid: vendor.uuid,
-          txHash: result.tx.hash,
-          isCompleted: true,
-          status: 'COMPLETED',
-        },
-      });
 
       return {
         txHash: result.tx.hash,
@@ -644,12 +658,19 @@ export class StellarService {
 
   // todo (new-chain-config): Need dynamic method according to chain
   async getDisbursementStats() {
+    console.log(await this.getFromSettings('TENANTNAME'));
+    console.log(
+      await this.disbursementService.getDistributionAddress(
+        await this.getFromSettings('TENANTNAME')
+      )
+    );
     const disbursementBalance = await this.getRahatBalance(
       await this.disbursementService.getDistributionAddress(
         await this.getFromSettings('TENANTNAME')
       )
     );
 
+    console.log(disbursementBalance, 'disbursementBalance');
     const vendors = await this.prisma.vendor.findMany({
       select: { walletAddress: true },
     });
@@ -1081,6 +1102,7 @@ export class StellarService {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
+      console.log(accountBalances, 'accountBalances');
       const assetCode = await this.getFromSettings('ASSETCODE');
 
       const rahatAsset = accountBalances?.find(
