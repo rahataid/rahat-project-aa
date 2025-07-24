@@ -174,7 +174,7 @@ class ContractSeed extends ContractLib {
 export default ContractSeed;
 async function main() {
   const contractSeed = new ContractSeed();
-  // await contractSeed.deployAAContracts();
+  await contractSeed.deployAAContracts();
   await contractSeed.addContractSettings();
 
   process.exit(0);
