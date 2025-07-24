@@ -3,6 +3,7 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 
 export const STELLER_UID = 'stellar';
 
@@ -228,6 +229,9 @@ export const EVENTS = {
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
   AUTOMATED_TRIGGERED: 'events.automated_triggered',
   TOKEN_RESERVED: 'events.token_reserved',
+  STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
+  STAKEHOLDER_CREATED: 'events.stakeholders_created',
+  STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
 };
 
 export const BQUEUE = {
@@ -246,4 +250,29 @@ export const VULNERABILITY_FIELD = {
   TYPE_OF_SSA_1: 'type_of_ssa_1',
   TYPE_OF_SSA_2: 'type_of_ssa_2',
   TYPE_OF_SSA_3: 'type_of_ssa_3',
+};
+
+export const TYPE_OF_SSA = {
+  SENIOR_CITIZEN_ABOVE_70: 'senior_citizen__70',
+  SENIOR_CITIZEN_DALIT_ABOVE_60: 'senior_citizen__60__dalit',
+  CHILD_NUTRITION: 'child_nutrition',
+  SINGLE_WOMEN: 'single_woman',
+  WIDOW: 'widow',
+  RED_CARD: 'red_class',
+  BLUE_CARD: 'blue_card',
+  INDIGENOUS_COMMUNITY: 'indigenous_community',
+};
+
+export const AGE_GROUPS = {
+  BELOW_20: '<20',
+  AGE_19_TO_29: '20-29',
+  AGE_30_TO_45: '30-45',
+  AGE_46_TO_59: '46-59',
+  ABOVE_60: '>60',
+};
+
+export const FIELD_MAP = {
+  NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
+  NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
+  NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
 };

@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { StatDto } from './dto/stat.dto';
 
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
 import { ConfigService } from '@nestjs/config';
+import { ClientProxy } from '@nestjs/microservices';
+import { TRIGGGERS_MODULE } from '../constants';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class StatsService {
@@ -11,7 +14,8 @@ export class StatsService {
 
   constructor(
     private prismaService: PrismaService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    @Inject(TRIGGGERS_MODULE) private readonly client: ClientProxy
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -40,8 +44,19 @@ export class StatsService {
     });
   }
 
-  findAll() {
-    return this.prismaService.stats.findMany();
+  async findAll(payload) {
+    try {
+      const benefStats = await this.prismaService.stats.findMany();
+      const triggeersStats = await firstValueFrom(
+        this.client.send({ cmd: 'rahat.jobs.ms.trigggers.stats' }, payload)
+      );
+      return {
+        benefStats,
+        triggeersStats,
+      };
+    } catch (error) {
+      console.error('Error from microservice:', error);
+    }
   }
 
   findOne(payload: { name: string }) {
@@ -56,5 +71,4 @@ export class StatsService {
       where: { name },
     });
   }
-
 }

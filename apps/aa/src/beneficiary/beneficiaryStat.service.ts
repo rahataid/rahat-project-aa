@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { StatsService } from '../stats';
 import { mapVulnerabilityStatusCount } from '../utils/vulnerabilityCountHelpers';
-import { VULNERABILITY_FIELD } from '../constants';
+import { AGE_GROUPS, VULNERABILITY_FIELD } from '../constants';
+import {
+  countBySSAType,
+  countResult,
+  getAgeGroup,
+  mapAgeGroupCounts,
+} from '../utils';
 
 @Injectable()
 export class BeneficiaryStatService {
@@ -195,6 +201,15 @@ export class BeneficiaryStatService {
     }));
   }
 
+  async calculateTypeOfSSA() {
+    const benef = await this.prisma.beneficiary.findMany({});
+    const myData = countBySSAType(benef);
+    return Object.keys(myData).map((d) => ({
+      id: d,
+      count: myData[d],
+    }));
+  }
+
   async calculateHouseholdCashSupport() {
     return this.prisma.beneficiary.count({
       where: {
@@ -205,38 +220,61 @@ export class BeneficiaryStatService {
     });
   }
 
+  async calculateAgeGroups() {
+    const benef = await this.prisma.beneficiary.findMany({});
+    const ageGroupCounts = mapAgeGroupCounts(benef);
+    return Object.keys(ageGroupCounts).map((d) => ({
+      id: d,
+      count: ageGroupCounts[d],
+    }));
+  }
+
+  async calculateTotalFamilyMembers() {
+    const benefs = await this.prisma.beneficiary.findMany();
+
+    const total = benefs.reduce((sum, ben) => {
+      const extras = ben.extras as {
+        total_number_of_family_members?: number;
+      };
+      const members = Number(extras?.total_number_of_family_members || 0);
+      return sum + members;
+    }, 0);
+
+    return { count: total };
+  }
+  async fieldMapResult() {
+    const benefs = await this.prisma.beneficiary.findMany();
+    return countResult(benefs);
+  }
   async calculateAllStats() {
     const [
       total,
       gender,
-      vulnerabilityStatus,
       bankStatus,
-      phoneType,
       countByBank,
-      phoneStatus,
-      vulnerabilityCountStats,
-      householdCashSupport,
+      calculateAgeGroups,
+      calculateTotalFamilyMembers,
+      calculateTypeOfSSA,
+      fieldMapResult,
     ] = await Promise.all([
       this.totalBeneficiaries(),
       this.calculateGenderStats(),
-      this.calculateVulnerabilityStats(),
       this.calculateBankStatusStats(),
-      this.calculatePhoneSetTypeStats(),
       this.calculateCountByBankStats(),
-      this.calculatePhoneStatusStats(),
-      this.calculateVulnerabilityCountStats(),
-      this.calculateHouseholdCashSupport(),
+      this.calculateAgeGroups(),
+      this.calculateTotalFamilyMembers(),
+      this.calculateTypeOfSSA(),
+      this.fieldMapResult(),
     ]);
     return {
       total,
       gender,
-      vulnerabilityStatus,
       bankStatus,
-      phoneType,
       countByBank,
-      phoneStatus,
-      vulnerabilityCountStats,
-      householdCashSupport,
+      calculateAgeGroups,
+      calculateTotalFamilyMembers,
+      calculateTypeOfSSA,
+      fieldMapResult,
     };
   }
 
@@ -244,19 +282,23 @@ export class BeneficiaryStatService {
     const {
       total,
       gender,
-      vulnerabilityStatus,
       bankStatus,
-      phoneType,
       countByBank,
-      phoneStatus,
-      vulnerabilityCountStats,
-      householdCashSupport,
+      calculateAgeGroups,
+      calculateTotalFamilyMembers,
+      calculateTypeOfSSA,
+      fieldMapResult,
     } = await this.calculateAllStats();
 
     await Promise.all([
       this.statsService.save({
-        name: 'beneficiary_total',
+        name: 'total_respondents',
         data: total,
+        group: 'beneficiary',
+      }),
+      this.statsService.save({
+        name: 'total_number_family_members',
+        data: calculateTotalFamilyMembers,
         group: 'beneficiary',
       }),
       this.statsService.save({
@@ -265,38 +307,30 @@ export class BeneficiaryStatService {
         group: 'beneficiary',
       }),
       this.statsService.save({
-        name: 'beneficiary_vulnerabilityStatus',
-        data: vulnerabilityStatus,
-        group: 'beneficiary',
-      }),
-      this.statsService.save({
         name: 'beneficiary_bankStatus',
         data: bankStatus,
         group: 'beneficiary',
       }),
-      this.statsService.save({
-        name: 'beneficiary_phoneType',
-        data: phoneType,
-        group: 'beneficiary',
-      }),
+
       this.statsService.save({
         name: 'beneficiary_countByBank',
         data: countByBank,
         group: 'beneficiary',
       }),
+
       this.statsService.save({
-        name: 'beneficiary_phoneStatus',
-        data: phoneStatus,
+        name: 'type_of_ssa',
+        data: calculateTypeOfSSA,
         group: 'beneficiary',
       }),
       this.statsService.save({
-        name: 'beneficiary_countByVulnerability',
-        data: vulnerabilityCountStats,
+        name: 'beneficiary_ageGroups',
+        data: calculateAgeGroups,
         group: 'beneficiary',
       }),
       this.statsService.save({
-        name: 'beneficiary_householdCashSupport',
-        data: { householdCashSupport: householdCashSupport },
+        name: 'field_map_result',
+        data: fieldMapResult,
         group: 'beneficiary',
       }),
     ]);
@@ -304,13 +338,10 @@ export class BeneficiaryStatService {
     return {
       total,
       gender,
-      vulnerabilityStatus,
       bankStatus,
-      phoneType,
       countByBank,
-      phoneStatus,
-      vulnerabilityCountStats,
-      householdCashSupport,
+      calculateAgeGroups,
+      fieldMapResult,
     };
   }
 }
