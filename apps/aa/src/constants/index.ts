@@ -196,6 +196,7 @@ export const JOBS = {
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
     GET_ONE: 'aa.jobs.stats.getOne',
+    MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
   DAILY_MONITORING: {
     ADD: 'aa.jobs.dailyMonitoring.add',

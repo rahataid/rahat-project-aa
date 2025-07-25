@@ -290,49 +290,47 @@ export class BeneficiaryStatService {
       fieldMapResult,
     } = await this.calculateAllStats();
 
-    await Promise.all([
-      this.statsService.save({
+    await this.statsService.saveMany([
+      {
         name: 'total_respondents',
         data: total,
         group: 'beneficiary',
-      }),
-      this.statsService.save({
+      },
+      {
         name: 'total_number_family_members',
         data: calculateTotalFamilyMembers,
         group: 'beneficiary',
-      }),
-      this.statsService.save({
+      },
+      {
         name: 'beneficiary_gender',
         data: gender,
         group: 'beneficiary',
-      }),
-      this.statsService.save({
+      },
+      {
         name: 'beneficiary_bankStatus',
         data: bankStatus,
         group: 'beneficiary',
-      }),
-
-      this.statsService.save({
+      },
+      {
         name: 'beneficiary_countByBank',
         data: countByBank,
         group: 'beneficiary',
-      }),
-
-      this.statsService.save({
+      },
+      {
         name: 'type_of_ssa',
         data: calculateTypeOfSSA,
         group: 'beneficiary',
-      }),
-      this.statsService.save({
+      },
+      {
         name: 'beneficiary_ageGroups',
         data: calculateAgeGroups,
         group: 'beneficiary',
-      }),
-      this.statsService.save({
+      },
+      {
         name: 'field_map_result',
         data: fieldMapResult,
         group: 'beneficiary',
-      }),
+      },
     ]);
 
     return {

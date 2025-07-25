@@ -5,7 +5,7 @@ import { StatDto } from './dto/stat.dto';
 import { CommunicationService } from '@rumsan/communication/services/communication.client';
 import { ConfigService } from '@nestjs/config';
 import { ClientProxy } from '@nestjs/microservices';
-import { TRIGGGERS_MODULE } from '../constants';
+import { JOBS, TRIGGGERS_MODULE } from '../constants';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
@@ -34,6 +34,25 @@ export class StatsService {
     });
   }
 
+  async saveMany(stats: StatDto[]) {
+    const formattedStats = stats.map((stat) => ({
+      ...stat,
+      name: stat.name.toUpperCase(),
+    }));
+
+    const group = formattedStats[0]?.group;
+    if (group) {
+      await this.prismaService.stats.deleteMany({
+        where: { group },
+      });
+    }
+
+    return this.prismaService.stats.createMany({
+      data: formattedStats,
+      skipDuplicates: true,
+    });
+  }
+
   getByGroup(
     group: string,
     select: { name?: boolean; data?: boolean; group?: boolean } | null = null
@@ -48,7 +67,7 @@ export class StatsService {
     try {
       const benefStats = await this.prismaService.stats.findMany();
       const triggeersStats = await firstValueFrom(
-        this.client.send({ cmd: 'rahat.jobs.ms.trigggers.stats' }, payload)
+        this.client.send({ cmd: JOBS.STATS.MS_TRIGGERS_STATS }, payload)
       );
       return {
         benefStats,
