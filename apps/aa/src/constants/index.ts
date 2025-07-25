@@ -135,6 +135,7 @@ export const JOBS = {
       'aa.jobs.payout.triggerOneFailedPayoutRequest',
     GET_PAYOUT_LOGS: 'aa.jobs.payout.getPayoutLogs',
     GET_PAYOUT_LOG: 'aa.jobs.payout.getPayoutLog',
+    GET_PAYOUT_DETAILS: 'aa.jobs.payout.getPayoutDetails',
     CREATE: 'aa.jobs.payout.create',
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',

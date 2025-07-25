@@ -7,6 +7,7 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import { GetPayoutDetailsDto } from './dto/get-payout-details.dto';
 
 @Controller()
 export class PayoutsController {
@@ -89,5 +90,32 @@ export class PayoutsController {
   getPayoutStats() {
     console.log('first');
     return this.payoutsService.getPayoutStats();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.GET_PAYOUT_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getPayoutDetails(@Payload() payload: GetPayoutDetailsDto) {
+    const {
+      uuid,
+      walletAddress,
+      status,
+      transactionType,
+      page,
+      perPage,
+      sort,
+      order,
+    } = payload;
+
+    return this.payoutsService.getPayoutDetails(uuid, {
+      walletAddress,
+      status,
+      transactionType,
+      page,
+      perPage,
+      sort,
+      order,
+    });
   }
 }

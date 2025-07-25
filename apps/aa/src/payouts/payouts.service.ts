@@ -5,6 +5,7 @@ import {
   BeneficiaryRedeem,
   Payouts,
   PayoutTransactionStatus,
+  PayoutTransactionType,
   PayoutType,
   Prisma,
 } from '@prisma/client';
@@ -27,6 +28,10 @@ import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import {
+  GetPayoutDetailsDto,
+  PayoutDetailsResponse,
+} from './dto/get-payout-details.dto';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -517,7 +522,9 @@ export class PayoutsService {
           return {
             amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
-            phoneNumber: benfToGroup.beneficiary?.phone || benfToGroup.beneficiary?.extras?.phone,
+            phoneNumber:
+              benfToGroup.beneficiary?.phone ||
+              benfToGroup.beneficiary?.extras?.phone,
             bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
               accountNumber:
@@ -548,6 +555,157 @@ export class PayoutsService {
 
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
     return this.offrampService.getPaymentProvider();
+  }
+
+  async getPayoutDetails(
+    uuid: string,
+    filters?: {
+      walletAddress?: string;
+      status?: string;
+      transactionType?: string;
+      page?: number;
+      perPage?: number;
+      sort?: string;
+      order?: 'asc' | 'desc';
+    }
+  ): Promise<PaginatedResult<PayoutDetailsResponse>> {
+    this.logger.log(
+      `Fetching payout details for payout with UUID: '${uuid}' with filters: ${JSON.stringify(
+        filters
+      )}`
+    );
+
+    try {
+      const payout = await this.findOne(uuid);
+
+      if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
+        this.logger.warn(
+          `No beneficiaries found for payout with UUID: '${uuid}'`
+        );
+        return {
+          data: [],
+          meta: {
+            total: 0,
+            lastPage: 0,
+            currentPage: 1,
+            perPage: 20,
+            prev: null,
+            next: null,
+          },
+        };
+      }
+
+      const numberOfTokensToTransfer =
+        payout.beneficiaryGroupToken.numberOfTokens /
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+
+      // Get beneficiary redeem records for this payout with filters
+      const whereClause: Prisma.BeneficiaryRedeemWhereInput = {
+        payoutId: uuid,
+        ...(filters?.walletAddress && {
+          beneficiaryWalletAddress: {
+            contains: filters.walletAddress,
+            mode: 'insensitive',
+          },
+        }),
+        ...(filters?.status && {
+          status: filters.status as PayoutTransactionStatus,
+        }),
+        ...(filters?.transactionType && {
+          transactionType: filters.transactionType as PayoutTransactionType,
+        }),
+      };
+
+      const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
+        where: whereClause,
+        include: {
+          Beneficiary: {
+            select: {
+              walletAddress: true,
+              phone: true,
+              extras: true,
+            },
+          },
+        },
+        orderBy:
+          filters?.sort && filters?.order
+            ? { [filters.sort]: filters.order }
+            : { createdAt: 'desc' },
+      });
+
+      const payoutDetails: PayoutDetailsResponse[] = [];
+
+      for (const benfToGroup of payout.beneficiaryGroupToken.beneficiaryGroup
+        .beneficiaries) {
+        const beneficiaryWalletAddress = benfToGroup.beneficiary?.walletAddress;
+
+        if (!beneficiaryWalletAddress) {
+          this.logger.warn(
+            `Beneficiary with missing wallet address for payout with UUID: '${uuid}'`
+          );
+          continue;
+        }
+
+        // Find corresponding redeem record
+        const redeemRecord = beneficiaryRedeems.find(
+          (redeem) =>
+            redeem.beneficiaryWalletAddress === beneficiaryWalletAddress
+        );
+
+        const payoutDetail: PayoutDetailsResponse = {
+          beneficiaryWalletAddress,
+          transactionWalletId: redeemRecord?.uuid || '',
+          transactionType: redeemRecord?.transactionType || 'UNKNOWN',
+          tokensAssigned: numberOfTokensToTransfer,
+          payoutStatus: redeemRecord?.status || 'PENDING',
+          timestamp: redeemRecord?.createdAt || benfToGroup.createdAt,
+        };
+
+        payoutDetails.push(payoutDetail);
+      }
+
+      // Apply additional filtering for wallet address search
+      let filteredPayoutDetails = payoutDetails;
+      if (filters?.walletAddress) {
+        filteredPayoutDetails = payoutDetails.filter((detail) =>
+          detail.beneficiaryWalletAddress
+            .toLowerCase()
+            .includes(filters.walletAddress!.toLowerCase())
+        );
+      }
+
+      // Apply pagination
+      const page = filters?.page || 1;
+      const perPage = filters?.perPage || 20;
+      const startIndex = (page - 1) * perPage;
+      const endIndex = startIndex + perPage;
+      const paginatedData = filteredPayoutDetails.slice(startIndex, endIndex);
+
+      const total = filteredPayoutDetails.length;
+      const lastPage = Math.ceil(total / perPage);
+
+      this.logger.log(
+        `Successfully fetched ${paginatedData.length} payout details for payout with UUID: '${uuid}' (page ${page} of ${lastPage})`
+      );
+
+      return {
+        data: paginatedData,
+        meta: {
+          total,
+          lastPage,
+          currentPage: page,
+          perPage,
+          prev: page > 1 ? page - 1 : null,
+          next: page < lastPage ? page + 1 : null,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch payout details: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
   }
 
   async registerTokenTransferRequest(payload: {
@@ -1012,7 +1170,9 @@ export class PayoutsService {
       );
     }
 
-    const beneficiaryPhoneNumber = benfRedeemRequest.Beneficiary.phone || (benfRedeemRequest.Beneficiary.extras as any)?.phone;
+    const beneficiaryPhoneNumber =
+      benfRedeemRequest.Beneficiary.phone ||
+      (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
