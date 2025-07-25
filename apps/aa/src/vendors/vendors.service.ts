@@ -22,16 +22,22 @@ export class VendorsService {
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
+    const { page, perPage, sort, order, search } = query;
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
     return paginate(
       this.prisma.vendor,
       {
         where: {
-          name: { contains: query.search, mode: 'insensitive' },
+          name: { contains: search, mode: 'insensitive' },
         },
+        orderBy,
       },
       {
-        page: query.page,
-        perPage: query.perPage,
+        page,
+        perPage,
       }
     );
   }
