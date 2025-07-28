@@ -145,14 +145,14 @@ export class EVMProcessor {
 
       // TODO: Add the logic to update the group token reservation
       await this.beneficiaryService.updateGroupToken({
-        groupUuid: groups,
+        groupUuid: Array.isArray(groups) ? groups[0] : groups,
         status: 'STARTED',
         isDisbursed: false,
         info: assignTokenToBeneficiary.hash,
       });
     } catch (error) {
       await this.beneficiaryService.updateGroupToken({
-        groupUuid: groups,
+        groupUuid: Array.isArray(groups) ? groups[0] : groups,
         status: 'FAILED',
         isDisbursed: false,
         info: {

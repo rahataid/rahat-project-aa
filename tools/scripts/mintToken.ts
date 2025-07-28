@@ -2,7 +2,7 @@
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-const RahatTokenABI = require('./RahatTokenAbi.json');
+const RahatDonorAbi = require('./RahatDonorAbi.json');
 
 // Load environment variables
 dotenv.config();
@@ -25,7 +25,7 @@ async function mintRahatTokens() {
       rpcUrl: string;
     };
 
-    const tokenContractAddress = '0x532fD930C89AaD6BCF27b451331528Cc296e7139';
+    const tokenContractAddress = '0xcA972Dc289297bA0244470D78c38598d58d19C21';
 
     console.log(tokenContractAddress, rpcUrl, 'token contract, rpc url');
 
@@ -44,18 +44,22 @@ async function mintRahatTokens() {
     // Connect to the token contract
     const tokenContract = new ethers.Contract(
       tokenContractAddress,
-      RahatTokenABI,
+      RahatDonorAbi,
       wallet
     );
 
     console.log(`Connected to token contract`);
 
     // Example: Mint 1000 tokens to the deployer's address
-    const recipient = '0x938e1F922E21664D876c754643D3d82C72f293D2';
+    const recipient = '0xCF6a6649a1f1bF7911B8bF726b523012B52a28b4';
     const amount = ethers.parseUnits('1000', 18); // 1000 tokens
 
     // Execute the mint transaction
-    const tx = await tokenContract.mint(recipient, amount);
+    const tx = await tokenContract.mintTokens(
+      '0x1876A19A0Ab56510C2E3c0317C95b47B8BC100C0',
+      recipient,
+      amount
+    );
     console.log(`Transaction hash: ${tx.hash}`);
 
     // Wait for the transaction to be mined
