@@ -15,6 +15,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
+  DownloadPayoutLogsType,
   IPaymentProvider,
   PayoutStats,
 } from './dto/types';
@@ -32,6 +33,8 @@ import {
   PayoutWithRelations,
   RedeemStatus,
 } from '../utils/getBeneficiaryRedemStatus';
+import { parseJsonField } from '../utils/parseJsonFields';
+import { format } from 'date-fns';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -517,7 +520,9 @@ export class PayoutsService {
           return {
             amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
-            phoneNumber: benfToGroup.beneficiary?.phone || benfToGroup.beneficiary?.extras?.phone,
+            phoneNumber:
+              benfToGroup.beneficiary?.phone ||
+              benfToGroup.beneficiary?.extras?.phone,
             bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
               accountNumber:
@@ -1045,7 +1050,9 @@ export class PayoutsService {
       );
     }
 
-    const beneficiaryPhoneNumber = benfRedeemRequest.Beneficiary.phone || (benfRedeemRequest.Beneficiary.extras as any)?.phone;
+    const beneficiaryPhoneNumber =
+      benfRedeemRequest.Beneficiary.phone ||
+      (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
@@ -1064,5 +1071,61 @@ export class PayoutsService {
       beneficiaryRedeemUUID: benfRedeemRequest.uuid,
     };
     return offrampQueuePayload;
+  }
+
+  async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {
+    this.logger.log(
+      `Getting payout log for beneficiary redeem with UUID: ${uuid}`
+    );
+    try {
+      const log = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          uuid,
+        },
+        include: {
+          Beneficiary: true,
+          payout: true,
+          Vendor: true,
+        },
+      });
+
+      if (!log) {
+        throw new RpcException(
+          `Beneficiary redeem log with UUID '${uuid}' not found`
+        );
+      }
+
+      const result = log.map((log) => {
+        const extras = parseJsonField(log.Beneficiary?.extras);
+        const info = parseJsonField(log.info);
+
+        return {
+          'Beneficiary Wallet Address': log.beneficiaryWalletAddress,
+          'Bank a/c name': extras.bank_ac_name || null,
+          'Bank a/c number': extras.bank_ac_number || null,
+          'Bank Name': extras.bank_name || null,
+          'Phone number': extras.phone || null,
+          'Govt Id': extras.interviewee_government_id_type || null,
+          'Transaction Type': log.transactionType,
+          'Bank Transaction ID': log.payoutId,
+          'Transacrion Wallet ID': log.txHash,
+          'Payout Status': log.payout?.status || null,
+          'Created at': log.createdAt
+            ? format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm')
+            : '',
+          'Updated at': log.updatedAt
+            ? format(new Date(log.updatedAt), 'yyyy-MM-dd HH:mm')
+            : '',
+          'No of Attempts': info.numberOfAttempts || 0,
+        };
+      });
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get payout log: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
   }
 }
