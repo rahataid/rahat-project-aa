@@ -47,4 +47,5 @@ export interface PayoutDetailsResponse {
   tokensAssigned: number;
   payoutStatus: string;
   timestamp: Date;
+  txHash?: string;
 }

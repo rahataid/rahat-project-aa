@@ -41,6 +41,7 @@ import {
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 const ONE_TOKEN_VALUE = 1;
+
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
@@ -576,9 +577,35 @@ export class PayoutsService {
     );
 
     try {
-      const payout = await this.findOne(uuid);
+      // Check beneficiary group token and get first where payout id matches
+      const beneficiaryGroupToken =
+        await this.prisma.beneficiaryGroupTokens.findFirst({
+          where: {
+            payout: {
+              uuid: uuid,
+            },
+          },
+          include: {
+            beneficiaryGroup: {
+              include: {
+                beneficiaries: {
+                  include: {
+                    beneficiary: {
+                      select: {
+                        uuid: true,
+                        walletAddress: true,
+                        extras: true,
+                        phone: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
 
-      if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
+      if (!beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
         this.logger.warn(
           `No beneficiaries found for payout with UUID: '${uuid}'`
         );
@@ -596,8 +623,8 @@ export class PayoutsService {
       }
 
       const numberOfTokensToTransfer =
-        payout.beneficiaryGroupToken.numberOfTokens /
-        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+        beneficiaryGroupToken.numberOfTokens /
+        beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
 
       // Get beneficiary redeem records for this payout with filters
       const whereClause: Prisma.BeneficiaryRedeemWhereInput = {
@@ -616,7 +643,7 @@ export class PayoutsService {
         }),
       };
 
-      const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
+      const query: Prisma.BeneficiaryRedeemFindManyArgs = {
         where: whereClause,
         include: {
           Beneficiary: {
@@ -626,78 +653,58 @@ export class PayoutsService {
               extras: true,
             },
           },
+          Vendor: {
+            select: {
+              walletAddress: true,
+            },
+          },
         },
         orderBy:
           filters?.sort && filters?.order
             ? { [filters.sort]: filters.order }
             : { createdAt: 'desc' },
+      };
+
+      const result = await paginate(this.prisma.beneficiaryRedeem, query, {
+        page: filters?.page || 1,
+        perPage: filters?.perPage || 20,
       });
 
-      const payoutDetails: PayoutDetailsResponse[] = [];
+      // Transform the data to match PayoutDetailsResponse format
+      const payoutDetails: PayoutDetailsResponse[] = await Promise.all(
+        result.data.map(async (redeemRecord: any) => {
+          // Get vendor wallet address from vendorUid
+          let transactionWalletId = '';
+          if (redeemRecord.vendorUid) {
+            const vendor = await this.prisma.vendor.findUnique({
+              where: { uuid: redeemRecord.vendorUid },
+              select: { walletAddress: true },
+            });
+            transactionWalletId = vendor?.walletAddress || '';
+          }
 
-      for (const benfToGroup of payout.beneficiaryGroupToken.beneficiaryGroup
-        .beneficiaries) {
-        const beneficiaryWalletAddress = benfToGroup.beneficiary?.walletAddress;
-
-        if (!beneficiaryWalletAddress) {
-          this.logger.warn(
-            `Beneficiary with missing wallet address for payout with UUID: '${uuid}'`
-          );
-          continue;
-        }
-
-        // Find corresponding redeem record
-        const redeemRecord = beneficiaryRedeems.find(
-          (redeem) =>
-            redeem.beneficiaryWalletAddress === beneficiaryWalletAddress
-        );
-
-        const payoutDetail: PayoutDetailsResponse = {
-          beneficiaryWalletAddress,
-          transactionWalletId: redeemRecord?.uuid || '',
-          transactionType: redeemRecord?.transactionType || 'UNKNOWN',
-          tokensAssigned: numberOfTokensToTransfer,
-          payoutStatus: redeemRecord?.status || 'PENDING',
-          timestamp: redeemRecord?.createdAt || benfToGroup.createdAt,
-        };
-
-        payoutDetails.push(payoutDetail);
-      }
-
-      // Apply additional filtering for wallet address search
-      let filteredPayoutDetails = payoutDetails;
-      if (filters?.walletAddress) {
-        filteredPayoutDetails = payoutDetails.filter((detail) =>
-          detail.beneficiaryWalletAddress
-            .toLowerCase()
-            .includes(filters.walletAddress!.toLowerCase())
-        );
-      }
-
-      // Apply pagination
-      const page = filters?.page || 1;
-      const perPage = filters?.perPage || 20;
-      const startIndex = (page - 1) * perPage;
-      const endIndex = startIndex + perPage;
-      const paginatedData = filteredPayoutDetails.slice(startIndex, endIndex);
-
-      const total = filteredPayoutDetails.length;
-      const lastPage = Math.ceil(total / perPage);
+          return {
+            beneficiaryWalletAddress: redeemRecord.beneficiaryWalletAddress,
+            transactionWalletId,
+            transactionType: redeemRecord.transactionType,
+            tokensAssigned: numberOfTokensToTransfer,
+            payoutStatus: redeemRecord.status,
+            timestamp: redeemRecord.createdAt,
+            txHash:
+              redeemRecord.status === 'COMPLETED'
+                ? redeemRecord.txHash
+                : undefined,
+          };
+        })
+      );
 
       this.logger.log(
-        `Successfully fetched ${paginatedData.length} payout details for payout with UUID: '${uuid}' (page ${page} of ${lastPage})`
+        `Successfully fetched ${payoutDetails.length} payout details for payout with UUID: '${uuid}'`
       );
 
       return {
-        data: paginatedData,
-        meta: {
-          total,
-          lastPage,
-          currentPage: page,
-          perPage,
-          prev: page > 1 ? page - 1 : null,
-          next: page < lastPage ? page + 1 : null,
-        },
+        data: payoutDetails,
+        meta: result.meta,
       };
     } catch (error) {
       this.logger.error(
