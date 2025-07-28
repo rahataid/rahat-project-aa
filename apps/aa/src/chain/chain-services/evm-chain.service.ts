@@ -331,6 +331,7 @@ export class EvmChainService implements IChainService {
 
   async getDisbursementStats() {
     const subgraphUrl = await this.settingsService.getPublic('SUBGRAPH_URL');
+    const chainConfig = await this.getChainConfig();
 
     const response = await querySubgraph(
       subgraphUrl.value as string,
@@ -346,13 +347,27 @@ export class EvmChainService implements IChainService {
         { name: 'Token Price', amount: 'Rs 10' },
       ],
       transactionStats: response.benTokensAssigneds.map((item) => ({
-        title: item.id,
+        title: `Token Assignment - ${item.beneficiary.slice(
+          0,
+          8
+        )}...${item.beneficiary.slice(-6)}`,
         subtitle: item.beneficiary,
         date: new Date(item.blockTimestamp * 1000),
         amount: Number(item.amount).toFixed(0),
         amtColor: 'green',
         hash: item.transactionHash,
       })),
+      chainInfo: {
+        name: chainConfig.name,
+        chainId: chainConfig.chainId,
+        rpcUrl: chainConfig.rpcUrl,
+        explorerUrl: chainConfig.explorerUrl,
+        currencyName: chainConfig.currencyName,
+        currencySymbol: chainConfig.currencySymbol,
+        currencyDecimals: chainConfig.currencyDecimals,
+        projectContractAddress: chainConfig.projectContractAddress,
+        tokenContractAddress: chainConfig.tokenContractAddress,
+      },
     };
   }
 
