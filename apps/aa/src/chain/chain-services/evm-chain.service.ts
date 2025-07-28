@@ -115,73 +115,13 @@ export class EvmChainService implements IChainService {
   }
 
   async addTrigger(data: AddTriggerDto): Promise<any> {
-    try {
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.ADD_TRIGGER,
-        {
-          triggers: [data],
-        },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-        }
-      );
-
-      this.logger.log(
-        `Queued EVM add trigger job ${job.id}`,
-        EvmChainService.name
-      );
-
-      return {
-        jobId: job.id,
-        status: 'QUEUED',
-        triggerCount: 1,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error queuing EVM trigger: ${error.message}`,
-        error.stack,
-        EvmChainService.name
-      );
-      throw error;
-    }
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
   }
 
   async updateTriggerParams(triggerUpdate: any): Promise<any> {
-    try {
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.UPDATE_TRIGGER_PARAMS,
-        triggerUpdate,
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-        }
-      );
-
-      this.logger.log(
-        `Queued EVM update trigger params job ${job.id}`,
-        EvmChainService.name
-      );
-
-      return {
-        jobId: job.id,
-        status: 'QUEUED',
-        triggerId: triggerUpdate.id,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error queuing EVM trigger update: ${error.message}`,
-        error.stack,
-        EvmChainService.name
-      );
-      throw error;
-    }
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
   }
 
   async addBeneficiary(beneficiaryAddress: string): Promise<any> {

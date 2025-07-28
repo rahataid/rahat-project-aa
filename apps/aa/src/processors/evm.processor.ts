@@ -333,6 +333,169 @@ export class EVMProcessor {
     }
   }
 
+  @Process({ name: JOBS.CONTRACT.CHECK_BALANCE, concurrency: 1 })
+  async checkBalance(
+    job: Job<{ address: string; tokenAddress: string; projectContract: string }>
+  ) {
+    try {
+      this.logger.log('Processing EVM balance check...', EVMProcessor.name);
+      await this.ensureInitialized();
+
+      const { address, tokenAddress, projectContract } = job.data;
+
+      // Get ETH balance
+      const ethBalance = await this.provider.getBalance(address);
+
+      // Get token balance
+      const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ['function balanceOf(address) view returns (uint256)'],
+        this.provider
+      );
+
+      const tokenBalance = await tokenContract.balanceOf(address);
+
+      // Get project contract balance for this beneficiary
+      const projectContractInstance = new ethers.Contract(
+        projectContract,
+        ['function benTokens(address) view returns (uint256)'],
+        this.provider
+      );
+
+      const projectTokenBalance = await projectContractInstance.benTokens(
+        address
+      );
+
+      return {
+        balances: [
+          {
+            asset_type: 'native',
+            balance: ethers.formatEther(ethBalance),
+            asset_code: 'ETH',
+            asset_issuer: null,
+          },
+          {
+            asset_type: 'credit_alphanum4',
+            balance: ethers.formatUnits(tokenBalance, 18),
+            asset_code: 'RAHAT',
+            asset_issuer: tokenAddress,
+          },
+          {
+            asset_type: 'credit_alphanum4',
+            balance: ethers.formatUnits(projectTokenBalance, 18),
+            asset_code: 'PROJECT_TOKENS',
+            asset_issuer: projectContract,
+          },
+        ],
+        transactions: [], // TODO: Implement transaction history
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error in EVM balance check: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  @Process({ name: JOBS.CONTRACT.FUND_ACCOUNT, concurrency: 1 })
+  async fundAccount(job: Job<{ walletAddress: string; amount: string }>) {
+    try {
+      this.logger.log('Processing EVM fund account...', EVMProcessor.name);
+      await this.ensureInitialized();
+
+      const { walletAddress, amount } = job.data;
+
+      // Send ETH to the wallet address
+      const tx = await this.signer.sendTransaction({
+        to: walletAddress,
+        value: ethers.parseEther(amount),
+      });
+
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully funded account ${walletAddress} with ${amount} ETH. Transaction: ${receipt.hash}`,
+        EVMProcessor.name
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        walletAddress,
+        amount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error in EVM fund account: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  @Process({ name: JOBS.CONTRACT.TRANSFER_TOKENS, concurrency: 1 })
+  async transferTokens(job: Job<{ from: string; to: string; amount: string }>) {
+    try {
+      this.logger.log('Processing EVM transfer tokens...', EVMProcessor.name);
+      await this.ensureInitialized();
+
+      const { from, to, amount } = job.data;
+
+      // Get the token contract
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+      const tokenContract = new ethers.Contract(
+        chainConfig.tokenContractAddress,
+        [
+          'function transfer(address to, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)',
+        ],
+        this.signer
+      );
+
+      // Check balance before transfer
+      const balance = await tokenContract.balanceOf(from);
+      const transferAmount = ethers.parseUnits(amount, 18);
+
+      if (balance < transferAmount) {
+        throw new Error(
+          `Insufficient balance. Required: ${amount}, Available: ${ethers.formatUnits(
+            balance,
+            18
+          )}`
+        );
+      }
+
+      // Transfer tokens
+      const tx = await tokenContract.transfer(to, transferAmount);
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully transferred ${amount} tokens from ${from} to ${to}. Transaction: ${receipt.hash}`,
+        EVMProcessor.name
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from,
+        to,
+        amount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error in EVM transfer tokens: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw error;
+    }
+  }
+
   private async getFromSettings(key: string): Promise<any> {
     try {
       const settings = await this.prismaService.setting.findUnique({
