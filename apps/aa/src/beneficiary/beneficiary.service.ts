@@ -16,6 +16,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, Prisma } from '@prisma/client';
+import { SettingsService } from '@rumsan/settings';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -38,7 +39,8 @@ export class BeneficiaryService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    private settingsService: SettingsService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -346,22 +348,22 @@ export class BeneficiaryService {
       user,
     } = payload;
 
-      const isAlreadyReserved =
-        await this.prisma.beneficiaryGroupTokens.findUnique({
-          where: { groupId: beneficiaryGroupId },
-        });
+    const isAlreadyReserved =
+      await this.prisma.beneficiaryGroupTokens.findUnique({
+        where: { groupId: beneficiaryGroupId },
+      });
 
-      if (isAlreadyReserved) {
-        throw new RpcException('Token already reserved.');
-      }
+    if (isAlreadyReserved) {
+      throw new RpcException('Token already reserved.');
+    }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: beneficiaryGroupId,
-      }
+      },
     });
 
-    if(!benfGroup) {
+    if (!benfGroup) {
       throw new RpcException('Beneficiary group not found.');
     }
 
@@ -446,11 +448,25 @@ export class BeneficiaryService {
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
     > = [];
 
+    // Get chain settings from database
+    let chainInfo = null;
+    try {
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      if (chainSettings?.value) {
+        chainInfo = chainSettings.value;
+      }
+    } catch (error) {
+      this.logger.warn('Failed to get chain settings:', error.message);
+    }
+
     for (const d of data) {
       const group = await this.getOneGroup(d['groupId'] as UUID);
       formattedData.push({
         ...d,
         group,
+        ...(chainInfo ? { chainInfo } : {}),
       });
     }
 
