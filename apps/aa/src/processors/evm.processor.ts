@@ -150,6 +150,33 @@ export class EVMProcessor {
         isDisbursed: false,
         info: assignTokenToBeneficiary.hash,
       });
+
+      // Add status update job to check transaction confirmation after 3 minutes
+      this.evmQueue.add(
+        JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
+        {
+          txHash: assignTokenToBeneficiary.hash,
+          groupUuid: Array.isArray(groups) ? groups[0] : groups,
+          beneficiaries: bens.map((ben) => ben.walletAddress),
+          amounts: bens.map((ben) => ben.amount),
+          identifier: `disbursement_${Date.now()}`,
+        },
+        {
+          delay: 3 * 60 * 1000, // 3 minutes
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+        }
+      );
+
+      this.logger.log(
+        `Successfully added disbursement status update job for group ${
+          Array.isArray(groups) ? groups[0] : groups
+        }`,
+        EVMProcessor.name
+      );
     } catch (error) {
       await this.beneficiaryService.updateGroupToken({
         groupUuid: Array.isArray(groups) ? groups[0] : groups,
@@ -179,7 +206,7 @@ export class EVMProcessor {
       );
 
       await this.ensureInitialized();
-      const { groupUuid } = job.data;
+      const { groupUuid, txHash } = job.data;
 
       const group =
         await this.beneficiaryService.getOneTokenReservationByGroupId(
@@ -189,6 +216,112 @@ export class EVMProcessor {
       if (!group) {
         this.logger.error(`Group ${groupUuid} not found`, EVMProcessor.name);
         return;
+      }
+
+      // Check if the group was updated more than 60 minutes ago (assume failed)
+      if (
+        new Date(group.updatedAt).getTime() <
+        new Date().getTime() - 60 * 60 * 1000
+      ) {
+        this.logger.log(
+          `Group ${groupUuid} updated more than 60 minutes ago, assuming disbursement failed`,
+          EVMProcessor.name
+        );
+        await this.beneficiaryService.updateGroupToken({
+          groupUuid,
+          status: 'FAILED',
+          isDisbursed: false,
+          info: {
+            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+            error: 'Transaction timeout - no confirmation received',
+          },
+        });
+        return;
+      }
+
+      // Check transaction status on blockchain
+      try {
+        const txReceipt = await this.provider.getTransactionReceipt(txHash);
+
+        if (!txReceipt) {
+          this.logger.log(
+            `Transaction ${txHash} not yet confirmed, adding another status update job`,
+            EVMProcessor.name
+          );
+
+          // Add another status update job to check again in 2 minutes
+          this.evmQueue.add(
+            JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
+            job.data,
+            {
+              delay: 2 * 60 * 1000, // 2 minutes
+              attempts: 3,
+              backoff: {
+                type: 'exponential',
+                delay: 2000,
+              },
+            }
+          );
+          return;
+        }
+
+        // Transaction confirmed, check if it was successful
+        if (txReceipt.status === 1) {
+          this.logger.log(
+            `Transaction ${txHash} confirmed successfully`,
+            EVMProcessor.name
+          );
+
+          await this.beneficiaryService.updateGroupToken({
+            groupUuid,
+            status: 'DISBURSED',
+            isDisbursed: true,
+            info: {
+              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+              txReceipt: {
+                blockNumber: txReceipt.blockNumber,
+                gasUsed: txReceipt.gasUsed?.toString(),
+                status: 'SUCCESS',
+              },
+            },
+          });
+        } else {
+          this.logger.log(
+            `Transaction ${txHash} failed on blockchain`,
+            EVMProcessor.name
+          );
+
+          await this.beneficiaryService.updateGroupToken({
+            groupUuid,
+            status: 'FAILED',
+            isDisbursed: false,
+            info: {
+              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+              error: 'Transaction failed on blockchain',
+              txReceipt: {
+                blockNumber: txReceipt.blockNumber,
+                gasUsed: txReceipt.gasUsed?.toString(),
+                status: 'FAILED',
+              },
+            },
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error checking transaction status for ${txHash}: ${error.message}`,
+          EVMProcessor.name
+        );
+
+        // If we can't check the transaction, assume it failed
+        await this.beneficiaryService.updateGroupToken({
+          groupUuid,
+          status: 'FAILED',
+          isDisbursed: false,
+          info: {
+            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+            error: `Error checking transaction status: ${error.message}`,
+          },
+        });
       }
     } catch (error) {
       this.logger.error(
