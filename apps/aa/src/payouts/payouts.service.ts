@@ -577,56 +577,7 @@ export class PayoutsService {
     );
 
     try {
-      // Check beneficiary group token and get first where payout id matches
-      const beneficiaryGroupToken =
-        await this.prisma.beneficiaryGroupTokens.findFirst({
-          where: {
-            payout: {
-              uuid: uuid,
-            },
-          },
-          include: {
-            beneficiaryGroup: {
-              include: {
-                beneficiaries: {
-                  include: {
-                    beneficiary: {
-                      select: {
-                        uuid: true,
-                        walletAddress: true,
-                        extras: true,
-                        phone: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        });
-
-      if (!beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
-        this.logger.warn(
-          `No beneficiaries found for payout with UUID: '${uuid}'`
-        );
-        return {
-          data: [],
-          meta: {
-            total: 0,
-            lastPage: 0,
-            currentPage: 1,
-            perPage: 20,
-            prev: null,
-            next: null,
-          },
-        };
-      }
-
-      const numberOfTokensToTransfer =
-        beneficiaryGroupToken.numberOfTokens /
-        beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
-
-      // Get beneficiary redeem records for this payout with filters
+      // Get all beneficiary redeem records for this payout with filters
       const whereClause: Prisma.BeneficiaryRedeemWhereInput = {
         payoutId: uuid,
         ...(filters?.walletAddress && {
@@ -687,13 +638,11 @@ export class PayoutsService {
             beneficiaryWalletAddress: redeemRecord.beneficiaryWalletAddress,
             transactionWalletId,
             transactionType: redeemRecord.transactionType,
-            tokensAssigned: numberOfTokensToTransfer,
+            tokensAssigned: redeemRecord.amount,
             payoutStatus: redeemRecord.status,
             timestamp: redeemRecord.createdAt,
             txHash:
-              redeemRecord.status === 'COMPLETED'
-                ? redeemRecord.txHash
-                : undefined,
+              redeemRecord.status === 'COMPLETED' ? redeemRecord.txHash : '',
           };
         })
       );
@@ -767,9 +716,6 @@ export class PayoutsService {
     );
     const offrampWalletAddress =
       await this.offrampService.getOfframpWalletAddress();
-
-    console.log('Offramp Wallet Address:', offrampWalletAddress);
-    console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
 
     const stellerOfframpQueuePayload: FSPPayoutDetails[] =
       BeneficiaryPayoutDetails.map((beneficiary) => ({
