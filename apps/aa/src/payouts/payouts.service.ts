@@ -32,6 +32,7 @@ import {
   PayoutWithRelations,
   RedeemStatus,
 } from '../utils/getBeneficiaryRedemStatus';
+import { parseJsonField } from '../utils/parseJsonFields';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -517,7 +518,9 @@ export class PayoutsService {
           return {
             amount: numberOfTokensToTransfer,
             walletAddress: benfToGroup.beneficiary?.walletAddress,
-            phoneNumber: benfToGroup.beneficiary?.phone || benfToGroup.beneficiary?.extras?.phone,
+            phoneNumber:
+              benfToGroup.beneficiary?.phone ||
+              benfToGroup.beneficiary?.extras?.phone,
             bankDetails: {
               accountName: benfToGroup.beneficiary?.extras?.bank_ac_name || '',
               accountNumber:
@@ -1012,7 +1015,9 @@ export class PayoutsService {
       );
     }
 
-    const beneficiaryPhoneNumber = benfRedeemRequest.Beneficiary.phone || (benfRedeemRequest.Beneficiary.extras as any)?.phone;
+    const beneficiaryPhoneNumber =
+      benfRedeemRequest.Beneficiary.phone ||
+      (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
@@ -1031,5 +1036,80 @@ export class PayoutsService {
       beneficiaryRedeemUUID: benfRedeemRequest.uuid,
     };
     return offrampQueuePayload;
+  }
+
+  async downloadPayoutLogs(uuid: string): Promise<any> {
+    this.logger.log(
+      `Getting payout log for beneficiary redeem with UUID: ${uuid}`
+    );
+    try {
+      const log = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          uuid,
+        },
+        include: {
+          Beneficiary: true,
+          payout: true,
+          Vendor: true,
+        },
+      });
+
+      if (!log) {
+        throw new RpcException(
+          `Beneficiary redeem log with UUID '${uuid}' not found`
+        );
+      }
+
+      // return log;
+      // const result = log.map((log) => {
+      //   const extras =
+      //     typeof log.Beneficiary?.extras === 'string'
+      //       ? JSON.parse(log.Beneficiary.extras)
+      //       : log.Beneficiary?.extras ?? {};
+
+      //   return {
+      //     'Beneficiary Wallet Address': log.beneficiaryWalletAddress,
+      //     'Bank a/c name': extras.bank_ac_name || null,
+      //     'Bank a/c number': extras.bank_ac_number || null,
+      //     'Bank Name': extras.bank_name || null,
+      //     'Phone number': extras.phone || null,
+      //     'Govt Id': extras.interviewee_government_id_type || null,
+      //     'Transaction Type': log.transactionType,
+      //     'Bank Transaction ID': log.payoutId,
+      //     'Transacrion Wallet ID': log.txHash,
+      //     'Payout Status': log.payout?.status || null,
+      //     'Created at': log.createdAt,
+      //     'Updated at': log.updatedAt,
+      //     'No of Attempts': log.info?.numberOfAttempts || 0,
+      //   };
+      // });
+      const result = log.map((log) => {
+        const extras = parseJsonField(log.Beneficiary?.extras);
+        const info = parseJsonField(log.info);
+
+        return {
+          'Beneficiary Wallet Address': log.beneficiaryWalletAddress,
+          'Bank a/c name': extras.bank_ac_name || null,
+          'Bank a/c number': extras.bank_ac_number || null,
+          'Bank Name': extras.bank_name || null,
+          'Phone number': extras.phone || null,
+          'Govt Id': extras.interviewee_government_id_type || null,
+          'Transaction Type': log.transactionType,
+          'Bank Transaction ID': log.payoutId,
+          'Transacrion Wallet ID': log.txHash,
+          'Payout Status': log.payout?.status || null,
+          'Created at': log.createdAt,
+          'Updated at': log.updatedAt,
+          'No of Attempts': info.numberOfAttempts || 0,
+        };
+      });
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get payout log: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
   }
 }
