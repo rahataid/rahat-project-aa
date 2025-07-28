@@ -15,6 +15,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
+  DownloadPayoutLogsType,
   IPaymentProvider,
   PayoutStats,
 } from './dto/types';
@@ -33,6 +34,7 @@ import {
   RedeemStatus,
 } from '../utils/getBeneficiaryRedemStatus';
 import { parseJsonField } from '../utils/parseJsonFields';
+import { format } from 'date-fns';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -1038,7 +1040,7 @@ export class PayoutsService {
     return offrampQueuePayload;
   }
 
-  async downloadPayoutLogs(uuid: string): Promise<any> {
+  async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {
     this.logger.log(
       `Getting payout log for beneficiary redeem with UUID: ${uuid}`
     );
@@ -1060,29 +1062,6 @@ export class PayoutsService {
         );
       }
 
-      // return log;
-      // const result = log.map((log) => {
-      //   const extras =
-      //     typeof log.Beneficiary?.extras === 'string'
-      //       ? JSON.parse(log.Beneficiary.extras)
-      //       : log.Beneficiary?.extras ?? {};
-
-      //   return {
-      //     'Beneficiary Wallet Address': log.beneficiaryWalletAddress,
-      //     'Bank a/c name': extras.bank_ac_name || null,
-      //     'Bank a/c number': extras.bank_ac_number || null,
-      //     'Bank Name': extras.bank_name || null,
-      //     'Phone number': extras.phone || null,
-      //     'Govt Id': extras.interviewee_government_id_type || null,
-      //     'Transaction Type': log.transactionType,
-      //     'Bank Transaction ID': log.payoutId,
-      //     'Transacrion Wallet ID': log.txHash,
-      //     'Payout Status': log.payout?.status || null,
-      //     'Created at': log.createdAt,
-      //     'Updated at': log.updatedAt,
-      //     'No of Attempts': log.info?.numberOfAttempts || 0,
-      //   };
-      // });
       const result = log.map((log) => {
         const extras = parseJsonField(log.Beneficiary?.extras);
         const info = parseJsonField(log.info);
@@ -1098,8 +1077,12 @@ export class PayoutsService {
           'Bank Transaction ID': log.payoutId,
           'Transacrion Wallet ID': log.txHash,
           'Payout Status': log.payout?.status || null,
-          'Created at': log.createdAt,
-          'Updated at': log.updatedAt,
+          'Created at': log.createdAt
+            ? format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm')
+            : '',
+          'Updated at': log.updatedAt
+            ? format(new Date(log.updatedAt), 'yyyy-MM-dd HH:mm')
+            : '',
           'No of Attempts': info.numberOfAttempts || 0,
         };
       });
