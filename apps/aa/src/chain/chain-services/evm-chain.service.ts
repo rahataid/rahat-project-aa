@@ -379,6 +379,14 @@ export class EvmChainService implements IChainService {
     );
 
     this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+
+    return {
+      message: `Disbursement jobs added for ${groups.length} groups`,
+      groups: groups.map((group) => ({
+        uuid: group.uuid,
+        status: 'PENDING',
+      })),
+    };
   }
 
   async getDisbursementStats() {
