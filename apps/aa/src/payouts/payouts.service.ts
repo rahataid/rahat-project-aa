@@ -659,11 +659,21 @@ export class PayoutsService {
         );
 
       if (transactionType === 'TOKEN_TRANSFER') {
+        if(benfRedeemRequest.status === 'TOKEN_TRANSACTION_INITIATED'){
+          throw new RpcException(
+            `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
+          );
+        }
         return await this.processOneFailedTokenTransferPayout({
           beneficiaryRedeemUuid,
         });
       }
       if (transactionType === 'FIAT_TRANSFER') {
+        if(benfRedeemRequest.status === 'FIAT_TRANSACTION_INITIATED'){
+          throw new RpcException(
+            `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
+          );
+        }
         return await this.processOneFailedFiatPayout({
           beneficiaryRedeemUuid,
         });
@@ -752,6 +762,20 @@ export class PayoutsService {
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
       await this.stellarService.addBulkToTokenTransferQueue(failedTokenPayouts);
+
+      await this.beneficiaryService.updateBeneficiaryRedeemBulk(
+        failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
+        {
+          status: 'FIAT_TRANSACTION_INITIATED',
+        }
+      );
+
+      await this.beneficiaryService.updateBeneficiaryRedeemBulk(
+        failedTokenRecords.beneficiaryRedeems.map((r) => r.uuid),
+        {
+          status: 'TOKEN_TRANSACTION_INITIATED',
+        }
+      );
 
       return {
         message: `Processing ${failedFiatRecords.count} failed fiat payouts and ${failedTokenRecords.count} failed token payouts`,
@@ -905,6 +929,10 @@ export class PayoutsService {
 
       await this.offrampService.addToOfframpQueue(offrampQueuePayload);
 
+      await this.beneficiaryService.updateBeneficiaryRedeem(beneficiaryRedeemUuid, {
+        status: 'FIAT_TRANSACTION_INITIATED',
+      });
+
       this.logger.log(
         `Added to offramp queue for beneficiary redeem with UUID: ${beneficiaryRedeemUuid}`
       );
@@ -940,6 +968,11 @@ export class PayoutsService {
     );
 
     await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
+
+    // update the beneficiary redeem status to pending
+    await this.beneficiaryService.updateBeneficiaryRedeem(beneficiaryRedeemUuid, {
+      status: 'TOKEN_TRANSACTION_INITIATED',
+    });
 
     this.logger.log(
       `Added to token transfer queue for beneficiary redeem with UUID: ${beneficiaryRedeemUuid}`
