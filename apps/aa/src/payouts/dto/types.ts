@@ -110,3 +110,19 @@ export type PayoutStats = {
     projectBalance: number;
   };
 };
+
+export type DownloadPayoutLogsType = {
+  'Beneficiary Wallet Address': string;
+  'Bank a/c name': string | null;
+  'Bank a/c number': string | null;
+  'Bank Name': string | null;
+  'Phone number': string | null;
+  'Govt Id': string | null;
+  'Transaction Type': string;
+  'Bank Transaction ID': string | undefined;
+  'Transacrion Wallet ID': string | undefined;
+  'Payout Status': string | null;
+  'Created at': string;
+  'Updated at': string;
+  'No of Attempts': number;
+};
