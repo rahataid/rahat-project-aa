@@ -267,6 +267,12 @@ export class StellarService {
           isCompleted: false,
           txHash: null,
           payoutId: payoutId,
+          info: {
+            message: 'OTP sent to beneficiary',
+            transactionHash: '',
+            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            beneficiaryWalletAddress: keys.publicKey,
+          },
         },
       });
     } else {
@@ -281,6 +287,12 @@ export class StellarService {
           txHash: null,
           vendorUid: sendOtpDto.vendorUuid,
           payoutId: payoutId,
+          info: {
+            message: 'OTP sent to beneficiary',
+            transactionHash: '',
+            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            beneficiaryWalletAddress: keys.publicKey,
+          },
         },
       });
     }
@@ -392,6 +404,12 @@ export class StellarService {
             txHash: result.tx.hash,
             isCompleted: true,
             status: 'COMPLETED',
+            info: {
+              message: 'Beneficiary Redemption successful',
+              transactionHash: result.tx.hash,
+              offrampWalletAddress: vendor.walletAddress,
+              beneficiaryWalletAddress: keys.publicKey,
+            },
           },
         });
       } else {
@@ -405,6 +423,12 @@ export class StellarService {
             txHash: result.tx.hash,
             isCompleted: true,
             status: 'COMPLETED',
+            info: {
+              message: 'Beneficiary Redemption successful',
+              transactionHash: result.tx.hash,
+              offrampWalletAddress: vendor.walletAddress,
+              beneficiaryWalletAddress: keys.publicKey,
+            },
           },
         });
       }
@@ -413,6 +437,52 @@ export class StellarService {
         txHash: result.tx.hash,
       };
     } catch (error) {
+      // Update BeneficiaryRedeem record with error information if possible
+      try {
+        const keys = (await this.getSecretByPhone(
+          verifyOtpDto.phoneNumber
+        )) as any;
+
+        if (keys) {
+          const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+            where: {
+              beneficiaryWalletAddress: keys.publicKey,
+              status: 'PENDING',
+              isCompleted: false,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+          if (existingRedeem) {
+            await this.prisma.beneficiaryRedeem.update({
+              where: {
+                uuid: existingRedeem.uuid,
+              },
+              data: {
+                status: 'FAILED',
+                isCompleted: false,
+                info: {
+                  message: `Beneficiary Redemption failed: ${
+                    error.message || 'Unknown error'
+                  }`,
+                  transactionHash: '',
+                  offrampWalletAddress: verifyOtpDto.receiverAddress,
+                  beneficiaryWalletAddress: keys.publicKey,
+                  error: error.message || 'Unknown error',
+                },
+              },
+            });
+          }
+        }
+      } catch (updateError) {
+        this.logger.error(
+          'Failed to update BeneficiaryRedeem record with error info:',
+          updateError
+        );
+      }
+
       throw new RpcException(
         error ? error : 'Transferring asset to vendor failed'
       );
