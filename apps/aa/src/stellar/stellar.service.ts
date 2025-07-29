@@ -213,10 +213,10 @@ export class StellarService {
       throw new RpcException('Payout mode is not ONLINE');
     }
 
-    return this.sendOtpByPhone(sendOtpDto);
+    return this.sendOtpByPhone(sendOtpDto, payoutType.uuid);
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto, payoutId: string) {
     const beneficiaryRahatAmount = await this.getBenTotal(
       sendOtpDto?.phoneNumber
     );
@@ -266,6 +266,7 @@ export class StellarService {
           status: 'PENDING',
           isCompleted: false,
           txHash: null,
+          payoutId: payoutId,
         },
       });
     } else {
@@ -279,6 +280,7 @@ export class StellarService {
           isCompleted: false,
           txHash: null,
           vendorUid: sendOtpDto.vendorUuid,
+          payoutId: payoutId,
         },
       });
     }

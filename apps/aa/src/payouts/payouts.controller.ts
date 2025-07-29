@@ -91,31 +91,4 @@ export class PayoutsController {
     console.log('first');
     return this.payoutsService.getPayoutStats();
   }
-
-  @MessagePattern({
-    cmd: JOBS.PAYOUT.GET_PAYOUT_DETAILS,
-    uuid: process.env.PROJECT_ID,
-  })
-  getPayoutDetails(@Payload() payload: GetPayoutDetailsDto) {
-    const {
-      uuid,
-      walletAddress,
-      status,
-      transactionType,
-      page,
-      perPage,
-      sort,
-      order,
-    } = payload;
-
-    return this.payoutsService.getPayoutDetails(uuid, {
-      walletAddress,
-      status,
-      transactionType,
-      page,
-      perPage,
-      sort,
-      order,
-    });
-  }
 }
