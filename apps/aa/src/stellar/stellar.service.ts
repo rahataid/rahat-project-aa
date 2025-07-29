@@ -244,6 +244,16 @@ export class StellarService {
       throw new RpcException('Beneficiary address not found');
     }
 
+    // Get vendor wallet address
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: sendOtpDto.vendorUuid },
+      select: { walletAddress: true },
+    });
+
+    if (!vendor) {
+      throw new RpcException('Vendor not found');
+    }
+
     // Find existing BeneficiaryRedeem record for this beneficiary
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
       where: {
@@ -270,7 +280,7 @@ export class StellarService {
           info: {
             message: 'OTP sent to beneficiary',
             transactionHash: '',
-            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            offrampWalletAddress: vendor.walletAddress,
             beneficiaryWalletAddress: keys.publicKey,
           },
         },
@@ -290,7 +300,7 @@ export class StellarService {
           info: {
             message: 'OTP sent to beneficiary',
             transactionHash: '',
-            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            offrampWalletAddress: vendor.walletAddress,
             beneficiaryWalletAddress: keys.publicKey,
           },
         },
