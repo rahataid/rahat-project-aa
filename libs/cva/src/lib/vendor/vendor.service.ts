@@ -38,14 +38,20 @@ export class CvaVendorService {
   }
 
   async listWithProjectData(query: PaginationBaseDto) {
+    const { page, perPage, sort, order } = query;
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
     return paginate(
       this.rsprisma.vendor,
       {
         where: {},
+        orderBy,
       },
       {
-        page: query.page,
-        perPage: query.perPage,
+        page,
+        perPage,
       }
     );
   }

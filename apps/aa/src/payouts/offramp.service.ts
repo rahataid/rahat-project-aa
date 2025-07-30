@@ -110,6 +110,9 @@ export class OfframpService {
     const offrampSettings = await this.fetchOfframpSettings();
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
+    console.log('#'.repeat(100));
+    console.log("Starting to instantiate offramp service");
+    console.log('#'.repeat(100));
     this.logger.log(
       `Initiating instant offramp to ${url}/offramp-request/instant`
     );
@@ -126,6 +129,9 @@ export class OfframpService {
         }
       );
 
+      console.log('#'.repeat(100));
+      console.log("Offramp service instantiated successfully");
+      console.log('#'.repeat(100));
       return data;
     } catch (error) {
       throw new RpcException(
@@ -141,7 +147,7 @@ export class OfframpService {
       payload.map((payload) => ({
         name: JOBS.OFFRAMP.INSTANT_OFFRAMP,
         data: payload,
-        opts: { ...this.offrampQueueOpts },
+        opts: { ...this.offrampQueueOpts},
       }))
     );
 
