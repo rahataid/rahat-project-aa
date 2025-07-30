@@ -103,11 +103,8 @@ export type PayoutStats = {
     };
   };
   payoutStats: {
-    tokenAssigned: number;
-    tokenDisbursed: number;
-    oneTokenValue: string;
-    amountDisbursed: number;
-    projectBalance: number;
+    beneficiaries: number;
+    totalCashDistribution: number;
   };
 };
 

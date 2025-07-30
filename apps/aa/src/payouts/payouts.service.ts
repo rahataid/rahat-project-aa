@@ -70,8 +70,7 @@ export class PayoutsService {
         vendorCount,
         notCompleted,
         completed,
-        tokenAssigned,
-        totalTokenDisbursed,
+        beneficiaryGroupTokens,
       ] = await Promise.all([
         this.prisma.beneficiaryRedeem.count({
           where: {
@@ -97,21 +96,30 @@ export class PayoutsService {
             isCompleted: true,
           },
         }),
-        this.prisma.beneficiaryGroupTokens.aggregate({
-          _sum: {
-            numberOfTokens: true,
-          },
-        }),
-
-        this.prisma.beneficiaryGroupTokens.aggregate({
-          where: {
-            status: 'DISBURSED',
-          },
-          _sum: {
-            numberOfTokens: true,
+        this.prisma.beneficiaryGroupTokens.findMany({
+          include: {
+            beneficiaryGroup: {
+              select: {
+                beneficiaries: true,
+                _count: {
+                  select: {
+                    beneficiaries: true,
+                  },
+                },
+              },
+            },
           },
         }),
       ]);
+
+      const totalBeneficiaries = beneficiaryGroupTokens.reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
+      const totalTokens = beneficiaryGroupTokens.reduce(
+        (acc, token) => acc + token.numberOfTokens,
+        0
+      );
 
       return {
         payoutOverview: {
@@ -125,12 +133,8 @@ export class PayoutsService {
           },
         },
         payoutStats: {
-          tokenAssigned: tokenAssigned._sum.numberOfTokens,
-          tokenDisbursed: totalTokenDisbursed._sum.numberOfTokens,
-          oneTokenValue: `Rs. ${ONE_TOKEN_VALUE}`,
-          amountDisbursed:
-            totalTokenDisbursed._sum.numberOfTokens * ONE_TOKEN_VALUE,
-          projectBalance: tokenAssigned._sum.numberOfTokens * ONE_TOKEN_VALUE,
+          beneficiaries: totalBeneficiaries,
+          totalCashDistribution: totalTokens * ONE_TOKEN_VALUE,
         },
       };
     } catch (error) {
@@ -429,13 +433,14 @@ export class PayoutsService {
       const isCompleted = await this.getPayoutCompletedStatus(payout);
       const isPayoutTriggered = payout.beneficiaryRedeem.length > 0;
 
-      const totalSuccessRequests = isPayoutTriggered ? 
-        payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
-        totalFailedPayoutRequests : 0;
+      const totalSuccessRequests = isPayoutTriggered
+        ? payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
+          totalFailedPayoutRequests
+        : 0;
 
-      let payoutGap = 'N/A'
+      let payoutGap = 'N/A';
 
-      if(isCompleted && isPayoutTriggered) {
+      if (isCompleted && isPayoutTriggered) {
         payoutGap = await this.calculatePayoutCompletionGap(uuid);
       }
 
@@ -1157,9 +1162,9 @@ export class PayoutsService {
     const riverBasin = projectInfo?.value?.river_basin;
 
     if (!activeYear || !riverBasin) {
-      this.logger.warn(`Active year or river basin not found, in SETTINGS`)
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`);
 
-      return 'N/A'
+      return 'N/A';
     }
 
     const data = await lastValueFrom(
@@ -1167,38 +1172,45 @@ export class PayoutsService {
         { cmd: 'ms.jobs.phases.getAll' },
         {
           activeYear,
-          riverBasin
+          riverBasin,
         }
       )
     );
 
-    const activationPhase = data.data.find(p => p.name === 'ACTIVATION')
+    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
 
-    if(!activationPhase) {
-      this.logger.warn(`Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`)
+    if (!activationPhase) {
+      this.logger.warn(
+        `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
 
-      return 'N/A'
+      return 'N/A';
     }
 
-    if(!activationPhase.isActive){
-      this.logger.warn(`Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`)
+    if (!activationPhase.isActive) {
+      this.logger.warn(
+        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
 
-      return 'N/A'
+      return 'N/A';
     }
 
     const activatedAt = new Date(activationPhase.activatedAt);
     const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
       where: { payout: { uuid: payoutUuid } },
       orderBy: {
-        updatedAt: 'desc'
-      }
-    })
+        updatedAt: 'desc',
+      },
+    });
 
-    if(!payoutLastLog) {
-      this.logger.warn(`Payout last log not found for payout with UUID ${payoutUuid}`)
+    if (!payoutLastLog) {
+      this.logger.warn(
+        `Payout last log not found for payout with UUID ${payoutUuid}`
+      );
     }
 
-    const diffInMs = new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+    const diffInMs =
+      new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
 
     return getFormattedTimeDiff(diffInMs);
   }
