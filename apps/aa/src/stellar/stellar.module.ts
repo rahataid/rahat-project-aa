@@ -10,6 +10,7 @@ import {
   TransactionService,
 } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
+import { AppService } from '../app/app.service';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { SettingsService } from '@rumsan/settings';
   controllers: [StellarController],
   providers: [
     StellarService,
+    AppService,
     {
       provide: ReceiveService,
       useFactory: async (settingService: SettingsService) => {

@@ -28,7 +28,7 @@ export class PayoutsController {
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET, uuid: process.env.PROJECT_ID })
   findOne(@Payload() payload: { uuid: string }) {
-    return this.payoutsService.findOne(payload.uuid);
+    return this.payoutsService.getOne(payload.uuid);
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.UPDATE, uuid: process.env.PROJECT_ID })
