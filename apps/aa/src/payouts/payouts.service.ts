@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import {
@@ -8,7 +8,7 @@ import {
   PayoutType,
   Prisma,
 } from '@prisma/client';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
@@ -22,7 +22,7 @@ import {
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
@@ -35,6 +35,9 @@ import {
 } from '../utils/getBeneficiaryRedemStatus';
 import { parseJsonField } from '../utils/parseJsonFields';
 import { format } from 'date-fns';
+import { AppService } from '../app/app.service';
+import { lastValueFrom } from 'rxjs';
+import { getFormattedTimeDiff } from '../utils/date';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -44,12 +47,14 @@ export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
 
   constructor(
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private prisma: PrismaService,
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
     private stellarService: StellarService,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
+    private appService: AppService,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
 
@@ -356,13 +361,18 @@ export class PayoutsService {
     Payouts & {
       beneficiaryGroupToken?: {
         numberOfTokens?: number;
+        info?: any;
         beneficiaryGroup?: {
           beneficiaries?: any[];
         };
       };
+      beneficiaryRedeem?: BeneficiaryRedeem[];
       isCompleted?: boolean;
       hasFailedPayoutRequests?: boolean;
       isPayoutTriggered?: boolean;
+      totalSuccessRequests?: number;
+      payoutGap?: string;
+      totalFailedPayoutRequests?: number;
     }
   > {
     try {
@@ -411,13 +421,62 @@ export class PayoutsService {
           uuid
         );
 
-      this.logger.log(`Successfully fetched payout with UUID: '${uuid}'`);
+      const totalFailedPayoutRequests = failedPayoutRequests.reduce(
+        (acc, curr) => acc + curr.count,
+        0
+      );
+
+      const isCompleted = await this.getPayoutCompletedStatus(payout);
+      const isPayoutTriggered = payout.beneficiaryRedeem.length > 0;
+
+      const totalSuccessRequests = isPayoutTriggered ? 
+        payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
+        totalFailedPayoutRequests : 0;
+
+      let payoutGap = 'N/A'
+
+      payoutGap = await this.calculatePayoutCompletionGap(uuid);
+      if(isCompleted && isPayoutTriggered) {
+      }
+
       return {
         ...payout,
         hasFailedPayoutRequests:
-          payout.type === 'VENDOR' ? false : failedPayoutRequests.length > 0,
-        isCompleted: await this.getPayoutCompletedStatus(payout),
-        isPayoutTriggered: payout.beneficiaryRedeem.length > 0,
+          payout.type === 'VENDOR' ? false : totalFailedPayoutRequests > 0,
+        totalSuccessRequests,
+        totalFailedPayoutRequests,
+        payoutGap,
+        isCompleted,
+        isPayoutTriggered,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch payout: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getOne(uuid: string): Promise<any> {
+    try {
+      const { beneficiaryRedeem, beneficiaryGroupToken, ...rest } =
+        await this.findOne(uuid);
+      const {
+        beneficiaryGroup: { beneficiaries, ...otherData },
+        ...tokenData
+      } = beneficiaryGroupToken;
+
+      delete tokenData.info;
+
+      return {
+        ...rest,
+        beneficiaryGroupToken: {
+          ...tokenData,
+          beneficiaryGroup: {
+            ...otherData,
+          },
+        },
       };
     } catch (error) {
       this.logger.error(
@@ -664,7 +723,7 @@ export class PayoutsService {
         );
 
       if (transactionType === 'TOKEN_TRANSFER') {
-        if(benfRedeemRequest.status === 'TOKEN_TRANSACTION_INITIATED'){
+        if (benfRedeemRequest.status === 'TOKEN_TRANSACTION_INITIATED') {
           throw new RpcException(
             `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
           );
@@ -674,7 +733,7 @@ export class PayoutsService {
         });
       }
       if (transactionType === 'FIAT_TRANSFER') {
-        if(benfRedeemRequest.status === 'FIAT_TRANSACTION_INITIATED'){
+        if (benfRedeemRequest.status === 'FIAT_TRANSACTION_INITIATED') {
           throw new RpcException(
             `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
           );
@@ -934,9 +993,12 @@ export class PayoutsService {
 
       await this.offrampService.addToOfframpQueue(offrampQueuePayload);
 
-      await this.beneficiaryService.updateBeneficiaryRedeem(beneficiaryRedeemUuid, {
-        status: 'FIAT_TRANSACTION_INITIATED',
-      });
+      await this.beneficiaryService.updateBeneficiaryRedeem(
+        beneficiaryRedeemUuid,
+        {
+          status: 'FIAT_TRANSACTION_INITIATED',
+        }
+      );
 
       this.logger.log(
         `Added to offramp queue for beneficiary redeem with UUID: ${beneficiaryRedeemUuid}`
@@ -975,9 +1037,12 @@ export class PayoutsService {
     await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
 
     // update the beneficiary redeem status to pending
-    await this.beneficiaryService.updateBeneficiaryRedeem(beneficiaryRedeemUuid, {
-      status: 'TOKEN_TRANSACTION_INITIATED',
-    });
+    await this.beneficiaryService.updateBeneficiaryRedeem(
+      beneficiaryRedeemUuid,
+      {
+        status: 'TOKEN_TRANSACTION_INITIATED',
+      }
+    );
 
     this.logger.log(
       `Added to token transfer queue for beneficiary redeem with UUID: ${beneficiaryRedeemUuid}`
@@ -1071,6 +1136,71 @@ export class PayoutsService {
       beneficiaryRedeemUUID: benfRedeemRequest.uuid,
     };
     return offrampQueuePayload;
+  }
+
+  /**
+   * Calculate the payout completion gap
+   * From the triggerness of activation phase to the completion of the last payout request.
+   *
+   * @param payout - The payout
+   * @returns { number } - The payout completion gap
+   */
+  async calculatePayoutCompletionGap(payoutUuid: string) {
+    const projectInfo = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
+    if (!projectInfo) {
+      throw new RpcException('Project info not found, in SETTINGS');
+    }
+    const activeYear = projectInfo?.value?.active_year;
+    const riverBasin = projectInfo?.value?.river_basin;
+
+    if (!activeYear || !riverBasin) {
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`)
+
+      return 'N/A'
+    }
+
+    const data = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phases.getAll' },
+        {
+          activeYear,
+          riverBasin
+        }
+      )
+    );
+
+    const activationPhase = data.data.find(p => p.name === 'ACTIVATION')
+
+    if(!activationPhase) {
+      this.logger.warn(`Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`)
+
+      return 'N/A'
+    }
+
+    if(!activationPhase.isActive){
+      this.logger.warn(`Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`)
+
+      return 'N/A'
+    }
+
+    const activatedAt = new Date(activationPhase.activatedAt);
+    const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { payout: { uuid: payoutUuid } },
+      orderBy: {
+        updatedAt: 'desc'
+      }
+    })
+
+    if(!payoutLastLog) {
+      this.logger.warn(`Payout last log not found for payout with UUID ${payoutUuid}`)
+    }
+
+    const diffInMs = new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+
+    return getFormattedTimeDiff(diffInMs);
   }
 
   async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {
