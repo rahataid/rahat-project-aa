@@ -1,4 +1,4 @@
-import { Payouts, PayoutTransactionStatus } from '@prisma/client';
+import { Payouts } from '@prisma/client';
 
 export type RedeemStatus = 'FAILED' | 'COMPLETED' | 'NOT_STARTED' | 'PENDING';
 

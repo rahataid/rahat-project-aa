@@ -435,8 +435,8 @@ export class PayoutsService {
 
       let payoutGap = 'N/A'
 
-      payoutGap = await this.calculatePayoutCompletionGap(uuid);
       if(isCompleted && isPayoutTriggered) {
+        payoutGap = await this.calculatePayoutCompletionGap(uuid);
       }
 
       return {

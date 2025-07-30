@@ -671,7 +671,7 @@ export class StellarProcessor {
         const currentDate = new Date();
         if (
           groupUpdatedAt.getTime() >
-          currentDate.getTime() - 24 * 60 * 60 * 1000
+          (currentDate.getTime() - 24 * 60 * 60 * 1000)
         ) {
           this.logger.log(
             `Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`,
@@ -730,6 +730,11 @@ export class StellarProcessor {
           StellarProcessor.name
         );
 
+        const timeTakenToDisburse = 
+        new Date(disbursement.updated_at).getTime() 
+        - new Date(disbursement.created_at).getTime();
+
+
         // update the status of the disbursement in the database
         await this.beneficiaryService.updateGroupToken({
           groupUuid,
@@ -737,6 +742,7 @@ export class StellarProcessor {
           isDisbursed: true,
           info: {
             ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+            disbursementTimeTaken: timeTakenToDisburse,
             disbursement,
           },
         });
