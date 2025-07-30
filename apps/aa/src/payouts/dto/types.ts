@@ -97,9 +97,9 @@ export type PayoutStats = {
       FSP: number;
       VENDOR: number;
     };
-    completionStatus: {
-      COMPLETED: number;
-      NOT_COMPLETED: number;
+    payoutStatus: {
+      SUCCESS: number;
+      FAILED: number;
     };
   };
   payoutStats: {

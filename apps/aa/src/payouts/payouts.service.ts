@@ -68,32 +68,28 @@ export class PayoutsService {
       const [
         fspCount,
         vendorCount,
-        notCompleted,
-        completed,
+        failed,
+        success,
         beneficiaryGroupTokens,
       ] = await Promise.all([
-        this.prisma.beneficiaryRedeem.count({
+        this.prisma.payouts.count({
           where: {
-            payout: {
-              type: 'FSP',
-            },
+            type: 'FSP'
           },
         }),
-        this.prisma.beneficiaryRedeem.count({
+        this.prisma.payouts.count({
           where: {
-            payout: {
-              type: 'VENDOR',
-            },
+            type: 'VENDOR'
           },
         }),
-        this.prisma.beneficiaryRedeem.count({
+        this.prisma.payouts.count({
           where: {
-            isCompleted: false,
+            status: 'FAILED'
           },
         }),
-        this.prisma.beneficiaryRedeem.count({
+        this.prisma.payouts.count({
           where: {
-            isCompleted: true,
+            status: "COMPLETED"
           },
         }),
         this.prisma.beneficiaryGroupTokens.findMany({
@@ -127,9 +123,9 @@ export class PayoutsService {
             FSP: fspCount,
             VENDOR: vendorCount,
           },
-          completionStatus: {
-            COMPLETED: completed,
-            NOT_COMPLETED: notCompleted,
+          payoutStatus: {
+            SUCCESS: success,
+            FAILED: failed,
           },
         },
         payoutStats: {
