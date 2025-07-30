@@ -1,5 +1,6 @@
 import {
   DisbursementServices,
+  IDisbursement,
   ReceiveService,
   TransactionService,
 } from '@rahataid/stellar-sdk';
@@ -41,6 +42,8 @@ import {
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
+import { AppService } from '../app/app.service';
+import { getFormattedTimeDiff } from '../utils/date';
 
 interface BatchInfo {
   batchIndex: number;
@@ -75,7 +78,8 @@ export class StellarService {
     private readonly stellarQueue: Queue,
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
-    private readonly transactionService: TransactionService
+    private readonly transactionService: TransactionService,
+    private readonly appService: AppService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -570,48 +574,151 @@ export class StellarService {
     );
   }
 
-  // todo (new-chain-config): Need dynamic method according to chain
-  async getDisbursementStats() {
-    const disbursementBalance = await this.getRahatBalance(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
+  async getActivityActivationTime() {
+    const projectInfo = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
+    if (!projectInfo) {
+      throw new RpcException('Project info not found, in SETTINGS');
+    }
+    const activeYear = projectInfo?.value?.active_year;
+    const riverBasin = projectInfo?.value?.river_basin;
+
+    if (!activeYear || !riverBasin) {
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`);
+
+      return null;
+    }
+
+    const data = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phases.getAll' },
+        {
+          activeYear,
+          riverBasin,
+        }
       )
     );
 
-    const vendors = await this.prisma.vendor.findMany({
-      select: { walletAddress: true },
+    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+
+    if (!activationPhase) {
+      this.logger.warn(
+        `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    if (!activationPhase.isActive) {
+      this.logger.warn(
+        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    return activationPhase.activatedAt;
+  }
+
+  // todo (new-chain-config): Need dynamic method according to chain
+  async getDisbursementStats() {
+    const oneTokenPrice = (await this.getFromSettings('ONE_TOKEN_PRICE')) ?? 1;
+    const tokenName = (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT';
+
+    const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      include: {
+        beneficiaryGroup: {
+          include: {
+            _count: {
+              select: {
+                beneficiaries: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    let totalVendorBalance = 0;
+    const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
+      if (token.isDisbursed) {
+        acc += token.numberOfTokens;
+      }
+      return acc;
+    }, 0);
 
-    await Promise.all(
-      vendors.map(async (vendor) => {
-        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
-      })
+    const totalTokens = benfTokens.reduce(
+      (acc, token) => acc + token.numberOfTokens,
+      0
     );
 
-    return {
-      tokenStats: [
-        {
-          name: 'Disbursement Balance',
-          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
-        },
-        {
-          name: 'Disbursed Balance',
-          amount: totalVendorBalance.toLocaleString(),
-        },
-        {
-          name: 'Remaining Balance',
-          amount: disbursementBalance.toLocaleString(),
-        },
-        { name: 'Token Price', amount: 'Rs 10' },
-      ],
-      transactionStats: await this.getRecentTransaction(
-        await this.disbursementService.getDistributionAddress(
-          await this.getFromSettings('TENANTNAME')
-        )
-      ),
-    };
+    const totalBeneficiaries = benfTokens.reduce(
+      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+      0
+    );
+
+    const disbursementsInfo = benfTokens
+      .filter(
+        (token) =>
+          token.isDisbursed && (token.info as any)?.disbursementTimeTaken
+      )
+      .map((token) => (token.info as any)?.disbursementTimeTaken);
+
+
+    const averageDisbursementTime =
+      disbursementsInfo.reduce((acc, time) => acc + time, 0) /
+      disbursementsInfo.length;
+    
+    console.log(averageDisbursementTime);
+
+    const activityActivationTime = await this.getActivityActivationTime();
+    let averageDuration = 0;
+
+    if (activityActivationTime) {
+      averageDuration =
+        benfTokens
+          .filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .reduce((acc, token) => {
+            const info = JSON.parse(JSON.stringify(token.info)) as {
+              disbursement: IDisbursement;
+            };
+            // getting disbursement completion time
+            const {
+              disbursement: { updated_at },
+            } = info;
+
+            // diff between disbursement completion time and activity activation time
+            const timeTaken =
+              new Date(updated_at).getTime() -
+              new Date(activityActivationTime).getTime();
+
+            return acc + timeTaken;
+          }, 0) /
+        benfTokens.filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .length;
+
+      averageDuration = averageDuration;
+    }
+
+    return [
+      {
+        name: 'Token Disbursed',
+        value: totalDisbursedTokens,
+      },
+      {
+        name: 'Budget Assigned',
+        value: totalTokens * oneTokenPrice,
+      },
+      {
+        name: 'Token',
+        value: tokenName,
+      },
+      { name: 'Token Price', value: oneTokenPrice },
+      { name: 'Total Beneficiaries', value: totalBeneficiaries },
+      { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
+      { name: 'Average Duration', value: averageDuration > 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+    ];
   }
 
   async checkBulkTrustline(mode: 'dry' | 'live') {
@@ -646,9 +753,12 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Need dynamic queue
-  async internalFaucetAndTrustline(beneficiaries: { wallets: any[], beneficiaryGroupId: string }): Promise<InternalFaucetResponse> {
+  async internalFaucetAndTrustline(beneficiaries: {
+    wallets: any[];
+    beneficiaryGroupId: string;
+  }): Promise<InternalFaucetResponse> {
     const { wallets, beneficiaryGroupId } = beneficiaries;
-    
+
     if (!wallets || wallets.length === 0) {
       this.logger.warn('No wallets provided for faucet and trustline');
       return {
@@ -659,7 +769,7 @@ export class StellarService {
 
     const batchSize = await this.getBatchSizeFromSettings();
     const batches = this.createWalletBatches(wallets, batchSize);
-    
+
     this.logger.log(
       `Creating ${batches.length} batch jobs for ${wallets.length} wallets (batch size: ${batchSize})`
     );
@@ -697,7 +807,7 @@ export class StellarService {
       message: `Created ${batches.length} batch jobs for ${wallets.length} wallets`,
       batchesCreated: batches.length,
       totalWallets: wallets.length,
-      jobIds: jobs.map(job => job.id),
+      jobIds: jobs.map((job) => job.id),
     };
   }
 
@@ -735,7 +845,9 @@ export class StellarService {
       const batchSize = settingsValue?.FAUCET_BATCH_SIZE;
       return batchSize && !isNaN(Number(batchSize)) ? Number(batchSize) : 3;
     } catch (error) {
-      this.logger.warn('Failed to get batch size from settings, using default value of 3');
+      this.logger.warn(
+        'Failed to get batch size from settings, using default value of 3'
+      );
       return 3;
     }
   }
@@ -747,11 +859,11 @@ export class StellarService {
   private createWalletBatches(wallets: any[], batchSize?: number): any[][] {
     const size = batchSize || this.getBatchSize();
     const batches: any[][] = [];
-    
+
     for (let i = 0; i < wallets.length; i += size) {
       batches.push(wallets.slice(i, i + size));
     }
-    
+
     return batches;
   }
 

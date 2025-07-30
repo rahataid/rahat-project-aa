@@ -18,8 +18,8 @@ export interface IDisbursement {
   }[];
   amount_disbursed: string;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IReceiveService {
