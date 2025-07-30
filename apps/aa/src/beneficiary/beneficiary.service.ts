@@ -170,7 +170,7 @@ export class BeneficiaryService {
               beneficiaries: true,
             },
           },
-          beneficiaries: true,
+          // beneficiaries: true,
           tokensReserved: true,
         },
         orderBy,
@@ -181,27 +181,29 @@ export class BeneficiaryService {
       }
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        benfGroups
-      )
-    );
+    return benfGroups;
 
-    res.data = res.data.map((group) => {
-      let updatedGroup = group;
-      benfGroups.data.forEach((benfGroup: any) => {
-        if (group.uuid === benfGroup.uuid) {
-          updatedGroup = {
-            ...group,
-            tokensReserved: benfGroup.tokensReserved,
-          };
-        }
-      });
-      return updatedGroup;
-    });
+    // const res = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+    //     benfGroups
+    //   )
+    // );
 
-    return res;
+    // res.data = res.data.map((group) => {
+    //   let updatedGroup = group;
+    //   benfGroups.data.forEach((benfGroup: any) => {
+    //     if (group.uuid === benfGroup.uuid) {
+    //       updatedGroup = {
+    //         ...group,
+    //         tokensReserved: benfGroup.tokensReserved,
+    //       };
+    //     }
+    //   });
+    //   return updatedGroup;
+    // });
+
+    // return res;
   }
 
   async findByUUID(uuid: UUID) {
@@ -270,6 +272,7 @@ export class BeneficiaryService {
   }
 
   // *****  beneficiary groups ********** //
+  //not recommended
   async getOneGroup(uuid: UUID) {
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
@@ -313,6 +316,27 @@ export class BeneficiaryService {
     return data;
   }
 
+  //recommended for better performance
+  async getOneGroupV2(uuid: UUID) {
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: {
+        uuid: uuid,
+        deletedAt: null,
+      },
+      include: {
+        tokensReserved: true,
+        beneficiaries: {
+          include: {
+            beneficiary: true,
+          },
+        },
+      },
+    });
+
+    if (!benfGroup) throw new RpcException('Beneficiary group not found.');
+    return benfGroup;
+  }
+
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
     const group = await this.prisma.beneficiaryGroups.create({
@@ -346,22 +370,22 @@ export class BeneficiaryService {
       user,
     } = payload;
 
-      const isAlreadyReserved =
-        await this.prisma.beneficiaryGroupTokens.findUnique({
-          where: { groupId: beneficiaryGroupId },
-        });
+    const isAlreadyReserved =
+      await this.prisma.beneficiaryGroupTokens.findUnique({
+        where: { groupId: beneficiaryGroupId },
+      });
 
-      if (isAlreadyReserved) {
-        throw new RpcException('Token already reserved.');
-      }
+    if (isAlreadyReserved) {
+      throw new RpcException('Token already reserved.');
+    }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: beneficiaryGroupId,
-      }
+      },
     });
 
-    if(!benfGroup) {
+    if (!benfGroup) {
       throw new RpcException('Beneficiary group not found.');
     }
 
@@ -375,9 +399,9 @@ export class BeneficiaryService {
     }
 
     return this.prisma.$transaction(async () => {
-      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
+      const group = await this.getOneGroupV2(beneficiaryGroupId as UUID);
 
-      if (!group || !group?.groupedBeneficiaries) {
+      if (!group || !group?.beneficiaries) {
         throw new RpcException(
           'No beneficiaries found in the specified group.'
         );
@@ -393,9 +417,7 @@ export class BeneficiaryService {
       //     throw new RpcException('Token already assigned to beneficiary.');
       // }
 
-      const benfIds = group?.groupedBeneficiaries?.map(
-        (d: any) => d?.beneficiaryId
-      );
+      const benfIds = group?.beneficiaries?.map((d: any) => d?.beneficiaryId);
 
       await this.prisma.beneficiary.updateMany({
         where: {
@@ -443,11 +465,11 @@ export class BeneficiaryService {
     );
 
     const formattedData: Array<
-      DataItem & { group: ReturnType<typeof this.getOneGroup> }
+      DataItem & { group: ReturnType<typeof this.getOneGroupV2> }
     > = [];
 
     for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID);
+      const group = await this.getOneGroupV2(d['groupId'] as UUID);
       formattedData.push({
         ...d,
         group,
@@ -468,7 +490,9 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    const groupDetails = await this.getOneGroupV2(
+      benfGroupToken.groupId as UUID
+    );
 
     return {
       ...benfGroupToken,

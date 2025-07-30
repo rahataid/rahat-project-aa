@@ -92,7 +92,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getOneGroup(payload: { uuid: UUID }) {
-    return this.beneficiaryService.getOneGroup(payload.uuid);
+    return this.beneficiaryService.getOneGroupV2(payload.uuid);
   }
   // ***** groups end ********** //
 
