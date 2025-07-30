@@ -144,6 +144,7 @@ export const JOBS = {
     GET_STATS: 'aa.jobs.payout.get_stats',
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
+    EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',

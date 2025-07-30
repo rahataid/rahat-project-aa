@@ -580,6 +580,13 @@ export class BeneficiaryService {
     }
   }
 
+  async updateBeneficiaryRedeemBulk(uuids: string[], payload: Prisma.BeneficiaryRedeemUpdateInput) {
+    return this.prisma.beneficiaryRedeem.updateMany({
+      where: { uuid: { in: uuids } },
+      data: payload,
+    });
+  }
+
   async createBeneficiaryRedeem(payload: Prisma.BeneficiaryRedeemCreateInput) {
     try {
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({

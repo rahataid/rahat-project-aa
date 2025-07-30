@@ -91,4 +91,13 @@ export class PayoutsController {
     console.log('first');
     return this.payoutsService.getPayoutStats();
   }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.EXPORT_PAYOUT_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  downloadPayoutLogs(@Payload() payload: { uuid: string }) {
+    console.log('first');
+    return this.payoutsService.downloadPayoutLogs(payload.uuid);
+  }
 }
