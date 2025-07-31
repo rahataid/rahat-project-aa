@@ -71,48 +71,43 @@ export class PayoutsService {
    */
   async getPayoutStats(): Promise<PayoutStats> {
     try {
-      const [
-        fspCount,
-        vendorCount,
-        failed,
-        success,
-        beneficiaryGroupTokens,
-      ] = await Promise.all([
-        this.prisma.payouts.count({
-          where: {
-            type: 'FSP'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            type: 'VENDOR'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            status: 'FAILED'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            status: "COMPLETED"
-          },
-        }),
-        this.prisma.beneficiaryGroupTokens.findMany({
-          include: {
-            beneficiaryGroup: {
-              select: {
-                beneficiaries: true,
-                _count: {
-                  select: {
-                    beneficiaries: true,
+      const [fspCount, vendorCount, failed, success, beneficiaryGroupTokens] =
+        await Promise.all([
+          this.prisma.payouts.count({
+            where: {
+              type: 'FSP',
+            },
+          }),
+          this.prisma.payouts.count({
+            where: {
+              type: 'VENDOR',
+            },
+          }),
+          this.prisma.payouts.count({
+            where: {
+              status: 'FAILED',
+            },
+          }),
+          this.prisma.payouts.count({
+            where: {
+              status: 'COMPLETED',
+            },
+          }),
+          this.prisma.beneficiaryGroupTokens.findMany({
+            include: {
+              beneficiaryGroup: {
+                select: {
+                  beneficiaries: true,
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
                   },
                 },
               },
             },
-          },
-        }),
-      ]);
+          }),
+        ]);
 
       const totalBeneficiaries = beneficiaryGroupTokens.reduce(
         (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
@@ -1246,7 +1241,6 @@ export class PayoutsService {
           'Bank a/c number': extras.bank_ac_number || null,
           'Bank Name': extras.bank_name || null,
           'Phone number': extras.phone || null,
-          'Govt Id': extras.interviewee_government_id_type || null,
           'Transaction Type': log.transactionType,
           'Bank Transaction ID': log.payoutId,
           'Transacrion Wallet ID': log.txHash,
