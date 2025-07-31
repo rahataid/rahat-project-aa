@@ -97,17 +97,14 @@ export type PayoutStats = {
       FSP: number;
       VENDOR: number;
     };
-    completionStatus: {
-      COMPLETED: number;
-      NOT_COMPLETED: number;
+    payoutStatus: {
+      SUCCESS: number;
+      FAILED: number;
     };
   };
   payoutStats: {
-    tokenAssigned: number;
-    tokenDisbursed: number;
-    oneTokenValue: string;
-    amountDisbursed: number;
-    projectBalance: number;
+    beneficiaries: number;
+    totalCashDistribution: number;
   };
 };
 
@@ -117,7 +114,6 @@ export type DownloadPayoutLogsType = {
   'Bank a/c number': string | null;
   'Bank Name': string | null;
   'Phone number': string | null;
-  'Govt Id': string | null;
   'Transaction Type': string;
   'Bank Transaction ID': string | undefined;
   'Transacrion Wallet ID': string | undefined;

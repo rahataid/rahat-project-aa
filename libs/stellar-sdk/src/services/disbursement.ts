@@ -48,6 +48,15 @@ export class DisbursementServices implements IDisbursementService {
   }
 
   public async getDistributionAddress(tenantName: string) {
+    const authService = new AuthService(
+      this.disbursementValues.tenantName,
+      this.disbursementValues.email,
+      this.disbursementValues.password,
+      this.disbursementValues.baseUrl
+    );
+
+    token = (await authService.getToken()) as string;
+
     return await getDistributionAddress(
       tenantName,
       this.disbursementValues.baseUrl
