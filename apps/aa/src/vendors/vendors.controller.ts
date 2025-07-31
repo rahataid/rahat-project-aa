@@ -5,6 +5,7 @@ import { VendorsService } from './vendors.service';
 import { PaginationBaseDto } from './common';
 import { VendorStatsDto, VendorRedeemDto } from './dto/vendorStats.dto';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
+import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 
 @Controller()
 export class VendorsController {
@@ -42,5 +43,14 @@ export class VendorsController {
   })
   async getTxnAndRedemptionRequestList(vendorWallet: VendorRedeemTxnListDto) {
     return this.vendorService.getTxnAndRedemptionList(vendorWallet);
+  }
+
+  // Returns beneficiaries assigned to a vendor based on payout mode
+  @MessagePattern({
+    cmd: JOBS.VENDOR.GET_BENEFICIARIES,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
+    return this.vendorService.getVendorBeneficiaries(payload);
   }
 }

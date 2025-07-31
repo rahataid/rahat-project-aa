@@ -18,6 +18,14 @@ export class VendorRedeemTxnListDto {
 
   @IsString()
   @IsOptional()
-  @ApiProperty({ description: 'Vendor uuid' })
+  @ApiProperty({ description: 'Transaction hash' })
   txHash?: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Status filter for redemption requests',
+    example: 'success',
+  })
+  status?: string;
 }

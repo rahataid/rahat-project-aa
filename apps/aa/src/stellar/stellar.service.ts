@@ -1,5 +1,6 @@
 import {
   DisbursementServices,
+  IDisbursement,
   ReceiveService,
   TransactionService,
 } from '@rahataid/stellar-sdk';
@@ -41,6 +42,8 @@ import {
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
+import { AppService } from '../app/app.service';
+import { getFormattedTimeDiff } from '../utils/date';
 
 interface BatchInfo {
   batchIndex: number;
@@ -75,7 +78,8 @@ export class StellarService {
     private readonly stellarQueue: Queue,
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
-    private readonly transactionService: TransactionService
+    private readonly transactionService: TransactionService,
+    private readonly appService: AppService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -194,22 +198,29 @@ export class StellarService {
 
   // todo: add payout part
   async sendOtp(sendOtpDto: SendOtpDto) {
-    // const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
-    //   sendOtpDto.phoneNumber
-    // );
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
+    );
 
-    // if (payoutType.type != 'VENDOR') {
-    //   throw new RpcException('Payout type is not VENDOR');
-    // }
+    if (!payoutType) {
+      this.logger.error('Payout not initiated');
+      throw new RpcException('Payout not initiated');
+    }
 
-    // if (payoutType.mode === 'OFFLINE') {
-    //   throw new RpcException('Payout mode is not ONLINE');
-    // }
+    if (payoutType.type != 'VENDOR') {
+      this.logger.error('Payout type is not VENDOR');
+      throw new RpcException('Payout type is not VENDOR');
+    }
 
-    return this.sendOtpByPhone(sendOtpDto);
+    if (payoutType.mode != 'ONLINE') {
+      this.logger.error('Payout mode is not ONLINE');
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(sendOtpDto, payoutType.uuid);
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto, payoutId: string) {
     const beneficiaryRahatAmount = await this.getBenTotal(
       sendOtpDto?.phoneNumber
     );
@@ -230,6 +241,75 @@ export class StellarService {
         { phoneNumber: sendOtpDto.phoneNumber, amount }
       )
     );
+
+    // Get beneficiary wallet address
+    const keys = (await this.getSecretByPhone(sendOtpDto.phoneNumber)) as any;
+    if (!keys) {
+      throw new RpcException('Beneficiary address not found');
+    }
+
+    // Get vendor wallet address
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: sendOtpDto.vendorUuid },
+      select: { walletAddress: true },
+    });
+
+    if (!vendor) {
+      throw new RpcException('Vendor not found');
+    }
+
+    // Find existing BeneficiaryRedeem record for this beneficiary
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: {
+        beneficiaryWalletAddress: keys.publicKey,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (existingRedeem) {
+      // Update existing record with new vendor and reset status
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          uuid: existingRedeem.uuid,
+        },
+        data: {
+          vendorUid: sendOtpDto.vendorUuid,
+          amount: amount as number,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          payoutId: payoutId,
+          info: {
+            message: 'OTP sent to beneficiary',
+            transactionHash: '',
+            offrampWalletAddress: vendor.walletAddress,
+            beneficiaryWalletAddress: keys.publicKey,
+          },
+        },
+      });
+    } else {
+      // Create new record if none exists
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          beneficiaryWalletAddress: keys.publicKey,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          vendorUid: sendOtpDto.vendorUuid,
+          payoutId: payoutId,
+          info: {
+            message: 'OTP sent to beneficiary',
+            transactionHash: '',
+            offrampWalletAddress: vendor.walletAddress,
+            beneficiaryWalletAddress: keys.publicKey,
+          },
+        },
+      });
+    }
 
     return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
   }
@@ -310,22 +390,113 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // todo: create beneficiary redeem while sending otp
-      await this.prisma.beneficiaryRedeem.create({
-        data: {
-          vendorUid: vendor.uuid,
-          amount: amount as number,
-          transactionType: 'VENDOR_REIMBURSEMENT',
+      // Find and update the existing BeneficiaryRedeem record
+      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        where: {
           beneficiaryWalletAddress: keys.publicKey,
-          txHash: result.tx.hash,
-          isCompleted: true,
+          vendorUid: vendor.uuid,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
         },
       });
+
+      if (!existingRedeem) {
+        this.logger.warn(
+          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+        );
+        // Create a new record since the transfer was successful
+        await this.prisma.beneficiaryRedeem.create({
+          data: {
+            beneficiaryWalletAddress: keys.publicKey,
+            vendorUid: vendor.uuid,
+            amount: amount as number,
+            transactionType: 'VENDOR_REIMBURSEMENT',
+            txHash: result.tx.hash,
+            isCompleted: true,
+            status: 'COMPLETED',
+            info: {
+              message: 'Beneficiary Redemption successful',
+              transactionHash: result.tx.hash,
+              offrampWalletAddress: vendor.walletAddress,
+              beneficiaryWalletAddress: keys.publicKey,
+            },
+          },
+        });
+      } else {
+        // Update the existing BeneficiaryRedeem record with transaction details
+        await this.prisma.beneficiaryRedeem.update({
+          where: {
+            uuid: existingRedeem.uuid,
+          },
+          data: {
+            vendorUid: vendor.uuid,
+            txHash: result.tx.hash,
+            isCompleted: true,
+            status: 'COMPLETED',
+            info: {
+              message: 'Beneficiary Redemption successful',
+              transactionHash: result.tx.hash,
+              offrampWalletAddress: vendor.walletAddress,
+              beneficiaryWalletAddress: keys.publicKey,
+            },
+          },
+        });
+      }
 
       return {
         txHash: result.tx.hash,
       };
     } catch (error) {
+      // Update BeneficiaryRedeem record with error information if possible
+      try {
+        const keys = (await this.getSecretByPhone(
+          verifyOtpDto.phoneNumber
+        )) as any;
+
+        if (keys) {
+          const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+            where: {
+              beneficiaryWalletAddress: keys.publicKey,
+              status: 'PENDING',
+              isCompleted: false,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+          if (existingRedeem) {
+            await this.prisma.beneficiaryRedeem.update({
+              where: {
+                uuid: existingRedeem.uuid,
+              },
+              data: {
+                status: 'FAILED',
+                isCompleted: false,
+                info: {
+                  message: `Beneficiary Redemption failed: ${
+                    error.message || 'Unknown error'
+                  }`,
+                  transactionHash: '',
+                  offrampWalletAddress: verifyOtpDto.receiverAddress,
+                  beneficiaryWalletAddress: keys.publicKey,
+                  error: error.message || 'Unknown error',
+                },
+              },
+            });
+          }
+        }
+      } catch (updateError) {
+        this.logger.error(
+          'Failed to update BeneficiaryRedeem record with error info:',
+          updateError
+        );
+      }
+
       throw new RpcException(
         error ? error : 'Transferring asset to vendor failed'
       );
@@ -388,7 +559,7 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // todo: create beneficiary redeem while sending otp
+      // Create BeneficiaryRedeem record for direct wallet transfer
       await this.prisma.beneficiaryRedeem.create({
         data: {
           vendorUid: vendor.uuid,
@@ -397,6 +568,7 @@ export class StellarService {
           beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
           isCompleted: true,
+          status: 'COMPLETED',
         },
       });
 
@@ -480,15 +652,19 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Make process dynamic
-  async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
-      attempts: 3,
-      removeOnComplete: true,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-    });
+  async addTriggerOnChain(triggers: AddTriggerDto[]) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
+      { triggers },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
   }
 
   // todo (new-chain-config): Need separate method for evm
@@ -570,51 +746,157 @@ export class StellarService {
     );
   }
 
-  // todo (new-chain-config): Need dynamic method according to chain
-  async getDisbursementStats() {
-    const disbursementBalance = await this.getRahatBalance(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
+  async getActivityActivationTime() {
+    const projectInfo = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
+    if (!projectInfo) {
+      throw new RpcException('Project info not found, in SETTINGS');
+    }
+    const activeYear = projectInfo?.value?.active_year;
+    const riverBasin = projectInfo?.value?.river_basin;
+
+    if (!activeYear || !riverBasin) {
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`);
+
+      return null;
+    }
+
+    const data = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phases.getAll' },
+        {
+          activeYear,
+          riverBasin,
+        }
       )
     );
 
-    const vendors = await this.prisma.vendor.findMany({
-      select: { walletAddress: true },
+    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+
+    if (!activationPhase) {
+      this.logger.warn(
+        `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    if (!activationPhase.isActive) {
+      this.logger.warn(
+        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    return activationPhase.activatedAt;
+  }
+
+  // todo (new-chain-config): Need dynamic method according to chain
+  async getDisbursementStats() {
+    const oneTokenPrice = (await this.getFromSettings('ONE_TOKEN_PRICE')) ?? 1;
+    const tokenName = (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT';
+
+    const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      include: {
+        beneficiaryGroup: {
+          include: {
+            _count: {
+              select: {
+                beneficiaries: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    let totalVendorBalance = 0;
+    const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
+      if (token.isDisbursed) {
+        acc += token.numberOfTokens;
+      }
+      return acc;
+    }, 0);
 
-    await Promise.all(
-      vendors.map(async (vendor) => {
-        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
-      })
+    const totalTokens = benfTokens.reduce(
+      (acc, token) => acc + token.numberOfTokens,
+      0
     );
 
-    const totalDisbursedTokens =
-      await this.getTotalDisbursedTokensAcrossAllGroups();
+    const totalBeneficiaries = benfTokens.reduce(
+      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+      0
+    );
 
-    return {
-      tokenStats: [
-        {
-          name: 'Disbursed Balance',
-          amount: totalDisbursedTokens.toLocaleString(),
-        },
-        {
-          name: 'Total claimed',
-          amount: totalVendorBalance.toLocaleString(),
-        },
-        {
-          name: 'Remaining Balance',
-          amount: (totalDisbursedTokens - totalVendorBalance).toLocaleString(),
-        },
-        { name: 'Token Price', amount: 'Rs 10' },
-      ],
-      transactionStats: await this.getRecentTransaction(
-        await this.disbursementService.getDistributionAddress(
-          await this.getFromSettings('TENANTNAME')
-        )
-      ),
-    };
+    const disbursementsInfo = benfTokens
+      .filter(
+        (token) =>
+          token.isDisbursed && (token.info as any)?.disbursementTimeTaken
+      )
+      .map((token) => (token.info as any)?.disbursementTimeTaken);
+
+    const averageDisbursementTime =
+      disbursementsInfo.reduce((acc, time) => acc + time, 0) /
+      disbursementsInfo.length;
+
+    console.log(averageDisbursementTime);
+
+    const activityActivationTime = await this.getActivityActivationTime();
+    let averageDuration = 0;
+
+    if (activityActivationTime) {
+      averageDuration =
+        benfTokens
+          .filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .reduce((acc, token) => {
+            const info = JSON.parse(JSON.stringify(token.info)) as {
+              disbursement: IDisbursement;
+            };
+            // getting disbursement completion time
+            const {
+              disbursement: { updated_at },
+            } = info;
+
+            // diff between disbursement completion time and activity activation time
+            const timeTaken =
+              new Date(updated_at).getTime() -
+              new Date(activityActivationTime).getTime();
+
+            return acc + timeTaken;
+          }, 0) /
+        benfTokens.filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .length;
+
+      averageDuration = averageDuration;
+    }
+
+    return [
+      {
+        name: 'Token Disbursed',
+        value: totalDisbursedTokens,
+      },
+      {
+        name: 'Budget Assigned',
+        value: totalTokens * oneTokenPrice,
+      },
+      {
+        name: 'Token',
+        value: tokenName,
+      },
+      { name: 'Token Price', value: oneTokenPrice },
+      { name: 'Total Beneficiaries', value: totalBeneficiaries },
+      {
+        name: 'Average Disbursement time',
+        value: getFormattedTimeDiff(averageDisbursementTime),
+      },
+      {
+        name: 'Average Duration',
+        value:
+          averageDuration > 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+      },
+    ];
   }
 
   async checkBulkTrustline(mode: 'dry' | 'live') {
@@ -1012,6 +1294,7 @@ export class StellarService {
     try {
       const accountBalances = await this.receiveService.getAccountBalance(keys);
 
+      console.log(accountBalances, 'accountBalances');
       const assetCode = await this.getFromSettings('ASSETCODE');
 
       const rahatAsset = accountBalances?.find(
@@ -1058,9 +1341,27 @@ export class StellarService {
         this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
       );
 
+      if (!beneficiary) {
+        this.logger.error('Beneficiary not found');
+        throw new RpcException('Beneficiary not found');
+      }
+
+      // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
+      const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
+        (g) => g.groupPurpose !== 'COMMUNICATION'
+      );
+
+      if (!payoutEligibleGroups.length) {
+        this.logger.error('No payout-eligible group found for beneficiary');
+        throw new RpcException(
+          'No payout-eligible group found for beneficiary'
+        );
+      }
+
+      // Use the first payout-eligible group for the lookup
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
-          uuid: beneficiary.groupedBeneficiaries[0].beneficiaryGroupId,
+          uuid: payoutEligibleGroups[0].beneficiaryGroupId,
         },
         include: {
           tokensReserved: {
@@ -1071,9 +1372,21 @@ export class StellarService {
         },
       });
 
+      if (!beneficiaryGroups) {
+        this.logger.error('Beneficiary group not found');
+        throw new RpcException('Beneficiary group not found');
+      }
+
+      if (!beneficiaryGroups.tokensReserved) {
+        this.logger.error('Tokens not reserved for the group');
+        throw new RpcException('Tokens not reserved for the group');
+      }
+
       return beneficiaryGroups.tokensReserved.payout;
     } catch (error) {
-      throw new Error(`Failed to retrieve payout type: ${error.message}`);
+      throw new RpcException(
+        `Failed to retrieve payout type: ${error.message}`
+      );
     }
   }
 
