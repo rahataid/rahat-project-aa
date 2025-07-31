@@ -8,6 +8,7 @@ import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
+import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -142,18 +143,19 @@ export class VendorsService {
 
   async getTxnAndRedemptionList(payload: VendorRedeemTxnListDto) {
     try {
-      console.log(payload);
-      const { page, perPage, uuid, txHash } = payload;
+      const { page, perPage, uuid, txHash, status } = payload;
       const query = {
         where: {
           vendorUid: uuid,
           ...(txHash && { txHash }),
+          ...(status === 'success' && { status: 'TOKEN_TRANSACTION_COMPLET' }),
         },
         orderBy: {
           createdAt: 'desc',
         },
       };
 
+      // Get paginated transactions
       return paginate(this.prisma.beneficiaryRedeem, query, {
         page,
         perPage,
@@ -210,6 +212,239 @@ export class VendorsService {
           )?.piiData?.name,
         };
       });
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
+    try {
+      this.logger.log(
+        `Getting beneficiaries for vendor ${payload.vendorUuid} with payout mode ${payload.payoutMode}`
+      );
+
+      // First verify the vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: payload.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `Vendor with id ${payload.vendorUuid} not found`
+        );
+      }
+
+      if (payload.payoutMode === 'ONLINE') {
+        // For ONLINE mode: Get beneficiaries who have been charged by this vendor
+        this.logger.log(
+          `Getting beneficiaries charged by vendor ${payload.vendorUuid} for ONLINE mode`
+        );
+
+        // Get beneficiaries who have been charged by this vendor
+        const chargedBeneficiaries =
+          await this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              transactionType: 'VENDOR_REIMBURSEMENT',
+              vendorUid: payload.vendorUuid,
+            },
+            include: {
+              Beneficiary: {
+                select: {
+                  uuid: true,
+                  walletAddress: true,
+                  phone: true,
+                  gender: true,
+                  benTokens: true,
+                  isVerified: true,
+                  createdAt: true,
+                },
+              },
+            },
+          });
+
+        // Extract unique beneficiaries (remove duplicates based on UUID)
+        const uniqueBeneficiaries = chargedBeneficiaries
+          .map((redeem) => redeem.Beneficiary)
+          .filter(
+            (beneficiary, index, self) =>
+              index === self.findIndex((b) => b.uuid === beneficiary.uuid)
+          );
+
+        this.logger.log(
+          `Found ${uniqueBeneficiaries.length} unique beneficiaries charged by vendor ${payload.vendorUuid}`
+        );
+
+        // Get beneficiary UUIDs for enrichment
+        const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
+        let benResponse = [];
+        if (beneficiaryUuids.length) {
+          benResponse = await lastValueFrom(
+            this.client.send(
+              { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+              beneficiaryUuids
+            )
+          );
+        }
+
+        // Attach beneficiary name to each beneficiary
+        const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
+          const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
+          return {
+            ...ben,
+            name: benInfo?.name || null,
+          };
+        });
+
+        // Use the reusable paginator
+        return paginate(
+          {
+            findMany: async () => enrichedBeneficiaries,
+            count: async () => enrichedBeneficiaries.length,
+          },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      } else if (payload.payoutMode === 'OFFLINE') {
+        // For OFFLINE mode: Keep existing logic unchanged
+        this.logger.log(
+          `Getting beneficiaries for vendor ${payload.vendorUuid} in OFFLINE mode`
+        );
+
+        const payoutsQuery = {
+          where: {
+            type: 'VENDOR' as const,
+            mode: 'OFFLINE' as const,
+            payoutProcessorId: payload.vendorUuid,
+            beneficiaryGroupToken: {
+              isNot: null,
+            },
+          },
+        };
+
+        // Get payouts that match the criteria
+        const payouts = await this.prisma.payouts.findMany({
+          ...payoutsQuery,
+        });
+        this.logger.log('Payouts found: ' + JSON.stringify(payouts));
+
+        if (!payouts.length) {
+          return paginate(
+            { findMany: async () => [], count: async () => 0 },
+            {},
+            { page: payload.page, perPage: payload.perPage }
+          );
+        }
+
+        // Get all beneficiary group tokens that are associated with these payouts
+        const payoutIds = payouts.map((payout) => payout.uuid);
+        const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+          where: {
+            payoutId: {
+              in: payoutIds,
+            },
+          },
+        });
+        this.logger.log('Group tokens found: ' + JSON.stringify(groupTokens));
+
+        if (!groupTokens.length) {
+          return paginate(
+            { findMany: async () => [], count: async () => 0 },
+            {},
+            { page: payload.page, perPage: payload.perPage }
+          );
+        }
+
+        // Get group IDs from tokens
+        const groupIds = groupTokens.map((token) => token.groupId);
+        this.logger.log(
+          'Group IDs for beneficiary query: ' + JSON.stringify(groupIds)
+        );
+
+        // Fetch group details and filter by purpose (exclude COMMUNICATION)
+        const groups = await this.prisma.beneficiaryGroups.findMany({
+          where: {
+            uuid: { in: groupIds },
+            groupPurpose: { not: 'COMMUNICATION' },
+          },
+        });
+        const payoutGroupIds = groups.map((g) => g.uuid);
+        this.logger.log(
+          'Filtered payout group IDs: ' + JSON.stringify(payoutGroupIds)
+        );
+
+        if (!payoutGroupIds.length) {
+          return paginate(
+            { findMany: async () => [], count: async () => 0 },
+            {},
+            { page: payload.page, perPage: payload.perPage }
+          );
+        }
+
+        // Use only payout-eligible group IDs for beneficiary query
+        const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
+          where: {
+            groupId: { in: payoutGroupIds },
+          },
+          include: {
+            beneficiary: {
+              select: {
+                uuid: true,
+                walletAddress: true,
+                phone: true,
+                gender: true,
+                benTokens: true,
+                isVerified: true,
+                createdAt: true,
+              },
+            },
+          },
+        });
+
+        // Extract beneficiary data
+        const allBeneficiaries = beneficiaries.map(
+          (beneficiaryToGroup) => beneficiaryToGroup.beneficiary
+        );
+
+        // Remove duplicates based on UUID
+        const uniqueBeneficiaries = allBeneficiaries.filter(
+          (beneficiary, index, self) =>
+            index === self.findIndex((b) => b.uuid === beneficiary.uuid)
+        );
+
+        // Get beneficiary UUIDs
+        const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
+        let benResponse = [];
+        if (beneficiaryUuids.length) {
+          benResponse = await lastValueFrom(
+            this.client.send(
+              { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+              beneficiaryUuids
+            )
+          );
+        }
+
+        // Attach beneficiary name to each beneficiary
+        const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
+          const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
+          return {
+            ...ben,
+            name: benInfo?.name || null,
+          };
+        });
+
+        // Use the reusable paginator
+        return paginate(
+          {
+            findMany: async () => enrichedBeneficiaries,
+            count: async () => enrichedBeneficiaries.length,
+          },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      } else {
+        throw new RpcException(`Invalid payout mode: ${payload.payoutMode}`);
+      }
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);

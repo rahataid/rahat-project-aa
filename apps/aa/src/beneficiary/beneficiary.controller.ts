@@ -94,6 +94,16 @@ export class BeneficiaryController {
   async getOneGroup(payload: { uuid: UUID }) {
     return this.beneficiaryService.getOneGroup(payload.uuid);
   }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryRedeemInfo(payload: { beneficiaryUUID: string }) {
+    return this.beneficiaryService.getBeneficiaryRedeemInfo(
+      payload.beneficiaryUUID
+    );
+  }
   // ***** groups end ********** //
 
   // ***** groups fund mgmt ********** //

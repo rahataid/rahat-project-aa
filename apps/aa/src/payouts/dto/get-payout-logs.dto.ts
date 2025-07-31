@@ -55,4 +55,4 @@ export class GetPayoutLogsDto {
   @IsOptional()
   @IsString()
   search?: string;
-} 
+}

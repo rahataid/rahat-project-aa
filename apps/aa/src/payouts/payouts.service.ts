@@ -5,6 +5,7 @@ import {
   BeneficiaryRedeem,
   Payouts,
   PayoutTransactionStatus,
+  PayoutTransactionType,
   PayoutType,
   Prisma,
 } from '@prisma/client';
@@ -29,6 +30,10 @@ import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import {
+  GetPayoutDetailsDto,
+  PayoutDetailsResponse,
+} from './dto/get-payout-details.dto';
+import {
   calculatePayoutStatus,
   PayoutWithRelations,
   RedeemStatus,
@@ -42,6 +47,7 @@ import { getFormattedTimeDiff } from '../utils/date';
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 const ONE_TOKEN_VALUE = 1;
+
 @Injectable()
 export class PayoutsService {
   private readonly logger = new Logger(PayoutsService.name);
@@ -667,9 +673,6 @@ export class PayoutsService {
     );
     const offrampWalletAddress =
       await this.offrampService.getOfframpWalletAddress();
-
-    console.log('Offramp Wallet Address:', offrampWalletAddress);
-    console.log('Beneficiary Wallet Addresses:', BeneficiaryPayoutDetails);
 
     const stellerOfframpQueuePayload: FSPPayoutDetails[] =
       BeneficiaryPayoutDetails.map((beneficiary) => ({

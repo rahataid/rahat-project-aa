@@ -178,15 +178,33 @@ export class StellarChainService implements IChainService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // todo: create beneficiary redeem while sending otp
-      await this.prisma.beneficiaryRedeem.create({
+      // Find and update the existing BeneficiaryRedeem record
+      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        where: {
+          beneficiaryWalletAddress: keys.publicKey,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!existingRedeem) {
+        throw new RpcException('No pending BeneficiaryRedeem record found');
+      }
+
+      // Update the BeneficiaryRedeem record with transaction details
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          uuid: existingRedeem.uuid,
+        },
         data: {
           vendorUid: vendor.uuid,
-          amount: amount as number,
-          transactionType: 'VENDOR_REIMBURSEMENT',
-          beneficiaryWalletAddress: keys.publicKey,
           txHash: result.tx.hash,
-          // isCompleted: true,
+          isCompleted: true,
+          status: 'COMPLETED',
         },
       });
 
@@ -258,6 +276,51 @@ export class StellarChainService implements IChainService {
         { phoneNumber: sendOtpDto.phoneNumber, amount }
       )
     );
+
+    // Get beneficiary wallet address
+    const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
+    if (!keys) {
+      throw new RpcException('Beneficiary address not found');
+    }
+
+    // Find existing BeneficiaryRedeem record for this beneficiary
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: {
+        beneficiaryWalletAddress: keys.address,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (existingRedeem) {
+      // Update existing record with new vendor and reset status
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          uuid: existingRedeem.uuid,
+        },
+        data: {
+          vendorUid: sendOtpDto.vendorUuid,
+          amount: amount as number,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+      });
+    } else {
+      // Create new record if none exists
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          beneficiaryWalletAddress: keys.address,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          vendorUid: sendOtpDto.vendorUuid,
+        },
+      });
+    }
 
     return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
   }

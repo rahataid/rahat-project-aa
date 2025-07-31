@@ -7,6 +7,7 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import { GetPayoutDetailsDto } from './dto/get-payout-details.dto';
 
 @Controller()
 export class PayoutsController {

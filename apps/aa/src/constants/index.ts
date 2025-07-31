@@ -71,6 +71,7 @@ export const JOBS = {
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
+    GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -136,6 +137,7 @@ export const JOBS = {
       'aa.jobs.payout.triggerOneFailedPayoutRequest',
     GET_PAYOUT_LOGS: 'aa.jobs.payout.getPayoutLogs',
     GET_PAYOUT_LOG: 'aa.jobs.payout.getPayoutLog',
+    GET_PAYOUT_DETAILS: 'aa.jobs.payout.getPayoutDetails',
     CREATE: 'aa.jobs.payout.create',
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',
@@ -215,6 +217,7 @@ export const JOBS = {
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    GET_BENEFICIARIES: 'rahat.jobs.vendor.get_beneficiaries',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
   },
