@@ -304,18 +304,59 @@ export class PayoutsService {
       });
 
       const enrichedData = await Promise.all(
-        result.data.map(async (payout: PayoutWithRelations) => {
+        result.data.map(async (eachPayout: PayoutWithRelations) => {
           //  Skip calculation if already completed
-          if (payout.status === 'COMPLETED') {
-            return payout;
+          if (eachPayout.status === 'COMPLETED') {
+            return {
+              ...eachPayout,
+              totalSuccessAmount:
+                eachPayout.beneficiaryGroupToken.numberOfTokens *
+                ONE_TOKEN_VALUE,
+            };
           }
-          const calculatedStatus = calculatePayoutStatus(payout);
-          await this.syncPayoutStatus(payout, calculatedStatus);
+          const calculatedStatus = calculatePayoutStatus(eachPayout);
+          await this.syncPayoutStatus(eachPayout, calculatedStatus);
+
+          let totalSuccessAmount = 0;
+
+          if (calculatedStatus === 'COMPLETED') {
+            totalSuccessAmount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE;
+          } else if (eachPayout.type === 'FSP') {
+            const successRequests = eachPayout.beneficiaryRedeem.filter(
+              (redeem) => redeem.status === 'FIAT_TRANSACTION_COMPLETED'
+            );
+
+            const eachBeneficiaryTokenCount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens /
+              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
+                .beneficiaries;
+
+            totalSuccessAmount =
+              successRequests.length *
+              ONE_TOKEN_VALUE *
+              eachBeneficiaryTokenCount;
+          } else {
+            const successRequests = eachPayout.beneficiaryRedeem.filter(
+              (redeem) => redeem.status === 'COMPLETED'
+            );
+
+            const eachBeneficiaryTokenCount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens /
+              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
+                .beneficiaries;
+
+            totalSuccessAmount =
+              successRequests.length *
+              ONE_TOKEN_VALUE *
+              eachBeneficiaryTokenCount;
+          }
 
           // Remove beneficiaryRedeem from result, add redeemStatus
-          const { beneficiaryRedeem, ...rest } = payout;
+          const { beneficiaryRedeem, ...rest } = eachPayout;
           return {
             ...rest,
+            totalSuccessAmount,
           };
         })
       );
@@ -373,6 +414,7 @@ export class PayoutsService {
       isPayoutTriggered?: boolean;
       totalSuccessRequests?: number;
       payoutGap?: string;
+      totalSuccessAmount?: number;
       totalFailedPayoutRequests?: number;
     }
   > {
@@ -429,6 +471,10 @@ export class PayoutsService {
 
       const isCompleted = await this.getPayoutCompletedStatus(payout);
       const isPayoutTriggered = payout.beneficiaryRedeem.length > 0;
+      const eachBenfTokenCount = isPayoutTriggered
+        ? payout.beneficiaryGroupToken.numberOfTokens /
+          payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries
+        : 0;
 
       const totalSuccessRequests = isPayoutTriggered
         ? payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
@@ -445,6 +491,8 @@ export class PayoutsService {
         ...payout,
         hasFailedPayoutRequests:
           payout.type === 'VENDOR' ? false : totalFailedPayoutRequests > 0,
+        totalSuccessAmount:
+          totalSuccessRequests * ONE_TOKEN_VALUE * eachBenfTokenCount,
         totalSuccessRequests,
         totalFailedPayoutRequests,
         payoutGap,
