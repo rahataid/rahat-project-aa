@@ -378,6 +378,7 @@ export class PayoutsService {
       isPayoutTriggered?: boolean;
       totalSuccessRequests?: number;
       payoutGap?: string;
+      totalSuccessAmount?: number;
       totalFailedPayoutRequests?: number;
     }
   > {
@@ -434,6 +435,10 @@ export class PayoutsService {
 
       const isCompleted = await this.getPayoutCompletedStatus(payout);
       const isPayoutTriggered = payout.beneficiaryRedeem.length > 0;
+      const eachBenfTokenCount = isPayoutTriggered
+        ? payout.beneficiaryGroupToken.numberOfTokens /
+          payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries
+        : 0;
 
       const totalSuccessRequests = isPayoutTriggered
         ? payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
@@ -450,6 +455,7 @@ export class PayoutsService {
         ...payout,
         hasFailedPayoutRequests:
           payout.type === 'VENDOR' ? false : totalFailedPayoutRequests > 0,
+        totalSuccessAmount: totalSuccessRequests * ONE_TOKEN_VALUE * eachBenfTokenCount,
         totalSuccessRequests,
         totalFailedPayoutRequests,
         payoutGap,
