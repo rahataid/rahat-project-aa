@@ -5,6 +5,8 @@ export class SendOtpDto {
 
   @IsOptional()
   amount?: string;
+
+  vendorUuid: string;
 }
 
 export class SendGroupDto {

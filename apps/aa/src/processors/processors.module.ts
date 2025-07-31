@@ -22,6 +22,7 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
+import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AppModule } from '../app/app.module';
     BeneficiaryModule,
     ActivitiesModule,
     PayoutsModule,
+    StakeholdersModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
