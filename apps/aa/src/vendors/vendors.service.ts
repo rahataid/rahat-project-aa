@@ -155,6 +155,7 @@ export class VendorsService {
         include: {
           Beneficiary: {
             select: {
+              uuid: true,
               extras: true,
               walletAddress: true,
             },
@@ -171,14 +172,35 @@ export class VendorsService {
         perPage,
       });
 
-      // Transform the data to include phone number from extras
-      const transformedData = result.data.map((redeem: any) => ({
-        ...redeem,
-        Beneficiary: {
-          ...redeem.Beneficiary,
-          phone: (redeem.Beneficiary?.extras as any)?.phone || null,
-        },
-      }));
+      // Get beneficiary UUIDs for name lookup
+      const beneficiaryUuids = result.data
+        .map((redeem: any) => redeem.Beneficiary?.uuid)
+        .filter(Boolean);
+
+      let benResponse = [];
+      if (beneficiaryUuids.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+            beneficiaryUuids
+          )
+        );
+      }
+
+      // Transform the data to include phone number from extras and name from benResponse
+      const transformedData = result.data.map((redeem: any) => {
+        const benInfo = benResponse.find(
+          (b: any) => b.uuid === redeem.Beneficiary?.uuid
+        );
+        return {
+          ...redeem,
+          Beneficiary: {
+            ...redeem.Beneficiary,
+            phone: (redeem.Beneficiary?.extras as any)?.phone || null,
+            name: benInfo?.name || null,
+          },
+        };
+      });
 
       return {
         ...result,
