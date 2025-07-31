@@ -33,6 +33,6 @@ import { StellarModule } from '../stellar/stellar.module';
   ],
   controllers: [BeneficiaryController],
   providers: [BeneficiaryService, PrismaService, BeneficiaryStatService],
-  exports: [BeneficiaryService],
+  exports: [BeneficiaryService, BeneficiaryStatService],
 })
 export class BeneficiaryModule {}

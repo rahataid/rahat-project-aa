@@ -346,22 +346,22 @@ export class BeneficiaryService {
       user,
     } = payload;
 
-      const isAlreadyReserved =
-        await this.prisma.beneficiaryGroupTokens.findUnique({
-          where: { groupId: beneficiaryGroupId },
-        });
+    const isAlreadyReserved =
+      await this.prisma.beneficiaryGroupTokens.findUnique({
+        where: { groupId: beneficiaryGroupId },
+      });
 
-      if (isAlreadyReserved) {
-        throw new RpcException('Token already reserved.');
-      }
+    if (isAlreadyReserved) {
+      throw new RpcException('Token already reserved.');
+    }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: beneficiaryGroupId,
-      }
+      },
     });
 
-    if(!benfGroup) {
+    if (!benfGroup) {
       throw new RpcException('Beneficiary group not found.');
     }
 
@@ -580,6 +580,13 @@ export class BeneficiaryService {
     }
   }
 
+  async updateBeneficiaryRedeemBulk(uuids: string[], payload: Prisma.BeneficiaryRedeemUpdateInput) {
+    return this.prisma.beneficiaryRedeem.updateMany({
+      where: { uuid: { in: uuids } },
+      data: payload,
+    });
+  }
+
   async createBeneficiaryRedeem(payload: Prisma.BeneficiaryRedeemCreateInput) {
     try {
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
@@ -640,5 +647,71 @@ export class BeneficiaryService {
         AND status IN ('FIAT_TRANSACTION_FAILED', 'TOKEN_TRANSACTION_FAILED')
       GROUP BY status;
       `;
+  }
+
+  /**
+   * Get beneficiary redeem information by beneficiary UUID
+   * This is used to get all beneficiary redeem details including wallet, token amount, transaction type, status, and txHash
+   *
+   * @param beneficiaryUUID - The UUID of the beneficiary
+   * @returns { beneficiaryWallet: string; tokenAmount: number; transactionType: string; status: string; txHash: string | null }[] - Array of beneficiary redeem information
+   */
+  async getBeneficiaryRedeemInfo(beneficiaryUUID: string): Promise<
+    {
+      beneficiaryWallet: string;
+      tokenAmount: number;
+      transactionType: string;
+      status: string;
+      txHash: string | null;
+    }[]
+  > {
+    try {
+      // Validate beneficiaryUUID
+      if (!beneficiaryUUID) {
+        throw new RpcException('Beneficiary UUID is required');
+      }
+
+      // First get the beneficiary to get their wallet address
+      const beneficiary = await this.prisma.beneficiary.findUnique({
+        where: { uuid: beneficiaryUUID },
+        select: { walletAddress: true },
+      });
+
+      if (!beneficiary) {
+        throw new RpcException('Beneficiary not found');
+      }
+
+      // Get all beneficiary redeem records for this beneficiary
+      const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          beneficiaryWalletAddress: beneficiary.walletAddress,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          beneficiaryWalletAddress: true,
+          amount: true,
+          transactionType: true,
+          status: true,
+          txHash: true,
+        },
+      });
+
+      if (!beneficiaryRedeems || beneficiaryRedeems.length === 0) {
+        throw new RpcException('No redeem records found for this beneficiary');
+      }
+
+      return beneficiaryRedeems.map((redeem) => ({
+        beneficiaryWallet: redeem.beneficiaryWalletAddress,
+        tokenAmount: redeem.amount,
+        transactionType: redeem.transactionType,
+        status: redeem.status,
+        txHash: redeem.txHash,
+      }));
+    } catch (error) {
+      this.logger.error(`Error getting beneficiary redeem info: ${error}`);
+      throw error;
+    }
   }
 }

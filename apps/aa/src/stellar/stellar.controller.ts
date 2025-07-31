@@ -43,7 +43,6 @@ export class StellarController {
     this.logger.log('Sending OTP to beneficiary');
     return this.stellarService.sendOtp(sendAssetDto);
   }
-
   // Verifies OTP and send Asset to vendor
   @MessagePattern({
     cmd: JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
