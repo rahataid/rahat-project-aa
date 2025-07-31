@@ -177,6 +177,14 @@ export class VendorsService {
         .map((redeem: any) => redeem.Beneficiary?.uuid)
         .filter(Boolean);
 
+      this.logger.log(
+        `Found ${
+          beneficiaryUuids.length
+        } beneficiary UUIDs for name lookup: ${JSON.stringify(
+          beneficiaryUuids
+        )}`
+      );
+
       let benResponse = [];
       if (beneficiaryUuids.length) {
         benResponse = await lastValueFrom(
@@ -185,12 +193,20 @@ export class VendorsService {
             beneficiaryUuids
           )
         );
+        this.logger.log(
+          `Received beneficiary response: ${JSON.stringify(benResponse)}`
+        );
       }
 
       // Transform the data to include phone number from extras and name from benResponse
       const transformedData = result.data.map((redeem: any) => {
         const benInfo = benResponse.find(
           (b: any) => b.uuid === redeem.Beneficiary?.uuid
+        );
+        this.logger.log(
+          `Looking for beneficiary ${
+            redeem.Beneficiary?.uuid
+          }, found: ${JSON.stringify(benInfo)}`
         );
         return {
           ...redeem,
