@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Logger } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { VendorsService } from './vendors.service';
@@ -6,16 +6,20 @@ import { PaginationBaseDto } from './common';
 import { VendorStatsDto, VendorRedeemDto } from './dto/vendorStats.dto';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
+import { VendorOfflinePayoutDto } from './dto/vendor-offline-payout.dto';
 
-@Controller()
+@Controller('vendors')
 export class VendorsController {
-  constructor(private readonly vendorService: VendorsService) {}
+  private readonly logger = new Logger(VendorsController.name);
+
+  constructor(private readonly vendorsService: VendorsService) {}
+
   @MessagePattern({
     cmd: JOBS.VENDOR.LIST_WITH_PROJECT_DATA,
     uuid: process.env.PROJECT_ID,
   })
   listWithData(query: PaginationBaseDto): any {
-    return this.vendorService.listWithProjectData(query);
+    return this.vendorsService.listWithProjectData(query);
   }
 
   // Return required stats for a vendor address
@@ -24,7 +28,7 @@ export class VendorsController {
     uuid: process.env.PROJECT_ID,
   })
   async getVendorStats(vendorWallet: VendorStatsDto) {
-    return this.vendorService.getVendorWalletStats(vendorWallet);
+    return this.vendorsService.getVendorWalletStats(vendorWallet);
   }
 
   // Returns all redemption requests of a vendor
@@ -33,7 +37,7 @@ export class VendorsController {
   //   uuid: process.env.PROJECT_ID,
   // })
   // async getRedemptionRequest(vendorWallet: VendorRedeemDto) {
-  //   return this.vendorService.getRedemptionRequest(vendorWallet);
+  //   return this.vendorsService.getRedemptionRequest(vendorWallet);
   // }
 
   // Returns all redemption requests of a vendor and txn list for vendors
@@ -42,7 +46,7 @@ export class VendorsController {
     uuid: process.env.PROJECT_ID,
   })
   async getTxnAndRedemptionRequestList(vendorWallet: VendorRedeemTxnListDto) {
-    return this.vendorService.getTxnAndRedemptionList(vendorWallet);
+    return this.vendorsService.getTxnAndRedemptionList(vendorWallet);
   }
 
   // Returns beneficiaries assigned to a vendor based on payout mode
@@ -51,6 +55,15 @@ export class VendorsController {
     uuid: process.env.PROJECT_ID,
   })
   async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
-    return this.vendorService.getVendorBeneficiaries(payload);
+    return this.vendorsService.getVendorBeneficiaries(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.VENDOR.OFFLINE_PAYOUT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async processVendorOfflinePayout(payload: VendorOfflinePayoutDto) {
+    this.logger.log('Processing vendor offline payout request');
+    return this.vendorsService.processVendorOfflinePayout(payload);
   }
 }

@@ -3,9 +3,10 @@ import { PrismaModule } from '@rumsan/prisma';
 import { VendorsService } from './vendors.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { CORE_MODULE } from '../constants';
+import { CORE_MODULE, BQUEUE } from '../constants';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
@@ -21,6 +22,9 @@ import { SettingsService } from '@rumsan/settings';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.VENDOR_OFFLINE,
+    }),
   ],
   providers: [
     VendorsService,

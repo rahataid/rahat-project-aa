@@ -218,6 +218,9 @@ export const JOBS = {
     GET_BENEFICIARIES: 'rahat.jobs.vendor.get_beneficiaries',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+    OFFLINE_PAYOUT: 'aa.jobs.vendor.offline_payout',
+    SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
+    SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
 };
 
@@ -245,6 +248,7 @@ export const BQUEUE = {
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
+  VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

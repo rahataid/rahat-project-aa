@@ -1001,7 +1001,7 @@ export class StellarService {
     return Object.values(csvData);
   }
 
-  private async getBenTotal(phoneNumber: string) {
+  public async getBenTotal(phoneNumber: string) {
     try {
       const keys = await this.getSecretByPhone(phoneNumber);
       this.logger.log('Keys: ', keys);
