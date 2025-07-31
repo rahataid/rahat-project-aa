@@ -652,10 +652,10 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Make process dynamic
-  async addTriggerOnChain(trigger: AddTriggerDto[]) {
+  async addTriggerOnChain(triggers: AddTriggerDto[]) {
     return this.stellarQueue.add(
       JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
-      trigger,
+      { triggers },
       {
         attempts: 3,
         removeOnComplete: true,
