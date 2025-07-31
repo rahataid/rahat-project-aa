@@ -484,15 +484,19 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Make process dynamic
-  async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
-      attempts: 3,
-      removeOnComplete: true,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-    });
+  async addTriggerOnChain(triggers: AddTriggerDto[]) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
+      { triggers },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
   }
 
   // todo (new-chain-config): Need separate method for evm
