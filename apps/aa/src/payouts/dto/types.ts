@@ -114,7 +114,6 @@ export type DownloadPayoutLogsType = {
   'Bank a/c number': string | null;
   'Bank Name': string | null;
   'Phone number': string | null;
-  'Govt Id': string | null;
   'Transaction Type': string;
   'Bank Transaction ID': string | undefined;
   'Transacrion Wallet ID': string | undefined;
