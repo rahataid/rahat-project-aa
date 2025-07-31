@@ -148,7 +148,17 @@ export class VendorsService {
         where: {
           vendorUid: uuid,
           ...(txHash && { txHash }),
-          ...(status === 'success' && { status: 'TOKEN_TRANSACTION_COMPLET' }),
+          ...(status === 'success' && {
+            status: 'TOKEN_TRANSACTION_COMPLETED',
+          }),
+        },
+        include: {
+          Beneficiary: {
+            select: {
+              extras: true,
+              walletAddress: true,
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -156,10 +166,24 @@ export class VendorsService {
       };
 
       // Get paginated transactions
-      return paginate(this.prisma.beneficiaryRedeem, query, {
+      const result = await paginate(this.prisma.beneficiaryRedeem, query, {
         page,
         perPage,
       });
+
+      // Transform the data to include phone number from extras
+      const transformedData = result.data.map((redeem: any) => ({
+        ...redeem,
+        Beneficiary: {
+          ...redeem.Beneficiary,
+          phone: (redeem.Beneficiary?.extras as any)?.phone || null,
+        },
+      }));
+
+      return {
+        ...result,
+        data: transformedData,
+      };
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);
