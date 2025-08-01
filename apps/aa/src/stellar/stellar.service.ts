@@ -841,8 +841,6 @@ export class StellarService {
     const averageDisbursementTime =
       disbursementsInfo.reduce((acc, time) => acc + time, 0) /
       disbursementsInfo.length;
-    
-    console.log(averageDisbursementTime);
 
     const activityActivationTime = await this.getActivityActivationTime();
     let averageDuration = 0;
@@ -871,6 +869,7 @@ export class StellarService {
           .length;
 
       averageDuration = averageDuration;
+
     }
 
     return [
@@ -889,7 +888,7 @@ export class StellarService {
       { name: 'Token Price', value: oneTokenPrice },
       { name: 'Total Beneficiaries', value: totalBeneficiaries },
       { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
-      { name: 'Average Duration', value: averageDuration > 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+      { name: 'Average Duration', value: averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
     ];
   }
 
