@@ -73,24 +73,30 @@ export class PayoutsService {
     try {
       const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
         await Promise.all([
-          this.prisma.payouts.count({
+          this.prisma.beneficiaryRedeem.count({
             where: {
-              type: 'FSP',
+              transactionType: 'FIAT_TRANSFER',
+              status: 'FIAT_TRANSACTION_COMPLETED',
             },
           }),
-          this.prisma.payouts.count({
+          this.prisma.beneficiaryRedeem.count({
             where: {
-              type: 'VENDOR',
-            },
-          }),
-          this.prisma.payouts.count({
-            where: {
-              status: 'FAILED',
-            },
-          }),
-          this.prisma.payouts.count({
-            where: {
+              transactionType: 'VENDOR_REIMBURSEMENT',
               status: 'COMPLETED',
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              status: {
+                in: ['FAILED', 'FIAT_TRANSACTION_FAILED', 'TOKEN_TRANSACTION_FAILED']
+              }
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              status: {
+                in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
+              },
             },
           }),
           this.prisma.beneficiaryRedeem.findMany({
@@ -100,13 +106,13 @@ export class PayoutsService {
               },
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
-              }
-            }
+              },
+            },
           }),
         ]);
 
       const uniqueWallets = new Set(
-        beneficiaryRedeems.flatMap(b => b.beneficiaryWalletAddress)
+        beneficiaryRedeems.flatMap((b) => b.beneficiaryWalletAddress)
       );
 
       const totalBeneficiaries = uniqueWallets.size;
@@ -476,13 +482,30 @@ export class PayoutsService {
 
       let totalSuccessRequests = 0;
       if (isPayoutTriggered) {
-        const count =
-          payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
-          totalFailedPayoutRequests;
-        if (count < 1) {
-          totalSuccessRequests = 0;
+        if (isCompleted) {
+          totalSuccessRequests =
+            payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries;
         } else {
-          totalSuccessRequests = count;
+          const count =
+            payout.type === 'FSP'
+              ? payout.beneficiaryRedeem.reduce((acc, curr) => {
+                  if (curr.status === 'FIAT_TRANSACTION_COMPLETED') {
+                    acc++;
+                  }
+                  return acc;
+                }, 0)
+              : payout.beneficiaryRedeem.reduce((acc, curr) => {
+                  if (curr.status === 'COMPLETED') {
+                    acc++;
+                  }
+                  return acc;
+                }, 0);
+
+          if (count < 1) {
+            totalSuccessRequests = 0;
+          } else {
+            totalSuccessRequests = count;
+          }
         }
       }
 
@@ -930,10 +953,10 @@ export class PayoutsService {
       const payout = await this.prisma.payouts.findFirst({
         where: {
           uuid: payoutUUID,
-        }
-      })
+        },
+      });
 
-      if( !payout) {
+      if (!payout) {
         throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
       }
 
@@ -1028,7 +1051,6 @@ export class PayoutsService {
                 },
               ],
             }),
-
           },
           include: {
             Beneficiary: true,
@@ -1058,7 +1080,10 @@ export class PayoutsService {
           if (walletRedeems.FIAT_TRANSFER) {
             filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
           } else if (walletRedeems.TOKEN_TRANSFER) {
-            if(walletRedeems.TOKEN_TRANSFER.status !== 'TOKEN_TRANSACTION_COMPLETED') {
+            if (
+              walletRedeems.TOKEN_TRANSFER.status !==
+              'TOKEN_TRANSACTION_COMPLETED'
+            ) {
               filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
             }
           }
@@ -1068,7 +1093,10 @@ export class PayoutsService {
         const pageNumber = page || 1;
         const itemsPerPage = perPage || 10;
         const offset = (pageNumber - 1) * itemsPerPage;
-        const paginatedRedeems = filteredRedeems.slice(offset, offset + itemsPerPage);
+        const paginatedRedeems = filteredRedeems.slice(
+          offset,
+          offset + itemsPerPage
+        );
 
         return {
           data: paginatedRedeems,
@@ -1078,7 +1106,10 @@ export class PayoutsService {
             currentPage: pageNumber,
             perPage: itemsPerPage,
             prev: pageNumber > 1 ? pageNumber - 1 : null,
-            next: pageNumber < Math.ceil(total / itemsPerPage) ? pageNumber + 1 : null,
+            next:
+              pageNumber < Math.ceil(total / itemsPerPage)
+                ? pageNumber + 1
+                : null,
           },
         };
       }
