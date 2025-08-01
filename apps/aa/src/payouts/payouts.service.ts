@@ -476,10 +476,17 @@ export class PayoutsService {
           payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries
         : 0;
 
-      const totalSuccessRequests = isPayoutTriggered
-        ? payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
-          totalFailedPayoutRequests
-        : 0;
+      let totalSuccessRequests = 0;
+      if (isPayoutTriggered) {
+        const count =
+          payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
+          totalFailedPayoutRequests;
+        if (count < 1) {
+          totalSuccessRequests = 0;
+        } else {
+          totalSuccessRequests = count;
+        }
+      }
 
       let payoutGap = 'N/A';
 
@@ -1253,6 +1260,8 @@ export class PayoutsService {
 
     const diffInMs =
       new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+
+    console.log(`Payout completion gap in ms: ${diffInMs}`);
 
     return getFormattedTimeDiff(diffInMs);
   }
