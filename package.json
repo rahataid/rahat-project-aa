@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
+    "test:aa": "npx nx test aa",
     "start": "nx serve aa",
     "dev": "nx serve aa --watch --verbose",
     "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
