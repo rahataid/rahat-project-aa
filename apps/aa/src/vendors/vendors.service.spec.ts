@@ -6,6 +6,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import { PayoutMode } from '@prisma/client';
+import { of } from 'rxjs';
 
 describe('VendorsService', () => {
   let service: VendorsService;
@@ -22,6 +23,12 @@ describe('VendorsService', () => {
       findMany: jest.fn(),
     },
     beneficiaryToGroup: {
+      findMany: jest.fn(),
+    },
+    beneficiaryGroups: {
+      findMany: jest.fn(),
+    },
+    beneficiaryRedeem: {
       findMany: jest.fn(),
     },
   };
@@ -76,33 +83,12 @@ describe('VendorsService', () => {
         walletAddress: 'test-wallet',
       };
 
-      const mockPayouts = [
+      const mockBeneficiaryRedeems = [
         {
-          uuid: 'payout-1',
-          type: 'VENDOR',
-          mode: 'ONLINE',
-        },
-        {
-          uuid: 'payout-2',
-          type: 'VENDOR',
-          mode: 'ONLINE',
-        },
-      ];
-
-      const mockGroupTokens = [
-        {
-          groupId: 'group-1',
-          payoutId: 'payout-1',
-        },
-        {
-          groupId: 'group-2',
-          payoutId: 'payout-2',
-        },
-      ];
-
-      const mockBeneficiaries = [
-        {
-          beneficiary: {
+          beneficiaryWalletAddress: 'wallet-1',
+          vendorUid: 'test-vendor-uuid',
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          Beneficiary: {
             uuid: 'ben-1',
             walletAddress: 'wallet-1',
             phone: '1234567890',
@@ -113,7 +99,10 @@ describe('VendorsService', () => {
           },
         },
         {
-          beneficiary: {
+          beneficiaryWalletAddress: 'wallet-2',
+          vendorUid: 'test-vendor-uuid',
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          Beneficiary: {
             uuid: 'ben-2',
             walletAddress: 'wallet-2',
             phone: '0987654321',
@@ -125,37 +114,48 @@ describe('VendorsService', () => {
         },
       ];
 
+      const mockBeneficiaryResponse = [
+        { uuid: 'ben-1', name: 'John Doe' },
+        { uuid: 'ben-2', name: 'Jane Smith' },
+      ];
+
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-      mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
-        mockGroupTokens
-      );
-      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(
-        mockBeneficiaries
-      );
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockBeneficiaryRedeems);
+      mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
 
       const result = await service.getVendorBeneficiaries(payload);
 
-      expect(result).toEqual({
-        data: mockBeneficiaries.map((b) => b.beneficiary),
-        meta: {
-          page: 1,
-          perPage: 20,
-          total: 2,
-          totalPages: 1,
-        },
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0]).toEqual({
+        ...mockBeneficiaryRedeems[0].Beneficiary,
+        name: 'John Doe',
       });
+      expect(result.data[1]).toEqual({
+        ...mockBeneficiaryRedeems[1].Beneficiary,
+        name: 'Jane Smith',
+      });
+      expect(result.meta.total).toBe(2);
 
       expect(mockPrismaService.vendor.findUnique).toHaveBeenCalledWith({
         where: { uuid: 'test-vendor-uuid' },
       });
 
-      expect(mockPrismaService.payouts.findMany).toHaveBeenCalledWith({
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith({
         where: {
-          type: 'VENDOR',
-          mode: 'ONLINE',
-          beneficiaryGroupToken: {
-            isNot: null,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          vendorUid: 'test-vendor-uuid',
+        },
+        include: {
+          Beneficiary: {
+            select: {
+              uuid: true,
+              walletAddress: true,
+              phone: true,
+              gender: true,
+              benTokens: true,
+              isVerified: true,
+              createdAt: true,
+            },
           },
         },
       });
@@ -191,7 +191,15 @@ describe('VendorsService', () => {
         },
       ];
 
-      const mockBeneficiaries = [
+      const mockGroups = [
+        {
+          uuid: 'group-1',
+          name: 'Test Group',
+          groupPurpose: 'BANK_TRANSFER',
+        },
+      ];
+
+      const mockBeneficiaryToGroups = [
         {
           beneficiary: {
             uuid: 'ben-1',
@@ -205,26 +213,25 @@ describe('VendorsService', () => {
         },
       ];
 
+      const mockBeneficiaryResponse = [
+        { uuid: 'ben-1', name: 'John Doe' },
+      ];
+
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
-        mockGroupTokens
-      );
-      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(
-        mockBeneficiaries
-      );
+      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockGroupTokens);
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(mockGroups);
+      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(mockBeneficiaryToGroups);
+      mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
 
       const result = await service.getVendorBeneficiaries(payload);
 
-      expect(result).toEqual({
-        data: mockBeneficiaries.map((b) => b.beneficiary),
-        meta: {
-          page: 1,
-          perPage: 20,
-          total: 1,
-          totalPages: 1,
-        },
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toEqual({
+        ...mockBeneficiaryToGroups[0].beneficiary,
+        name: 'John Doe',
       });
+      expect(result.meta.total).toBe(1);
 
       expect(mockPrismaService.payouts.findMany).toHaveBeenCalledWith({
         where: {
@@ -234,6 +241,13 @@ describe('VendorsService', () => {
           beneficiaryGroupToken: {
             isNot: null,
           },
+        },
+      });
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith({
+        where: {
+          uuid: { in: ['group-1'] },
+          groupPurpose: { not: 'COMMUNICATION' },
         },
       });
     });
@@ -256,7 +270,7 @@ describe('VendorsService', () => {
     it('should return empty result when no payouts found', async () => {
       const payload: VendorBeneficiariesDto = {
         vendorUuid: 'test-vendor-uuid',
-        payoutMode: PayoutMode.ONLINE,
+        payoutMode: PayoutMode.OFFLINE,
         page: 1,
         perPage: 20,
       };
@@ -272,15 +286,8 @@ describe('VendorsService', () => {
 
       const result = await service.getVendorBeneficiaries(payload);
 
-      expect(result).toEqual({
-        data: [],
-        meta: {
-          page: 1,
-          perPage: 20,
-          total: 0,
-          totalPages: 0,
-        },
-      });
+      expect(result.data).toEqual([]);
+      expect(result.meta.total).toBe(0);
     });
   });
 });

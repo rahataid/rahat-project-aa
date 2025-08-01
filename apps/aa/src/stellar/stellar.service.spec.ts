@@ -7,7 +7,9 @@ import { DisbursementServices, ReceiveService, TransactionService } from '@rahat
 import { of } from 'rxjs';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { AppService } from '../app/app.service';
+import { getQueueToken } from '@nestjs/bull';
 
 jest.mock('@rahataid/stellar-sdk');
 jest.mock('bcryptjs');
@@ -20,6 +22,7 @@ describe('StellarService', () => {
   let receiveService: jest.Mocked<ReceiveService>;
   let transactionService: jest.Mocked<TransactionService>;
   let disbursementServices: jest.Mocked<DisbursementServices>;
+  let appService: jest.Mocked<AppService>;
 
   const mockClientProxy = {
     send: jest.fn(),
@@ -36,10 +39,16 @@ describe('StellarService', () => {
     },
     beneficiaryGroups: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
     vendor: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+    },
+    beneficiaryRedeem: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
     },
   };
 
@@ -53,12 +62,22 @@ describe('StellarService', () => {
         KEYPAIR: 'test_keypair',
         CONTRACTID: 'test_contract',
         VENDORADDRESS: 'test_vendor',
+        ASSETCODE: 'RAHAT',
+        ONE_TOKEN_PRICE: 1,
       },
     }),
   };
 
   const mockBullQueueStellar = {
     add: jest.fn(),
+    addBulk: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockBullQueueCheckTrustline = {
+    add: jest.fn(),
+    addBulk: jest.fn(),
     process: jest.fn(),
     on: jest.fn(),
   };
@@ -66,15 +85,29 @@ describe('StellarService', () => {
   const mockReceiveService = {
     sendAsset: jest.fn(),
     faucetAndTrustlineService: jest.fn(),
+    getAccountBalance: jest.fn(),
   };
 
   const mockTransactionService = {
-    // Add any required methods
+    hasTrustline: jest.fn(),
+    rahatFaucetService: jest.fn(),
+    getTransaction: jest.fn(),
   };
 
   const mockDisbursementServices = {
     createDisbursementProcess: jest.fn(),
     getDistributionAddress: jest.fn().mockResolvedValue('test_address'),
+    getDisbursement: jest.fn(),
+  };
+
+  const mockAppService = {
+    getSettings: jest.fn().mockResolvedValue({
+      name: 'PROJECTINFO',
+      value: {
+        active_year: '2024',
+        river_basin: 'test-basin',
+      },
+    }),
   };
 
   beforeEach(async () => {
@@ -94,8 +127,16 @@ describe('StellarService', () => {
           useValue: mockSettingsService,
         },
         {
-          provide: 'BullQueue_STELLAR',
+          provide: AppService,
+          useValue: mockAppService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.STELLAR),
           useValue: mockBullQueueStellar,
+        },
+        {
+          provide: getQueueToken(BQUEUE.STELLAR_CHECK_TRUSTLINE),
+          useValue: mockBullQueueCheckTrustline,
         },
         {
           provide: ReceiveService,
@@ -119,6 +160,7 @@ describe('StellarService', () => {
     receiveService = module.get(ReceiveService);
     transactionService = module.get(TransactionService);
     disbursementServices = module.get(DisbursementServices);
+    appService = module.get(AppService);
 
     // Reset all mocks before each test
     jest.clearAllMocks();
@@ -164,20 +206,78 @@ describe('StellarService', () => {
     const mockSendOtpDto = {
       phoneNumber: '+1234567890',
       amount: '100',
+      vendorUuid: 'vendor-uuid-123',
+    };
+
+    const mockPayoutType = {
+      uuid: 'payout-uuid-123',
+      type: 'VENDOR',
+      mode: 'ONLINE',
+    };
+
+    const mockVendor = {
+      uuid: 'vendor-uuid-123',
+      walletAddress: 'vendor-wallet-address',
+    };
+
+    const mockBeneficiaryKeys = {
+      address: 'beneficiary-address',
+      publicKey: 'beneficiary-public-key',
+      privateKey: 'beneficiary-private-key',
     };
 
     beforeEach(() => {
+      // Set up the spy for getBeneficiaryPayoutTypeByPhone first
+      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+      jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
+      jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue(mockBeneficiaryKeys);
+      jest.spyOn(service as any, 'storeOTP').mockResolvedValue({ id: 1 });
+      
+      // Mock the external dependencies
       mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedOtp');
       mockPrismaService.otp.upsert.mockResolvedValue({ id: 1 });
-      jest.spyOn(service as any, 'getRahatBalance').mockResolvedValue(1000);
+      mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(null);
+      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({ uuid: 'redeem-uuid' });
     });
 
     it('should successfully send and store OTP', async () => {
       const result = await service.sendOtp(mockSendOtpDto);
       expect(result).toEqual({ id: 1 });
       expect(mockClientProxy.send).toHaveBeenCalled();
-      expect(mockPrismaService.otp.upsert).toHaveBeenCalled();
+      expect(service['getBeneficiaryPayoutTypeByPhone']).toHaveBeenCalledWith(mockSendOtpDto.phoneNumber);
+      expect(service['storeOTP']).toHaveBeenCalled();
+    });
+
+    it('should throw RpcException if payout type is not VENDOR', async () => {
+      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue({
+        ...mockPayoutType,
+        type: 'CASH',
+      });
+
+      await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
+        new RpcException('Payout type is not VENDOR')
+      );
+    });
+
+    it('should throw RpcException if payout mode is not ONLINE', async () => {
+      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue({
+        ...mockPayoutType,
+        mode: 'OFFLINE',
+      });
+
+      await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
+        new RpcException('Payout mode is not ONLINE')
+      );
+    });
+
+    it('should throw RpcException if payout not initiated', async () => {
+      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(null);
+
+      await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
+        new RpcException('Payout not initiated')
+      );
     });
   });
 
