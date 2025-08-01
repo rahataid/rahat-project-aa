@@ -929,59 +929,163 @@ export class PayoutsService {
 
     this.logger.log(`Getting payout logs for payout with UUID: ${payoutUUID}`);
     try {
-      const query: Prisma.BeneficiaryRedeemFindManyArgs = {
+      const payout = await this.prisma.payouts.findFirst({
         where: {
-          ...(payoutUUID && { payoutId: payoutUUID }),
-          ...(transactionType && { transactionType }),
-          ...(transactionStatus && { status: transactionStatus }),
-          ...(search && {
-            OR: [
-              {
-                beneficiaryWalletAddress: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
-              },
-              {
-                txHash: { contains: search, mode: 'insensitive' },
-              },
-              {
-                info: {
-                  path: ['error'],
-                  string_contains: search,
-                },
-              },
-              {
-                Vendor: {
-                  walletAddress: { contains: search, mode: 'insensitive' },
-                },
-              },
-              {
-                Beneficiary: {
-                  phone: { contains: search, mode: 'insensitive' },
-                },
-              },
-            ],
-          }),
-        },
-        ...(sort && {
-          orderBy: {
-            [sort]: order,
-          },
-        }),
-      };
-
-      const logs = await paginate(
-        this.prisma.beneficiaryRedeem,
-        {
-          ...query,
-        },
-        {
-          page,
-          perPage,
+          uuid: payoutUUID,
         }
-      );
-      return logs;
+      })
+
+      if( !payout) {
+        throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+      }
+
+      if (payout.type === 'VENDOR') {
+        const query: Prisma.BeneficiaryRedeemFindManyArgs = {
+          where: {
+            ...(payoutUUID && { payoutId: payoutUUID }),
+            ...(transactionType && { transactionType }),
+            ...(transactionStatus && { status: transactionStatus }),
+            ...(search && {
+              OR: [
+                {
+                  beneficiaryWalletAddress: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  txHash: { contains: search, mode: 'insensitive' },
+                },
+                {
+                  info: {
+                    path: ['error'],
+                    string_contains: search,
+                  },
+                },
+                {
+                  Vendor: {
+                    walletAddress: { contains: search, mode: 'insensitive' },
+                  },
+                },
+                {
+                  Beneficiary: {
+                    phone: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              ],
+            }),
+          },
+          ...(sort && {
+            orderBy: {
+              [sort]: order,
+            },
+          }),
+        };
+
+        const logs = await paginate(
+          this.prisma.beneficiaryRedeem,
+          {
+            ...query,
+          },
+          {
+            page,
+            perPage,
+          }
+        );
+        return logs;
+      }
+
+      if (payout.type === 'FSP') {
+        const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
+          where: {
+            payoutId: payoutUUID,
+            ...(transactionType && { transactionType }),
+            ...(transactionStatus && { status: transactionStatus }),
+            ...(search && {
+              OR: [
+                {
+                  beneficiaryWalletAddress: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  txHash: { contains: search, mode: 'insensitive' },
+                },
+                {
+                  info: {
+                    path: ['error'],
+                    string_contains: search,
+                  },
+                },
+                {
+                  Vendor: {
+                    walletAddress: { contains: search, mode: 'insensitive' },
+                  },
+                },
+                {
+                  Beneficiary: {
+                    phone: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              ],
+            }),
+
+          },
+          include: {
+            Beneficiary: true,
+            Vendor: true,
+            payout: true,
+          },
+        });
+
+        // Group by beneficiary wallet address
+        const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
+          const walletAddress = redeem.beneficiaryWalletAddress;
+          if (!acc[walletAddress]) {
+            acc[walletAddress] = {
+              TOKEN_TRANSFER: null,
+              FIAT_TRANSFER: null,
+            };
+          }
+          acc[walletAddress][redeem.transactionType] = redeem;
+          return acc;
+        }, {});
+
+        // - If FIAT_TRANSFER exists, include it and exclude TOKEN_TRANSFER
+        // - If FIAT_TRANSFER doesn't exist, include TOKEN_TRANSFER
+        const filteredRedeems = [];
+        for (const walletAddress in redeemsByWallet) {
+          const walletRedeems = redeemsByWallet[walletAddress];
+          if (walletRedeems.FIAT_TRANSFER) {
+            filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
+          } else if (walletRedeems.TOKEN_TRANSFER) {
+            if(walletRedeems.TOKEN_TRANSFER.status !== 'TOKEN_TRANSACTION_COMPLETED') {
+              filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
+            }
+          }
+        }
+
+        const total = filteredRedeems.length;
+        const pageNumber = page || 1;
+        const itemsPerPage = perPage || 10;
+        const offset = (pageNumber - 1) * itemsPerPage;
+        const paginatedRedeems = filteredRedeems.slice(offset, offset + itemsPerPage);
+
+        return {
+          data: paginatedRedeems,
+          meta: {
+            total,
+            lastPage: Math.ceil(total / itemsPerPage),
+            currentPage: pageNumber,
+            perPage: itemsPerPage,
+            prev: pageNumber > 1 ? pageNumber - 1 : null,
+            next: pageNumber < Math.ceil(total / itemsPerPage) ? pageNumber + 1 : null,
+          },
+        };
+      }
+
+      throw new RpcException(`Unsupported payout type: ${payout.type}`);
     } catch (error) {
       this.logger.error(
         `Failed to get payout log: ${error.message}`,
