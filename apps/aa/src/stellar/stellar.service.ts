@@ -825,7 +825,9 @@ export class StellarService {
       0
     );
 
-    const totalBeneficiaries = benfTokens.reduce(
+    const totalBeneficiaries = benfTokens
+    .filter((token) => token.isDisbursed)
+    .reduce(
       (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
       0
     );

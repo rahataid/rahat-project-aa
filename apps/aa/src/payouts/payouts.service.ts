@@ -71,7 +71,7 @@ export class PayoutsService {
    */
   async getPayoutStats(): Promise<PayoutStats> {
     try {
-      const [fspCount, vendorCount, failed, success, beneficiaryGroupTokens] =
+      const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
         await Promise.all([
           this.prisma.payouts.count({
             where: {
@@ -93,28 +93,26 @@ export class PayoutsService {
               status: 'COMPLETED',
             },
           }),
-          this.prisma.beneficiaryGroupTokens.findMany({
-            include: {
-              beneficiaryGroup: {
-                select: {
-                  beneficiaries: true,
-                  _count: {
-                    select: {
-                      beneficiaries: true,
-                    },
-                  },
-                },
+          this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              transactionType: {
+                in: ['FIAT_TRANSFER', 'VENDOR_REIMBURSEMENT'],
               },
-            },
+              status: {
+                in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
+              }
+            }
           }),
         ]);
 
-      const totalBeneficiaries = beneficiaryGroupTokens.reduce(
-        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-        0
+      const uniqueWallets = new Set(
+        beneficiaryRedeems.flatMap(b => b.beneficiaryWalletAddress)
       );
-      const totalTokens = beneficiaryGroupTokens.reduce(
-        (acc, token) => acc + token.numberOfTokens,
+
+      const totalBeneficiaries = uniqueWallets.size;
+
+      const totalTokens = beneficiaryRedeems.reduce(
+        (acc, redeem) => acc + redeem.amount,
         0
       );
 
