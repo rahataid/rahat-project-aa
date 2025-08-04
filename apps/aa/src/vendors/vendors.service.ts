@@ -303,13 +303,21 @@ export class VendorsService {
           `Getting beneficiaries charged by vendor ${payload.vendorUuid} for ONLINE mode`
         );
 
+        // Build where clause for beneficiary redeem query
+        const redeemWhereClause: any = {
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          vendorUid: payload.vendorUuid,
+        };
+
+        // Add wallet address filter if provided
+        if (payload.walletAddress) {
+          redeemWhereClause.beneficiaryWalletAddress = payload.walletAddress;
+        }
+
         // Get beneficiaries who have been charged by this vendor
         const chargedBeneficiaries =
           await this.prisma.beneficiaryRedeem.findMany({
-            where: {
-              transactionType: 'VENDOR_REIMBURSEMENT',
-              vendorUid: payload.vendorUuid,
-            },
+            where: redeemWhereClause,
             include: {
               Beneficiary: {
                 select: {
@@ -349,12 +357,43 @@ export class VendorsService {
           );
         }
 
-        // Attach beneficiary name to each beneficiary
+        // Get transaction hash and status information for each beneficiary
+        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
+          (ben) => ben.walletAddress
+        );
+        const beneficiaryTransactions =
+          await this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
+              transactionType: 'VENDOR_REIMBURSEMENT',
+            },
+            select: {
+              beneficiaryWalletAddress: true,
+              txHash: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+        // Create maps of wallet address to latest transaction hash and status
+        const transactionMap = new Map();
+        const statusMap = new Map();
+        beneficiaryTransactions.forEach((tx) => {
+          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
+            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
+            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+          }
+        });
+
+        // Attach beneficiary name, transaction hash, and status to each beneficiary
         const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
             name: benInfo?.name || null,
+            txHash: transactionMap.get(ben.walletAddress) || null,
+            status: statusMap.get(ben.walletAddress) || null,
           };
         });
 
@@ -443,11 +482,21 @@ export class VendorsService {
           );
         }
 
+        // Build where clause for beneficiary query
+        const beneficiaryWhereClause: any = {
+          groupId: { in: payoutGroupIds },
+        };
+
+        // Add wallet address filter if provided
+        if (payload.walletAddress) {
+          beneficiaryWhereClause.beneficiary = {
+            walletAddress: payload.walletAddress,
+          };
+        }
+
         // Use only payout-eligible group IDs for beneficiary query
         const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
-          where: {
-            groupId: { in: payoutGroupIds },
-          },
+          where: beneficiaryWhereClause,
           include: {
             beneficiary: {
               select: {
@@ -486,12 +535,43 @@ export class VendorsService {
           );
         }
 
-        // Attach beneficiary name to each beneficiary
+        // Get transaction hash and status information for each beneficiary
+        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
+          (ben) => ben.walletAddress
+        );
+        const beneficiaryTransactions =
+          await this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
+              transactionType: 'VENDOR_REIMBURSEMENT',
+            },
+            select: {
+              beneficiaryWalletAddress: true,
+              txHash: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+        // Create maps of wallet address to latest transaction hash and status
+        const transactionMap = new Map();
+        const statusMap = new Map();
+        beneficiaryTransactions.forEach((tx) => {
+          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
+            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
+            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+          }
+        });
+
+        // Attach beneficiary name, transaction hash, and status to each beneficiary
         const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
             name: benInfo?.name || null,
+            txHash: transactionMap.get(ben.walletAddress) || null,
+            status: statusMap.get(ben.walletAddress) || null,
           };
         });
 
