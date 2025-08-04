@@ -67,13 +67,22 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { isVerified, ...rest } = dto;
+    // const { isVerified, ...rest } = dto;
+    // const rdata = await this.rsprisma.beneficiary.create({
+    //   data: rest,
+    // });
+
+    const { isVerified, location, ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: rest,
+      data: {
+        ...rest,
+        extras: {
+          ...rest.extras,
+          ...(location && { location: location }),
+        },
+      },
     });
-
-    await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
-
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
   }
 
@@ -580,7 +589,10 @@ export class BeneficiaryService {
     }
   }
 
-  async updateBeneficiaryRedeemBulk(uuids: string[], payload: Prisma.BeneficiaryRedeemUpdateInput) {
+  async updateBeneficiaryRedeemBulk(
+    uuids: string[],
+    payload: Prisma.BeneficiaryRedeemUpdateInput
+  ) {
     return this.prisma.beneficiaryRedeem.updateMany({
       where: { uuid: { in: uuids } },
       data: payload,

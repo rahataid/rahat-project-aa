@@ -75,3 +75,103 @@ export function countResult(data: any[]) {
   }
   return counts;
 }
+
+export function generateLocationStats<T>({
+  dataList,
+  getKeyParts,
+  getCoordinates,
+  keyFormat = (ward, municipality) => `ward${ward}_${municipality}`,
+}: {
+  dataList: T[];
+  getKeyParts: (
+    item: T
+  ) => { municipality: string; ward_no: number } | undefined;
+  getCoordinates: (
+    item: T
+  ) => { latitude: number; longitude: number } | undefined;
+  keyFormat?: (ward: number, municipality: string) => string;
+}): Record<
+  string,
+  {
+    count: number;
+    latitude: number[];
+    longitude: number[];
+  }
+> {
+  const result: Record<
+    string,
+    {
+      count: number;
+      latitudes: number[];
+      longitudes: number[];
+    }
+  > = {};
+
+  for (const item of dataList) {
+    const keyParts = getKeyParts(item);
+    const coords = getCoordinates(item);
+
+    if (!keyParts || !coords) continue;
+
+    const { municipality, ward_no } = keyParts;
+    const { latitude, longitude } = coords;
+
+    if (
+      !municipality ||
+      ward_no == null ||
+      latitude == null ||
+      longitude == null
+    )
+      continue;
+
+    const key = keyFormat(ward_no, municipality);
+
+    if (!result[key]) {
+      result[key] = {
+        count: 0,
+        latitudes: [],
+        longitudes: [],
+      };
+    }
+
+    const group = result[key];
+    group.count += 1;
+    group.latitudes.push(latitude);
+    group.longitudes.push(longitude);
+  }
+
+  const finalResult: Record<
+    string,
+    {
+      count: number;
+      latitude: number[];
+      longitude: number[];
+    }
+  > = {};
+
+  for (const [key, group] of Object.entries(result)) {
+    const { latitudes, longitudes, count } = group;
+
+    finalResult[key] = {
+      count,
+      latitude: latitudes,
+      longitude: longitudes,
+    };
+  }
+
+  return finalResult;
+}
+
+export function extractLatLng(gps?: string) {
+  if (!gps) return { latitude: null, longitude: null };
+
+  const parts = gps.trim().split(/\s+/);
+  const latitude = parseFloat(parts[0]);
+  const longitude = parseFloat(parts[1]);
+
+  if (isNaN(latitude) || isNaN(longitude)) {
+    return { latitude: null, longitude: null };
+  }
+
+  return { latitude, longitude };
+}

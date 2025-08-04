@@ -6,6 +6,8 @@ import { AGE_GROUPS, VULNERABILITY_FIELD } from '../constants';
 import {
   countBySSAType,
   countResult,
+  extractLatLng,
+  generateLocationStats,
   getAgeGroup,
   mapAgeGroupCounts,
 } from '../utils';
@@ -210,6 +212,34 @@ export class BeneficiaryStatService {
     }));
   }
 
+  async calculateBeneflocationStats() {
+    const benef = await this.prisma.beneficiary.findMany({});
+
+    const wardLocationStats = generateLocationStats({
+      dataList: benef,
+      getKeyParts: (item) => {
+        const extras = item.extras as { location?: string; ward_no?: number };
+        return {
+          municipality: extras.location,
+          ward_no: extras.ward_no,
+        };
+      },
+
+      getCoordinates: (item) => {
+        const extras = item.extras as { gps?: string };
+
+        return extractLatLng(extras.gps);
+      },
+    });
+    const k = Object.entries(wardLocationStats).map(([key, value]) => ({
+      name: `${key}`,
+      data: value,
+      group: 'beneficiary_gps_location',
+    }));
+
+    return k;
+  }
+
   async calculateHouseholdCashSupport() {
     return this.prisma.beneficiary.count({
       where: {
@@ -256,6 +286,7 @@ export class BeneficiaryStatService {
       calculateTotalFamilyMembers,
       calculateTypeOfSSA,
       fieldMapResult,
+      calculateBeneflocationStats,
     ] = await Promise.all([
       this.totalBeneficiaries(),
       this.calculateGenderStats(),
@@ -265,6 +296,7 @@ export class BeneficiaryStatService {
       this.calculateTotalFamilyMembers(),
       this.calculateTypeOfSSA(),
       this.fieldMapResult(),
+      this.calculateBeneflocationStats(),
     ]);
     return {
       total,
@@ -275,6 +307,7 @@ export class BeneficiaryStatService {
       calculateTotalFamilyMembers,
       calculateTypeOfSSA,
       fieldMapResult,
+      calculateBeneflocationStats,
     };
   }
 
@@ -288,9 +321,10 @@ export class BeneficiaryStatService {
       calculateTotalFamilyMembers,
       calculateTypeOfSSA,
       fieldMapResult,
+      calculateBeneflocationStats,
     } = await this.calculateAllStats();
 
-    await this.statsService.saveMany([
+    const generalStats = [
       {
         name: 'total_respondents',
         data: total,
@@ -331,7 +365,11 @@ export class BeneficiaryStatService {
         data: fieldMapResult,
         group: 'beneficiary',
       },
-    ]);
+    ];
+
+    const allStats = [...generalStats, ...calculateBeneflocationStats];
+
+    await this.statsService.saveMany(allStats);
 
     return {
       total,
@@ -340,6 +378,7 @@ export class BeneficiaryStatService {
       countByBank,
       calculateAgeGroups,
       fieldMapResult,
+      locationStats: calculateBeneflocationStats,
     };
   }
 }
