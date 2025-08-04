@@ -73,4 +73,32 @@ export interface BeneficiaryOtpData {
   amount: number;
   otpHash: string;
   expiryDate: Date;
+  txHash?: string | null;
+}
+
+export class TestVendorOfflinePayoutDto {
+  @ApiProperty({
+    description: 'Beneficiary group UUID to test offline payout',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  beneficiaryGroupUuid: string;
+
+  @ApiProperty({
+    description: 'Test amount for payout (optional)',
+    example: '1000',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  testAmount?: string;
+
+  @ApiProperty({
+    description: 'Whether to simulate the entire flow',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  simulateFlow?: boolean;
 }

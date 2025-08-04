@@ -29,7 +29,8 @@ export class VendorOfflinePayoutProcessor {
   ) {}
 
   @Process({ name: JOBS.VENDOR.OFFLINE_PAYOUT, concurrency: 5 })
-  async processVendorOfflinePayout(data: VendorOfflinePayoutDto) {
+  async processVendorOfflinePayout(job: Job<VendorOfflinePayoutDto>) {
+    const data = job.data;
     this.logger.log(
       `Processing vendor offline payout for group ${data.beneficiaryGroupUuid}`,
       VendorOfflinePayoutProcessor.name
@@ -54,20 +55,20 @@ export class VendorOfflinePayoutProcessor {
           },
         });
 
-      if (!beneficiaryGroupTokens) {
-        throw new Error(
-          `No beneficiary group tokens found for group ${data.beneficiaryGroupUuid}`
-        );
-      }
+      // if (!beneficiaryGroupTokens) {
+      //   throw new Error(
+      //     `No beneficiary group tokens found for group ${data.beneficiaryGroupUuid}`
+      //   );
+      // }
 
       const { payout, beneficiaryGroup } = beneficiaryGroupTokens;
 
       // Validate payout type and mode
-      if (payout.type !== 'VENDOR' || payout.mode !== 'OFFLINE') {
-        throw new Error(
-          `Invalid payout type or mode. Expected VENDOR/OFFLINE, got ${payout.type}/${payout.mode}`
-        );
-      }
+      // if (payout.type !== 'VENDOR' || payout.mode !== 'OFFLINE') {
+      //   throw new Error(
+      //     `Invalid payout type or mode. Expected VENDOR/OFFLINE, got ${payout.type}/${payout.mode}`
+      //   );
+      // }
 
       // Extract beneficiaries from the group
       const beneficiaries = beneficiaryGroup.beneficiaries.map(
@@ -86,7 +87,7 @@ export class VendorOfflinePayoutProcessor {
       );
 
       // Send OTP to all beneficiaries in the group
-      const result = await this.sendOtpToGroup(
+      const result = await this.sendOtpToGroupDirect(
         beneficiaries,
         payout.payoutProcessorId, // Use vendor UUID directly from payout
         payout.uuid,
@@ -109,8 +110,7 @@ export class VendorOfflinePayoutProcessor {
     }
   }
 
-  @Process({ name: JOBS.VENDOR.SEND_GROUP_OTP, concurrency: 5 })
-  async sendOtpToGroup(
+  private async sendOtpToGroupDirect(
     beneficiaries: any[],
     vendorUuid: string,
     payoutUuid: string,
@@ -232,12 +232,31 @@ export class VendorOfflinePayoutProcessor {
                 },
               });
 
+              // Check if beneficiary has existing transaction
+              const existingTransaction =
+                await this.prismaService.beneficiaryRedeem.findFirst({
+                  where: {
+                    beneficiaryWalletAddress: beneficiary.walletAddress,
+                    transactionType: 'VENDOR_REIMBURSEMENT',
+                    txHash: { not: null },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                });
+
+              if (existingTransaction?.txHash) {
+                this.logger.log(
+                  `Found existing transaction hash ${existingTransaction.txHash} for beneficiary ${beneficiary.uuid}`,
+                  VendorOfflinePayoutProcessor.name
+                );
+              }
+
               otpData.push({
                 phoneNumber: request.phoneNumber,
                 walletAddress: beneficiary.walletAddress,
                 amount: parseInt(request.amount),
                 otpHash,
                 expiryDate,
+                txHash: existingTransaction?.txHash || null,
               });
             } catch (error) {
               this.logger.error(

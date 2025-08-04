@@ -1027,7 +1027,9 @@ export class StellarService {
         `Couldn't find secret for phone ${phoneNumber}`,
         error.message
       );
-      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+      throw new RpcException(
+        `Cannot get secret of beneficiary with phone number: ${phoneNumber}`
+      );
     }
   }
 
@@ -1049,7 +1051,7 @@ export class StellarService {
         error.message
       );
       throw new RpcException(
-        `Beneficiary with wallet ${walletAddress} not found`
+        `Cannot get secret of beneficiary with wallet address: ${walletAddress}`
       );
     }
   }

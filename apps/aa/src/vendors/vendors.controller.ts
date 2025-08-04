@@ -6,7 +6,10 @@ import { PaginationBaseDto } from './common';
 import { VendorStatsDto, VendorRedeemDto } from './dto/vendorStats.dto';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
-import { VendorOfflinePayoutDto } from './dto/vendor-offline-payout.dto';
+import {
+  VendorOfflinePayoutDto,
+  TestVendorOfflinePayoutDto,
+} from './dto/vendor-offline-payout.dto';
 
 @Controller('vendors')
 export class VendorsController {
@@ -65,5 +68,14 @@ export class VendorsController {
   async processVendorOfflinePayout(payload: VendorOfflinePayoutDto) {
     this.logger.log('Processing vendor offline payout request');
     return this.vendorsService.processVendorOfflinePayout(payload);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.vendor.test_offline_payout',
+    uuid: process.env.PROJECT_ID,
+  })
+  async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
+    this.logger.log('Testing vendor offline payout processor');
+    return this.vendorsService.testVendorOfflinePayout(payload);
   }
 }

@@ -9,7 +9,10 @@ import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
-import { VendorOfflinePayoutDto } from './dto/vendor-offline-payout.dto';
+import {
+  VendorOfflinePayoutDto,
+  TestVendorOfflinePayoutDto,
+} from './dto/vendor-offline-payout.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
@@ -470,6 +473,39 @@ export class VendorsService {
         success: true,
         message: 'Vendor offline payout job added to queue',
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+      };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
+    try {
+      this.logger.log(
+        `Testing offline payout for beneficiary group ${payload.beneficiaryGroupUuid}`
+      );
+
+      // Add job to queue for processing
+      const jobData = {
+        beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+        ...(payload.testAmount && { amount: payload.testAmount }),
+      };
+
+      await this.vendorOfflinePayoutQueue.add(
+        JOBS.VENDOR.OFFLINE_PAYOUT,
+        jobData
+      );
+
+      this.logger.log(
+        `Test job added to queue for beneficiary group ${payload.beneficiaryGroupUuid} offline payout`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor offline payout test job added to queue',
+        beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+        testAmount: payload.testAmount,
       };
     } catch (error) {
       this.logger.error(error.message);
