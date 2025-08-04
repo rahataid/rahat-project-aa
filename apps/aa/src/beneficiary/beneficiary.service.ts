@@ -397,6 +397,28 @@ export class BeneficiaryService {
         (d: any) => d?.beneficiaryId
       );
 
+      const matchedTokenAssignedGroups =
+        await this.prisma.beneficiaryGroups.findMany({
+          where: {
+            tokensReserved: {
+              isNot: null,
+            },
+            beneficiaries: {
+              some: {
+                beneficiaryId: {
+                  in: benfIds,
+                },
+              },
+            },
+          },
+        });
+
+      if (matchedTokenAssignedGroups?.length) {
+        throw new RpcException(
+          'One or more selected beneficiaries have already been assigned to a group with reserved tokens. Please review the selection before proceeding.'
+        );
+      }
+
       await this.prisma.beneficiary.updateMany({
         where: {
           uuid: {
@@ -580,7 +602,10 @@ export class BeneficiaryService {
     }
   }
 
-  async updateBeneficiaryRedeemBulk(uuids: string[], payload: Prisma.BeneficiaryRedeemUpdateInput) {
+  async updateBeneficiaryRedeemBulk(
+    uuids: string[],
+    payload: Prisma.BeneficiaryRedeemUpdateInput
+  ) {
     return this.prisma.beneficiaryRedeem.updateMany({
       where: { uuid: { in: uuids } },
       data: payload,
