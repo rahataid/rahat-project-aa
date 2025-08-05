@@ -25,11 +25,7 @@ export class CreateVendorTokenRedemptionDto {
 
   @IsString()
   @IsOptional()
-  tokenAddress?: string;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
+  transactionHash?: string;
 }
 
 export class UpdateVendorTokenRedemptionDto {
@@ -76,4 +72,10 @@ export class ListVendorTokenRedemptionDto {
   @IsNumber()
   @IsOptional()
   perPage?: number = 20;
+}
+
+export class GetVendorRedemptionsDto {
+  @IsUUID()
+  @IsNotEmpty()
+  vendorUuid: string;
 }

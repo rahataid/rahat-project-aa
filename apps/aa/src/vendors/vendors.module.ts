@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
 import { VendorsService } from './vendors.service';
+import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
@@ -24,6 +25,7 @@ import { SettingsService } from '@rumsan/settings';
   ],
   providers: [
     VendorsService,
+    VendorTokenRedemptionService,
     {
       provide: ReceiveService,
       useFactory: async (settingService: SettingsService) => {
@@ -42,6 +44,6 @@ import { SettingsService } from '@rumsan/settings';
     },
   ],
   controllers: [VendorsController],
-  exports: [VendorsService, ReceiveService],
+  exports: [VendorsService, VendorTokenRedemptionService, ReceiveService],
 })
 export class VendorsModule {}

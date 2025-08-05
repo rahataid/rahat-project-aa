@@ -214,6 +214,13 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
+    GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
+    UPDATE_TOKEN_REDEMPTION_STATUS:
+      'aa.jobs.vendor.token_redemption.update_status',
+    LIST_TOKEN_REDEMPTIONS: 'aa.jobs.vendor.token_redemption.list',
+    GET_VENDOR_REDEMPTIONS:
+      'aa.jobs.vendor.token_redemption.get_vendor_redemptions',
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',

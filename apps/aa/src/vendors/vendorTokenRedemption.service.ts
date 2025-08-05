@@ -6,6 +6,7 @@ import {
   UpdateVendorTokenRedemptionDto,
   GetVendorTokenRedemptionDto,
   ListVendorTokenRedemptionDto,
+  GetVendorRedemptionsDto,
   TokenRedemptionStatus,
 } from './dto/vendorTokenRedemption.dto';
 
@@ -16,6 +17,7 @@ export class VendorTokenRedemptionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
+    console.log('dto', dto);
     try {
       // Verify vendor exists
       const vendor = await this.prisma.vendor.findUnique({
@@ -31,9 +33,8 @@ export class VendorTokenRedemptionService {
         data: {
           vendorUuid: dto.vendorUuid,
           tokenAmount: dto.tokenAmount,
-          tokenAddress: dto.tokenAddress,
-          notes: dto.notes,
           redemptionStatus: TokenRedemptionStatus.REQUESTED,
+          transactionHash: dto?.transactionHash || null,
         },
         include: {
           vendor: true,
@@ -84,18 +85,32 @@ export class VendorTokenRedemptionService {
         );
       }
 
-      // Update the redemption
+      // Only allow status updates from REQUESTED to APPROVED or REJECTED
+      if (redemption.redemptionStatus !== TokenRedemptionStatus.REQUESTED) {
+        throw new RpcException(
+          `Token redemption ${dto.uuid} is not in REQUESTED status`
+        );
+      }
+
+      if (
+        ![
+          TokenRedemptionStatus.APPROVED,
+          TokenRedemptionStatus.REJECTED,
+        ].includes(dto.redemptionStatus)
+      ) {
+        throw new RpcException(
+          `Invalid status update. Only APPROVED or REJECTED status is allowed`
+        );
+      }
+
+      // Update the redemption status
       const updatedRedemption = await this.prisma.vendorTokenRedemption.update({
         where: { uuid: dto.uuid },
         data: {
           redemptionStatus: dto.redemptionStatus,
           approvedBy: dto.approvedBy,
-          approvedAt:
-            dto.redemptionStatus === TokenRedemptionStatus.APPROVED
-              ? new Date()
-              : null,
+          approvedAt: new Date(),
           transactionHash: dto.transactionHash,
-          notes: dto.notes,
         },
         include: {
           vendor: true,
@@ -116,9 +131,7 @@ export class VendorTokenRedemptionService {
     try {
       const { vendorUuid, redemptionStatus, page = 1, perPage = 20 } = query;
 
-      const where: any = {
-        deletedAt: null,
-      };
+      const where: any = {};
 
       if (vendorUuid) {
         where.vendorUuid = vendorUuid;
@@ -158,12 +171,11 @@ export class VendorTokenRedemptionService {
     }
   }
 
-  async getVendorRedemptions(vendorUuid: string) {
+  async getVendorRedemptions(dto: GetVendorRedemptionsDto) {
     try {
       const redemptions = await this.prisma.vendorTokenRedemption.findMany({
         where: {
-          vendorUuid,
-          deletedAt: null,
+          vendorUuid: dto.vendorUuid,
         },
         orderBy: {
           createdAt: 'desc',
@@ -173,84 +185,6 @@ export class VendorTokenRedemptionService {
       return redemptions;
     } catch (error) {
       this.logger.error(`Error getting vendor redemptions: ${error.message}`);
-      throw new RpcException(error.message);
-    }
-  }
-
-  async approveRedemption(
-    uuid: string,
-    approvedBy: string,
-    transactionHash?: string
-  ) {
-    try {
-      const redemption = await this.prisma.vendorTokenRedemption.findUnique({
-        where: { uuid },
-      });
-
-      if (!redemption) {
-        throw new RpcException(`Token redemption with UUID ${uuid} not found`);
-      }
-
-      if (redemption.redemptionStatus !== TokenRedemptionStatus.REQUESTED) {
-        throw new RpcException(
-          `Token redemption ${uuid} is not in REQUESTED status`
-        );
-      }
-
-      const updatedRedemption = await this.prisma.vendorTokenRedemption.update({
-        where: { uuid },
-        data: {
-          redemptionStatus: TokenRedemptionStatus.APPROVED,
-          approvedBy,
-          approvedAt: new Date(),
-          transactionHash,
-        },
-        include: {
-          vendor: true,
-        },
-      });
-
-      this.logger.log(`Approved token redemption ${uuid} by ${approvedBy}`);
-      return updatedRedemption;
-    } catch (error) {
-      this.logger.error(`Error approving token redemption: ${error.message}`);
-      throw new RpcException(error.message);
-    }
-  }
-
-  async rejectRedemption(uuid: string, approvedBy: string, notes?: string) {
-    try {
-      const redemption = await this.prisma.vendorTokenRedemption.findUnique({
-        where: { uuid },
-      });
-
-      if (!redemption) {
-        throw new RpcException(`Token redemption with UUID ${uuid} not found`);
-      }
-
-      if (redemption.redemptionStatus !== TokenRedemptionStatus.REQUESTED) {
-        throw new RpcException(
-          `Token redemption ${uuid} is not in REQUESTED status`
-        );
-      }
-
-      const updatedRedemption = await this.prisma.vendorTokenRedemption.update({
-        where: { uuid },
-        data: {
-          redemptionStatus: TokenRedemptionStatus.REJECTED,
-          approvedBy,
-          approvedAt: new Date(),
-          notes,
-        },
-        include: {
-          vendor: true,
-        },
-      });
-
-      this.logger.log(`Rejected token redemption ${uuid} by ${approvedBy}`);
-      return updatedRedemption;
-    } catch (error) {
-      this.logger.error(`Error rejecting token redemption: ${error.message}`);
       throw new RpcException(error.message);
     }
   }
