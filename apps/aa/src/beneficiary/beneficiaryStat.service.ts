@@ -220,15 +220,15 @@ export class BeneficiaryStatService {
       getKeyParts: (item) => {
         const extras = item.extras as { location?: string; ward_no?: number };
         return {
-          municipality: extras.location,
-          ward_no: extras.ward_no,
+          municipality: extras?.location,
+          ward_no: extras?.ward_no,
         };
       },
 
       getCoordinates: (item) => {
-        const extras = item.extras as { gps?: string };
+        const extras = item?.extras as { gps?: string };
 
-        return extractLatLng(extras.gps);
+        return extractLatLng(extras?.gps);
       },
     });
     const k = Object.entries(wardLocationStats).map(([key, value]) => ({
