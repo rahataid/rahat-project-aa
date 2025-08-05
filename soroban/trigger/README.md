@@ -11,11 +11,13 @@ brew install stellar-cli
 ### Install Rust and WebAssembly Target
 
 To install Rust on macOS, run:
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 Add the WebAssembly compilation target:
+
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
@@ -33,7 +35,7 @@ stellar contract build
 Create a new testnet account and fund it with test tokens:
 
 ```bash
-stellar keys generate --global sushant --network testnet --fund
+stellar keys generate --global sushants --network testnet --fund
 ```
 
 ### Step 3: Deploy the Contract
@@ -43,12 +45,13 @@ Deploy the compiled contract to the testnet:
 ```bash
 stellar contract deploy \
   --wasm target/wasm32-unknown-unknown/release/soroban_contract.wasm \
-  --source sushant \
+  --source sushants \
   --network testnet \
   --alias deployed_contract
 ```
 
 **Parameters:**
+
 - **Deployer:** `sushant` (the account created in Step 2)
 - **Network:** Testnet
 - **Contract Alias:** `deployed_contract`

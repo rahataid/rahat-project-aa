@@ -1,5 +1,6 @@
 import {
   DisbursementServices,
+  IDisbursement,
   ReceiveService,
   TransactionService,
 } from '@rahataid/stellar-sdk';
@@ -41,6 +42,8 @@ import {
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
+import { AppService } from '../app/app.service';
+import { getFormattedTimeDiff } from '../utils/date';
 
 interface BatchInfo {
   batchIndex: number;
@@ -75,7 +78,8 @@ export class StellarService {
     private readonly stellarQueue: Queue,
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
-    private readonly transactionService: TransactionService
+    private readonly transactionService: TransactionService,
+    private readonly appService: AppService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -244,6 +248,16 @@ export class StellarService {
       throw new RpcException('Beneficiary address not found');
     }
 
+    // Get vendor wallet address
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: sendOtpDto.vendorUuid },
+      select: { walletAddress: true },
+    });
+
+    if (!vendor) {
+      throw new RpcException('Vendor not found');
+    }
+
     // Find existing BeneficiaryRedeem record for this beneficiary
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
       where: {
@@ -270,7 +284,7 @@ export class StellarService {
           info: {
             message: 'OTP sent to beneficiary',
             transactionHash: '',
-            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            offrampWalletAddress: vendor.walletAddress,
             beneficiaryWalletAddress: keys.publicKey,
           },
         },
@@ -290,7 +304,7 @@ export class StellarService {
           info: {
             message: 'OTP sent to beneficiary',
             transactionHash: '',
-            offrampWalletAddress: sendOtpDto.vendorUuid, // vendor wallet address
+            offrampWalletAddress: vendor.walletAddress,
             beneficiaryWalletAddress: keys.publicKey,
           },
         },
@@ -638,15 +652,19 @@ export class StellarService {
   }
 
   // todo (new-chain-config): Make process dynamic
-  async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarQueue.add(JOBS.STELLAR.ADD_ONCHAIN_TRIGGER, trigger, {
-      attempts: 3,
-      removeOnComplete: true,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-    });
+  async addTriggerOnChain(triggers: AddTriggerDto[]) {
+    return this.stellarQueue.add(
+      JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE,
+      { triggers },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
   }
 
   // todo (new-chain-config): Need separate method for evm
@@ -728,55 +746,152 @@ export class StellarService {
     );
   }
 
-  // todo (new-chain-config): Need dynamic method according to chain
-  async getDisbursementStats() {
-    console.log(await this.getFromSettings('TENANTNAME'));
-    console.log(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      )
-    );
-    const disbursementBalance = await this.getRahatBalance(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      )
-    );
-
-    console.log(disbursementBalance, 'disbursementBalance');
-    const vendors = await this.prisma.vendor.findMany({
-      select: { walletAddress: true },
+  async getActivityActivationTime() {
+    const projectInfo = await this.appService.getSettings({
+      name: 'PROJECTINFO',
     });
 
-    let totalVendorBalance = 0;
+    if (!projectInfo) {
+      throw new RpcException('Project info not found, in SETTINGS');
+    }
+    const activeYear = projectInfo?.value?.active_year;
+    const riverBasin = projectInfo?.value?.river_basin;
 
-    await Promise.all(
-      vendors.map(async (vendor) => {
-        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
-      })
+    if (!activeYear || !riverBasin) {
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`);
+
+      return null;
+    }
+
+    const data = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phases.getAll' },
+        {
+          activeYear,
+          riverBasin,
+        }
+      )
     );
 
-    return {
-      tokenStats: [
-        {
-          name: 'Disbursement Balance',
-          amount: (disbursementBalance + totalVendorBalance).toLocaleString(),
+    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+
+    if (!activationPhase) {
+      this.logger.warn(
+        `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    if (!activationPhase.isActive) {
+      this.logger.warn(
+        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    return activationPhase.activatedAt;
+  }
+
+  // todo (new-chain-config): Need dynamic method according to chain
+  async getDisbursementStats() {
+    const oneTokenPrice = (await this.getFromSettings('ONE_TOKEN_PRICE')) ?? 1;
+    const tokenName = (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT';
+
+    const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      include: {
+        beneficiaryGroup: {
+          include: {
+            _count: {
+              select: {
+                beneficiaries: true,
+              },
+            },
+          },
         },
-        {
-          name: 'Disbursed Balance',
-          amount: totalVendorBalance.toLocaleString(),
-        },
-        {
-          name: 'Remaining Balance',
-          amount: disbursementBalance.toLocaleString(),
-        },
-        { name: 'Token Price', amount: 'Rs 10' },
-      ],
-      transactionStats: await this.getRecentTransaction(
-        await this.disbursementService.getDistributionAddress(
-          await this.getFromSettings('TENANTNAME')
-        )
-      ),
-    };
+      },
+    });
+
+    const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
+      if (token.isDisbursed) {
+        acc += token.numberOfTokens;
+      }
+      return acc;
+    }, 0);
+
+    const totalTokens = benfTokens.reduce(
+      (acc, token) => acc + token.numberOfTokens,
+      0
+    );
+
+    const totalBeneficiaries = benfTokens
+    .filter((token) => token.isDisbursed)
+    .reduce(
+      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+      0
+    );
+
+    const disbursementsInfo = benfTokens
+      .filter(
+        (token) =>
+          token.isDisbursed && (token.info as any)?.disbursementTimeTaken
+      )
+      .map((token) => (token.info as any)?.disbursementTimeTaken);
+
+
+    const averageDisbursementTime =
+      disbursementsInfo.reduce((acc, time) => acc + time, 0) /
+      disbursementsInfo.length;
+
+    const activityActivationTime = await this.getActivityActivationTime();
+    let averageDuration = 0;
+
+    if (activityActivationTime) {
+      averageDuration =
+        benfTokens
+          .filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .reduce((acc, token) => {
+            const info = JSON.parse(JSON.stringify(token.info)) as {
+              disbursement: IDisbursement;
+            };
+            // getting disbursement completion time
+            const {
+              disbursement: { updated_at },
+            } = info;
+
+            // diff between disbursement completion time and activity activation time
+            const timeTaken =
+              new Date(updated_at).getTime() -
+              new Date(activityActivationTime).getTime();
+
+            return acc + timeTaken;
+          }, 0) /
+        benfTokens.filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .length;
+
+      averageDuration = averageDuration;
+
+    }
+
+    return [
+      {
+        name: 'Token Disbursed',
+        value: totalDisbursedTokens,
+      },
+      {
+        name: 'Budget Assigned',
+        value: totalTokens * oneTokenPrice,
+      },
+      {
+        name: 'Token',
+        value: tokenName,
+      },
+      { name: 'Token Price', value: oneTokenPrice },
+      { name: 'Total Beneficiaries', value: totalBeneficiaries },
+      { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
+      { name: 'Average Duration', value: averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+    ];
   }
 
   async checkBulkTrustline(mode: 'dry' | 'live') {

@@ -28,7 +28,7 @@ export class PayoutsController {
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET, uuid: process.env.PROJECT_ID })
   findOne(@Payload() payload: { uuid: string }) {
-    return this.payoutsService.findOne(payload.uuid);
+    return this.payoutsService.getOne(payload.uuid);
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.UPDATE, uuid: process.env.PROJECT_ID })
@@ -90,5 +90,14 @@ export class PayoutsController {
   getPayoutStats() {
     console.log('first');
     return this.payoutsService.getPayoutStats();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.EXPORT_PAYOUT_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  downloadPayoutLogs(@Payload() payload: { uuid: string }) {
+    console.log('first');
+    return this.payoutsService.downloadPayoutLogs(payload.uuid);
   }
 }

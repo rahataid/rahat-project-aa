@@ -32,16 +32,22 @@ export class VendorsService {
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
+    const { page, perPage, sort, order, search } = query;
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    orderBy[sort] = order;
+
     return paginate(
       this.prisma.vendor,
       {
         where: {
-          name: { contains: query.search, mode: 'insensitive' },
+          name: { contains: search, mode: 'insensitive' },
         },
+        orderBy,
       },
       {
-        page: query.page,
-        perPage: query.perPage,
+        page,
+        perPage,
       }
     );
   }
@@ -151,7 +157,18 @@ export class VendorsService {
         where: {
           vendorUid: uuid,
           ...(txHash && { txHash }),
-          ...(status === 'success' && { status: 'TOKEN_TRANSACTION_COMPLET' }),
+          ...(status === 'success' && {
+            status: 'TOKEN_TRANSACTION_COMPLETED',
+          }),
+        },
+        include: {
+          Beneficiary: {
+            select: {
+              uuid: true,
+              extras: true,
+              walletAddress: true,
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -159,10 +176,61 @@ export class VendorsService {
       };
 
       // Get paginated transactions
-      return paginate(this.prisma.beneficiaryRedeem, query, {
+      const result = await paginate(this.prisma.beneficiaryRedeem, query, {
         page,
         perPage,
       });
+
+      // Get beneficiary UUIDs for name lookup
+      const beneficiaryUuids = result.data
+        .map((redeem: any) => redeem.Beneficiary?.uuid)
+        .filter(Boolean);
+
+      this.logger.log(
+        `Found ${
+          beneficiaryUuids.length
+        } beneficiary UUIDs for name lookup: ${JSON.stringify(
+          beneficiaryUuids
+        )}`
+      );
+
+      let benResponse = [];
+      if (beneficiaryUuids.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+            beneficiaryUuids
+          )
+        );
+        this.logger.log(
+          `Received beneficiary response: ${JSON.stringify(benResponse)}`
+        );
+      }
+
+      // Transform the data to include phone number from extras and name from benResponse
+      const transformedData = result.data.map((redeem: any) => {
+        const benInfo = benResponse.find(
+          (b: any) => b.uuid === redeem.Beneficiary?.uuid
+        );
+        this.logger.log(
+          `Looking for beneficiary ${
+            redeem.Beneficiary?.uuid
+          }, found: ${JSON.stringify(benInfo)}`
+        );
+        return {
+          ...redeem,
+          Beneficiary: {
+            ...redeem.Beneficiary,
+            phone: (redeem.Beneficiary?.extras as any)?.phone || null,
+            name: benInfo?.name || null,
+          },
+        };
+      });
+
+      return {
+        ...result,
+        data: transformedData,
+      };
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);
@@ -244,13 +312,21 @@ export class VendorsService {
           `Getting beneficiaries charged by vendor ${payload.vendorUuid} for ONLINE mode`
         );
 
+        // Build where clause for beneficiary redeem query
+        const redeemWhereClause: any = {
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          vendorUid: payload.vendorUuid,
+        };
+
+        // Add wallet address filter if provided
+        if (payload.walletAddress) {
+          redeemWhereClause.beneficiaryWalletAddress = payload.walletAddress;
+        }
+
         // Get beneficiaries who have been charged by this vendor
         const chargedBeneficiaries =
           await this.prisma.beneficiaryRedeem.findMany({
-            where: {
-              transactionType: 'VENDOR_REIMBURSEMENT',
-              vendorUid: payload.vendorUuid,
-            },
+            where: redeemWhereClause,
             include: {
               Beneficiary: {
                 select: {
@@ -290,12 +366,43 @@ export class VendorsService {
           );
         }
 
-        // Attach beneficiary name to each beneficiary
+        // Get transaction hash and status information for each beneficiary
+        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
+          (ben) => ben.walletAddress
+        );
+        const beneficiaryTransactions =
+          await this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
+              transactionType: 'VENDOR_REIMBURSEMENT',
+            },
+            select: {
+              beneficiaryWalletAddress: true,
+              txHash: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+        // Create maps of wallet address to latest transaction hash and status
+        const transactionMap = new Map();
+        const statusMap = new Map();
+        beneficiaryTransactions.forEach((tx) => {
+          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
+            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
+            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+          }
+        });
+
+        // Attach beneficiary name, transaction hash, and status to each beneficiary
         const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
             name: benInfo?.name || null,
+            txHash: transactionMap.get(ben.walletAddress) || null,
+            status: statusMap.get(ben.walletAddress) || null,
           };
         });
 
@@ -384,11 +491,21 @@ export class VendorsService {
           );
         }
 
+        // Build where clause for beneficiary query
+        const beneficiaryWhereClause: any = {
+          groupId: { in: payoutGroupIds },
+        };
+
+        // Add wallet address filter if provided
+        if (payload.walletAddress) {
+          beneficiaryWhereClause.beneficiary = {
+            walletAddress: payload.walletAddress,
+          };
+        }
+
         // Use only payout-eligible group IDs for beneficiary query
         const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
-          where: {
-            groupId: { in: payoutGroupIds },
-          },
+          where: beneficiaryWhereClause,
           include: {
             beneficiary: {
               select: {
@@ -427,12 +544,43 @@ export class VendorsService {
           );
         }
 
-        // Attach beneficiary name to each beneficiary
+        // Get transaction hash and status information for each beneficiary
+        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
+          (ben) => ben.walletAddress
+        );
+        const beneficiaryTransactions =
+          await this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
+              transactionType: 'VENDOR_REIMBURSEMENT',
+            },
+            select: {
+              beneficiaryWalletAddress: true,
+              txHash: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+        // Create maps of wallet address to latest transaction hash and status
+        const transactionMap = new Map();
+        const statusMap = new Map();
+        beneficiaryTransactions.forEach((tx) => {
+          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
+            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
+            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+          }
+        });
+
+        // Attach beneficiary name, transaction hash, and status to each beneficiary
         const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
             name: benInfo?.name || null,
+            txHash: transactionMap.get(ben.walletAddress) || null,
+            status: statusMap.get(ben.walletAddress) || null,
           };
         });
 
