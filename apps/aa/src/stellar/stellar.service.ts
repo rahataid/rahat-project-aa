@@ -825,10 +825,12 @@ export class StellarService {
       0
     );
 
-    const totalBeneficiaries = benfTokens.reduce(
-      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-      0
-    );
+    const totalBeneficiaries = benfTokens
+      .filter((token) => token.isDisbursed)
+      .reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
 
     const disbursementsInfo = benfTokens
       .filter(
@@ -840,8 +842,6 @@ export class StellarService {
     const averageDisbursementTime =
       disbursementsInfo.reduce((acc, time) => acc + time, 0) /
       disbursementsInfo.length;
-
-    console.log(averageDisbursementTime);
 
     const activityActivationTime = await this.getActivityActivationTime();
     let averageDuration = 0;
@@ -894,7 +894,7 @@ export class StellarService {
       {
         name: 'Average Duration',
         value:
-          averageDuration > 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+          averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
       },
     ];
   }

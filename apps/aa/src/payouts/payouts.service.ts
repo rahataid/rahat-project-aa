@@ -71,55 +71,54 @@ export class PayoutsService {
    */
   async getPayoutStats(): Promise<PayoutStats> {
     try {
-      const [
-        fspCount,
-        vendorCount,
-        failed,
-        success,
-        beneficiaryGroupTokens,
-      ] = await Promise.all([
-        this.prisma.payouts.count({
-          where: {
-            type: 'FSP'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            type: 'VENDOR'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            status: 'FAILED'
-          },
-        }),
-        this.prisma.payouts.count({
-          where: {
-            status: "COMPLETED"
-          },
-        }),
-        this.prisma.beneficiaryGroupTokens.findMany({
-          include: {
-            beneficiaryGroup: {
-              select: {
-                beneficiaries: true,
-                _count: {
-                  select: {
-                    beneficiaries: true,
-                  },
-                },
+      const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
+        await Promise.all([
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              transactionType: 'FIAT_TRANSFER',
+              status: 'FIAT_TRANSACTION_COMPLETED',
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              transactionType: 'VENDOR_REIMBURSEMENT',
+              status: 'COMPLETED',
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              status: {
+                in: ['FAILED', 'FIAT_TRANSACTION_FAILED', 'TOKEN_TRANSACTION_FAILED']
+              }
+            },
+          }),
+          this.prisma.beneficiaryRedeem.count({
+            where: {
+              status: {
+                in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
             },
-          },
-        }),
-      ]);
+          }),
+          this.prisma.beneficiaryRedeem.findMany({
+            where: {
+              transactionType: {
+                in: ['FIAT_TRANSFER', 'VENDOR_REIMBURSEMENT'],
+              },
+              status: {
+                in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
+              },
+            },
+          }),
+        ]);
 
-      const totalBeneficiaries = beneficiaryGroupTokens.reduce(
-        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-        0
+      const uniqueWallets = new Set(
+        beneficiaryRedeems.flatMap((b) => b.beneficiaryWalletAddress)
       );
-      const totalTokens = beneficiaryGroupTokens.reduce(
-        (acc, token) => acc + token.numberOfTokens,
+
+      const totalBeneficiaries = uniqueWallets.size;
+
+      const totalTokens = beneficiaryRedeems.reduce(
+        (acc, redeem) => acc + redeem.amount,
         0
       );
 
@@ -309,18 +308,59 @@ export class PayoutsService {
       });
 
       const enrichedData = await Promise.all(
-        result.data.map(async (payout: PayoutWithRelations) => {
+        result.data.map(async (eachPayout: PayoutWithRelations) => {
           //  Skip calculation if already completed
-          if (payout.status === 'COMPLETED') {
-            return payout;
+          if (eachPayout.status === 'COMPLETED') {
+            return {
+              ...eachPayout,
+              totalSuccessAmount:
+                eachPayout.beneficiaryGroupToken.numberOfTokens *
+                ONE_TOKEN_VALUE,
+            };
           }
-          const calculatedStatus = calculatePayoutStatus(payout);
-          await this.syncPayoutStatus(payout, calculatedStatus);
+          const calculatedStatus = calculatePayoutStatus(eachPayout);
+          await this.syncPayoutStatus(eachPayout, calculatedStatus);
+
+          let totalSuccessAmount = 0;
+
+          if (calculatedStatus === 'COMPLETED') {
+            totalSuccessAmount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE;
+          } else if (eachPayout.type === 'FSP') {
+            const successRequests = eachPayout.beneficiaryRedeem.filter(
+              (redeem) => redeem.status === 'FIAT_TRANSACTION_COMPLETED'
+            );
+
+            const eachBeneficiaryTokenCount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens /
+              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
+                .beneficiaries;
+
+            totalSuccessAmount =
+              successRequests.length *
+              ONE_TOKEN_VALUE *
+              eachBeneficiaryTokenCount;
+          } else {
+            const successRequests = eachPayout.beneficiaryRedeem.filter(
+              (redeem) => redeem.status === 'COMPLETED'
+            );
+
+            const eachBeneficiaryTokenCount =
+              eachPayout.beneficiaryGroupToken.numberOfTokens /
+              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
+                .beneficiaries;
+
+            totalSuccessAmount =
+              successRequests.length *
+              ONE_TOKEN_VALUE *
+              eachBeneficiaryTokenCount;
+          }
 
           // Remove beneficiaryRedeem from result, add redeemStatus
-          const { beneficiaryRedeem, ...rest } = payout;
+          const { beneficiaryRedeem, ...rest } = eachPayout;
           return {
             ...rest,
+            totalSuccessAmount,
           };
         })
       );
@@ -378,6 +418,7 @@ export class PayoutsService {
       isPayoutTriggered?: boolean;
       totalSuccessRequests?: number;
       payoutGap?: string;
+      totalSuccessAmount?: number;
       totalFailedPayoutRequests?: number;
     }
   > {
@@ -434,11 +475,39 @@ export class PayoutsService {
 
       const isCompleted = await this.getPayoutCompletedStatus(payout);
       const isPayoutTriggered = payout.beneficiaryRedeem.length > 0;
-
-      const totalSuccessRequests = isPayoutTriggered
-        ? payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries -
-          totalFailedPayoutRequests
+      const eachBenfTokenCount = isPayoutTriggered
+        ? payout.beneficiaryGroupToken.numberOfTokens /
+          payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries
         : 0;
+
+      let totalSuccessRequests = 0;
+      if (isPayoutTriggered) {
+        if (isCompleted) {
+          totalSuccessRequests =
+            payout.beneficiaryGroupToken.beneficiaryGroup._count.beneficiaries;
+        } else {
+          const count =
+            payout.type === 'FSP'
+              ? payout.beneficiaryRedeem.reduce((acc, curr) => {
+                  if (curr.status === 'FIAT_TRANSACTION_COMPLETED') {
+                    acc++;
+                  }
+                  return acc;
+                }, 0)
+              : payout.beneficiaryRedeem.reduce((acc, curr) => {
+                  if (curr.status === 'COMPLETED') {
+                    acc++;
+                  }
+                  return acc;
+                }, 0);
+
+          if (count < 1) {
+            totalSuccessRequests = 0;
+          } else {
+            totalSuccessRequests = count;
+          }
+        }
+      }
 
       let payoutGap = 'N/A';
 
@@ -450,6 +519,8 @@ export class PayoutsService {
         ...payout,
         hasFailedPayoutRequests:
           payout.type === 'VENDOR' ? false : totalFailedPayoutRequests > 0,
+        totalSuccessAmount:
+          totalSuccessRequests * ONE_TOKEN_VALUE * eachBenfTokenCount,
         totalSuccessRequests,
         totalFailedPayoutRequests,
         payoutGap,
@@ -879,59 +950,171 @@ export class PayoutsService {
 
     this.logger.log(`Getting payout logs for payout with UUID: ${payoutUUID}`);
     try {
-      const query: Prisma.BeneficiaryRedeemFindManyArgs = {
+      const payout = await this.prisma.payouts.findFirst({
         where: {
-          ...(payoutUUID && { payoutId: payoutUUID }),
-          ...(transactionType && { transactionType }),
-          ...(transactionStatus && { status: transactionStatus }),
-          ...(search && {
-            OR: [
-              {
-                beneficiaryWalletAddress: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
-              },
-              {
-                txHash: { contains: search, mode: 'insensitive' },
-              },
-              {
-                info: {
-                  path: ['error'],
-                  string_contains: search,
-                },
-              },
-              {
-                Vendor: {
-                  walletAddress: { contains: search, mode: 'insensitive' },
-                },
-              },
-              {
-                Beneficiary: {
-                  phone: { contains: search, mode: 'insensitive' },
-                },
-              },
-            ],
-          }),
+          uuid: payoutUUID,
         },
-        ...(sort && {
-          orderBy: {
-            [sort]: order,
-          },
-        }),
-      };
+      });
 
-      const logs = await paginate(
-        this.prisma.beneficiaryRedeem,
-        {
-          ...query,
-        },
-        {
-          page,
-          perPage,
+      if (!payout) {
+        throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+      }
+
+      if (payout.type === 'VENDOR') {
+        const query: Prisma.BeneficiaryRedeemFindManyArgs = {
+          where: {
+            ...(payoutUUID && { payoutId: payoutUUID }),
+            ...(transactionType && { transactionType }),
+            ...(transactionStatus && { status: transactionStatus }),
+            ...(search && {
+              OR: [
+                {
+                  beneficiaryWalletAddress: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  txHash: { contains: search, mode: 'insensitive' },
+                },
+                {
+                  info: {
+                    path: ['error'],
+                    string_contains: search,
+                  },
+                },
+                {
+                  Vendor: {
+                    walletAddress: { contains: search, mode: 'insensitive' },
+                  },
+                },
+                {
+                  Beneficiary: {
+                    phone: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              ],
+            }),
+          },
+          ...(sort && {
+            orderBy: {
+              [sort]: order,
+            },
+          }),
+        };
+
+        const logs = await paginate(
+          this.prisma.beneficiaryRedeem,
+          {
+            ...query,
+          },
+          {
+            page,
+            perPage,
+          }
+        );
+        return logs;
+      }
+
+      if (payout.type === 'FSP') {
+        const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
+          where: {
+            payoutId: payoutUUID,
+            ...(transactionType && { transactionType }),
+            ...(transactionStatus && { status: transactionStatus }),
+            ...(search && {
+              OR: [
+                {
+                  beneficiaryWalletAddress: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  txHash: { contains: search, mode: 'insensitive' },
+                },
+                {
+                  info: {
+                    path: ['error'],
+                    string_contains: search,
+                  },
+                },
+                {
+                  Vendor: {
+                    walletAddress: { contains: search, mode: 'insensitive' },
+                  },
+                },
+                {
+                  Beneficiary: {
+                    phone: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              ],
+            }),
+          },
+          include: {
+            Beneficiary: true,
+            Vendor: true,
+            payout: true,
+          },
+        });
+
+        // Group by beneficiary wallet address
+        const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
+          const walletAddress = redeem.beneficiaryWalletAddress;
+          if (!acc[walletAddress]) {
+            acc[walletAddress] = {
+              TOKEN_TRANSFER: null,
+              FIAT_TRANSFER: null,
+            };
+          }
+          acc[walletAddress][redeem.transactionType] = redeem;
+          return acc;
+        }, {});
+
+        // - If FIAT_TRANSFER exists, include it and exclude TOKEN_TRANSFER
+        // - If FIAT_TRANSFER doesn't exist, include TOKEN_TRANSFER
+        const filteredRedeems = [];
+        for (const walletAddress in redeemsByWallet) {
+          const walletRedeems = redeemsByWallet[walletAddress];
+          if (walletRedeems.FIAT_TRANSFER) {
+            filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
+          } else if (walletRedeems.TOKEN_TRANSFER) {
+            if (
+              walletRedeems.TOKEN_TRANSFER.status !==
+              'TOKEN_TRANSACTION_COMPLETED'
+            ) {
+              filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
+            }
+          }
         }
-      );
-      return logs;
+
+        const total = filteredRedeems.length;
+        const pageNumber = page || 1;
+        const itemsPerPage = perPage || 10;
+        const offset = (pageNumber - 1) * itemsPerPage;
+        const paginatedRedeems = filteredRedeems.slice(
+          offset,
+          offset + itemsPerPage
+        );
+
+        return {
+          data: paginatedRedeems,
+          meta: {
+            total,
+            lastPage: Math.ceil(total / itemsPerPage),
+            currentPage: pageNumber,
+            perPage: itemsPerPage,
+            prev: pageNumber > 1 ? pageNumber - 1 : null,
+            next:
+              pageNumber < Math.ceil(total / itemsPerPage)
+                ? pageNumber + 1
+                : null,
+          },
+        };
+      }
+
+      throw new RpcException(`Unsupported payout type: ${payout.type}`);
     } catch (error) {
       this.logger.error(
         `Failed to get payout log: ${error.message}`,
@@ -1211,6 +1394,8 @@ export class PayoutsService {
     const diffInMs =
       new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
 
+    console.log(`Payout completion gap in ms: ${diffInMs}`);
+
     return getFormattedTimeDiff(diffInMs);
   }
 
@@ -1246,7 +1431,6 @@ export class PayoutsService {
           'Bank a/c number': extras.bank_ac_number || null,
           'Bank Name': extras.bank_name || null,
           'Phone number': extras.phone || null,
-          'Govt Id': extras.interviewee_government_id_type || null,
           'Transaction Type': log.transactionType,
           'Bank Transaction ID': log.payoutId,
           'Transacrion Wallet ID': log.txHash,
