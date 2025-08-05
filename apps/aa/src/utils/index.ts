@@ -80,7 +80,8 @@ export function generateLocationStats<T>({
   dataList,
   getKeyParts,
   getCoordinates,
-  keyFormat = (ward, municipality) => `ward${ward}_${municipality}`,
+  keyFormat = (ward, municipality) =>
+    `WARD${ward}_${municipality.toUpperCase()}`,
 }: {
   dataList: T[];
   getKeyParts: (
@@ -94,16 +95,14 @@ export function generateLocationStats<T>({
   string,
   {
     count: number;
-    latitude: number[];
-    longitude: number[];
+    locations: { lat: number; long: number }[];
   }
 > {
   const result: Record<
     string,
     {
       count: number;
-      latitudes: number[];
-      longitudes: number[];
+      locations: { lat: number; long: number }[];
     }
   > = {};
 
@@ -129,37 +128,15 @@ export function generateLocationStats<T>({
     if (!result[key]) {
       result[key] = {
         count: 0,
-        latitudes: [],
-        longitudes: [],
+        locations: [],
       };
     }
 
-    const group = result[key];
-    group.count += 1;
-    group.latitudes.push(latitude);
-    group.longitudes.push(longitude);
+    result[key].count += 1;
+    result[key].locations.push({ lat: latitude, long: longitude });
   }
 
-  const finalResult: Record<
-    string,
-    {
-      count: number;
-      latitude: number[];
-      longitude: number[];
-    }
-  > = {};
-
-  for (const [key, group] of Object.entries(result)) {
-    const { latitudes, longitudes, count } = group;
-
-    finalResult[key] = {
-      count,
-      latitude: latitudes,
-      longitude: longitudes,
-    };
-  }
-
-  return finalResult;
+  return result;
 }
 
 export function extractLatLng(gps?: string) {
