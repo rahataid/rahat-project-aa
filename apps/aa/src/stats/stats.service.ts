@@ -85,27 +85,13 @@ export class StatsService {
     try {
       const whereClause: Prisma.StatsWhereInput = {
         group: 'beneficiary_gps_location',
-        ...(ward_no &&
-          location && {
-            name: {
-              contains: `WARD${ward_no}_${location}`,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          }),
-        ...(ward_no &&
-          !location && {
-            name: {
-              contains: `WARD${ward_no}_`,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          }),
-        ...(!ward_no &&
-          location && {
-            name: {
-              contains: location,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          }),
+
+        ...(ward_no && {
+          name: {
+            contains: `WARD${ward_no}`,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        }),
       };
 
       const mapLocation = await this.prismaService.stats.findMany({

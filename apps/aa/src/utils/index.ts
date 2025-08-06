@@ -80,17 +80,14 @@ export function generateLocationStats<T>({
   dataList,
   getKeyParts,
   getCoordinates,
-  keyFormat = (ward, municipality) =>
-    `WARD${ward}_${municipality.toUpperCase()}`,
+  keyFormat = (ward) => `WARD${ward}`,
 }: {
   dataList: T[];
-  getKeyParts: (
-    item: T
-  ) => { municipality: string; ward_no: number } | undefined;
+  getKeyParts: (item: T) => { ward_no: number } | undefined;
   getCoordinates: (
     item: T
   ) => { latitude: number; longitude: number } | undefined;
-  keyFormat?: (ward: number, municipality: string) => string;
+  keyFormat?: (ward: number) => string;
 }): Record<
   string,
   {
@@ -112,18 +109,12 @@ export function generateLocationStats<T>({
 
     if (!keyParts || !coords) continue;
 
-    const { municipality, ward_no } = keyParts;
+    const { ward_no } = keyParts;
     const { latitude, longitude } = coords;
 
-    if (
-      !municipality ||
-      ward_no == null ||
-      latitude == null ||
-      longitude == null
-    )
-      continue;
+    if (ward_no == null || latitude == null || longitude == null) continue;
 
-    const key = keyFormat(ward_no, municipality);
+    const key = keyFormat(ward_no);
 
     if (!result[key]) {
       result[key] = {
@@ -151,4 +142,15 @@ export function extractLatLng(gps?: string) {
   }
 
   return { latitude, longitude };
+}
+
+export function toPascalCase(input: string): string {
+  return input
+    .replace(/^channel/, '')
+    .replace(/_+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
 }
