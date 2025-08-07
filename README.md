@@ -1,3 +1,5 @@
+[![Coverage Status](https://coveralls.io/repos/github/rahataid/rahat-project-aa/badge.svg?branch=main)](https://coveralls.io/github/rahataid/rahat-project-aa?branch=main)
+
 # Rahat Anticipatory Action (AA)
 
 A decentralized platform for managing anticipatory action projects to enhance community resilience against climate shocks. This project provides fund management management, beneficiary support, and automated response systems for climate-related humanitarian interventions.
