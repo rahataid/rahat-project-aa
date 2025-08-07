@@ -1,6 +1,6 @@
 # Rahat Anticipatory Action (AA)
 
-A decentralized platform for managing anticipatory action projects to enhance community resilience against climate shocks. This project provides advanced trigger management, beneficiary support, and automated response systems for climate-related humanitarian interventions.
+A decentralized platform for managing anticipatory action projects to enhance community resilience against climate shocks. This project provides fund management management, beneficiary support, and automated response systems for climate-related humanitarian interventions.
 
 ## Table of Contents
 - [Project Overview](#project-overview)
@@ -407,4 +407,4 @@ Once the application is running, you can access:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MPL-2.0 License - see the LICENSE file for details.
