@@ -37,6 +37,7 @@ export const seedStellar = async () => {
     fundingAmount: '10',
     network: 'testnet',
     faucetSecretKey: 'SAVNF6EBFM56QSBCYBKKNXOCZASR5QEHO5AMAGEM2NJN4KIZBHIMGA6A',
+    fallbackAddress: 'GDX4KG22ONNKJPJHSODEMJFI25PNEEKEXXDV5W54KGWOETBU7JYBY7FY',
   };
 
   try {

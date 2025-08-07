@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaService, paginator, PaginatorTypes } from '@rumsan/prisma';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
@@ -14,6 +14,8 @@ import {
   VendorTokenRedemptionStatsResponseDto,
   TokenRedemptionStatus,
 } from './dto/vendorTokenRedemption.dto';
+
+const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class VendorTokenRedemptionService {
@@ -158,7 +160,14 @@ export class VendorTokenRedemptionService {
 
   async list(query: ListVendorTokenRedemptionDto) {
     try {
-      const { vendorUuid, redemptionStatus, page = 1, perPage = 20 } = query;
+      const {
+        vendorUuid,
+        redemptionStatus,
+        sort = 'createdAt',
+        order = 'desc',
+        page,
+        perPage,
+      } = query;
 
       const where: any = {};
 
@@ -170,30 +179,23 @@ export class VendorTokenRedemptionService {
         where.redemptionStatus = redemptionStatus;
       }
 
-      const [redemptions, total] = await Promise.all([
-        this.prisma.vendorTokenRedemption.findMany({
+      const orderBy: Record<string, 'asc' | 'desc'> = {};
+      orderBy[sort] = order;
+
+      return paginate(
+        this.prisma.vendorTokenRedemption,
+        {
           where,
           include: {
             vendor: true,
           },
-          skip: (page - 1) * perPage,
-          take: perPage,
-          orderBy: {
-            createdAt: 'desc',
-          },
-        }),
-        this.prisma.vendorTokenRedemption.count({ where }),
-      ]);
-
-      return {
-        data: redemptions,
-        meta: {
-          total,
+          orderBy,
+        },
+        {
           page,
           perPage,
-          totalPages: Math.ceil(total / perPage),
-        },
-      };
+        }
+      );
     } catch (error) {
       this.logger.error(`Error listing token redemptions: ${error.message}`);
       throw new RpcException(error.message);

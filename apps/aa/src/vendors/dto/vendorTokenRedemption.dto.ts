@@ -67,6 +67,14 @@ export class ListVendorTokenRedemptionDto {
   @IsOptional()
   redemptionStatus?: TokenRedemptionStatus;
 
+  @IsString()
+  @IsOptional()
+  sort?: string = 'createdAt';
+
+  @IsString()
+  @IsOptional()
+  order?: 'asc' | 'desc' = 'desc';
+
   @IsNumber()
   @IsOptional()
   page?: number = 1;
