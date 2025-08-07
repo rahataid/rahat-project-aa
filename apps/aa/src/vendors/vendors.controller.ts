@@ -13,6 +13,7 @@ import {
   GetVendorTokenRedemptionDto,
   ListVendorTokenRedemptionDto,
   GetVendorRedemptionsDto,
+  GetVendorTokenRedemptionStatsDto,
 } from './dto/vendorTokenRedemption.dto';
 
 @Controller()
@@ -104,5 +105,13 @@ export class VendorsController {
   })
   async getVendorRedemptions(dto: GetVendorRedemptionsDto) {
     return this.vendorTokenRedemptionService.getVendorRedemptions(dto);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.VENDOR.GET_TOKEN_REDEMPTION_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getVendorTokenRedemptionStats(dto: GetVendorTokenRedemptionStatsDto) {
+    return this.vendorTokenRedemptionService.getVendorTokenRedemptionStats(dto);
   }
 }

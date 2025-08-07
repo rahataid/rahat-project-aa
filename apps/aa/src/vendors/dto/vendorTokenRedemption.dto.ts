@@ -12,6 +12,8 @@ export enum TokenRedemptionStatus {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   COMPLETED = 'COMPLETED',
+  STELLAR_VERIFIED = 'STELLAR_VERIFIED',
+  STELLAR_FAILED = 'STELLAR_FAILED',
 }
 
 export class CreateVendorTokenRedemptionDto {
@@ -78,4 +80,15 @@ export class GetVendorRedemptionsDto {
   @IsUUID()
   @IsNotEmpty()
   vendorUuid: string;
+}
+
+export class GetVendorTokenRedemptionStatsDto {
+  @IsUUID()
+  @IsNotEmpty()
+  vendorUuid: string;
+}
+
+export class VendorTokenRedemptionStatsResponseDto {
+  totalTokensApproved: number;
+  totalTokensPending: number;
 }

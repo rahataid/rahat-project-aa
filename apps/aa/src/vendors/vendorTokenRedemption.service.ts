@@ -1,12 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { BQUEUE, JOBS } from '../constants';
 import {
   CreateVendorTokenRedemptionDto,
   UpdateVendorTokenRedemptionDto,
   GetVendorTokenRedemptionDto,
   ListVendorTokenRedemptionDto,
   GetVendorRedemptionsDto,
+  GetVendorTokenRedemptionStatsDto,
+  VendorTokenRedemptionStatsResponseDto,
   TokenRedemptionStatus,
 } from './dto/vendorTokenRedemption.dto';
 
@@ -14,10 +19,13 @@ import {
 export class VendorTokenRedemptionService {
   private readonly logger = new Logger(VendorTokenRedemptionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue(BQUEUE.VENDOR)
+    private readonly vendorQueue: Queue
+  ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
-    console.log('dto', dto);
     try {
       // Verify vendor exists
       const vendor = await this.prisma.vendor.findUnique({
@@ -44,6 +52,24 @@ export class VendorTokenRedemptionService {
       this.logger.log(
         `Created token redemption request for vendor ${dto.vendorUuid}`
       );
+
+      // Trigger the verification processor immediately after creation
+      // The processor will wait for the transaction hash to be provided
+      this.vendorQueue.add(
+        JOBS.VENDOR.VERIFY_TOKEN_REDEMPTION,
+        {
+          uuid: redemption.uuid,
+          transactionHash: redemption.transactionHash,
+        },
+        {
+          delay: 1000, // 1 second delay
+        }
+      );
+
+      this.logger.log(
+        `Added verification job for token redemption ${redemption.uuid}`
+      );
+
       return redemption;
     } catch (error) {
       this.logger.error(`Error creating token redemption: ${error.message}`);
@@ -96,10 +122,12 @@ export class VendorTokenRedemptionService {
         ![
           TokenRedemptionStatus.APPROVED,
           TokenRedemptionStatus.REJECTED,
+          TokenRedemptionStatus.STELLAR_VERIFIED,
+          TokenRedemptionStatus.STELLAR_FAILED,
         ].includes(dto.redemptionStatus)
       ) {
         throw new RpcException(
-          `Invalid status update. Only APPROVED or REJECTED status is allowed`
+          `Invalid status update. Only APPROVED, REJECTED, STELLAR_VERIFIED, or STELLAR_FAILED status is allowed`
         );
       }
 
@@ -120,6 +148,7 @@ export class VendorTokenRedemptionService {
       this.logger.log(
         `Updated token redemption ${dto.uuid} to status ${dto.redemptionStatus}`
       );
+
       return updatedRedemption;
     } catch (error) {
       this.logger.error(`Error updating token redemption: ${error.message}`);
@@ -185,6 +214,60 @@ export class VendorTokenRedemptionService {
       return redemptions;
     } catch (error) {
       this.logger.error(`Error getting vendor redemptions: ${error.message}`);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorTokenRedemptionStats(
+    dto: GetVendorTokenRedemptionStatsDto
+  ): Promise<VendorTokenRedemptionStatsResponseDto> {
+    try {
+      // Verify vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: dto.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${dto.vendorUuid} not found`);
+      }
+
+      // Get total tokens approved (APPROVED + STELLAR_VERIFIED statuses)
+      const totalTokensApproved =
+        await this.prisma.vendorTokenRedemption.aggregate({
+          where: {
+            vendorUuid: dto.vendorUuid,
+            redemptionStatus: {
+              in: [
+                TokenRedemptionStatus.APPROVED,
+                TokenRedemptionStatus.STELLAR_VERIFIED,
+              ],
+            },
+          },
+          _sum: {
+            tokenAmount: true,
+          },
+        });
+
+      // Get total tokens pending (REQUESTED status)
+      const totalTokensPending =
+        await this.prisma.vendorTokenRedemption.aggregate({
+          where: {
+            vendorUuid: dto.vendorUuid,
+            redemptionStatus: TokenRedemptionStatus.REQUESTED,
+          },
+          _sum: {
+            tokenAmount: true,
+          },
+        });
+
+      return {
+        totalTokensApproved: totalTokensApproved._sum.tokenAmount || 0,
+        totalTokensPending: totalTokensPending._sum.tokenAmount || 0,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting vendor token redemption stats: ${error.message}`
+      );
       throw new RpcException(error.message);
     }
   }

@@ -414,6 +414,8 @@ enum TokenRedemptionStatus {
   APPROVED
   REJECTED
   COMPLETED
+  STELLAR_VERIFIED
+  STELLAR_FAILED
 }
 
 enum OfflineBeneficiaryStatus {
