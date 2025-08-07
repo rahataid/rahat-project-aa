@@ -292,7 +292,7 @@ export class CashTokenSDK {
   async getTransactionFlowHistory(
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<{
-    entities: Array<{
+    entityOutcomes: Array<{
       alias: string;
       pending: Array<{
         to: string;
@@ -309,6 +309,7 @@ export class CashTokenSDK {
         type: 'sent' | 'received';
       }>;
     }>;
+    allFlows: any[];
   }> {
     return this.flowTracking.getTransactionFlowHistory(entities);
   }

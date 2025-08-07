@@ -1144,7 +1144,7 @@ export class FlowTrackingManager {
   async getTransactionFlowHistory(
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<{
-    entities: Array<{
+    entityOutcomes: Array<{
       alias: string;
       pending: Array<{
         to: string;
@@ -1161,13 +1161,13 @@ export class FlowTrackingManager {
         type: 'sent' | 'received';
       }>;
     }>;
+    allFlows: any[];
   }> {
     if (!this.cashTokenContract || !this.provider) {
       throw new Error('SDK not properly initialized');
     }
 
     const allFlowsData = await this.getAllFlowsAsJSON(entities);
-    console.log('allFlowsData', allFlowsData);
 
     // Flatten all flows from the data structure
     const allFlows: any[] = [];
@@ -1188,7 +1188,8 @@ export class FlowTrackingManager {
     );
 
     return {
-      entities: entityOutcomes,
+      entityOutcomes: entityOutcomes,
+      allFlows: allFlows,
     };
   }
 
