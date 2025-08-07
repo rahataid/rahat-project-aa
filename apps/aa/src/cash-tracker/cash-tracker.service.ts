@@ -25,16 +25,14 @@ export interface CashTrackerConfig {
 
 export interface ExecuteActionRequest {
   from: string; // smart address
-  to: string; // smart address
+  to?: string; // smart address (optional for get_cash_balance)
   alias: string;
   action:
-    | 'create_budget'
-    | 'initiate_transfer'
-    | 'confirm_transfer'
-    | 'approve'
-    | 'allowance'
-    | 'transfer';
-  amount: string | number | bigint;
+    | 'give_cash_allowance'
+    | 'get_cash_from'
+    | 'get_cash_approved_by_me'
+    | 'get_cash_balance';
+  amount?: string | number | bigint; // optional for get_cash_balance
   proof?: string; // Base64 encoded proof document
   description?: string;
 }
@@ -138,6 +136,33 @@ export class CashTrackerService {
   }
 
   /**
+   * Serialize BigInt values to strings for JSON serialization
+   */
+  private serializeBigInt(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (typeof obj === 'bigint') {
+      return obj.toString();
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.serializeBigInt(item));
+    }
+
+    if (typeof obj === 'object') {
+      const serialized: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        serialized[key] = this.serializeBigInt(value);
+      }
+      return serialized;
+    }
+
+    return obj;
+  }
+
+  /**
    * Execute action based on user story requirements
    */
   async executeAction(
@@ -148,57 +173,52 @@ export class CashTrackerService {
 
       this.logger.log(`Executing ${action} from ${from} to ${to} (${alias})`);
 
-      // Get SDK instances for from and to entities
+      // Get SDK instance for from entity
       const fromSDK = this.entitySDKs.get(from);
-      const toSDK = this.entitySDKs.get(to);
 
       if (!fromSDK) {
         throw new Error(`Entity not found for smart address: ${from}`);
       }
 
-      if (!toSDK) {
-        throw new Error(`Entity not found for smart address: ${to}`);
+      // For actions that require both from and to entities, get toSDK
+      let toSDK: CashTokenSDK | undefined;
+      if (action !== 'get_cash_balance') {
+        toSDK = this.entitySDKs.get(to);
+        if (!toSDK) {
+          throw new Error(`Entity not found for smart address: ${to}`);
+        }
       }
 
       // Validate action based on user roles (if roles are defined)
       this.validateAction(action, from, to);
 
       let result: TransactionResult | TokenAllowance | TokenFlowData | any;
-      let allowanceResult: TokenAllowance;
 
       switch (action) {
-        case 'create_budget':
+        case 'give_cash_allowance':
           // UNICEF Nepal CO creates budget for Field Office
           result = await fromSDK.giveCashAllowance(to, amount);
-          return result;
+          return this.serializeBigInt(result);
 
-        case 'initiate_transfer':
-          // UNICEF Nepal CO or Field Office initiates transfer
-          result = await fromSDK.giveCashAllowance(to, amount);
-          return result;
-
-        case 'confirm_transfer':
+        case 'get_cash_from':
           // Any role confirms transfer
           result = await fromSDK.getCashFrom(to, amount);
-          return result;
+          return this.serializeBigInt(result);
 
-        case 'approve':
-          result = await fromSDK.giveCashAllowance(to, amount);
-          return result;
-
-        case 'allowance':
+        case 'get_cash_approved_by_me':
           result = await fromSDK.getCashApprovedByMe(to);
-          return result as TransactionResult;
+          return this.serializeBigInt(result as TransactionResult);
 
-        case 'transfer':
-          result = await fromSDK.getCashFrom(to, amount);
-          return result as TransactionResult;
+        case 'get_cash_balance':
+          // For balance check, we only need the 'from' address
+          const balance = await this.getBalance(from);
+          return this.serializeBigInt(balance);
 
         default:
           throw new Error(`Unknown action: ${action}`);
       }
 
-      return result as TransactionResult;
+      return this.serializeBigInt(result as TransactionResult);
     } catch (error) {
       this.logger.error(`Failed to execute action ${request.action}:`, error);
       throw error;
