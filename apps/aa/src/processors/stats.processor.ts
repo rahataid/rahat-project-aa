@@ -5,13 +5,15 @@ import { PhasesService } from '../phases/phases.service';
 import { PhasesStatsService } from '../phases/phases.stats.service';
 import { BeneficiaryStatService } from '../beneficiary/beneficiaryStat.service';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 
 @Injectable()
 export class StatsProcessor implements OnApplicationBootstrap {
   constructor(
     private readonly phasesStatsService: PhasesStatsService,
     private readonly benefStats: BeneficiaryStatService,
-    private readonly stakeholderStats: StakeholdersService
+    private readonly stakeholderStats: StakeholdersService,
+    private readonly beneficiaryService: BeneficiaryService
   ) {}
 
   async onApplicationBootstrap() {
@@ -41,5 +43,10 @@ export class StatsProcessor implements OnApplicationBootstrap {
   async onActivityCompleted() {
     this.phasesStatsService.calculatePhaseActivities();
     return;
+  }
+
+  @OnEvent(EVENTS.TOKEN_DISBURSED)
+  async onTokenDisbursed(groupUuid) {
+    this.beneficiaryService.benTokensUpdate(groupUuid);
   }
 }
