@@ -198,9 +198,9 @@ describe('BeneficiaryService', () => {
         name: 'John Doe',
         phone: '+1234567890',
         walletAddress: 'wallet-address',
+        location: { lat: 27.7, lng: 85.3 },
         extras: {
-          note: 'test note',
-          location: { lat: 27.7, lng: 85.3 },
+          note: 'test note'
         },
       };
 
