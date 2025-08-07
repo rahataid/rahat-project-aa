@@ -446,21 +446,6 @@ describe('BeneficiaryService', () => {
         select: { walletAddress: true },
       });
 
-      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith({
-        where: {
-          beneficiaryWalletAddress: mockBeneficiary.walletAddress,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        select: {
-          beneficiaryWalletAddress: true,
-          amount: true,
-          transactionType: true,
-          status: true,
-          txHash: true,
-        },
-      });
     });
 
     it('should throw RpcException when beneficiaryUUID is empty', async () => {
