@@ -13,8 +13,9 @@ import { StatsModule } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
-import { DisbursementServices } from '@rahataid/stellar-sdk';
+import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { StellarModule } from '../stellar/stellar.module';
+import { AppService } from '../app/app.service';
 
 describe('BeneficiaryModule', () => {
   it('should compile the module', async () => {
@@ -48,6 +49,33 @@ describe('BeneficiaryModule', () => {
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as jest.Mocked<CvaDisbursementService>;
+
+    const mockStellarService = {
+      createAccount: jest.fn(),
+      faucetAndTrustlineService: jest.fn(),
+      sendOtp: jest.fn(),
+      sendAssetToVendor: jest.fn(),
+      checkTrustline: jest.fn(),
+      addDisbursementJobs: jest.fn(),
+      disburse: jest.fn(),
+      getDisbursement: jest.fn(),
+    };
+
+    const mockAppService = {
+      getSettings: jest.fn(),
+    };
+
+    const mockReceiveService = {
+      getAccountBalance: jest.fn(),
+      sendAsset: jest.fn(),
+      faucetAndTrustlineService: jest.fn(),
+    };
+
+    const mockTransactionService = {
+      hasTrustline: jest.fn(),
+      getTransaction: jest.fn(),
+      rahatFaucetService: jest.fn(),
+    };
 
     const module = await Test.createTestingModule({
       imports: [
@@ -106,10 +134,13 @@ describe('BeneficiaryModule', () => {
       .overrideProvider(DisbursementServices)
       .useValue(disbursementServices)
       .overrideProvider(StellarService)
-      .useValue({
-        createAccount: jest.fn(),
-        faucetAndTrustlineService: jest.fn(),
-      })
+      .useValue(mockStellarService)
+      .overrideProvider(AppService)
+      .useValue(mockAppService)
+      .overrideProvider(ReceiveService)
+      .useValue(mockReceiveService)
+      .overrideProvider(TransactionService)
+      .useValue(mockTransactionService)
       .overrideProvider(EventEmitter2)
       .useValue({
         emit: jest.fn(),

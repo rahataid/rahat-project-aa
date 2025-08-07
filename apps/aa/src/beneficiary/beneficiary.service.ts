@@ -67,9 +67,9 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { isVerified, ...rest } = dto;
+    const { isVerified,  ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: rest,
+      data: rest  
     });
 
     await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
