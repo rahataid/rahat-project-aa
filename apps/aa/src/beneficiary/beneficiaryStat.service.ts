@@ -209,7 +209,7 @@ export class BeneficiaryStatService {
       },
     });
     const k = Object.entries(wardLocationStats).map(([key, value]) => ({
-      name: `${key}`,
+      name: `${key.toString()}`,
       data: value,
       group: 'beneficiary_gps_location',
     }));
@@ -292,55 +292,6 @@ export class BeneficiaryStatService {
       count,
     }));
   }
-
-  async accesstoEarlyWarningInformation() {
-    return this.countExtrasFieldValuesNormalized('receive_disaster_info', [
-      'yes',
-      'no',
-    ]);
-  }
-
-  async calculateBankStatusStats() {
-    return this.countExtrasFieldValuesNormalized('have_active_bank_ac', [
-      'yes',
-      'no',
-    ]);
-  }
-
-  async calculateSSARecipientInHH() {
-    return this.countExtrasFieldValuesNormalized('ssa_recipient_in_hh', [
-      'yes',
-      'no',
-    ]);
-  }
-
-  async accessToMobilePhones() {
-    return this.countExtrasFieldValuesNormalized(
-      'do_you_have_access_to_mobile_phones',
-      ['yes', 'no']
-    );
-  }
-
-  async accessInternet() {
-    return this.countExtrasFieldValuesNormalized(
-      'do_you_have_access_to_internet',
-      ['yes', 'no']
-    );
-  }
-
-  async digitalWalletUse() {
-    return this.countExtrasFieldValuesNormalized('use_digital_wallets', [
-      'yes',
-      'no',
-    ]);
-  }
-
-  async floadImpactIn5Years() {
-    return this.countExtrasFieldValuesNormalized('flood_affected_in_5_years', [
-      'yes',
-      'no',
-    ]);
-  }
   async phoneTypeDistribution() {
     const rData = await this.countExtrasFieldValuesNormalized(
       'type_of_phone_set',
@@ -384,11 +335,35 @@ export class BeneficiaryStatService {
 
     return uniqueWards;
   }
+
+  async getExtrasStats() {
+    const keys = [
+      'flood_affected_in_5_years',
+      'use_digital_wallets',
+      'do_you_have_access_to_internet',
+      'do_you_have_access_to_mobile_phones',
+      'ssa_recipient_in_hh',
+      'have_active_bank_ac',
+      'receive_disaster_info',
+    ];
+
+    const responses = await Promise.all(
+      keys.map(async (key) => {
+        const value = await this.countExtrasFieldValuesNormalized(key, [
+          'yes',
+          'no',
+        ]);
+        return { name: key, data: value, group: 'beneficiary' };
+      })
+    );
+
+    return responses;
+  }
+
   async calculateAllStats() {
     const [
       total,
       gender,
-      bankStatus,
       countByBank,
       calculateAgeGroups,
       calculateTotalFamilyMembers,
@@ -396,18 +371,12 @@ export class BeneficiaryStatService {
       fieldMapResult,
       calculateBeneflocationStats,
       calculateChannelUsageStats,
-      accessToMobilePhones,
-      accessInternet,
-      digitalWalletUse,
+      extrasStats,
       phoneTypeDistribution,
-      calculateSSARecipientInHH,
-      floadImpactIn5Years,
-      accesstoEarlyWarningInformation,
       calculateUniqueWards,
     ] = await Promise.all([
       this.totalBeneficiaries(),
       this.calculateGenderStats(),
-      this.calculateBankStatusStats(),
       this.calculateCountByBankStats(),
       this.calculateAgeGroups(),
       this.calculateTotalFamilyMembers(),
@@ -415,19 +384,13 @@ export class BeneficiaryStatService {
       this.fieldMapResult(),
       this.calculateBeneflocationStats(),
       this.calculateChannelUsageStats(),
-      this.accessToMobilePhones(),
-      this.accessInternet(),
-      this.digitalWalletUse(),
+      this.getExtrasStats(),
       this.phoneTypeDistribution(),
-      this.calculateSSARecipientInHH(),
-      this.floadImpactIn5Years(),
-      this.accesstoEarlyWarningInformation(),
       this.calculateUniqueWards(),
     ]);
     return {
       total,
       gender,
-      bankStatus,
       countByBank,
       calculateAgeGroups,
       calculateTotalFamilyMembers,
@@ -435,13 +398,8 @@ export class BeneficiaryStatService {
       fieldMapResult,
       calculateBeneflocationStats,
       calculateChannelUsageStats,
-      accessToMobilePhones,
-      accessInternet,
-      digitalWalletUse,
       phoneTypeDistribution,
-      calculateSSARecipientInHH,
-      floadImpactIn5Years,
-      accesstoEarlyWarningInformation,
+      extrasStats,
       calculateUniqueWards,
     };
   }
@@ -450,7 +408,6 @@ export class BeneficiaryStatService {
     const {
       total,
       gender,
-      bankStatus,
       countByBank,
       calculateAgeGroups,
       calculateTotalFamilyMembers,
@@ -458,13 +415,8 @@ export class BeneficiaryStatService {
       fieldMapResult,
       calculateBeneflocationStats,
       calculateChannelUsageStats,
-      accessToMobilePhones,
-      accessInternet,
-      digitalWalletUse,
       phoneTypeDistribution,
-      calculateSSARecipientInHH,
-      floadImpactIn5Years,
-      accesstoEarlyWarningInformation,
+      extrasStats,
       calculateUniqueWards,
     } = await this.calculateAllStats();
 
@@ -482,11 +434,6 @@ export class BeneficiaryStatService {
       {
         name: 'beneficiary_gender',
         data: gender,
-        group: 'beneficiary',
-      },
-      {
-        name: 'beneficiary_bankStatus',
-        data: bankStatus,
         group: 'beneficiary',
       },
       {
@@ -515,41 +462,11 @@ export class BeneficiaryStatService {
         group: 'beneficiary_channel',
       },
       {
-        name: 'mobile_access',
-        data: accessToMobilePhones,
-        group: 'beneficiary',
-      },
-      {
-        name: 'internet_access',
-        data: accessInternet,
-        group: 'beneficiary',
-      },
-      {
-        name: 'digital_wallet_use',
-        data: digitalWalletUse,
-        group: 'beneficiary',
-      },
-      {
         name: 'type_of_phone',
         data: phoneTypeDistribution,
         group: 'beneficiary',
       },
-      {
-        name: 'social_security_linked_to_bank_account',
-        data: calculateSSARecipientInHH,
-        group: 'beneficiary',
-      },
-      {
-        name: 'flood_impact_in_last_5years',
-        data: floadImpactIn5Years,
-        group: 'beneficiary',
-      },
 
-      {
-        name: 'acces_to_early_warning_information',
-        data: accesstoEarlyWarningInformation,
-        group: 'beneficiary',
-      },
       {
         name: 'unique_wards',
         data: calculateUniqueWards,
@@ -557,26 +474,24 @@ export class BeneficiaryStatService {
       },
     ];
 
-    const allStats = [...generalStats, ...calculateBeneflocationStats];
+    const allStats = [
+      ...generalStats,
+      ...calculateBeneflocationStats,
+      ...extrasStats,
+    ];
 
     await this.statsService.saveMany(allStats);
 
     return {
       total,
       gender,
-      bankStatus,
       countByBank,
       calculateAgeGroups,
       fieldMapResult,
       locationStats: calculateBeneflocationStats,
       calculateChannelUsageStats,
-      accessToMobilePhones,
-      accessInternet,
-      digitalWalletUse,
       phoneTypeDistribution,
-      calculateSSARecipientInHH,
-      floadImpactIn5Years,
-      accesstoEarlyWarningInformation,
+      ...extrasStats,
       calculateUniqueWards,
     };
   }
