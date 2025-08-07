@@ -3,11 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { CashTrackerController } from './cash-tracker.controller';
 import { CashTrackerService } from './cash-tracker.service';
 import { SettingsService } from '@rumsan/settings';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 
 @Module({
+  imports: [PrismaModule],
   controllers: [CashTrackerController],
-  providers: [CashTrackerService, SettingsService, PrismaService],
+  providers: [CashTrackerService],
   exports: [CashTrackerService],
 })
 export class CashTrackerModule implements OnModuleInit, OnModuleDestroy {
@@ -51,13 +52,11 @@ export class CashTrackerModule implements OnModuleInit, OnModuleDestroy {
   private async getNetworkConfig() {
     try {
       // Get RPC URL from database or fallback to environment
-      const rpcUrlSetting = await this.settingsService.getPublic(
-        'CASH_TRACKER_RPC_URL'
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
       );
-      const rpcUrl =
-        (rpcUrlSetting?.value as string) ||
-        this.configService.get<string>('CASH_TRACKER_RPC_URL') ||
-        'https://sepolia.base.org';
+      const rpcUrl = (chainSettings?.value as any)?.rpcUrl;
+      console.log('first', rpcUrl);
 
       // Get entry point from database or fallback to environment
       const entryPointSetting = await this.settingsService.getPublic(

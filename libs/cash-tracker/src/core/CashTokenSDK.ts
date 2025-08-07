@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers } from 'ethers';
 import {
   SDKConfig,
   Entity,
@@ -11,15 +11,15 @@ import {
   FlowHistory,
   FlowHistoryOptions,
   TransactionFlowHistory,
-} from "../types";
-import { ConfigManager } from "./ConfigManager";
-import { SDKError } from "./SDKError";
-import { ValidationUtils } from "../utils/ValidationUtils";
+} from '../types';
+import { ConfigManager } from './ConfigManager';
+import { SDKError } from './SDKError';
+import { ValidationUtils } from '../utils/ValidationUtils';
 // Manager imports
-import { EntityManager } from "../entities/EntityManager";
-import { OperationsManager } from "../operations/OperationsManager";
-import { EventManager } from "../tracking/EventManager";
-import { FlowTrackingManager } from "../tracking/FlowTrackingManager";
+import { EntityManager } from '../entities/EntityManager';
+import { OperationsManager } from '../operations/OperationsManager';
+import { EventManager } from '../tracking/EventManager';
+import { FlowTrackingManager } from '../tracking/FlowTrackingManager';
 
 /**
  * Main Cash Tracker SDK class
@@ -59,7 +59,7 @@ export class CashTokenSDK {
    * @param walletOrPrivateKey - Wallet instance or private key string
    */
   connect(walletOrPrivateKey: ethers.Wallet | string): void {
-    if (typeof walletOrPrivateKey === "string") {
+    if (typeof walletOrPrivateKey === 'string') {
       this.wallet = new ethers.Wallet(walletOrPrivateKey, this.provider);
     } else {
       this.wallet = walletOrPrivateKey;
@@ -96,7 +96,7 @@ export class CashTokenSDK {
         this.config = await this.configManager.loadFromObject(config);
       } else if (!this.config) {
         throw SDKError.configError(
-          "No configuration provided for initialization"
+          'No configuration provided for initialization'
         );
       }
 
@@ -135,7 +135,7 @@ export class CashTokenSDK {
       // Emit initialization event
       this.events.emit({
         id: this.generateEventId(),
-        type: "sdk_initialized",
+        type: 'sdk_initialized',
         timestamp: Date.now(),
       });
     } catch (error) {
@@ -163,7 +163,7 @@ export class CashTokenSDK {
     }
   ): Promise<void> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     await this.flowTracking.startFlowTracking(smartAddresses, options);
@@ -306,7 +306,7 @@ export class CashTokenSDK {
         to: string;
         amount: string;
         transactionHash: string;
-        type: "sent" | "received";
+        type: 'sent' | 'received';
       }>;
     }>;
   }> {
@@ -319,11 +319,11 @@ export class CashTokenSDK {
    */
   async getCashApprovedToMe(ownerAddress: string): Promise<TokenAllowance> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     if (!this.smartAccountAddress) {
-      throw SDKError.configError("Smart account address not set");
+      throw SDKError.configError('Smart account address not set');
     }
 
     try {
@@ -353,11 +353,11 @@ export class CashTokenSDK {
    */
   async getCashApprovedByMe(spenderAddress: string): Promise<TokenAllowance> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     if (!this.smartAccountAddress) {
-      throw SDKError.configError("Smart account address not set");
+      throw SDKError.configError('Smart account address not set');
     }
 
     try {
@@ -386,11 +386,11 @@ export class CashTokenSDK {
    */
   async getCashBalance(): Promise<TokenBalance> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     if (!this.smartAccountAddress) {
-      throw SDKError.configError("Smart account address not set");
+      throw SDKError.configError('Smart account address not set');
     }
 
     try {
@@ -467,34 +467,34 @@ export class CashTokenSDK {
   private getCashTokenABI(): any {
     // Try to load from artifacts directory first
     try {
-      const path = require("path");
-      const fs = require("fs");
+      const path = require('path');
+      const fs = require('fs');
 
       const artifactPath = path.join(
         __dirname,
-        "../artifacts/CashTokenAbi.json"
+        '../artifacts/CashTokenAbi.json'
       );
       if (fs.existsSync(artifactPath)) {
-        const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+        const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
         return artifact;
       }
     } catch (error) {
-      console.warn("Could not load CashTokenAbi.json, using fallback ABI");
+      console.warn('Could not load CashTokenAbi.json, using fallback ABI');
     }
 
     // Fallback to minimal ABI
     return [
-      "function balanceOf(address account) view returns (uint256)",
-      "function allowance(address owner, address spender) view returns (uint256)",
-      "function approve(address spender, uint256 amount) returns (bool)",
-      "function transfer(address to, uint256 amount) returns (bool)",
-      "function transferFrom(address from, address to, uint256 amount) returns (bool)",
-      "function decimals() view returns (uint8)",
-      "function symbol() view returns (string)",
-      "function name() view returns (string)",
-      "function totalSupply() view returns (uint256)",
-      "function mint(address to, uint256 amount)",
-      "function burn(address from, uint256 amount)",
+      'function balanceOf(address account) view returns (uint256)',
+      'function allowance(address owner, address spender) view returns (uint256)',
+      'function approve(address spender, uint256 amount) returns (bool)',
+      'function transfer(address to, uint256 amount) returns (bool)',
+      'function transferFrom(address from, address to, uint256 amount) returns (bool)',
+      'function decimals() view returns (uint8)',
+      'function symbol() view returns (string)',
+      'function name() view returns (string)',
+      'function totalSupply() view returns (uint256)',
+      'function mint(address to, uint256 amount)',
+      'function burn(address from, uint256 amount)',
     ];
   }
 
@@ -504,26 +504,26 @@ export class CashTokenSDK {
   private getSmartAccountABI(): any {
     // Try to load from artifacts directory first
     try {
-      const path = require("path");
-      const fs = require("fs");
+      const path = require('path');
+      const fs = require('fs');
 
       const artifactPath = path.join(
         __dirname,
-        "../artifacts/SmartAccountAbi.json"
+        '../artifacts/SmartAccountAbi.json'
       );
       if (fs.existsSync(artifactPath)) {
-        const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+        const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
         return artifact;
       }
     } catch (error) {
-      console.warn("Could not load SmartAccountAbi.json, using fallback ABI");
+      console.warn('Could not load SmartAccountAbi.json, using fallback ABI');
     }
 
     // Fallback to minimal ABI
     return [
-      "function execute(address dest, uint256 value, bytes calldata functionData) external",
-      "function getEntryPoint() external view returns (address)",
-      "function owner() external view returns (address)",
+      'function execute(address dest, uint256 value, bytes calldata functionData) external',
+      'function getEntryPoint() external view returns (address)',
+      'function owner() external view returns (address)',
     ];
   }
 
@@ -531,7 +531,7 @@ export class CashTokenSDK {
    * Parse units with proper decimal handling
    */
   private parseUnits(amount: string | number, decimals: number): bigint {
-    if (typeof amount === "string") {
+    if (typeof amount === 'string') {
       return ethers.parseUnits(amount, decimals);
     }
     // If amount is a number, assume it's already in the smallest unit
@@ -550,7 +550,7 @@ export class CashTokenSDK {
    */
   private async checkBalanceForApproval(amount: bigint): Promise<void> {
     if (!this.smartAccountAddress) {
-      throw SDKError.configError("Smart account address not set");
+      throw SDKError.configError('Smart account address not set');
     }
 
     const balance = await this.cashTokenContract!.balanceOf(
@@ -583,12 +583,12 @@ export class CashTokenSDK {
     amount: string | number | bigint
   ): Promise<TransactionResult> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     if (!this.wallet || !this.smartAccountContract) {
       throw SDKError.configError(
-        "Wallet not connected or smart account not configured"
+        'Wallet not connected or smart account not configured'
       );
     }
 
@@ -599,7 +599,7 @@ export class CashTokenSDK {
 
       // Parse amount to bigint
       let amountBigInt: bigint;
-      if (typeof amount === "bigint") {
+      if (typeof amount === 'bigint') {
         amountBigInt = amount;
       } else {
         amountBigInt = this.parseUnits(amount.toString(), decimals);
@@ -617,7 +617,7 @@ export class CashTokenSDK {
 
       // Encode approval data
       const approveData = this.cashTokenContract!.interface.encodeFunctionData(
-        "approve",
+        'approve',
         [spenderAddress, amountBigInt]
       );
 
@@ -632,7 +632,7 @@ export class CashTokenSDK {
 
       return {
         hash: approveTx.hash,
-        status: "confirmed",
+        status: 'confirmed',
         receipt,
         gasUsed: receipt?.gasUsed,
         gasPrice: receipt?.gasPrice,
@@ -655,17 +655,17 @@ export class CashTokenSDK {
     amount?: string | number | bigint
   ): Promise<TransactionResult> {
     if (!this.isReady()) {
-      throw SDKError.configError("SDK not initialized");
+      throw SDKError.configError('SDK not initialized');
     }
 
     if (!this.wallet || !this.smartAccountContract) {
       throw SDKError.configError(
-        "Wallet not connected or smart account not configured"
+        'Wallet not connected or smart account not configured'
       );
     }
 
     if (!this.smartAccountAddress) {
-      throw SDKError.configError("Smart account address not set");
+      throw SDKError.configError('Smart account address not set');
     }
 
     try {
@@ -682,7 +682,7 @@ export class CashTokenSDK {
         amountBigInt = allowance;
       } else {
         // Parse amount to bigint
-        if (typeof amount === "bigint") {
+        if (typeof amount === 'bigint') {
           amountBigInt = amount;
         } else {
           amountBigInt = this.parseUnits(amount.toString(), decimals);
@@ -716,7 +716,7 @@ export class CashTokenSDK {
 
       // Encode transferFrom data
       const transferFromData =
-        this.cashTokenContract!.interface.encodeFunctionData("transferFrom", [
+        this.cashTokenContract!.interface.encodeFunctionData('transferFrom', [
           fromAddress,
           this.smartAccountAddress,
           amountBigInt,
@@ -733,7 +733,7 @@ export class CashTokenSDK {
 
       return {
         hash: transferTx.hash,
-        status: "confirmed",
+        status: 'confirmed',
         receipt,
         gasUsed: receipt?.gasUsed,
         gasPrice: receipt?.gasPrice,

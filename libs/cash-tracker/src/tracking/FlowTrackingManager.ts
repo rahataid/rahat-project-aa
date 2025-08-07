@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers } from 'ethers';
 import {
   SDKConfig,
   FlowTrackingConfig,
@@ -15,10 +15,10 @@ import {
   TransactionFlowPath,
   TransactionFlowStep,
   TransactionFlow,
-} from "../types";
-import { SDKError } from "../core/SDKError";
-import { EventManager } from "./EventManager";
-import { FlowTrackingEvent } from "../types/events";
+} from '../types';
+import { SDKError } from '../core/SDKError';
+import { EventManager } from './EventManager';
+import { FlowTrackingEvent } from '../types/events';
 
 /**
  * Flow Tracking Manager for monitoring token flow between smart addresses
@@ -95,9 +95,9 @@ export class FlowTrackingManager {
    * Get flow history for a specific path (A->B->C)
    */
   getFlowHistoryByPath(path: string[]): FlowHistory[] {
-    const pathKey = path.join("->");
+    const pathKey = path.join('->');
     return Array.from(this.flowHistories.values()).filter(
-      (flow) => flow.path.join("->") === pathKey
+      (flow) => flow.path.join('->') === pathKey
     );
   }
 
@@ -114,17 +114,17 @@ export class FlowTrackingManager {
    * Display complete flow history
    */
   displayFlowHistory(): void {
-    console.log("\n=== Complete Flow History ===");
+    console.log('\n=== Complete Flow History ===');
 
     const histories = this.getFlowHistory();
     if (histories.length === 0) {
-      console.log("No flow history found.");
+      console.log('No flow history found.');
       return;
     }
 
     for (const history of histories) {
       console.log(`\n📊 Flow ID: ${history.flowId}`);
-      console.log(`   Path: ${history.path.join(" -> ")}`);
+      console.log(`   Path: ${history.path.join(' -> ')}`);
       console.log(`   Total Amount: ${history.formattedTotalAmount} CASH`);
       console.log(`   Status: ${history.status}`);
       console.log(`   Start: ${new Date(history.startTime).toLocaleString()}`);
@@ -142,9 +142,9 @@ export class FlowTrackingManager {
         console.log(`   Description: ${history.description}`);
       }
 
-      console.log("   Steps:");
+      console.log('   Steps:');
       for (const entry of history.entries) {
-        const direction = entry.type === "balance_change" ? "↔" : "→";
+        const direction = entry.type === 'balance_change' ? '↔' : '→';
         const time = new Date(entry.timestamp).toLocaleTimeString();
         console.log(
           `     ${entry.step}. ${entry.from} ${direction} ${entry.to}: ${entry.formatted} CASH (${entry.type}) - ${time}`
@@ -153,7 +153,7 @@ export class FlowTrackingManager {
           console.log(`        TX: ${entry.transactionHash}`);
         }
       }
-      console.log("─".repeat(50));
+      console.log('─'.repeat(50));
     }
   }
 
@@ -161,32 +161,32 @@ export class FlowTrackingManager {
    * Display active flows
    */
   displayActiveFlows(): void {
-    console.log("\n=== Active Flows ===");
+    console.log('\n=== Active Flows ===');
 
     const activeFlows = this.getActiveFlows();
     if (activeFlows.length === 0) {
-      console.log("No active flows found.");
+      console.log('No active flows found.');
       return;
     }
 
     for (const flow of activeFlows) {
       console.log(`\n🔄 Active Flow ID: ${flow.flowId}`);
-      console.log(`   Path: ${flow.path.join(" -> ")}`);
+      console.log(`   Path: ${flow.path.join(' -> ')}`);
       console.log(`   Current Amount: ${flow.formattedTotalAmount} CASH`);
       console.log(`   Start: ${new Date(flow.startTime).toLocaleString()}`);
       console.log(
         `   Duration: ${this.formatDuration(flow.startTime, Date.now())}`
       );
 
-      console.log("   Steps:");
+      console.log('   Steps:');
       for (const entry of flow.entries) {
-        const direction = entry.type === "balance_change" ? "↔" : "→";
+        const direction = entry.type === 'balance_change' ? '↔' : '→';
         const time = new Date(entry.timestamp).toLocaleTimeString();
         console.log(
           `     ${entry.step}. ${entry.from} ${direction} ${entry.to}: ${entry.formatted} CASH (${entry.type}) - ${time}`
         );
       }
-      console.log("─".repeat(50));
+      console.log('─'.repeat(50));
     }
   }
 
@@ -201,12 +201,12 @@ export class FlowTrackingManager {
     }
   ): Promise<void> {
     if (!this.cashTokenContract) {
-      throw SDKError.configError("Flow tracking manager not initialized");
+      throw SDKError.configError('Flow tracking manager not initialized');
     }
 
     if (smartAddresses.length < 2) {
       throw SDKError.validationError(
-        "Need at least 2 smart addresses for flow tracking"
+        'Need at least 2 smart addresses for flow tracking'
       );
     }
 
@@ -239,7 +239,7 @@ export class FlowTrackingManager {
         // Emit flow update event
         const flowUpdateEvent: FlowTrackingEvent = {
           id: this.generateEventId(),
-          type: "flow_update",
+          type: 'flow_update',
           timestamp: Date.now(),
           data: flowData,
         };
@@ -253,10 +253,10 @@ export class FlowTrackingManager {
         // Update previous state
         this.updatePreviousState(flowData);
       } catch (error) {
-        console.error("Flow tracking error:", error);
+        console.error('Flow tracking error:', error);
         const flowErrorEvent: FlowTrackingEvent = {
           id: this.generateEventId(),
-          type: "flow_tracking_error",
+          type: 'flow_tracking_error',
           timestamp: Date.now(),
           error: error instanceof Error ? error.message : String(error),
         };
@@ -273,7 +273,7 @@ export class FlowTrackingManager {
     // Emit tracking started event
     const flowStartedEvent: FlowTrackingEvent = {
       id: this.generateEventId(),
-      type: "flow_tracking_started",
+      type: 'flow_tracking_started',
       timestamp: Date.now(),
       smartAddresses,
     };
@@ -302,11 +302,11 @@ export class FlowTrackingManager {
     // Emit tracking stopped event
     this.eventManager.emit({
       id: this.generateEventId(),
-      type: "flow_tracking_stopped",
+      type: 'flow_tracking_stopped',
       timestamp: Date.now(),
     });
 
-    console.log("🛑 Flow tracking stopped");
+    console.log('🛑 Flow tracking stopped');
   }
 
   /**
@@ -314,7 +314,7 @@ export class FlowTrackingManager {
    */
   async getCurrentFlowData(): Promise<TokenFlowData> {
     if (!this.cashTokenContract || !this.flowConfig) {
-      throw SDKError.configError("Flow tracking not initialized");
+      throw SDKError.configError('Flow tracking not initialized');
     }
 
     const flows: TokenFlow[] = [];
@@ -342,15 +342,15 @@ export class FlowTrackingManager {
         if (previousBalance !== undefined && balance !== previousBalance) {
           const change = balance - previousBalance;
           flows.push({
-            from: change > 0n ? "external" : address,
-            to: change > 0n ? address : "external",
+            from: change > 0n ? 'external' : address,
+            to: change > 0n ? address : 'external',
             amount: change > 0n ? change : -change,
             formatted: ethers.formatUnits(
               change > 0n ? change : -change,
               decimals
             ),
             timestamp: Date.now(),
-            type: "balance_change",
+            type: 'balance_change',
           });
         }
 
@@ -387,7 +387,7 @@ export class FlowTrackingManager {
                   decimals
                 ),
                 timestamp: Date.now(),
-                type: "allowance",
+                type: 'allowance',
               });
             }
           }
@@ -401,7 +401,7 @@ export class FlowTrackingManager {
         allowances,
       };
     } catch (error) {
-      throw SDKError.trackingError("Failed to get current flow data", {
+      throw SDKError.trackingError('Failed to get current flow data', {
         error,
       });
     }
@@ -412,20 +412,20 @@ export class FlowTrackingManager {
    */
   async displayFlowStatus(): Promise<void> {
     if (!this.cashTokenContract || !this.flowConfig) {
-      throw SDKError.configError("Flow tracking not initialized");
+      throw SDKError.configError('Flow tracking not initialized');
     }
 
     this.clearConsole();
-    console.log("\n=== CashToken Flow Tracker ===");
+    console.log('\n=== CashToken Flow Tracker ===');
     console.log(
       `Tracking ${this.flowConfig.smartAddresses.length} smart addresses`
     );
-    console.log("Press Ctrl+C to stop tracking\n");
+    console.log('Press Ctrl+C to stop tracking\n');
 
     const flowData = await this.getCurrentFlowData();
 
     // Display balances
-    console.log("=== Token Balances ===");
+    console.log('=== Token Balances ===');
     for (const balance of flowData.balances) {
       console.log(
         `${balance.entityId}: ${balance.formatted} ${balance.symbol}`
@@ -433,7 +433,7 @@ export class FlowTrackingManager {
     }
 
     // Display allowances
-    console.log("\n=== Token Allowances ===");
+    console.log('\n=== Token Allowances ===');
     for (const allowance of flowData.allowances) {
       if (allowance.allowance > 0n) {
         console.log(
@@ -444,10 +444,10 @@ export class FlowTrackingManager {
 
     // Display recent flows
     if (flowData.flows.length > 0) {
-      console.log("\n=== Recent Flows ===");
+      console.log('\n=== Recent Flows ===');
       for (const flow of flowData.flows.slice(-5)) {
         // Show last 5 flows
-        const direction = flow.type === "balance_change" ? "↔" : "→";
+        const direction = flow.type === 'balance_change' ? '↔' : '→';
         console.log(
           `${flow.from} ${direction} ${flow.to}: ${flow.formatted} CASH (${flow.type})`
         );
@@ -533,7 +533,7 @@ export class FlowTrackingManager {
 
           // Check if flow is complete (reached the end of the path)
           if (this.isFlowComplete(activeFlow)) {
-            activeFlow.status = "completed";
+            activeFlow.status = 'completed';
             activeFlow.endTime = Date.now();
             this.activeFlows.delete(flowId);
             this.flowHistories.set(flowId, activeFlow);
@@ -569,7 +569,7 @@ export class FlowTrackingManager {
     const smartAddresses = this.flowConfig.smartAddresses;
 
     // Check if this flow starts a new path (from first address)
-    if (flow.from === smartAddresses[0] && flow.type === "allowance") {
+    if (flow.from === smartAddresses[0] && flow.type === 'allowance') {
       // Look for potential path continuation
       const potentialPath = this.findPotentialPath(flow.to, smartAddresses);
       if (potentialPath.length > 2) {
@@ -596,7 +596,7 @@ export class FlowTrackingManager {
           entries: [entry],
           totalAmount: flow.amount,
           formattedTotalAmount: flow.formatted,
-          status: "active",
+          status: 'active',
           description: this.flowHistoryOptions.includeDescriptions
             ? `Flow from ${flow.from} to ${
                 potentialPath[potentialPath.length - 1]
@@ -773,7 +773,7 @@ export class FlowTrackingManager {
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<any[]> {
     if (!this.cashTokenContract || !this.provider) {
-      throw new Error("SDK not properly initialized");
+      throw new Error('SDK not properly initialized');
     }
 
     const allFlows: any[] = [];
@@ -783,7 +783,7 @@ export class FlowTrackingManager {
     const aliasMap = new Map<string, string>();
 
     if (entities) {
-      if (typeof entities[0] === "string") {
+      if (typeof entities[0] === 'string') {
         // Array of strings (addresses)
         trackedAddresses = entities as string[];
         // Use addresses as aliases
@@ -852,7 +852,7 @@ export class FlowTrackingManager {
 
       // Convert to JSON format
       for (const [pathKey, pathFlows] of groupedFlows.entries()) {
-        const path = pathKey.split("->");
+        const path = pathKey.split('->');
         const totalAmount = pathFlows.reduce(
           (sum: number, flow: any) => sum + flow.amount,
           0
@@ -889,7 +889,7 @@ export class FlowTrackingManager {
 
       return allFlows;
     } catch (error) {
-      console.error("Error querying blockchain for flows:", error);
+      console.error('Error querying blockchain for flows:', error);
       return [];
     }
   }
@@ -908,7 +908,7 @@ export class FlowTrackingManager {
 
     // Process transfer events
     for (const event of transferEvents) {
-      if ("args" in event) {
+      if ('args' in event) {
         const { from, to, value } = event.args;
         const fromAddr = ethers.getAddress(from);
         const toAddr = ethers.getAddress(to);
@@ -922,7 +922,7 @@ export class FlowTrackingManager {
             from: fromAddr,
             to: toAddr,
             amount: amount,
-            type: "transfer",
+            type: 'transfer',
             transactionHash: event.transactionHash,
             blockNumber: event.blockNumber,
             timestamp: Date.now(), // We'll get actual timestamp later if needed
@@ -947,7 +947,7 @@ export class FlowTrackingManager {
     const paths = this.generateAllPaths(trackedAddresses);
 
     for (const path of paths) {
-      const pathKey = path.join("->");
+      const pathKey = path.join('->');
       const pathFlows: any[] = [];
 
       // Find flows that follow this path
@@ -1047,28 +1047,28 @@ export class FlowTrackingManager {
     }
 
     // Find flows that match this specific path
-    const pathKey = path.join("->");
+    const pathKey = path.join('->');
     const matchingFlows = allFlows.filter(
-      (flow) => flow.path.join("->") === pathKey
+      (flow) => flow.path.join('->') === pathKey
     );
 
     if (matchingFlows.length === 0) {
       return {
         path: path,
         totalFlows: 0,
-        totalAmount: "0",
+        totalAmount: '0',
         stages: path.map((address, index) => ({
           stage: index + 1,
           address: address,
           role:
             index === 0
-              ? "sender"
+              ? 'sender'
               : index === path.length - 1
-              ? "receiver"
-              : "intermediary",
-          received: "0",
-          sent: "0",
-          balance: "0",
+              ? 'receiver'
+              : 'intermediary',
+          received: '0',
+          sent: '0',
+          balance: '0',
         })),
       };
     }
@@ -1079,9 +1079,9 @@ export class FlowTrackingManager {
     // Convert entity totals to stages format
     const stages = path.map((address, index) => {
       const entityTotals = flow.entityTotals[address] || {
-        received: "0",
-        sent: "0",
-        balance: "0",
+        received: '0',
+        sent: '0',
+        balance: '0',
       };
 
       return {
@@ -1089,10 +1089,10 @@ export class FlowTrackingManager {
         address: address,
         role:
           index === 0
-            ? "sender"
+            ? 'sender'
             : index === path.length - 1
-            ? "receiver"
-            : "intermediary",
+            ? 'receiver'
+            : 'intermediary',
         received: entityTotals.received,
         sent: entityTotals.sent,
         balance: entityTotals.balance,
@@ -1106,7 +1106,7 @@ export class FlowTrackingManager {
       stages: stages,
       flows: flow.flows.map((individualFlow: any) => ({
         flowId: individualFlow.transactionHash,
-        status: "completed",
+        status: 'completed',
         amount: individualFlow.amount,
         startTime: new Date(individualFlow.timestamp).toISOString(),
         endTime: new Date(individualFlow.timestamp).toISOString(),
@@ -1158,15 +1158,16 @@ export class FlowTrackingManager {
         to: string;
         amount: string;
         transactionHash: string;
-        type: "sent" | "received";
+        type: 'sent' | 'received';
       }>;
     }>;
   }> {
     if (!this.cashTokenContract || !this.provider) {
-      throw new Error("SDK not properly initialized");
+      throw new Error('SDK not properly initialized');
     }
 
     const allFlowsData = await this.getAllFlowsAsJSON(entities);
+    console.log('allFlowsData', allFlowsData);
 
     // Flatten all flows from the data structure
     const allFlows: any[] = [];
@@ -1210,7 +1211,7 @@ export class FlowTrackingManager {
         to: string;
         amount: string;
         transactionHash: string;
-        type: "sent" | "received";
+        type: 'sent' | 'received';
       }>;
     }>
   > {
@@ -1234,15 +1235,15 @@ export class FlowTrackingManager {
           to: string;
           amount: string;
           transactionHash: string;
-          type: "sent" | "received";
+          type: 'sent' | 'received';
         }>;
       }
     >();
 
     // Initialize entity map
     entities.forEach((entity) => {
-      const address = typeof entity === "string" ? entity : entity.smartAddress;
-      const alias = typeof entity === "string" ? entity : entity.alias;
+      const address = typeof entity === 'string' ? entity : entity.smartAddress;
+      const alias = typeof entity === 'string' ? entity : entity.alias;
 
       entityMap.set(address, {
         alias,
@@ -1309,7 +1310,7 @@ export class FlowTrackingManager {
 
         // Check if this flow already exists for this entity
         const existingFlow = senderEntity.flows.find(
-          (f) => f.transactionHash === flow.transactionHash && f.type === "sent"
+          (f) => f.transactionHash === flow.transactionHash && f.type === 'sent'
         );
         if (!existingFlow) {
           senderEntity.flows.push({
@@ -1317,7 +1318,7 @@ export class FlowTrackingManager {
             to: flow.to.alias || flow.to.address,
             amount: flow.amount,
             transactionHash: flow.transactionHash,
-            type: "sent",
+            type: 'sent',
           });
         }
       }
@@ -1330,7 +1331,7 @@ export class FlowTrackingManager {
         // Check if this flow already exists for this entity
         const existingFlow = receiverEntity.flows.find(
           (f) =>
-            f.transactionHash === flow.transactionHash && f.type === "received"
+            f.transactionHash === flow.transactionHash && f.type === 'received'
         );
         if (!existingFlow) {
           receiverEntity.flows.push({
@@ -1338,7 +1339,7 @@ export class FlowTrackingManager {
             to: flow.to.alias || flow.to.address,
             amount: flow.amount,
             transactionHash: flow.transactionHash,
-            type: "received",
+            type: 'received',
           });
         }
       }
@@ -1392,8 +1393,8 @@ export class FlowTrackingManager {
 
     // Initialize entity map
     entities.forEach((entity) => {
-      const address = typeof entity === "string" ? entity : entity.smartAddress;
-      const alias = typeof entity === "string" ? undefined : entity.alias;
+      const address = typeof entity === 'string' ? entity : entity.smartAddress;
+      const alias = typeof entity === 'string' ? undefined : entity.alias;
 
       entityMap.set(address, {
         smartAddress: address,
@@ -1448,9 +1449,9 @@ export class FlowTrackingManager {
     if (!entities) return undefined;
 
     const entity = entities.find(
-      (e) => (typeof e === "string" ? e : e.smartAddress) === address
+      (e) => (typeof e === 'string' ? e : e.smartAddress) === address
     );
 
-    return typeof entity === "string" ? undefined : entity?.alias;
+    return typeof entity === 'string' ? undefined : entity?.alias;
   }
 }

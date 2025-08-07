@@ -7,6 +7,7 @@ import {
   TransactionResult,
   EntityConfig,
   TokenFlowData,
+  CashTokenAbi,
 } from '@rahataid/cash-tracker';
 import { ethers } from 'ethers';
 import { SettingsService } from '@rumsan/settings';
@@ -68,7 +69,9 @@ export class CashTrackerService {
   private provider: ethers.Provider | null = null;
   private entitySDKs: Map<string, CashTokenSDK> = new Map(); // smartAddress -> SDK
   private transactions: TransactionRecord[] = [];
-  private settingsService: SettingsService;
+
+  constructor(private readonly settingsService: SettingsService) {}
+
   /**
    * Initialize cash tracker with configuration from database
    */
@@ -237,20 +240,44 @@ export class CashTrackerService {
   async getTransactions(): Promise<any> {
     try {
       const entities = await this.settingsService.getPublic('ENTITIES');
+
+      // Map database entities to EntityConfig format
+      const entityConfigs = (entities.value as any[]).map((entity: any) => ({
+        privateKey: entity.privateKey,
+        address: entity.address,
+        smartAccount: entity.smartAccount,
+        alias: entity.alias,
+      }));
+
       const transactionsSdk = new CashTokenSDK({
-        ...this.sdkConfig!,
-        contracts: {
-          ...this.sdkConfig!.contracts,
+        network: {
+          rpcUrl: this.sdkConfig!.network.rpcUrl,
+          entryPoint: this.sdkConfig!.network.entryPoint,
         },
-        entities: entities.value as unknown as EntityConfig[],
+        contracts: {
+          cashToken: this.sdkConfig!.contracts.cashToken,
+          cashtokenAbi: CashTokenAbi,
+        },
+        entities: entityConfigs,
       });
 
-      // Get comprehensive transaction flow history
-      const flowHistory = await transactionsSdk.getTransactionFlowHistory();
+      // Initialize the SDK before using it
+      await transactionsSdk.initialize();
 
-      // this.logger.log(
-      //   `Retrieved flow history for ${entities.value.length} entities`
-      // );
+      // Get comprehensive transaction flow history
+      const flowHistory = await transactionsSdk.getTransactionFlowHistory(
+        entityConfigs.map((entity) => ({
+          smartAddress: entity.smartAccount,
+          alias: entity.alias,
+        }))
+      );
+
+      // Cleanup the SDK after use
+      await transactionsSdk.cleanup();
+
+      this.logger.log(
+        `Retrieved flow history for ${entityConfigs.length} entities`
+      );
 
       return flowHistory;
     } catch (error) {
