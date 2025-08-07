@@ -8,6 +8,6 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: '../../coverage/apps/aa',
-  coverageReporters: ['lcov', 'text'], // Add 'lcov' for lcov.info and 'text' for console output
+  coverageReporters: ['lcov', 'text', 'html'], // Add 'lcov' for lcov.info and 'text' for console output
 
 };

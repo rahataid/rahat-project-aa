@@ -238,6 +238,7 @@ export const EVENTS = {
   STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
+  TOKEN_DISBURSED: 'events.token_disbursed',
 };
 
 export const BQUEUE = {

@@ -67,11 +67,11 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { isVerified, ...rest } = dto;
+    const { isVerified,  ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-      data: {
-        ...rest,
-      },
+
+      data: rest  
+
     });
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
@@ -300,6 +300,8 @@ export class BeneficiaryService {
 
     const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
 
+    data.benfGroupTokensStatus = benfGroup?.tokensReserved?.status;
+
     data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
       let token = null;
 
@@ -400,18 +402,19 @@ export class BeneficiaryService {
         (d: any) => d?.beneficiaryId
       );
 
-      await this.prisma.beneficiary.updateMany({
-        where: {
-          uuid: {
-            in: benfIds,
-          },
-        },
-        data: {
-          benTokens: {
-            increment: numberOfTokens,
-          },
-        },
-      });
+      // await this.prisma.beneficiary.updateMany({
+      //   where: {
+      //     uuid: {
+      //       in: benfIds,
+      //     },
+      //   },
+      //   data: {
+      //     benTokens: {
+      //       increment: numberOfTokens,
+      //     },
+      //   },
+      // });
+      // when disbursement is successful, we will update the benTokens not now
 
       await this.prisma.beneficiaryGroupTokens.create({
         data: {
@@ -664,11 +667,17 @@ export class BeneficiaryService {
    */
   async getBeneficiaryRedeemInfo(beneficiaryUUID: string): Promise<
     {
+      uuid: string;
       beneficiaryWallet: string;
       tokenAmount: number;
       transactionType: string;
       status: string;
       txHash: string | null;
+      createdAt: Date;
+      payoutType?: string;
+      mode?: string;
+      vendorName?: string;
+      extras?: any;
     }[]
   > {
     try {
@@ -691,16 +700,31 @@ export class BeneficiaryService {
       const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
         where: {
           beneficiaryWalletAddress: beneficiary.walletAddress,
+          isCompleted: true,
         },
         orderBy: {
           createdAt: 'desc',
         },
         select: {
+          uuid: true,
           beneficiaryWalletAddress: true,
           amount: true,
           transactionType: true,
           status: true,
           txHash: true,
+          payout: {
+            select: {
+              type: true,
+              mode: true,
+              extras: true,
+            },
+          },
+          createdAt: true,
+          Vendor: {
+            select: {
+              name: true,
+            },
+          },
         },
       });
 
@@ -709,15 +733,89 @@ export class BeneficiaryService {
       }
 
       return beneficiaryRedeems.map((redeem) => ({
+        uuid: redeem.uuid,
         beneficiaryWallet: redeem.beneficiaryWalletAddress,
         tokenAmount: redeem.amount,
         transactionType: redeem.transactionType,
         status: redeem.status,
         txHash: redeem.txHash,
+        createdAt: redeem.createdAt,
+        payoutType: redeem?.payout?.type,
+        mode: redeem?.payout?.mode,
+        vendorName: redeem?.Vendor?.name,
+        extras: redeem?.payout?.extras,
       }));
     } catch (error) {
       this.logger.error(`Error getting beneficiary redeem info: ${error}`);
       throw error;
+    }
+  }
+
+  async benTokensUpdate(payload) {
+    const { groupUuid } = payload;
+    this.logger.log(`Updating beneficiary tokens for group: ${groupUuid}`);
+    try {
+      const beneficiaryGroup = await this.prisma.beneficiaryGroups.findUnique({
+        where: {
+          uuid: groupUuid,
+        },
+        select: {
+          tokensReserved: true,
+          beneficiaries: true,
+        },
+      });
+
+      if (!beneficiaryGroup) {
+        this.logger.warn(`Beneficiary group with UUID ${groupUuid} not found.`);
+        return;
+      }
+
+      if (!beneficiaryGroup.tokensReserved) {
+        this.logger.warn(
+          `No tokens reserved for group with UUID ${groupUuid}.`
+        );
+        return;
+      }
+
+      if (
+        !beneficiaryGroup.beneficiaries &&
+        beneficiaryGroup.beneficiaries.length === 0
+      ) {
+        this.logger.warn(
+          `No beneficiaries found in group with UUID ${groupUuid}.`
+        );
+        return;
+      }
+
+      const benfIds = beneficiaryGroup.beneficiaries.map(
+        (benf) => benf.beneficiaryId
+      );
+      const tokensPerBeneficiary =
+        beneficiaryGroup.tokensReserved.numberOfTokens;
+
+      await this.prisma.beneficiary.updateMany({
+        where: {
+          uuid: {
+            in: benfIds,
+          },
+        },
+        data: {
+          benTokens: {
+            increment: tokensPerBeneficiary,
+          },
+        },
+      });
+
+      this.logger.log(
+        `Updated ${benfIds.length} beneficiaries with ${tokensPerBeneficiary} tokens each for group ${groupUuid}.`
+      );
+
+      return;
+    } catch (error) {
+      this.logger.error(`Error updating beneficiary tokens: ${error}`);
+      throw new RpcException(
+        `Failed to update beneficiary tokens for group ${groupUuid}: ${error.message}`
+      );
     }
   }
 }

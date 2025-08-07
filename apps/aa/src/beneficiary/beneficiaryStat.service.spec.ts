@@ -177,32 +177,39 @@ describe('BeneficiaryStatService', () => {
         { id: 'MALE', count: 60 },
         { id: 'FEMALE', count: 40 },
       ]);
-      jest.spyOn(service, 'calculateVulnerabilityStats').mockResolvedValue([
-        { id: 'Vulnerable', count: 30 },
-        { id: 'Not_Vulnerable', count: 70 },
-      ]);
       jest.spyOn(service, 'calculateBankStatusStats').mockResolvedValue([
         { id: 'Banked', count: 80 },
         { id: 'Unbanked', count: 20 },
-      ]);
-      jest.spyOn(service, 'calculatePhoneSetTypeStats').mockResolvedValue([
-        { id: 'Smart_Phone_Set', count: 65 },
-        { id: 'Simple_Mobile_Set', count: 35 },
       ]);
       jest.spyOn(service, 'calculateCountByBankStats').mockResolvedValue([
         { id: 'Bank A', count: 2 },
         { id: 'Bank B', count: 1 },
       ]);
-      jest.spyOn(service, 'calculatePhoneStatusStats').mockResolvedValue([
-        { id: 'Phoned', count: 1 },
-        { id: 'UnPhoned', count: 2 },
+      jest.spyOn(service, 'calculateAgeGroups').mockResolvedValue([
+        { id: '<20', count: 0 },
+        { id: '20-29', count: 0 },
+        { id: '30-45', count: 0 },
+        { id: '46-59', count: 0 },
+        { id: '>60', count: 0 },
       ]);
-      jest.spyOn(service, 'calculateVulnerabilityCountStats').mockResolvedValue([
-        { id: 'High', count: 30 },
-        { id: 'Medium', count: 40 },
-        { id: 'Low', count: 30 },
+      jest.spyOn(service, 'calculateTotalFamilyMembers').mockResolvedValue({
+        count: 0,
+      });
+      jest.spyOn(service, 'calculateTypeOfSSA').mockResolvedValue([
+        { id: 'senior_citizen__70', count: 0 },
+        { id: 'senior_citizen__60__dalit', count: 0 },
+        { id: 'child_nutrition', count: 0 },
+        { id: 'single_woman', count: 0 },
+        { id: 'widow', count: 0 },
+        { id: 'red_class', count: 0 },
+        { id: 'blue_card', count: 0 },
+        { id: 'indigenous_community', count: 0 },
       ]);
-      jest.spyOn(service, 'calculateHouseholdCashSupport').mockResolvedValue(50);
+      jest.spyOn(service, 'fieldMapResult').mockResolvedValue({
+        no_of_lactating_women: 0,
+        no_of_persons_with_disability: 0,
+        no_of_pregnant_women: 0,
+      });
 
       const result = await service.calculateAllStats();
 
@@ -212,32 +219,39 @@ describe('BeneficiaryStatService', () => {
           { id: 'MALE', count: 60 },
           { id: 'FEMALE', count: 40 },
         ],
-        vulnerabilityStatus: [
-          { id: 'Vulnerable', count: 30 },
-          { id: 'Not_Vulnerable', count: 70 },
-        ],
         bankStatus: [
           { id: 'Banked', count: 80 },
           { id: 'Unbanked', count: 20 },
-        ],
-        phoneType: [
-          { id: 'Smart_Phone_Set', count: 65 },
-          { id: 'Simple_Mobile_Set', count: 35 },
         ],
         countByBank: [
           { id: 'Bank A', count: 2 },
           { id: 'Bank B', count: 1 },
         ],
-        phoneStatus: [
-          { id: 'Phoned', count: 1 },
-          { id: 'UnPhoned', count: 2 },
+        calculateAgeGroups: [
+          { id: '<20', count: 0 },
+          { id: '20-29', count: 0 },
+          { id: '30-45', count: 0 },
+          { id: '46-59', count: 0 },
+          { id: '>60', count: 0 },
         ],
-        vulnerabilityCountStats: [
-          { id: 'High', count: 30 },
-          { id: 'Medium', count: 40 },
-          { id: 'Low', count: 30 },
+        calculateTotalFamilyMembers: {
+          count: 0,
+        },
+        calculateTypeOfSSA: [
+          { id: 'senior_citizen__70', count: 0 },
+          { id: 'senior_citizen__60__dalit', count: 0 },
+          { id: 'child_nutrition', count: 0 },
+          { id: 'single_woman', count: 0 },
+          { id: 'widow', count: 0 },
+          { id: 'red_class', count: 0 },
+          { id: 'blue_card', count: 0 },
+          { id: 'indigenous_community', count: 0 },
         ],
-        householdCashSupport: 50,
+        fieldMapResult: {
+          no_of_lactating_women: 0,
+          no_of_persons_with_disability: 0,
+          no_of_pregnant_women: 0,
+        },
       });
     });
   });
