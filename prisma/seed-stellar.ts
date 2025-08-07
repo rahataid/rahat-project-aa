@@ -31,7 +31,7 @@ export const seedStellar = async () => {
     friendBotUrl: 'https://friendbot.stellar.org/',
     demoWalletUrl: 'https://demo-wallet-server.stellar.org',
     horizonUrl: 'https://horizon-testnet.stellar.org',
-    assetCreator: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
+    assetIssuer: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
     assetCreatorSecret:
       'SA5S2EF72XXJTLBD4SZEMY7OUGIACQZ4KXPEB7NSEVWGEKZCDOQDBFBE',
     fundingAmount: '10',

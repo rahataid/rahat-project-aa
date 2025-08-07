@@ -237,10 +237,7 @@ export class VendorTokenRedemptionService {
           where: {
             vendorUuid: dto.vendorUuid,
             redemptionStatus: {
-              in: [
-                TokenRedemptionStatus.APPROVED,
-                TokenRedemptionStatus.STELLAR_VERIFIED,
-              ],
+              in: [TokenRedemptionStatus.APPROVED],
             },
           },
           _sum: {
@@ -253,7 +250,12 @@ export class VendorTokenRedemptionService {
         await this.prisma.vendorTokenRedemption.aggregate({
           where: {
             vendorUuid: dto.vendorUuid,
-            redemptionStatus: TokenRedemptionStatus.REQUESTED,
+            redemptionStatus: {
+              in: [
+                TokenRedemptionStatus.REQUESTED,
+                TokenRedemptionStatus.STELLAR_VERIFIED,
+              ],
+            },
           },
           _sum: {
             tokenAmount: true,
