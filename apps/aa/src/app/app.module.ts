@@ -7,6 +7,7 @@ import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { CashTrackerModule } from '../cash-tracker/cash-tracker.module';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { DataSourceModule } from '../datasource/datasource.module';
 import { ListenersModule } from '../listeners/listeners.module';
@@ -40,7 +41,9 @@ import { GrievancesModule } from '../grievances/grievances.module';
           host: configService.get('REDIS_HOST'),
           port: configService.get('REDIS_PORT'),
           password: configService.get('REDIS_PASSWORD'),
-          connectionName: `nestjs-rahat-aa-${process.env.PROJECT_ID}-${Date.now()}`,
+          connectionName: `nestjs-rahat-aa-${
+            process.env.PROJECT_ID
+          }-${Date.now()}`,
         },
       }),
       inject: [ConfigService],
@@ -95,21 +98,21 @@ import { GrievancesModule } from '../grievances/grievances.module';
     PayoutsModule,
     ChainModule,
     GrievancesModule,
+    CashTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
 })
-
 export class AppModule implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly queueService: QueueService) {}
 
   async onModuleInit() {
     console.log('🚀 Initializing application...');
-    
+
     await this.queueService.waitForConnection();
-    
+
     await this.setupProcessors();
-    
+
     console.log('✅ All queue processors initialized successfully');
   }
 
@@ -122,7 +125,7 @@ export class AppModule implements OnModuleInit, OnModuleDestroy {
   private async setupProcessors() {
     try {
       await this.queueService.verifyProcessorsReady();
-      
+
       console.log('📋 Queue processors verification completed');
     } catch (error) {
       console.error('❌ Failed to setup processors:', error);

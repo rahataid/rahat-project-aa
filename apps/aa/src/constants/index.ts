@@ -38,6 +38,12 @@ export const CONTROLLERS = {
     UPDATE: NAMESPACE + '.payouts.update',
     REMOVE: NAMESPACE + '.payouts.remove',
   },
+  CASH_TRACKER: {
+    CREATE: NAMESPACE + '.cash-tracker.create',
+    LIST: NAMESPACE + '.cash-tracker.list',
+    GET: NAMESPACE + '.cash-tracker.get',
+    UPDATE: NAMESPACE + '.cash-tracker.update',
+  },
 };
 
 export const JOBS = {
@@ -72,6 +78,10 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
+  },
+  CASH_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
