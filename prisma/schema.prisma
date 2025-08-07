@@ -39,27 +39,60 @@ enum SettingDataType {
   OBJECT
 }
 
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-  UNKNOWN
+enum PayoutType {
+  FSP
+  VENDOR
+}
+
+enum PayoutMode {
+  ONLINE
+  OFFLINE
+}
+
+enum PayoutTransactionType {
+  TOKEN_TRANSFER
+  FIAT_TRANSFER
+  VENDOR_REIMBURSEMENT
+}
+
+enum PayoutTransactionStatus {
+  PENDING
+  TOKEN_TRANSACTION_INITIATED
+  TOKEN_TRANSACTION_COMPLETED
+  TOKEN_TRANSACTION_FAILED
+  FIAT_TRANSACTION_INITIATED
+  FIAT_TRANSACTION_COMPLETED
+  FIAT_TRANSACTION_FAILED
+  COMPLETED
+  FAILED
+}
+
+enum GroupPurpose {
+  BANK_TRANSFER
+  MOBILE_MONEY
+  COMMUNICATION
 }
 
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
-  id   Int    @id @default(autoincrement()) @db.Integer()
-  uuid String @unique @db.Uuid()
+  id            Int     @id @default(autoincrement()) @db.Integer()
+  uuid          String  @unique @db.Uuid()
+  walletAddress String  @unique
+  phone         String?
 
-  walletAddress String?
-  gender        Gender  @default(UNKNOWN)
-  extras        Json?
-  benTokens     Int     @default(0)
+  gender    Gender? @default(UNKNOWN)
+  benTokens Int?    @default(0)
+  extras    Json?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
-  deletedAt DateTime?
+  isVerified Boolean @default(false)
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  BeneficiaryGroup   BeneficiaryGroup[]
+  BeneficiaryToGroup BeneficiaryToGroup[]
 
   @@map("tbl_beneficiaries")
 }
@@ -70,13 +103,31 @@ model BeneficiaryGroups {
 
   name String
 
+  groupPurpose GroupPurpose?
+
   tokensReserved BeneficiaryGroupTokens?
+  beneficiaries  BeneficiaryToGroup[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   deletedAt DateTime?
 
   @@map("tbl_beneficiaries_groups")
+}
+
+model BeneficiaryToGroup {
+  id            Int               @id @default(autoincrement()) @db.Integer()
+  uuid          String            @unique @default(uuid())
+  beneficiary   Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
+  beneficiaryId String            @db.Uuid()
+  group         BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  groupId       String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([beneficiaryId, groupId])
+  @@map("tbl_beneficiaries_to_groups")
 }
 
 model BeneficiaryGroupTokens {
@@ -86,12 +137,41 @@ model BeneficiaryGroupTokens {
   title          String
   numberOfTokens Int    @default(0)
 
+  status      String  @default("NOT_DISBURSED")
+  isDisbursed Boolean @default(false)
+  info        Json?
+
   groupId          String            @unique
-  benefefiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+
+  payoutId String?  @unique
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
 
   createdBy String?
 
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
   @@map("tbl_beneficiaries_groups_tokens")
+}
+
+model Payouts {
+  int  Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  type   PayoutType
+  mode   PayoutMode
+  status String?
+  extras Json?
+
+  payoutProcessorId     String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
+  beneficiaryGroupToken BeneficiaryGroupTokens?
+  beneficiaryRedeem     BeneficiaryRedeem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups_payouts")
 }
 
 // ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
@@ -116,11 +196,12 @@ model Stakeholders {
 
   name         String
   email        String?
-  phone        String? @unique 
+  phone        String?  @unique
   designation  String
   organization String
   district     String
   municipality String
+  supportArea  String[]
 
   stakeholdersGroups StakeholdersGroups[]
 
@@ -166,8 +247,8 @@ model Phases {
   isActive         Boolean @default(false)
 
   activatedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
 
   @@map("tbl_phases")
 }
@@ -213,7 +294,7 @@ model Activities {
   isDeleted Boolean @default(false)
 
   completedBy String?
-  completedAt DateTime? 
+  completedAt DateTime?
 
   differenceInTriggerAndActivityCompletion String?
 
@@ -240,11 +321,12 @@ model Triggers {
   phase   Phases? @relation(fields: [phaseId], references: [uuid])
   phaseId String?
 
-  isMandatory Boolean @default(false)
-  isTriggered Boolean @default(false)
-  isDeleted   Boolean @default(false)
+  isMandatory      Boolean @default(false)
+  isTriggered      Boolean @default(false)
+  isDeleted        Boolean @default(false)
+  isOnchainSuccess Boolean @default(false)
 
-  triggeredBy String? 
+  triggeredBy String?
 
   triggeredAt DateTime?
   createdAt   DateTime  @default(now())
@@ -293,4 +375,208 @@ model DailyMonitoring {
   updatedAt DateTime? @updatedAt()
 
   @@map("tbl_daily_monitoring")
+}
+
+model Vendor {
+  id            Int     @id @default(autoincrement())
+  uuid          String  @unique @db.Uuid()
+  name          String
+  walletAddress String  @unique
+  phone         String?
+  location      String?
+  extras        Json?
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  VendorReimbursment VendorReimbursment[]
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  OfflineBeneficiary OfflineBeneficiary[]
+
+  @@map("tbl_vendors")
+}
+
+// ============== OTHER CORE CVA SCHEMAS================
+enum DisbursementStatus {
+  SYNCING_OFFLINE
+  SYNCED_OFFLINE
+  ONLINE
+}
+
+enum ReedemStatus {
+  REQUESTED
+  APPROVED
+}
+
+enum OfflineBeneficiaryStatus {
+  PROCESSED
+  PENDING
+  SYNCED
+}
+
+model Group {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String  @unique
+  isSystem    Boolean @default(false) // Non deleteable
+  autoCreated Boolean @default(false)
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime?          @updatedAt()
+  createdBy        String?
+  BeneficiaryGroup BeneficiaryGroup[]
+
+  @@map("tbl_groups")
+}
+
+model BeneficiaryGroup {
+  id             Int         @id @default(autoincrement()) @db.Integer()
+  uuid           String      @unique @default(uuid()) @db.Uuid()
+  beneficiary    Beneficiary @relation(fields: [beneficiaryUID], references: [uuid])
+  beneficiaryUID String      @db.Uuid()
+  group          Group       @relation(fields: [groupUID], references: [uuid])
+  groupUID       String      @db.Uuid()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([beneficiaryUID, groupUID], name: "benefGroupIdentifier")
+  @@map("tbl_beneficiary_groups")
+}
+
+model Communication {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String
+  message     String
+  transportId String
+  groupUID    String? @db.Uuid()
+  sessionId   String? // If sessionID is null, it means the message is not sent
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_communications")
+}
+
+model Disbursement {
+  id            Int                @id @default(autoincrement())
+  uuid          String             @unique @default(uuid()) @db.Uuid()
+  amount        Float              @default(0)
+  walletAddress String             @unique
+  planUid       String?            @db.Uuid()
+  status        DisbursementStatus @default(ONLINE)
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime?           @updatedAt()
+  deletedAt          DateTime?
+  OfflineBeneficiary OfflineBeneficiary?
+
+  @@map("tbl_disbursement")
+}
+
+model VendorReimbursment {
+  id            Int          @id @default(autoincrement())
+  uuid          String       @unique @default(uuid()) @db.Uuid()
+  tokenAddress  String
+  voucherAmount Int
+  status        ReedemStatus @default(REQUESTED)
+
+  vendorUid String @db.Uuid()
+  vendor    Vendor @relation(fields: [vendorUid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_vendor_reimbursment")
+}
+
+model BeneficiaryRedeem {
+  id                       Int     @id @default(autoincrement())
+  uuid                     String  @unique @default(uuid())
+  beneficiaryWalletAddress String
+  isCompleted              Boolean @default(false)
+  amount                   Int     @default(0)
+
+  transactionType PayoutTransactionType
+  status          PayoutTransactionStatus @default(PENDING)
+  fspId           String? // refer PaymentProvider Id from rahat-offramp-service
+  txHash          String?
+
+  Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  vendorUid   String?     @db.Uuid()
+  Vendor      Vendor?     @relation(fields: [vendorUid], references: [uuid])
+
+  payoutId String?
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
+
+  info Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiary_redeem")
+}
+
+model BeneficiaryOTP {
+  id                       Int    @id @default(autoincrement())
+  uuid                     String @unique @default(uuid())
+  otp                      String
+  otpHash                  String
+  beneficiaryWalletAddress String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tbl_beneficiary_otp")
+}
+
+model OfflineBeneficiary {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  otpHash String
+  txHash  String
+
+  vendorId       String @db.Uuid()
+  disbursementId String @unique @db.Uuid()
+  amount         Float
+
+  Vendor       Vendor                   @relation(fields: [vendorId], references: [uuid])
+  Disbursement Disbursement?            @relation(fields: [disbursementId], references: [uuid])
+  status       OfflineBeneficiaryStatus @default(PENDING)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map(name: "tbl_offline_beneficiaries")
+}
+
+// ============== END CORE CVA SCHEMAS================
+
+// ============== Start OTP SCHEMAS ================
+model Otp {
+  id          Int      @id @default(autoincrement())
+  phoneNumber String   @unique
+  otpHash     String
+  amount      Float
+  expiresAt   DateTime
+
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map(name: "tbl_otp")
+}
+
+// ============== End OTP SCHEMAS ================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
 }

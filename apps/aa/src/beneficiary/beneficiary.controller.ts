@@ -2,26 +2,23 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { CONTROLLERS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
-import { AddBeneficiaryGroups, AddTokenToGroup, CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
+import {
+  AddTokenToGroup,
+  CreateBeneficiaryDto,
+} from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
+import { CVA_JOBS } from '@rahat-project/cva';
+import { GetBenfGroupDto } from './dto/get-group.dto';
 
 @Controller()
 export class BeneficiaryController {
-  constructor(private readonly beneficiaryService: BeneficiaryService) { }
+  constructor(private readonly beneficiaryService: BeneficiaryService) {}
 
-  @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
-  findAll(data) {
-    return this.beneficiaryService.findAll(data);
-  }
-
-  @MessagePattern({
-    cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
-    uuid: process.env.PROJECT_ID,
-  })
-  findAllPii(data) {
-    return this.beneficiaryService.findAll(data);
-  }
+  // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
+  // findAll(data) {
+  //   return this.beneficiaryService.findAll(data);
+  // }
 
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ADD_TO_PROJECT,
@@ -31,17 +28,32 @@ export class BeneficiaryController {
     return this.beneficiaryService.create(data);
   }
 
+  @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
+  findOne(payload) {
+    return this.beneficiaryService.findOne(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY,
+    uuid: process.env.PROJECT_ID,
+  })
+  findOneBeneficiary(payload) {
+    return this.beneficiaryService.findOneBeneficiary(payload);
+  }
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
+    uuid: process.env.PROJECT_ID,
+  })
+  findAllPii(data) {
+    return this.beneficiaryService.findAll(data);
+  }
+
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
   })
   createMany(data) {
     return this.beneficiaryService.createMany(data);
-  }
-
-  @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
-  findOne(payload) {
-    return this.beneficiaryService.findOne(payload);
   }
 
   @MessagePattern({ cmd: JOBS.BENEFICIARY.REMOVE })
@@ -63,26 +75,36 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async addGroupToProject(payload) {
-    return this.beneficiaryService.addGroupToProject(payload)
+    return this.beneficiaryService.addGroupToProject(payload);
   }
 
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
   })
-  async getAllGroups(payload) {
-    return this.beneficiaryService.getAllGroups(payload)
+  async getAllGroups(payload: GetBenfGroupDto) {
+    console.log(payload);
+    return this.beneficiaryService.getAllGroups(payload);
   }
 
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ONE_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  async getOneGroup(payload: {uuid: UUID}) {
-    return this.beneficiaryService.getOneGroup(payload.uuid)
+  async getOneGroup(payload: { uuid: UUID }) {
+    return this.beneficiaryService.getOneGroup(payload.uuid);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryRedeemInfo(payload: { beneficiaryUUID: string }) {
+    return this.beneficiaryService.getBeneficiaryRedeemInfo(
+      payload.beneficiaryUUID
+    );
   }
   // ***** groups end ********** //
-
 
   // ***** groups fund mgmt ********** //
   @MessagePattern({
@@ -90,7 +112,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async reserveTokenToGroup(payload: AddTokenToGroup) {
-    return this.beneficiaryService.reserveTokenToGroup(payload)
+    return this.beneficiaryService.reserveTokenToGroup(payload);
   }
 
   @MessagePattern({
@@ -98,7 +120,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getTokenReservations(payload) {
-    return this.beneficiaryService.getAllTokenReservations(payload)
+    return this.beneficiaryService.getAllTokenReservations(payload);
   }
 
   @MessagePattern({
@@ -106,17 +128,23 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getOneTokenReservations(payload) {
-    return this.beneficiaryService.getOneTokenReservation(payload)
+    return this.beneficiaryService.getOneTokenReservation(payload);
   }
-
 
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_RESERVATION_STATS,
     uuid: process.env.PROJECT_ID,
   })
   async getReservationStats(payload) {
-    return this.beneficiaryService.getReservationStats(payload)
+    return this.beneficiaryService.getReservationStats(payload);
   }
 
   // ***** groups fund mgmt end ********** //
+  @MessagePattern({
+    cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN,
+    location: process.env['PROJECT_LOCATION'],
+  })
+  assignToken() {
+    return this.beneficiaryService.assignToken();
+  }
 }

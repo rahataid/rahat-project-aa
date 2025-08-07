@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "wallet": {
+      "type": "library",
+      "root": "libs/wallet",
+      "entryFile": "index",
+      "sourceRoot": "libs/wallet/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/wallet/tsconfig.lib.json"
+      }
+    }
+  },
+  "compilerOptions": {
+    "webpack": true
+  }
+}
