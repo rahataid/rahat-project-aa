@@ -229,7 +229,8 @@ The application will be available at `http://localhost:3000` (or the port specif
 - `pnpm prisma:generate` - Generate Prisma client
 
 ### Testing
-- `pnpm test` - Run unit tests
+- `pnpm test:aa` - Run unit tests
+- `pnpm test:aa --coverage` - Run unit tests with coverage 
 - `pnpm test:e2e` - Run end-to-end tests
 - `pnpm test:cov` - Run tests with coverage
 
