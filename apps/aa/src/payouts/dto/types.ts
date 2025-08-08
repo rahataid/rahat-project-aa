@@ -110,15 +110,16 @@ export type PayoutStats = {
 
 export type DownloadPayoutLogsType = {
   'Beneficiary Wallet Address': string;
-  'Bank a/c name': string | null;
-  'Bank a/c number': string | null;
-  'Bank Name': string | null;
-  'Phone number': string | null;
+  'Phone number': string;
+  'Transaction Wallet ID': string;
+  'Transaction Hash': string;
+  'Payout Status': string;
   'Transaction Type': string;
-  'Bank Transaction ID': string | undefined;
-  'Transacrion Wallet ID': string | undefined;
-  'Payout Status': string | null;
-  'Created at': string;
-  'Updated at': string;
-  'No of Attempts': number;
+  'Created At': string;
+  'Updated At': string;
+  'Actual Budget': number;
+  'Amount Disbursed': number;
+  'Bank a/c name'?: string;
+  'Bank a/c number'?: string;
+  'Bank Name'?: string;
 };
