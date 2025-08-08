@@ -111,12 +111,13 @@ export class VendorTokenRedemptionService {
         );
       }
 
-      // Only allow status updates from REQUESTED to APPROVED or REJECTED
+      // Only allow status updates from REQUESTED or STELLAR_VERIFIED to APPROVED or REJECTED
       if (
+        redemption.redemptionStatus !== TokenRedemptionStatus.REQUESTED &&
         redemption.redemptionStatus !== TokenRedemptionStatus.STELLAR_VERIFIED
       ) {
         throw new RpcException(
-          `Token redemption ${dto.uuid} is not in REQUESTED status`
+          `Token redemption ${dto.uuid} is not in REQUESTED or STELLAR_VERIFIED status`
         );
       }
 
