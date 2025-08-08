@@ -69,16 +69,19 @@ export class BeneficiaryService {
   async create(dto: CreateBeneficiaryDto) {
     const { isVerified,  ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
+
       data: rest  
+
     });
-
-    await this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
-
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
   }
 
   async createMany(dto) {
-    const rdata = await this.rsprisma.beneficiary.createMany({ data: dto });
+    const rdata = await this.rsprisma.beneficiary.createMany({
+      data: dto,
+      skipDuplicates: true,
+    });
 
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 

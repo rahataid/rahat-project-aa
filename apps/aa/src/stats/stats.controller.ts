@@ -12,6 +12,13 @@ export class StatsController {
     return this.statsService.findAll(payload);
   }
 
+  @MessagePattern({
+    cmd: JOBS.STATS.GET_MAP_LOCATION,
+    uuid: process.env.PROJECT_ID,
+  })
+  benefLocation(@Payload() payload) {
+    return this.statsService.mapLocation(payload);
+  }
   @MessagePattern({ cmd: JOBS.STATS.GET_ONE, uuid: process.env.PROJECT_ID })
   findOne(payload) {
     return this.statsService.findOne(payload);
