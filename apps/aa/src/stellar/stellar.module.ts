@@ -46,7 +46,9 @@ import { AppService } from '../app/app.service';
           settings?.value['NETWORK'],
           settings?.value['FAUCETSECRETKEY'],
           settings?.value['FUNDINGAMOUNT'],
-          settings?.value['HORIZONURL']
+          settings?.value['HORIZONURL'],
+          settings?.value['FAUCETBASEURL'],
+          settings?.value['FAUCETAUTHKEY']
         );
       },
       inject: [SettingsService],

@@ -12,7 +12,7 @@ import { BeneficiaryWallet, ITransactionService } from '../types';
 import { logger } from '../utils/logger';
 import { transfer_asset } from '../lib/transferAsset';
 import { add_trustline } from '../lib/addTrustline';
-import { fundAccountXlm } from '../lib/internalXlmFaucet';
+import { fundAccountXlm } from '../lib/xlmFaucet';
 import { checkAccountExists } from '../utils/checkAccountExists';
 import { sleep } from '../utils/sleep';
 
@@ -138,20 +138,30 @@ export class TransactionService implements ITransactionService {
     keys: BeneficiaryWallet[],
     amount: string,
     faucetSecretKey: string,
-    sorobanServer: string
+    sorobanServer: string,
+    faucetBaseUrl?: string,
+    faucetAuthKey?: string,
+    faucetType: 'internal' | 'external' = 'internal'
   ) {
     try {
       // Fund account with XLM
-      const txHash = await fundAccountXlm(
+      const result = await fundAccountXlm(
         keys,
         amount,
         faucetSecretKey,
         this.network,
-        this.horizonServer
+        this.horizonServer,
+        faucetBaseUrl,
+        faucetAuthKey,
+        faucetType
       );
 
-      // Wait for transaction confirmation
-      await this.waitForTransactionConfirmation(txHash);
+      // Wait for transaction confirmation only for internal faucet
+      if (faucetType === 'internal') {
+        await this.waitForTransactionConfirmation(result);
+      } else {
+        logger.info('Skipping transaction confirmation for external faucet');
+      }
 
       // Add trustline for all wallet addresses
 
@@ -168,7 +178,9 @@ export class TransactionService implements ITransactionService {
         })
       );
       return {
-        message: `Funded successfully for ${keys.length} wallets: ${txHash}`,
+        message: `Funded successfully for ${keys.length} wallets: ${
+          faucetType === 'internal' ? result : 'external faucet'
+        }`,
       };
     } catch (error: any) {
       return error?.response;
