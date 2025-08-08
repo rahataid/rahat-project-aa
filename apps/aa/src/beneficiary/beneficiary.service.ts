@@ -698,6 +698,9 @@ export class BeneficiaryService {
         where: {
           beneficiaryWalletAddress: beneficiary.walletAddress,
           isCompleted: true,
+          transactionType: {
+            in: ['FIAT_TRANSFER', 'VENDOR_REIMBURSEMENT'],
+          },
         },
         orderBy: {
           createdAt: 'desc',
