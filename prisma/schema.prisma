@@ -390,6 +390,7 @@ model Vendor {
   updatedAt          DateTime?            @updatedAt()
   deletedAt          DateTime?
   VendorReimbursment VendorReimbursment[]
+  VendorTokenRedemption VendorTokenRedemption[]
   BeneficiaryRedeem  BeneficiaryRedeem[]
   OfflineBeneficiary OfflineBeneficiary[]
 
@@ -406,6 +407,15 @@ enum DisbursementStatus {
 enum ReedemStatus {
   REQUESTED
   APPROVED
+}
+
+enum TokenRedemptionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  COMPLETED
+  STELLAR_VERIFIED
+  STELLAR_FAILED
 }
 
 enum OfflineBeneficiaryStatus {
@@ -491,6 +501,26 @@ model VendorReimbursment {
   deletedAt DateTime?
 
   @@map("tbl_vendor_reimbursment")
+}
+
+model VendorTokenRedemption {
+  id                Int                    @id @default(autoincrement())
+  uuid              String                 @unique @default(uuid()) @db.Uuid()
+  vendorUuid        String                 @db.Uuid()
+  redemptionStatus  TokenRedemptionStatus @default(REQUESTED)
+  tokenAmount       Int                    @default(0)
+  
+  // Additional fields for better tracking
+  transactionHash   String?
+  approvedBy        String?
+  approvedAt        DateTime?
+
+  vendor            Vendor                 @relation(fields: [vendorUuid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_vendor_token_redemption")
 }
 
 model BeneficiaryRedeem {
