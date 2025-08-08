@@ -209,7 +209,7 @@ export class BeneficiaryStatService {
       },
     });
     const k = Object.entries(wardLocationStats).map(([key, value]) => ({
-      name: `${key.toString()}`,
+      name: key.toString(),
       data: value,
       group: 'beneficiary_gps_location',
     }));
