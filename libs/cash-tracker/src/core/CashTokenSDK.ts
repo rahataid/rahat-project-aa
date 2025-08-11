@@ -606,8 +606,7 @@ export class CashTokenSDK {
         amountBigInt = this.parseUnits(amount.toString(), decimals);
       }
 
-      // Check if entity has sufficient balance for approval
-      await this.checkBalanceForApproval(amountBigInt);
+      // Note: ERC20 approve does not require having current balance. Skip strict balance check to avoid false blocks.
 
       console.log(
         `Approving ${this.formatUnits(
@@ -638,10 +637,17 @@ export class CashTokenSDK {
         gasUsed: receipt?.gasUsed,
         gasPrice: receipt?.gasPrice,
       };
-    } catch (error) {
+    } catch (error: any) {
+      const parsed = this.parseEthersLikeError(error);
       throw SDKError.transactionFailed(
         `Failed to approve tokens for ${spenderAddress}`,
-        { error }
+        {
+          context: 'approve',
+          spenderAddress,
+          amount:
+            typeof amount === 'bigint' ? amount.toString() : String(amount),
+          ...parsed,
+        }
       );
     }
   }
@@ -739,10 +745,21 @@ export class CashTokenSDK {
         gasUsed: receipt?.gasUsed,
         gasPrice: receipt?.gasPrice,
       };
-    } catch (error) {
+    } catch (error: any) {
+      const parsed = this.parseEthersLikeError(error);
       throw SDKError.transactionFailed(
         `Failed to transfer tokens from ${fromAddress}`,
-        { error }
+        {
+          context: 'transferFrom',
+          fromAddress,
+          toAddress: this.smartAccountAddress,
+          amount: amount
+            ? typeof amount === 'bigint'
+              ? amount.toString()
+              : String(amount)
+            : 'allowance',
+          ...parsed,
+        }
       );
     }
   }
@@ -752,6 +769,33 @@ export class CashTokenSDK {
    */
   private generateEventId(): string {
     return `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Extract common fields from ethers-like errors for better diagnostics
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private parseEthersLikeError(error: any): Record<string, unknown> {
+    const details: Record<string, unknown> = {};
+    try {
+      details.message = error?.shortMessage || error?.reason || error?.message;
+      details.code =
+        error?.code || error?.error?.code || error?.info?.error?.code;
+      details.reason = error?.reason;
+      details.shortMessage = error?.shortMessage;
+      details.transaction = error?.transaction || error?.info?.transaction;
+      details.receipt = error?.receipt || error?.info?.receipt;
+      details.data =
+        error?.data || error?.error?.data || error?.info?.error?.data;
+      details.stack = error?.stack;
+      const nestedMsg = error?.info?.error?.message || error?.error?.message;
+      if (nestedMsg && typeof nestedMsg === 'string') {
+        details.nestedMessage = nestedMsg;
+      }
+    } catch {
+      // ignore parse failures
+    }
+    return details;
   }
 
   /**

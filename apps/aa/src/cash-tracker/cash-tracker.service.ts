@@ -31,7 +31,13 @@ export interface ExecuteActionRequest {
     | 'give_cash_allowance'
     | 'get_cash_from'
     | 'get_cash_approved_by_me'
-    | 'get_cash_balance';
+    | 'get_cash_balance'
+    | 'create_budget'
+    | 'initiate_transfer'
+    | 'confirm_transfer'
+    | 'approve'
+    | 'allowance'
+    | 'transfer';
   amount?: string | number | bigint; // optional for get_cash_balance
   proof?: string; // Base64 encoded proof document
   description?: string;
@@ -173,6 +179,31 @@ export class CashTrackerService {
 
       this.logger.log(`Executing ${action} from ${from} to ${to} (${alias})`);
 
+      // Normalize action synonyms to SDK operations
+      const normalizedAction:
+        | 'give_cash_allowance'
+        | 'get_cash_from'
+        | 'get_cash_approved_by_me'
+        | 'get_cash_balance' = (() => {
+        switch (action) {
+          case 'initiate_transfer':
+          case 'create_budget':
+          case 'approve':
+            return 'give_cash_allowance';
+          case 'confirm_transfer':
+          case 'transfer':
+            return 'get_cash_from';
+          case 'allowance':
+          case 'get_cash_approved_by_me':
+            return 'get_cash_approved_by_me';
+          case 'get_cash_balance':
+            return 'get_cash_balance';
+          default:
+            // Fallback to original if already one of the supported actions
+            return action as any;
+        }
+      })();
+
       // Get SDK instance for from entity
       const fromSDK = this.entitySDKs.get(from);
 
@@ -180,13 +211,9 @@ export class CashTrackerService {
         throw new Error(`Entity not found for smart address: ${from}`);
       }
 
-      // For actions that require both from and to entities, get toSDK
-      let toSDK: CashTokenSDK | undefined;
-      if (action !== 'get_cash_balance') {
-        toSDK = this.entitySDKs.get(to);
-        if (!toSDK) {
-          throw new Error(`Entity not found for smart address: ${to}`);
-        }
+      // For actions that require both from and to, ensure 'to' is provided
+      if (normalizedAction !== 'get_cash_balance' && !to) {
+        throw new Error(`Missing 'to' smart address for action: ${action}`);
       }
 
       // Validate action based on user roles (if roles are defined)
@@ -194,19 +221,19 @@ export class CashTrackerService {
 
       let result: TransactionResult | TokenAllowance | TokenFlowData | any;
 
-      switch (action) {
+      switch (normalizedAction) {
         case 'give_cash_allowance':
           // UNICEF Nepal CO creates budget for Field Office
-          result = await fromSDK.giveCashAllowance(to, amount);
+          result = await fromSDK.giveCashAllowance(to!, amount!);
           return this.serializeBigInt(result);
 
         case 'get_cash_from':
           // Any role confirms transfer
-          result = await fromSDK.getCashFrom(to, amount);
+          result = await fromSDK.getCashFrom(to!, amount);
           return this.serializeBigInt(result);
 
         case 'get_cash_approved_by_me':
-          result = await fromSDK.getCashApprovedByMe(to);
+          result = await fromSDK.getCashApprovedByMe(to!);
           return this.serializeBigInt(result as TransactionResult);
 
         case 'get_cash_balance':
@@ -219,8 +246,19 @@ export class CashTrackerService {
       }
 
       return this.serializeBigInt(result as TransactionResult);
-    } catch (error) {
-      this.logger.error(`Failed to execute action ${request.action}:`, error);
+    } catch (error: any) {
+      // Try to unwrap SDKError for clearer blockchain diagnostics
+      const isSdkError = error?.name === 'SDKError';
+      if (isSdkError) {
+        this.logger.error(
+          `Failed to execute action ${request.action}: ${error.message}`
+        );
+        if (error.details) {
+          this.logger.error(`Details: ${JSON.stringify(error.details)}`);
+        }
+      } else {
+        this.logger.error(`Failed to execute action ${request.action}:`, error);
+      }
       throw error;
     }
   }
