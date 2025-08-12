@@ -198,6 +198,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
@@ -240,6 +241,7 @@ export const EVENTS = {
   STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
+  TOKEN_DISBURSED: 'events.token_disbursed',
 };
 
 export const BQUEUE = {

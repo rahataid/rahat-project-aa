@@ -61,9 +61,25 @@ After successful deployment, the contract ID will be displayed and saved to `./s
 ### Example Contract ID
 
 ```
-CONTRACT_ID=CDIESPF2SHPYTXTAM4EW55TD4DIIMSYBRS72CCRQH2UDCL4IS4KOZEMK
+CONTRACT_ID=CDVCBYUVLPYXCSPFN6G72TJUBOQTIVXFEVN5UQW72DYA6IO7RPXXLYM3
 ```
 
 ## Next Steps
 
 Once deployed, you can interact with your contract using the Stellar CLI or integrate it into your application using the Stellar SDK.
+
+## For mainnet
+
+# 1. Set up mainnet RPC
+
+stellar network add mainnet \
+ --rpc-url "https://mainnet.sorobanrpc.com" \
+ --network-passphrase "Public Global Stellar Network ; September 2015" \
+ --global
+
+# 2. Deploy your contract
+
+stellar contract deploy \
+ --wasm target/wasm32-unknown-unknown/release/soroban_contract.wasm \
+ --source your_secret_key \
+ --network mainnet
