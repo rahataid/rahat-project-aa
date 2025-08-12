@@ -19,6 +19,7 @@ export const seedStellar = async () => {
   const stellarValue = {
     tenantName: 'sandab',
     server: 'https://soroban-testnet.stellar.org',
+    // server: 'https://mainnet.sorobanrpc.com',
     keypair: 'SAKQYFOKZFZI2LDGNMMWN3UQA6JP4F3JVUEDHVUYYWHCVQIE764WTGBU',
     email: 'owner@sandab.stellar.rahat.io',
     password: 'Password123!',
@@ -28,8 +29,6 @@ export const seedStellar = async () => {
     baseUrl: 'https://api-sdp.stellar.rahat.io',
     adminBaseUrl: 'https://admin-sdp.stellar.rahat.io',
     receiverBaseUrl: 'https://anchor.stellar.rahat.io',
-    friendBotUrl: 'https://friendbot.stellar.org/',
-    demoWalletUrl: 'https://demo-wallet-server.stellar.org',
     horizonUrl: 'https://horizon-testnet.stellar.org',
     assetCreator: 'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYE',
     assetCreatorSecret:
@@ -37,6 +36,8 @@ export const seedStellar = async () => {
     fundingAmount: '10',
     network: 'testnet',
     faucetSecretKey: 'SAVNF6EBFM56QSBCYBKKNXOCZASR5QEHO5AMAGEM2NJN4KIZBHIMGA6A',
+    faucetBaseUrl: 'https://api-faucet.rumsan.com',
+    faucetAuthKey: 'faucet_auth_key_1234567890',
   };
 
   try {

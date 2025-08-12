@@ -47,12 +47,20 @@ export async function canProcessJob(
   const maxConcurrency = parseInt(process.env.CONTRACT_CONCURRENCY || '1', 10);
   const maxWaiting = parseInt(process.env.QUEUE_MAX_WAITING || '0', 10);
   const retryDelay = parseInt(process.env.QUEUE_RETRY_DELAY_MS || '1000', 10);
-  if (conditionalPause || activeCount > maxConcurrency || waitingCount > maxWaiting) {
+  if (
+    conditionalPause ||
+    activeCount > maxConcurrency ||
+    waitingCount > maxWaiting
+  ) {
     // logger.warn(
     //   `Queue busy (${job.queue.name}): active=${activeCount}, waiting=${waitingCount}. delaying batch ${batchIndex+1}/${totalBatchesLength} by ${retryDelay}ms`
     // );
     // re-schedule this job by re-adding to the queue with delay
-    await job.queue.add(job.name, job.data, { delay: retryDelay, removeOnComplete: true, removeOnFail: true });
+    await job.queue.add(job.name, job.data, {
+      delay: retryDelay,
+      removeOnComplete: true,
+      removeOnFail: true,
+    });
     return false;
   }
 

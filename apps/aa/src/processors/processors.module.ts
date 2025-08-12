@@ -76,7 +76,9 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
           (stellarSettings.value as any).NETWORK,
           (stellarSettings.value as any).FAUCETSECRETKEY,
           (stellarSettings.value as any).FUNDINGAMOUNT,
-          (stellarSettings.value as any).HORIZONURL
+          (stellarSettings.value as any).HORIZONURL,
+          (stellarSettings.value as any).FAUCETBASEURL,
+          (stellarSettings.value as any).FAUCETAUTHKEY
         );
       },
       inject: [SettingsService],
