@@ -198,6 +198,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
@@ -214,6 +215,15 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
+    GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
+    UPDATE_TOKEN_REDEMPTION_STATUS:
+      'aa.jobs.vendor.token_redemption.update_status',
+    LIST_TOKEN_REDEMPTIONS: 'aa.jobs.vendor.token_redemption.list',
+    GET_VENDOR_REDEMPTIONS:
+      'aa.jobs.vendor.token_redemption.get_vendor_redemptions',
+    GET_TOKEN_REDEMPTION_STATS: 'aa.jobs.vendor.token_redemption.get_stats',
+    VERIFY_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.verify',
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
@@ -248,6 +258,7 @@ export const BQUEUE = {
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
+  VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

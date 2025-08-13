@@ -889,7 +889,7 @@ export class StellarProcessor {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: await this.getNetworkPassphrase(),
       })
         .addOperation(
           contract.call(
@@ -949,7 +949,7 @@ export class StellarProcessor {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: await this.getNetworkPassphrase(),
       })
         .addOperation(
           contract.call(
@@ -1154,5 +1154,18 @@ export class StellarProcessor {
       throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
     }
     return settings.value[key];
+  }
+
+  private async getNetworkPassphrase(): Promise<string> {
+    try {
+      const network = await this.getFromSettings('NETWORK');
+      return network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+    } catch (error) {
+      this.logger.warn(
+        'Failed to get network from settings, defaulting to testnet',
+        StellarProcessor.name
+      );
+      return Networks.TESTNET;
+    }
   }
 }
