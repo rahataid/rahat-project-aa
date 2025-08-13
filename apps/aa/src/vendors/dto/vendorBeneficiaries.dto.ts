@@ -32,4 +32,13 @@ export class VendorBeneficiariesDto {
     default: 20,
   })
   perPage?: number = 20;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Wallet address to search for (optional)',
+    required: false,
+    example: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  })
+  walletAddress?: string;
 }
