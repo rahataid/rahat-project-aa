@@ -6,6 +6,7 @@ import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
 import { CORE_MODULE } from '../constants';
 import { ClientProxy } from '@nestjs/microservices';
+import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 
 describe('VendorsModule', () => {
   let module: TestingModule;
@@ -51,6 +52,15 @@ describe('VendorsModule', () => {
     getAccountBalance: jest.fn(),
   };
 
+  const mockVendorTokenRedemptionService = {
+    create: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    list: jest.fn(),
+    getVendorRedemptions: jest.fn(),
+    getVendorTokenRedemptionStats: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Mock the SettingsService to return stellar settings
     mockSettingsService.getPublic.mockResolvedValue({
@@ -94,6 +104,10 @@ describe('VendorsModule', () => {
         {
           provide: SettingsService,
           useValue: mockSettingsService,
+        },
+        {
+          provide: VendorTokenRedemptionService,
+          useValue: mockVendorTokenRedemptionService,
         },
       ],
     }).compile();
@@ -155,7 +169,7 @@ describe('VendorsModule', () => {
   it('should properly configure providers with correct dependencies', () => {
     // This test verifies that the providers are correctly configured
     expect(module).toBeDefined();
-    
+
     // Verify that all required dependencies are available
     const clientProxy = module.get<ClientProxy>(CORE_MODULE);
     const settingsService = module.get<SettingsService>(SettingsService);
@@ -197,6 +211,10 @@ describe('VendorsModule', () => {
           useValue: {
             getPublic: jest.fn().mockResolvedValue(null),
           },
+        },
+        {
+          provide: VendorTokenRedemptionService,
+          useValue: mockVendorTokenRedemptionService,
         },
       ],
     }).compile();
@@ -242,6 +260,10 @@ describe('VendorsModule', () => {
             getPublic: jest.fn().mockResolvedValue({ value: {} }),
           },
         },
+        {
+          provide: VendorTokenRedemptionService,
+          useValue: mockVendorTokenRedemptionService,
+        },
       ],
     }).compile();
 
@@ -255,4 +277,4 @@ describe('VendorsModule', () => {
     // Verify that SettingsService was injected and called
     expect(mockSettingsService.getPublic).toHaveBeenCalledWith('STELLAR_SETTINGS');
   });
-}); 
+});
