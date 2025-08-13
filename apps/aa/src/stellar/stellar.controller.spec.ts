@@ -321,7 +321,7 @@ describe('StellarController', () => {
       };
       service.addTriggerOnChain.mockResolvedValue(expectedResult as any);
 
-      const result = await controller.addTriggerOnChain(mockAddTriggerDto);
+      const result = await controller.addTriggerOnChain({triggers: mockAddTriggerDto});
       expect(result).toEqual(expectedResult);
       expect(service.addTriggerOnChain).toHaveBeenCalledWith(mockAddTriggerDto);
     });
@@ -341,7 +341,7 @@ describe('StellarController', () => {
       };
       service.updateOnchainTrigger.mockResolvedValue(expectedResult as any);
 
-      const result = await controller.updateOnchainTrigger(mockUpdateTriggerParamsDto);
+      const result = await controller.updateOnchainTrigger({trigger: mockUpdateTriggerParamsDto});
       expect(result).toEqual(expectedResult);
       expect(service.updateOnchainTrigger).toHaveBeenCalledWith(mockUpdateTriggerParamsDto);
     });
