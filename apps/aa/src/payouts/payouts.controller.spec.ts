@@ -413,7 +413,7 @@ describe('PayoutsController', () => {
 
   describe('downloadPayoutLogs', () => {
     it('should download payout logs successfully', async () => {
-      const payload = { uuid: 'payout-uuid-123' };
+      const payload = { payoutUUID: 'payout-uuid-123' };
       const expectedResult = [
         {
           beneficiaryName: 'John Doe',
@@ -432,7 +432,7 @@ describe('PayoutsController', () => {
     });
 
     it('should handle errors in downloadPayoutLogs', async () => {
-      const payload = { uuid: 'invalid-uuid' };
+      const payload = { payoutUUID: 'payout-uuid-123' };
       const error = new Error('Logs not found');
 
       mockPayoutsService.downloadPayoutLogs.mockRejectedValue(error);
@@ -440,4 +440,4 @@ describe('PayoutsController', () => {
       await expect(controller.downloadPayoutLogs(payload)).rejects.toThrow('Logs not found');
     });
   });
-}); 
+});

@@ -96,8 +96,7 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.EXPORT_PAYOUT_LOGS,
     uuid: process.env.PROJECT_ID,
   })
-  downloadPayoutLogs(@Payload() payload: { uuid: string }) {
-    console.log('first');
-    return this.payoutsService.downloadPayoutLogs(payload.uuid);
+  downloadPayoutLogs(@Payload() payload: { payoutUUID: string }) {
+    return this.payoutsService.downloadPayoutLogs(payload.payoutUUID);
   }
 }
