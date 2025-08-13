@@ -117,8 +117,8 @@ export class StellarController {
     cmd: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
-  async addTriggerOnChain(trigger: AddTriggerDto[]) {
-    return this.stellarService.addTriggerOnChain(trigger);
+  async addTriggerOnChain(payload: { triggers: AddTriggerDto[] }) {
+    return this.stellarService.addTriggerOnChain(payload.triggers);
   }
 
   // Update trigger from on-chain contract
@@ -126,8 +126,8 @@ export class StellarController {
     cmd: JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER,
     uuid: process.env.PROJECT_ID,
   })
-  async updateOnchainTrigger(trigger: UpdateTriggerParamsDto) {
-    return this.stellarService.updateOnchainTrigger(trigger);
+  async updateOnchainTrigger(payload: { trigger: UpdateTriggerParamsDto }) {
+    return this.stellarService.updateOnchainTrigger(payload.trigger);
   }
 
   // Funds wallet Address with Rahat Asset
