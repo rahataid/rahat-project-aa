@@ -263,6 +263,7 @@ describe('BeneficiaryService', () => {
       expect(result).toEqual(mockResult);
       expect(mockPrismaService.rsclient.beneficiary.createMany).toHaveBeenCalledWith({
         data: createManyDto,
+        skipDuplicates: true,
       });
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_CREATED);
     });
@@ -1127,7 +1128,7 @@ describe('BeneficiaryService', () => {
 
       expect(service.createBatches).toHaveBeenCalledWith(mockCount, 50);
       expect(contractQueue.add).toHaveBeenCalledTimes(3);
-      
+
       mockBatches.forEach((batch) => {
         expect(contractQueue.add).toHaveBeenCalledWith(
           JOBS.PAYOUT.ASSIGN_TOKEN,
@@ -1325,4 +1326,4 @@ describe('BeneficiaryService', () => {
       await expect(service.createBeneficiaryRedeem(payload)).rejects.toThrow(error);
     });
   });
-}); 
+});
