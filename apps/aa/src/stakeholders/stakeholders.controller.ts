@@ -6,6 +6,7 @@ import {
   AddStakeholdersData,
   AddStakeholdersGroups,
   GetAllGroups,
+  getGroupByUuidDto,
   GetOneGroup,
   GetStakeholdersData,
   RemoveStakeholdersData,
@@ -103,6 +104,15 @@ export class StakeholdersController {
   async getAllGroups(payload: GetAllGroups) {
     console.log('getting all stakeholders groups', payload);
     return this.stakeholdersService.getAllGroups(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.GET_ALL_GROUPS_BY_UUIDS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getAllGroupsByUuids(payload: getGroupByUuidDto) {
+    console.log(payload);
+    return this.stakeholdersService.getAllGroupsByUuids(payload);
   }
 
   @MessagePattern({
