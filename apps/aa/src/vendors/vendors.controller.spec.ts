@@ -6,6 +6,7 @@ import { VendorStatsDto, VendorRedeemDto } from './dto/vendorStats.dto';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import { PayoutMode } from '@prisma/client';
+import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 
 describe('VendorsController', () => {
   let controller: VendorsController;
@@ -18,6 +19,15 @@ describe('VendorsController', () => {
     getVendorBeneficiaries: jest.fn(),
   };
 
+  const mockVendorTokenRedemptionService = {
+    create: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    list: jest.fn(),
+    getVendorRedemptions: jest.fn(),
+    getVendorTokenRedemptionStats: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [VendorsController],
@@ -25,6 +35,10 @@ describe('VendorsController', () => {
         {
           provide: VendorsService,
           useValue: mockVendorsService,
+        },
+        {
+          provide: VendorTokenRedemptionService,
+          useValue: mockVendorTokenRedemptionService,
         },
       ],
     }).compile();
@@ -363,4 +377,4 @@ describe('VendorsController', () => {
       await expect(controller.getVendorBeneficiaries(payload)).rejects.toThrow('Vendor not found');
     });
   });
-}); 
+});

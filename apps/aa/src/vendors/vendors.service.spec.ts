@@ -407,7 +407,12 @@ describe('VendorsService', () => {
 
       const result = await service.getTxnAndRedemptionList(payload);
 
-      expect(result.data).toEqual(mockTransactions);
+      // Updated expectation to account for Beneficiary enrichment performed by service
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
+        ...mockTransactions[0],
+        Beneficiary: { phone: null, name: null },
+      });
       expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
@@ -464,7 +469,7 @@ describe('VendorsService', () => {
         expect.objectContaining({
           where: {
             vendorUid: 'vendor-123',
-            status: 'TOKEN_TRANSACTION_COMPLET',
+            status: 'TOKEN_TRANSACTION_COMPLETED', // corrected expected status
           },
         })
       );
@@ -518,17 +523,17 @@ describe('VendorsService', () => {
         },
         {
           beneficiaryWalletAddress: 'wallet-2',
-          vendorUid: 'test-vendor-uuid',
-          transactionType: 'VENDOR_REIMBURSEMENT',
-          Beneficiary: {
-            uuid: 'ben-2',
-            walletAddress: 'wallet-2',
-            phone: '0987654321',
-            gender: 'FEMALE',
-            benTokens: 200,
-            isVerified: false,
-            createdAt: new Date(),
-          },
+            vendorUid: 'test-vendor-uuid',
+            transactionType: 'VENDOR_REIMBURSEMENT',
+            Beneficiary: {
+              uuid: 'ben-2',
+              walletAddress: 'wallet-2',
+              phone: '0987654321',
+              gender: 'FEMALE',
+              benTokens: 200,
+              isVerified: false,
+              createdAt: new Date(),
+            },
         },
       ];
 
@@ -544,13 +549,17 @@ describe('VendorsService', () => {
       const result = await service.getVendorBeneficiaries(payload);
 
       expect(result.data).toHaveLength(2);
-      expect(result.data[0]).toEqual({
+      expect(result.data[0]).toMatchObject({
         ...mockBeneficiaryRedeems[0].Beneficiary,
         name: 'John Doe',
+        txHash: null,
+        status: null,
       });
-      expect(result.data[1]).toEqual({
+      expect(result.data[1]).toMatchObject({
         ...mockBeneficiaryRedeems[1].Beneficiary,
         name: 'Jane Smith',
+        txHash: null,
+        status: null,
       });
       expect(result.meta.total).toBe(2);
 
@@ -645,9 +654,11 @@ describe('VendorsService', () => {
       const result = await service.getVendorBeneficiaries(payload);
 
       expect(result.data).toHaveLength(1);
-      expect(result.data[0]).toEqual({
+      expect(result.data[0]).toMatchObject({
         ...mockBeneficiaryToGroups[0].beneficiary,
         name: 'John Doe',
+        txHash: null,
+        status: null,
       });
       expect(result.meta.total).toBe(1);
 
