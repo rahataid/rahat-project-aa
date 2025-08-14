@@ -13,6 +13,7 @@ import {
 import { StellarService } from '../stellar/stellar.service';
 import { SettingsService } from '@rumsan/settings';
 import bcrypt from 'bcryptjs';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Processor(BQUEUE.VENDOR_OFFLINE)
 @Injectable()
@@ -55,13 +56,18 @@ export class VendorOfflinePayoutProcessor {
           },
         });
 
-      // if (!beneficiaryGroupTokens) {
-      //   throw new Error(
-      //     `No beneficiary group tokens found for group ${data.beneficiaryGroupUuid}`
-      //   );
-      // }
+      if (!beneficiaryGroupTokens) {
+        throw new Error(
+          `No beneficiary group tokens found for group ${data.beneficiaryGroupUuid}`
+        );
+      }
 
       const { payout, beneficiaryGroup } = beneficiaryGroupTokens;
+
+      // Validate amount is provided
+      if (!data.amount) {
+        throw new Error('Amount is required for vendor offline payout');
+      }
 
       // Validate payout type and mode
       // if (payout.type !== 'VENDOR' || payout.mode !== 'OFFLINE') {
@@ -89,9 +95,8 @@ export class VendorOfflinePayoutProcessor {
       // Send OTP to all beneficiaries in the group
       const result = await this.sendOtpToGroupDirect(
         beneficiaries,
-        payout.payoutProcessorId, // Use vendor UUID directly from payout
-        payout.uuid,
-        (payout.extras as any)?.amount // Pass the payout amount if available in extras
+        '9fc87585-0bb4-41a6-b040-d8c3ffff6440',
+        data.amount
       );
 
       this.logger.log(
@@ -110,16 +115,123 @@ export class VendorOfflinePayoutProcessor {
     }
   }
 
+  @Process({ name: JOBS.VENDOR.PROCESS_OFFLINE_TOKEN_TRANSFER, concurrency: 1 })
+  async processOfflineTokenTransfer(
+    job: Job<{
+      offlineRecordUuid: string;
+      vendorUuid: string;
+      beneficiaryUuid: string;
+      amount: number;
+      otp: string;
+    }>
+  ) {
+    try {
+      const { offlineRecordUuid, vendorUuid, beneficiaryUuid, amount, otp } =
+        job.data;
+
+      this.logger.log(
+        `Processing offline token transfer for record ${offlineRecordUuid}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      // Get the offline record
+      const offlineRecord =
+        await this.prismaService.offlineBeneficiaryMCN.findUnique({
+          where: { uuid: offlineRecordUuid },
+          include: { Beneficiary: true, Vendor: true },
+        });
+
+      if (!offlineRecord) {
+        throw new Error(`Offline record ${offlineRecordUuid} not found`);
+      }
+
+      // Get beneficiary and vendor details
+      const beneficiary = offlineRecord.Beneficiary;
+      const vendor = offlineRecord.Vendor;
+
+      if (!beneficiary || !vendor) {
+        throw new Error('Beneficiary or vendor not found');
+      }
+
+      // Send tokens from beneficiary to vendor using Stellar service
+      const transferResult = await this.stellarService.sendAssetToVendor({
+        phoneNumber: (beneficiary.extras as any)?.phone || '',
+        receiverAddress: vendor.walletAddress,
+        amount: amount.toString(),
+        otp: otp,
+      });
+
+      // Update the offline record status to SYNCED
+      await this.prismaService.offlineBeneficiaryMCN.update({
+        where: { uuid: offlineRecordUuid },
+        data: {
+          status: 'SYNCED',
+        },
+      });
+
+      // Create beneficiary redeem record
+      await this.prismaService.beneficiaryRedeem.create({
+        data: {
+          vendorUid: vendorUuid,
+          amount: amount,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          beneficiaryWalletAddress: beneficiary.walletAddress,
+          txHash: transferResult.txHash,
+          isCompleted: true,
+          status: 'COMPLETED',
+        },
+      });
+
+      this.logger.log(
+        `Successfully processed offline token transfer for record ${offlineRecordUuid}. Transaction hash: ${transferResult.txHash}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      return {
+        success: true,
+        offlineRecordUuid,
+        transactionHash: transferResult.txHash,
+        amount,
+        beneficiaryUuid,
+        vendorUuid,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to process offline token transfer for record ${job.data.offlineRecordUuid}: ${error.message}`,
+        error.stack,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      // Update status to FAILED
+      await this.prismaService.offlineBeneficiaryMCN.update({
+        where: { uuid: job.data.offlineRecordUuid },
+        data: {
+          status: 'FAILED',
+        },
+      });
+
+      throw new RpcException(error.message);
+    }
+  }
+
   private async sendOtpToGroupDirect(
     beneficiaries: any[],
     vendorUuid: string,
-    payoutUuid: string,
     amount?: string
   ) {
     this.logger.log(
-      `Sending OTP to ${beneficiaries.length} beneficiaries for vendor ${vendorUuid}`,
+      `Sending OTP to ${beneficiaries.length} beneficiaries for vendor ${vendorUuid} with amount: ${amount}`,
       VendorOfflinePayoutProcessor.name
     );
+
+    // Verify vendor exists before proceeding
+    const vendor = await this.prismaService.vendor.findUnique({
+      where: { uuid: vendorUuid },
+    });
+
+    if (!vendor) {
+      throw new Error(`Vendor with UUID ${vendorUuid} not found`);
+    }
 
     const otpData: BeneficiaryOtpData[] = [];
     const bulkOtpRequests: CreateClaimDto[] = [];
@@ -127,7 +239,7 @@ export class VendorOfflinePayoutProcessor {
     // Prepare bulk OTP requests
     for (const beneficiary of beneficiaries) {
       try {
-        if (!beneficiary.phone) {
+        if (!beneficiary.extras.phone) {
           this.logger.warn(
             `Beneficiary ${beneficiary.uuid} has no phone number, skipping...`,
             VendorOfflinePayoutProcessor.name
@@ -135,21 +247,12 @@ export class VendorOfflinePayoutProcessor {
           continue;
         }
 
-        let beneficiaryAmount: number;
+        // Use amount provided in DTO
+        const beneficiaryAmount = parseInt(amount);
 
-        // If amount is provided in DTO, use it; otherwise fetch from beneficiary balance
-        if (amount) {
-          beneficiaryAmount = parseInt(amount);
-        } else {
-          // Get beneficiary token balance only when amount is not provided
-          beneficiaryAmount = await this.getBeneficiaryBalance(
-            beneficiary.phone
-          );
-        }
-
-        if (beneficiaryAmount <= 0) {
+        if (isNaN(beneficiaryAmount) || beneficiaryAmount <= 0) {
           this.logger.warn(
-            `Beneficiary ${beneficiary.uuid} has no balance, skipping...`,
+            `Invalid amount for beneficiary ${beneficiary.uuid}: ${amount}`,
             VendorOfflinePayoutProcessor.name
           );
           continue;
@@ -157,7 +260,7 @@ export class VendorOfflinePayoutProcessor {
 
         // Add to bulk OTP requests
         bulkOtpRequests.push({
-          phoneNumber: beneficiary.phone,
+          phoneNumber: beneficiary.extras.phone,
           amount: beneficiaryAmount.toString(),
         });
 
@@ -202,7 +305,7 @@ export class VendorOfflinePayoutProcessor {
       if (bulkOtpResult && bulkOtpResult.success) {
         for (const request of bulkOtpRequests) {
           const beneficiary = beneficiaries.find(
-            (b) => b.phone === request.phoneNumber
+            (b) => b.extras.phone === request.phoneNumber
           );
 
           if (beneficiary) {
@@ -216,21 +319,47 @@ export class VendorOfflinePayoutProcessor {
                 10
               );
 
-              await this.prismaService.otp.upsert({
-                where: { phoneNumber: request.phoneNumber },
-                update: {
-                  otpHash,
-                  amount: parseInt(request.amount),
-                  expiresAt: expiryDate,
-                  isVerified: false,
-                },
-                create: {
-                  phoneNumber: request.phoneNumber,
-                  otpHash,
-                  amount: parseInt(request.amount),
-                  expiresAt: expiryDate,
-                },
-              });
+              // Check if record already exists for this beneficiary and vendor
+              const existingRecord =
+                await this.prismaService.offlineBeneficiaryMCN.findFirst({
+                  where: {
+                    beneficiaryId: beneficiary.uuid,
+                    vendorId: vendorUuid,
+                  },
+                });
+
+              if (existingRecord) {
+                // Update existing record
+                await this.prismaService.offlineBeneficiaryMCN.update({
+                  where: { uuid: existingRecord.uuid },
+                  data: {
+                    otpHash,
+                    amount: parseInt(request.amount),
+                    updatedAt: new Date(),
+                  },
+                });
+
+                this.logger.log(
+                  `Updated existing OTP record for beneficiary ${beneficiary.uuid} and vendor ${vendorUuid}`,
+                  VendorOfflinePayoutProcessor.name
+                );
+              } else {
+                // Create new record
+                await this.prismaService.offlineBeneficiaryMCN.create({
+                  data: {
+                    otpHash,
+                    vendorId: vendorUuid,
+                    beneficiaryId: beneficiary.uuid,
+                    amount: parseInt(request.amount),
+                    status: 'PENDING',
+                  },
+                });
+
+                this.logger.log(
+                  `Created new OTP record for beneficiary ${beneficiary.uuid} and vendor ${vendorUuid}`,
+                  VendorOfflinePayoutProcessor.name
+                );
+              }
 
               // Check if beneficiary has existing transaction
               const existingTransaction =
@@ -288,20 +417,6 @@ export class VendorOfflinePayoutProcessor {
         VendorOfflinePayoutProcessor.name
       );
       throw error;
-    }
-  }
-
-  public async getBeneficiaryBalance(phoneNumber: string): Promise<number> {
-    try {
-      // Use the stellar service's getBenTotal function to get beneficiary balance
-      return await this.stellarService.getBenTotal(phoneNumber);
-    } catch (error) {
-      this.logger.error(
-        `Failed to get balance for phone ${phoneNumber}: ${error.message}`,
-        error.stack,
-        VendorOfflinePayoutProcessor.name
-      );
-      return 0;
     }
   }
 }

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { CORE_MODULE } from '../constants';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
+import bcrypt from 'bcryptjs';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
@@ -9,6 +10,13 @@ import { lastValueFrom } from 'rxjs';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
+import {
+  GetVendorOfflineBeneficiariesDto,
+  OfflineBeneficiaryDetail,
+  VerifyVendorOfflineOtpDto,
+  OtpVerificationResult,
+  VendorOfflineSyncDto,
+} from './dto/vendor-offline-beneficiaries.dto';
 import {
   VendorOfflinePayoutDto,
   TestVendorOfflinePayoutDto,
@@ -607,10 +615,10 @@ export class VendorsService {
       this.logger.log(
         `Processing offline payout for beneficiary group ${payload.beneficiaryGroupUuid}`
       );
-
       // Add job to queue for processing
       await this.vendorOfflinePayoutQueue.add(JOBS.VENDOR.OFFLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+        amount: payload.amount,
       });
 
       this.logger.log(
@@ -654,6 +662,297 @@ export class VendorsService {
         message: 'Vendor offline payout test job added to queue',
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         testAmount: payload.testAmount,
+      };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async fetchVendorOfflineBeneficiaries(
+    payload: GetVendorOfflineBeneficiariesDto
+  ): Promise<OfflineBeneficiaryDetail[]> {
+    try {
+      this.logger.log(
+        `Getting offline beneficiaries for vendor ${payload.vendorUuid}`
+      );
+
+      // First verify the vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: payload.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `Vendor with id ${payload.vendorUuid} not found`
+        );
+      }
+
+      // Get offline beneficiary MCN data for this vendor
+      const offlineBeneficiaryData =
+        await this.prisma.offlineBeneficiaryMCN.findMany({
+          where: {
+            vendorId: payload.vendorUuid,
+          },
+          include: {
+            Beneficiary: true,
+          },
+        });
+
+      if (!offlineBeneficiaryData.length) {
+        this.logger.log(
+          `No offline beneficiary data found for vendor ${payload.vendorUuid}`
+        );
+        return [];
+      }
+
+      // Update status of all records to REQUESTED
+      await this.prisma.offlineBeneficiaryMCN.updateMany({
+        where: {
+          vendorId: payload.vendorUuid,
+        },
+        data: {
+          status: 'REQUESTED',
+        },
+      });
+
+      this.logger.log(
+        `Updated status to REQUESTED for ${offlineBeneficiaryData.length} offline beneficiary records for vendor ${payload.vendorUuid}`
+      );
+
+      // Fetch updated records to get the new status
+      const updatedOfflineBeneficiaryData =
+        await this.prisma.offlineBeneficiaryMCN.findMany({
+          where: {
+            vendorId: payload.vendorUuid,
+          },
+          include: {
+            Beneficiary: true,
+          },
+        });
+
+      // Transform data to simplified format
+      const offlineBeneficiaries: OfflineBeneficiaryDetail[] = [];
+
+      for (const offlineBen of updatedOfflineBeneficiaryData) {
+        const beneficiary = offlineBen.Beneficiary;
+        if (beneficiary) {
+          offlineBeneficiaries.push({
+            uuid: offlineBen.uuid,
+            beneficiaryName: (beneficiary.extras as any)?.name || 'Unknown',
+            phoneNumber: (beneficiary.extras as any)?.phone || '',
+            otpHash: offlineBen.otpHash,
+            amount: offlineBen.amount,
+            status: offlineBen.status,
+          });
+        }
+      }
+
+      this.logger.log(
+        `Found ${offlineBeneficiaries.length} offline beneficiaries for vendor ${payload.vendorUuid}`
+      );
+
+      return offlineBeneficiaries;
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async syncVendorOfflineData(payload: VendorOfflineSyncDto) {
+    try {
+      this.logger.log(
+        `Syncing offline data for vendor ${payload.vendorUuid} with ${payload.verifiedBeneficiaries.length} verified beneficiaries`
+      );
+
+      // First verify the vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: payload.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `Vendor with id ${payload.vendorUuid} not found`
+        );
+      }
+
+      const results = [];
+
+      for (const item of payload.verifiedBeneficiaries) {
+        try {
+          // Get the offline beneficiary record
+          const offlineRecord =
+            await this.prisma.offlineBeneficiaryMCN.findUnique({
+              where: { uuid: item.uuid },
+              include: { Beneficiary: true },
+            });
+
+          if (!offlineRecord) {
+            results.push({
+              uuid: item.uuid,
+              success: false,
+              message: 'Offline beneficiary record not found',
+            });
+            continue;
+          }
+
+          // Verify OTP
+          const isValidOtp = await bcrypt.compare(
+            `${item.otp}:${offlineRecord.amount}`,
+            offlineRecord.otpHash
+          );
+
+          if (!isValidOtp) {
+            results.push({
+              uuid: item.uuid,
+              success: false,
+              message: 'Invalid OTP',
+            });
+            continue;
+          }
+
+          // Add to queue for token transfer
+          await this.vendorOfflinePayoutQueue.add(
+            JOBS.VENDOR.PROCESS_OFFLINE_TOKEN_TRANSFER,
+            {
+              offlineRecordUuid: item.uuid,
+              vendorUuid: payload.vendorUuid,
+              beneficiaryUuid: offlineRecord.beneficiaryId,
+              amount: offlineRecord.amount,
+              otp: item.otp,
+            },
+            {
+              attempts: 3,
+              removeOnComplete: true,
+              backoff: {
+                type: 'exponential',
+                delay: 1000,
+              },
+            }
+          );
+
+          results.push({
+            uuid: item.uuid,
+            success: true,
+            message: 'Queued for token transfer',
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error processing offline record ${item.uuid}: ${error.message}`
+          );
+          results.push({
+            uuid: item.uuid,
+            success: false,
+            message: error.message,
+          });
+        }
+      }
+
+      this.logger.log(
+        `Completed syncing offline data for vendor ${
+          payload.vendorUuid
+        }. Results: ${JSON.stringify(results)}`
+      );
+
+      return {
+        vendorUuid: payload.vendorUuid,
+        totalProcessed: payload.verifiedBeneficiaries.length,
+        results,
+      };
+    } catch (error) {
+      this.logger.error(`Error syncing vendor offline data: ${error.message}`);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async verifyVendorOfflineOtp(
+    payload: VerifyVendorOfflineOtpDto
+  ): Promise<OtpVerificationResult> {
+    try {
+      this.logger.log(
+        `Verifying OTP for phone ${payload.phoneNumber} and vendor ${payload.vendorUuid}`
+      );
+
+      // First verify the vendor exists
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: payload.vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `Vendor with id ${payload.vendorUuid} not found`
+        );
+      }
+
+      // Get OTP data for the phone number
+      const otpData = await this.prisma.otp.findUnique({
+        where: { phoneNumber: payload.phoneNumber },
+      });
+
+      if (!otpData) {
+        return {
+          isValid: false,
+          message: 'No OTP found for this phone number',
+        };
+      }
+
+      // Check if OTP has expired
+      if (new Date() > otpData.expiresAt) {
+        return {
+          isValid: false,
+          message: 'OTP has expired',
+        };
+      }
+
+      // Check if OTP is already verified
+      if (otpData.isVerified) {
+        return {
+          isValid: false,
+          message: 'OTP has already been used',
+        };
+      }
+
+      // Verify the OTP using bcrypt
+      const isValidOtp = await bcrypt.compare(
+        `${payload.otp}:${otpData.amount}`,
+        otpData.otpHash
+      );
+
+      if (!isValidOtp) {
+        return {
+          isValid: false,
+          message: 'Invalid OTP',
+        };
+      }
+
+      // Get beneficiary information
+      const beneficiary = await this.prisma.beneficiary.findFirst({
+        where: { phone: payload.phoneNumber },
+      });
+
+      if (!beneficiary) {
+        return {
+          isValid: false,
+          message: 'Beneficiary not found for this phone number',
+        };
+      }
+
+      // Mark OTP as verified
+      await this.prisma.otp.update({
+        where: { phoneNumber: payload.phoneNumber },
+        data: { isVerified: true },
+      });
+
+      this.logger.log(
+        `OTP verified successfully for phone ${payload.phoneNumber}`
+      );
+
+      return {
+        isValid: true,
+        message: 'OTP verified successfully',
+        beneficiaryUuid: beneficiary.uuid,
+        amount: otpData.amount,
+        walletAddress: beneficiary.walletAddress,
       };
     } catch (error) {
       this.logger.error(error.message);

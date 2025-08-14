@@ -51,6 +51,10 @@ export class VendorOfflinePayoutDto {
   @IsString()
   @IsNotEmpty()
   beneficiaryGroupUuid: string;
+
+  @IsString()
+  @IsNotEmpty()
+  amount: string;
 }
 
 export class SendGroupOtpDto {

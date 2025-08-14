@@ -1,16 +1,23 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
+import { BullModule } from '@nestjs/bull';
 import { VendorsService } from './vendors.service';
+import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE, BQUEUE } from '../constants';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
-import { BullModule } from '@nestjs/bull';
+import { StellarModule } from '../stellar/stellar.module';
+import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedemption.processor';
 
 @Module({
   imports: [
     PrismaModule,
+    StellarModule,
+    BullModule.registerQueue({
+      name: BQUEUE.VENDOR,
+    }),
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -28,6 +35,8 @@ import { BullModule } from '@nestjs/bull';
   ],
   providers: [
     VendorsService,
+    VendorTokenRedemptionService,
+    VendorTokenRedemptionProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingService: SettingsService) => {
@@ -46,6 +55,6 @@ import { BullModule } from '@nestjs/bull';
     },
   ],
   controllers: [VendorsController],
-  exports: [VendorsService, ReceiveService],
+  exports: [VendorsService, VendorTokenRedemptionService, ReceiveService],
 })
 export class VendorsModule {}
