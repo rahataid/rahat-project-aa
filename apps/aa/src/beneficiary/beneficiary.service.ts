@@ -207,14 +207,18 @@ export class BeneficiaryService {
   }
 
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
-    this.logger.log('Fetching all group by group uuids');
+    this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
     try {
-      // Convert fields array into an object for Prisma select
-      const selectFields = selectField.reduce((acc, field) => {
-        acc[field] = true;
-        return acc;
-      }, {});
+      let selectFields;
+
+      if (selectField && selectField.length > 0) {
+        // Convert fields array into an object for Prisma select
+        selectFields = selectField.reduce((acc, field) => {
+          acc[field] = true;
+          return acc;
+        }, {});
+      }
 
       const groups = await this.prisma.beneficiaryGroups.findMany({
         where: {
@@ -222,7 +226,7 @@ export class BeneficiaryService {
             in: uuids,
           },
         },
-        select: selectFields,
+        ...(selectFields ? { select: selectFields } : {}),
       });
 
       return groups;

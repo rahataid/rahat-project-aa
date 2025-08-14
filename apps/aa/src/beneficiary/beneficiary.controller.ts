@@ -92,7 +92,6 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
-    console.log(payload);
     return this.beneficiaryService.getAllGroupsByUuids(payload);
   }
 
