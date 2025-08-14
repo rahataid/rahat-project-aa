@@ -170,6 +170,7 @@ export class VendorTokenRedemptionService {
         perPage,
         sort = 'createdAt',
         order = 'desc',
+        name,
       } = query;
 
       const where: any = {};
@@ -180,6 +181,10 @@ export class VendorTokenRedemptionService {
 
       if (redemptionStatus) {
         where.redemptionStatus = redemptionStatus;
+      }
+
+      if (name) {
+        where.vendor = { name: { contains: name, mode: 'insensitive' } };
       }
 
       const orderBy: Record<string, 'asc' | 'desc'> = {};
