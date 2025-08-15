@@ -342,7 +342,10 @@ export class StellarService {
   }
 
   // todo: Make this dynamic for evm
-  async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+  async sendAssetToVendor(
+    verifyOtpDto: SendAssetDto,
+    skipOtpVerification: boolean = false
+  ) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -362,11 +365,14 @@ export class StellarService {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      // Skip OTP verification for offline flows
+      if (!skipOtpVerification) {
+        await this.verifyOTP(
+          verifyOtpDto.otp,
+          verifyOtpDto.phoneNumber,
+          amount as number
+        );
+      }
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -826,11 +832,11 @@ export class StellarService {
     );
 
     const totalBeneficiaries = benfTokens
-    .filter((token) => token.isDisbursed)
-    .reduce(
-      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-      0
-    );
+      .filter((token) => token.isDisbursed)
+      .reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
 
     const disbursementsInfo = benfTokens
       .filter(
@@ -838,7 +844,6 @@ export class StellarService {
           token.isDisbursed && (token.info as any)?.disbursementTimeTaken
       )
       .map((token) => (token.info as any)?.disbursementTimeTaken);
-
 
     const averageDisbursementTime =
       disbursementsInfo.reduce((acc, time) => acc + time, 0) /
@@ -871,7 +876,6 @@ export class StellarService {
           .length;
 
       averageDuration = averageDuration;
-
     }
 
     return [
@@ -889,8 +893,15 @@ export class StellarService {
       },
       { name: 'Token Price', value: oneTokenPrice },
       { name: 'Total Beneficiaries', value: totalBeneficiaries },
-      { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
-      { name: 'Average Duration', value: averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+      {
+        name: 'Average Disbursement time',
+        value: getFormattedTimeDiff(averageDisbursementTime),
+      },
+      {
+        name: 'Average Duration',
+        value:
+          averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+      },
     ];
   }
 

@@ -153,13 +153,16 @@ export class VendorOfflinePayoutProcessor {
         throw new Error('Beneficiary or vendor not found');
       }
 
-      // Send tokens from beneficiary to vendor using Stellar service
-      const transferResult = await this.stellarService.sendAssetToVendor({
-        phoneNumber: (beneficiary.extras as any)?.phone || '',
-        receiverAddress: vendor.walletAddress,
-        amount: amount.toString(),
-        otp: otp,
-      });
+      // Send tokens from beneficiary to vendor using Stellar service (offline flow)
+      const transferResult = await this.stellarService.sendAssetToVendor(
+        {
+          phoneNumber: (beneficiary.extras as any)?.phone || '',
+          receiverAddress: vendor.walletAddress,
+          amount: amount.toString(),
+          otp: otp,
+        },
+        true // skipOtpVerification flag for offline flow
+      );
 
       // Update the offline record status to SYNCED
       await this.prismaService.offlineBeneficiaryMCN.update({
@@ -169,16 +172,23 @@ export class VendorOfflinePayoutProcessor {
         },
       });
 
-      // Create beneficiary redeem record
+      // Create beneficiary redeem record for offline flow
       await this.prismaService.beneficiaryRedeem.create({
         data: {
-          vendorUid: vendorUuid,
+          vendorUid: vendor.uuid,
           amount: amount,
           transactionType: 'VENDOR_REIMBURSEMENT',
           beneficiaryWalletAddress: beneficiary.walletAddress,
           txHash: transferResult.txHash,
           isCompleted: true,
           status: 'COMPLETED',
+          info: {
+            message: 'Offline beneficiary redemption successful',
+            transactionHash: transferResult.txHash,
+            offrampWalletAddress: vendor.walletAddress,
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            otp: otp,
+          },
         },
       });
 
@@ -301,6 +311,8 @@ export class VendorOfflinePayoutProcessor {
         VendorOfflinePayoutProcessor.name
       );
 
+      console.log(bulkOtpResult);
+
       // Process the bulk OTP results and store OTPs
       if (bulkOtpResult && bulkOtpResult.success) {
         for (const request of bulkOtpRequests) {
@@ -314,8 +326,20 @@ export class VendorOfflinePayoutProcessor {
               const expiryDate = new Date();
               expiryDate.setMonth(expiryDate.getMonth() + 1);
 
+              // Find the OTP for this request
+              const result = bulkOtpResult.results.find(
+                (r) => r.phoneNumber === request.phoneNumber && r.success
+              );
+              if (!result) {
+                this.logger.error(
+                  `No OTP result found for phone ${request.phoneNumber}`,
+                  VendorOfflinePayoutProcessor.name
+                );
+                continue;
+              }
+
               const otpHash = await bcrypt.hash(
-                `${bulkOtpResult.otp}:${request.amount}`,
+                `${result.otp}:${request.amount}`,
                 10
               );
 
