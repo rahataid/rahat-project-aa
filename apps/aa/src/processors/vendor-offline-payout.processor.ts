@@ -338,10 +338,15 @@ export class VendorOfflinePayoutProcessor {
                 continue;
               }
 
+              console.log(result.otp);
+              console.log(request.amount);
+
               const otpHash = await bcrypt.hash(
                 `${result.otp}:${request.amount}`,
                 10
               );
+
+              console.log(otpHash);
 
               // Check if record already exists for this beneficiary and vendor
               const existingRecord =
