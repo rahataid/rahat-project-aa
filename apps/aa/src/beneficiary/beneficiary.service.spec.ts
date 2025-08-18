@@ -5,7 +5,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getQueueToken } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
-import { CreateBeneficiaryDto, AddTokenToGroup } from './dto/create-beneficiary.dto';
+import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { GetBenfGroupDto } from './dto/get-group.dto';
 import { GroupPurpose } from '@prisma/client';
@@ -131,7 +131,9 @@ describe('BeneficiaryService', () => {
         { id: 2, uuid: 'ben-2', name: 'Jane Smith' },
       ];
 
-      mockPrismaService.beneficiary.findMany.mockResolvedValue(mockBeneficiaries);
+      mockPrismaService.beneficiary.findMany.mockResolvedValue(
+        mockBeneficiaries
+      );
 
       const result = await service.getAllBenfs();
 
@@ -165,7 +167,9 @@ describe('BeneficiaryService', () => {
         { id: 5, uuid: 'ben-5', name: 'Jane Smith' },
       ];
 
-      mockPrismaService.beneficiary.findMany.mockResolvedValue(mockBeneficiaries);
+      mockPrismaService.beneficiary.findMany.mockResolvedValue(
+        mockBeneficiaries
+      );
 
       const result = await service.getBenfBetweenIds(startId, endId);
 
@@ -200,20 +204,26 @@ describe('BeneficiaryService', () => {
         walletAddress: 'wallet-address',
         location: { lat: 27.7, lng: 85.3 },
         extras: {
-          note: 'test note'
+          note: 'test note',
         },
       };
 
       const mockCreatedBeneficiary = { id: 1, ...expectedData };
-      mockPrismaService.rsclient.beneficiary.create.mockResolvedValue(mockCreatedBeneficiary);
+      mockPrismaService.rsclient.beneficiary.create.mockResolvedValue(
+        mockCreatedBeneficiary
+      );
 
       const result = await service.create(createDto);
 
       expect(result).toEqual(mockCreatedBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.create).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.create
+      ).toHaveBeenCalledWith({
         data: expectedData,
       });
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_CREATED);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.BENEFICIARY_CREATED
+      );
     });
 
     it('should create beneficiary without location', async () => {
@@ -237,12 +247,16 @@ describe('BeneficiaryService', () => {
       };
 
       const mockCreatedBeneficiary = { id: 1, ...expectedData };
-      mockPrismaService.rsclient.beneficiary.create.mockResolvedValue(mockCreatedBeneficiary);
+      mockPrismaService.rsclient.beneficiary.create.mockResolvedValue(
+        mockCreatedBeneficiary
+      );
 
       const result = await service.create(createDto);
 
       expect(result).toEqual(mockCreatedBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.create).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.create
+      ).toHaveBeenCalledWith({
         data: expectedData,
       });
     });
@@ -256,16 +270,22 @@ describe('BeneficiaryService', () => {
       ];
 
       const mockResult = { count: 2 };
-      mockPrismaService.rsclient.beneficiary.createMany.mockResolvedValue(mockResult);
+      mockPrismaService.rsclient.beneficiary.createMany.mockResolvedValue(
+        mockResult
+      );
 
       const result = await service.createMany(createManyDto);
 
       expect(result).toEqual(mockResult);
-      expect(mockPrismaService.rsclient.beneficiary.createMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.createMany
+      ).toHaveBeenCalledWith({
         data: createManyDto,
         skipDuplicates: true,
       });
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_CREATED);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.BENEFICIARY_CREATED
+      );
     });
   });
 
@@ -289,7 +309,9 @@ describe('BeneficiaryService', () => {
       // Mock the paginate function result - need to ensure the rsprisma beneficiary model has required methods
       Object.assign(mockPrismaService.rsclient.beneficiary, {
         count: jest.fn().mockResolvedValue(1),
-        findMany: jest.fn().mockResolvedValue([{ id: 1, uuid: 'ben-1', name: 'John Doe' }]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, uuid: 'ben-1', name: 'John Doe' }]),
       });
 
       const result = await service.findAll(dto);
@@ -427,8 +449,12 @@ describe('BeneficiaryService', () => {
         },
       ];
 
-      mockPrismaService.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockRedeemRecords);
+      mockPrismaService.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedeemRecords
+      );
 
       const result = await service.getBeneficiaryRedeemInfo(beneficiaryUUID);
 
@@ -446,7 +472,6 @@ describe('BeneficiaryService', () => {
         where: { uuid: beneficiaryUUID },
         select: { walletAddress: true },
       });
-
     });
 
     it('should throw RpcException when beneficiaryUUID is empty', async () => {
@@ -459,19 +484,23 @@ describe('BeneficiaryService', () => {
       const beneficiaryUUID = 'non-existent-uuid';
       mockPrismaService.beneficiary.findUnique.mockResolvedValue(null);
 
-      await expect(service.getBeneficiaryRedeemInfo(beneficiaryUUID)).rejects.toThrow(
-        new RpcException('Beneficiary not found')
-      );
+      await expect(
+        service.getBeneficiaryRedeemInfo(beneficiaryUUID)
+      ).rejects.toThrow(new RpcException('Beneficiary not found'));
     });
 
     it('should throw RpcException when no redeem records found', async () => {
       const beneficiaryUUID = 'ben-uuid-123';
       const mockBeneficiary = { walletAddress: 'wallet-address-123' };
 
-      mockPrismaService.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
       mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
-      await expect(service.getBeneficiaryRedeemInfo(beneficiaryUUID)).rejects.toThrow(
+      await expect(
+        service.getBeneficiaryRedeemInfo(beneficiaryUUID)
+      ).rejects.toThrow(
         new RpcException('No redeem records found for this beneficiary')
       );
     });
@@ -482,7 +511,9 @@ describe('BeneficiaryService', () => {
 
       mockPrismaService.beneficiary.findUnique.mockRejectedValue(error);
 
-      await expect(service.getBeneficiaryRedeemInfo(beneficiaryUUID)).rejects.toThrow(error);
+      await expect(
+        service.getBeneficiaryRedeemInfo(beneficiaryUUID)
+      ).rejects.toThrow(error);
     });
   });
 
@@ -499,7 +530,9 @@ describe('BeneficiaryService', () => {
 
       mockPrismaService.$queryRaw.mockResolvedValue(mockResult);
 
-      const result = await service.getFailedBeneficiaryRedeemByPayoutUUID(payoutUUID);
+      const result = await service.getFailedBeneficiaryRedeemByPayoutUUID(
+        payoutUUID
+      );
 
       expect(result).toEqual(mockResult);
       expect(mockPrismaService.$queryRaw).toHaveBeenCalled();
@@ -516,12 +549,16 @@ describe('BeneficiaryService', () => {
         Beneficiary: { uuid: 'ben-123' },
       };
 
-      mockPrismaService.beneficiaryRedeem.findUnique.mockResolvedValue(mockRedeem);
+      mockPrismaService.beneficiaryRedeem.findUnique.mockResolvedValue(
+        mockRedeem
+      );
 
       const result = await service.getBeneficiaryRedeem(uuid);
 
       expect(result).toEqual(mockRedeem);
-      expect(mockPrismaService.beneficiaryRedeem.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryRedeem.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid },
         include: {
           payout: true,
@@ -575,12 +612,16 @@ describe('BeneficiaryService', () => {
       const uuid = '123e4567-e89b-12d3-a456-426614174000' as any;
       const mockBeneficiary = { id: 1, uuid, name: 'John Doe' };
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
 
       const result = await service.findByUUID(uuid);
 
       expect(result).toEqual(mockBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid },
       });
     });
@@ -594,12 +635,16 @@ describe('BeneficiaryService', () => {
       };
       const mockBeneficiary = { id: 1, uuid: 'ben-uuid-123', name: 'John Doe' };
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
 
       const result = await service.findOne(payload);
 
       expect(result).toEqual({ extra: 'extraData', ...mockBeneficiary });
-      expect(mockPrismaService.rsclient.beneficiary.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid: payload.uuid },
       });
     });
@@ -608,7 +653,9 @@ describe('BeneficiaryService', () => {
       const payload = { uuid: 'ben-uuid-123' };
       const mockBeneficiary = { id: 1, uuid: 'ben-uuid-123', name: 'John Doe' };
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
 
       const result = await service.findOne(payload);
 
@@ -620,9 +667,14 @@ describe('BeneficiaryService', () => {
     it('should find one beneficiary and send to client', async () => {
       const payload = { uuid: 'ben-uuid-123' };
       const mockBeneficiary = { id: 1, uuid: 'ben-uuid-123', name: 'John Doe' };
-      const mockClientResponse = of({ ...mockBeneficiary, extraData: 'fromClient' });
+      const mockClientResponse = of({
+        ...mockBeneficiary,
+        extraData: 'fromClient',
+      });
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
       mockClientProxy.send.mockReturnValue(mockClientResponse);
 
       const result = await service.findOneBeneficiary(payload);
@@ -639,12 +691,18 @@ describe('BeneficiaryService', () => {
       const walletAddress = 'wallet-address-123';
       const mockBeneficiary = { id: 1, walletAddress, name: 'John Doe' };
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
 
-      const result = await service.findOneBeneficiaryByWalletAddress(walletAddress);
+      const result = await service.findOneBeneficiaryByWalletAddress(
+        walletAddress
+      );
 
       expect(result).toEqual(mockBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.findUnique
+      ).toHaveBeenCalledWith({
         where: { walletAddress },
       });
     });
@@ -660,16 +718,22 @@ describe('BeneficiaryService', () => {
       };
       const mockUpdatedBeneficiary = { id, ...updateDto };
 
-      mockPrismaService.rsclient.beneficiary.update.mockResolvedValue(mockUpdatedBeneficiary);
+      mockPrismaService.rsclient.beneficiary.update.mockResolvedValue(
+        mockUpdatedBeneficiary
+      );
 
       const result = await service.update(id, updateDto);
 
       expect(result).toEqual(mockUpdatedBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.update).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.update
+      ).toHaveBeenCalledWith({
         where: { id },
         data: updateDto,
       });
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_UPDATED);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.BENEFICIARY_UPDATED
+      );
     });
   });
 
@@ -677,22 +741,35 @@ describe('BeneficiaryService', () => {
     it('should soft delete beneficiary and emit event', async () => {
       const payload = { uuid: 'ben-uuid-123' };
       const mockBeneficiary = { id: 1, uuid: 'ben-uuid-123', name: 'John Doe' };
-      const mockUpdatedBeneficiary = { ...mockBeneficiary, deletedAt: new Date() };
+      const mockUpdatedBeneficiary = {
+        ...mockBeneficiary,
+        deletedAt: new Date(),
+      };
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
-      mockPrismaService.rsclient.beneficiary.update.mockResolvedValue(mockUpdatedBeneficiary);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
+      mockPrismaService.rsclient.beneficiary.update.mockResolvedValue(
+        mockUpdatedBeneficiary
+      );
 
       const result = await service.remove(payload);
 
       expect(result).toEqual(mockUpdatedBeneficiary);
-      expect(mockPrismaService.rsclient.beneficiary.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid: payload.uuid },
       });
-      expect(mockPrismaService.rsclient.beneficiary.update).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.rsclient.beneficiary.update
+      ).toHaveBeenCalledWith({
         where: { uuid: payload.uuid },
         data: { deletedAt: expect.any(Date) },
       });
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_REMOVED);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.BENEFICIARY_REMOVED
+      );
     });
 
     it('should return OK if beneficiary not found for removal', async () => {
@@ -703,7 +780,9 @@ describe('BeneficiaryService', () => {
       const result = await service.remove(payload);
 
       expect(result).toBe('OK');
-      expect(mockPrismaService.rsclient.beneficiary.update).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.rsclient.beneficiary.update
+      ).not.toHaveBeenCalled();
       expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });
@@ -732,12 +811,16 @@ describe('BeneficiaryService', () => {
         ],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockGroup);
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockGroup
+      );
       mockClientProxy.send.mockReturnValue(of(mockClientResponse));
 
       const result = await service.getOneGroup(uuid);
 
-      expect(mockPrismaService.beneficiaryGroups.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroups.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid, deletedAt: null },
         include: {
           tokensReserved: true,
@@ -780,7 +863,9 @@ describe('BeneficiaryService', () => {
         groupedBeneficiaries: [],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockGroup);
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockGroup
+      );
       mockClientProxy.send.mockReturnValue(of(mockClientResponse));
 
       const result = await service.getOneGroup(uuid);
@@ -789,17 +874,198 @@ describe('BeneficiaryService', () => {
     });
   });
 
+  describe('getAllGroupsByUuids', () => {
+    it('should fetch groups by UUIDs without select fields', async () => {
+      const payload = {
+        uuids: [
+          '123e4567-e89b-12d3-a456-426614174000',
+          '123e4567-e89b-12d3-a456-426614174001',
+        ],
+        selectField: undefined,
+      };
+      const mockGroups = [
+        {
+          id: 1,
+          uuid: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Group 1',
+          description: 'Description 1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 2,
+          uuid: '123e4567-e89b-12d3-a456-426614174001',
+          name: 'Group 2',
+          description: 'Description 2',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(
+        mockGroups
+      );
+
+      const result = await service.getAllGroupsByUuids(payload);
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            uuid: {
+              in: [
+                '123e4567-e89b-12d3-a456-426614174000',
+                '123e4567-e89b-12d3-a456-426614174001',
+              ],
+            },
+          },
+        }
+      );
+      expect(result).toEqual(mockGroups);
+    });
+
+    it('should fetch groups by UUIDs with select fields', async () => {
+      const payload = {
+        uuids: ['123e4567-e89b-12d3-a456-426614174000'],
+        selectField: ['uuid', 'name'],
+      };
+      const mockSelectedGroups = [
+        { uuid: '123e4567-e89b-12d3-a456-426614174000', name: 'Group 1' },
+      ];
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(
+        mockSelectedGroups
+      );
+
+      const result = await service.getAllGroupsByUuids(payload);
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            uuid: {
+              in: ['123e4567-e89b-12d3-a456-426614174000'],
+            },
+          },
+          select: {
+            uuid: true,
+            name: true,
+          },
+        }
+      );
+      expect(result).toEqual(mockSelectedGroups);
+    });
+
+    it('should return empty array when no groups found', async () => {
+      const payload = {
+        uuids: ['non-existent-uuid'],
+        selectField: undefined,
+      };
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+
+      const result = await service.getAllGroupsByUuids(payload);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should handle empty UUIDs array', async () => {
+      const payload = {
+        uuids: [],
+        selectField: undefined,
+      };
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+
+      const result = await service.getAllGroupsByUuids(payload);
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            uuid: {
+              in: [],
+            },
+          },
+        }
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('should handle empty select fields array', async () => {
+      const payload = {
+        uuids: ['123e4567-e89b-12d3-a456-426614174000'],
+        selectField: [],
+      };
+      const mockGroup = [
+        {
+          id: 1,
+          uuid: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Test Group',
+        },
+      ];
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(mockGroup);
+
+      const result = await service.getAllGroupsByUuids(payload);
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            uuid: {
+              in: ['123e4567-e89b-12d3-a456-426614174000'],
+            },
+          },
+        }
+      );
+      expect(result).toEqual(mockGroup);
+    });
+
+    it('should throw RpcException when database error occurs', async () => {
+      const payload = {
+        uuids: ['123e4567-e89b-12d3-a456-426614174000'],
+        selectField: undefined,
+      };
+
+      mockPrismaService.beneficiaryGroups.findMany.mockRejectedValue(
+        new Error('Database connection failed')
+      );
+
+      await expect(service.getAllGroupsByUuids(payload)).rejects.toThrow(
+        new RpcException(
+          'Error while fetching beneficiary groups by uuids. Database connection failed'
+        )
+      );
+    });
+
+    it('should throw RpcException with generic message when error has no message', async () => {
+      const payload = {
+        uuids: ['123e4567-e89b-12d3-a456-426614174000'],
+        selectField: undefined,
+      };
+
+      mockPrismaService.beneficiaryGroups.findMany.mockRejectedValue(
+        new Error()
+      );
+
+      await expect(service.getAllGroupsByUuids(payload)).rejects.toThrow(
+        new RpcException('Error while fetching beneficiary groups by uuids. ')
+      );
+    });
+  });
+
   describe('Edge cases', () => {
     it('should handle empty data in createMany', async () => {
       const emptyData: any[] = [];
       const mockResult = { count: 0 };
 
-      mockPrismaService.rsclient.beneficiary.createMany.mockResolvedValue(mockResult);
+      mockPrismaService.rsclient.beneficiary.createMany.mockResolvedValue(
+        mockResult
+      );
 
       const result = await service.createMany(emptyData);
 
       expect(result).toEqual(mockResult);
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.BENEFICIARY_CREATED);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.BENEFICIARY_CREATED
+      );
     });
 
     it('should handle beneficiary redeem with null values', async () => {
@@ -815,8 +1081,12 @@ describe('BeneficiaryService', () => {
         },
       ];
 
-      mockPrismaService.beneficiary.findUnique.mockResolvedValue(mockBeneficiary);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockRedeemRecords);
+      mockPrismaService.beneficiary.findUnique.mockResolvedValue(
+        mockBeneficiary
+      );
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedeemRecords
+      );
 
       const result = await service.getBeneficiaryRedeemInfo(beneficiaryUUID);
 
@@ -827,7 +1097,9 @@ describe('BeneficiaryService', () => {
       const uuid = '123e4567-e89b-12d3-a456-426614174002' as any;
       const error = new Error('Database error');
 
-      mockPrismaService.rsclient.beneficiary.findUnique.mockRejectedValue(error);
+      mockPrismaService.rsclient.beneficiary.findUnique.mockRejectedValue(
+        error
+      );
 
       await expect(service.findByUUID(uuid)).rejects.toThrow(error);
     });
@@ -869,7 +1141,9 @@ describe('BeneficiaryService', () => {
       const mockGroupedBeneficiaries = { count: 1 };
 
       mockPrismaService.beneficiaryGroups.create.mockResolvedValue(mockGroup);
-      mockPrismaService.beneficiaryToGroup.createMany.mockResolvedValue(mockGroupedBeneficiaries);
+      mockPrismaService.beneficiaryToGroup.createMany.mockResolvedValue(
+        mockGroupedBeneficiaries
+      );
 
       const result = await service.addGroupToProject(payload);
 
@@ -886,7 +1160,9 @@ describe('BeneficiaryService', () => {
         },
       });
 
-      expect(mockPrismaService.beneficiaryToGroup.createMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryToGroup.createMany
+      ).toHaveBeenCalledWith({
         data: [
           {
             beneficiaryId: 'benf-id-1',
@@ -919,9 +1195,15 @@ describe('BeneficiaryService', () => {
         groupPurpose: GroupPurpose.BANK_TRANSFER,
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(null);
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockBenfGroup);
-      mockPrismaService.$transaction.mockImplementation((callback) => callback());
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        null
+      );
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockBenfGroup
+      );
+      mockPrismaService.$transaction.mockImplementation((callback) =>
+        callback()
+      );
       mockPrismaService.beneficiary.updateMany.mockResolvedValue({ count: 2 });
       mockPrismaService.beneficiaryGroupTokens.create.mockResolvedValue({
         id: 1,
@@ -933,11 +1215,15 @@ describe('BeneficiaryService', () => {
 
       const result = await service.reserveTokenToGroup(payload);
 
-      expect(mockPrismaService.beneficiaryGroupTokens.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.findUnique
+      ).toHaveBeenCalledWith({
         where: { groupId: 'group-123' },
       });
 
-      expect(mockPrismaService.beneficiaryGroups.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroups.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid: 'group-123' },
       });
 
@@ -953,7 +1239,9 @@ describe('BeneficiaryService', () => {
         user: { name: 'Admin User' },
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue({
+        id: 1,
+      });
 
       await expect(service.reserveTokenToGroup(payload)).rejects.toThrow(
         new RpcException('Token already reserved.')
@@ -969,7 +1257,9 @@ describe('BeneficiaryService', () => {
         user: { name: 'Admin User' },
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(null);
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        null
+      );
       mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(null);
 
       await expect(service.reserveTokenToGroup(payload)).rejects.toThrow(
@@ -991,8 +1281,12 @@ describe('BeneficiaryService', () => {
         groupPurpose: GroupPurpose.COMMUNICATION,
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(null);
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockBenfGroup);
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        null
+      );
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockBenfGroup
+      );
 
       await expect(service.reserveTokenToGroup(payload)).rejects.toThrow(
         new RpcException(
@@ -1055,7 +1349,9 @@ describe('BeneficiaryService', () => {
       };
       const mockGroupDetails = { name: 'Test Group', beneficiaries: [] };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(mockTokenReservation);
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        mockTokenReservation
+      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupDetails);
 
       const result = await service.getOneTokenReservation(payload);
@@ -1065,7 +1361,9 @@ describe('BeneficiaryService', () => {
         ...mockGroupDetails,
       });
 
-      expect(mockPrismaService.beneficiaryGroupTokens.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.findUnique
+      ).toHaveBeenCalledWith({
         where: { uuid: 'token-res-123' },
       });
     });
@@ -1080,12 +1378,16 @@ describe('BeneficiaryService', () => {
         title: 'Test Reservation',
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(mockTokenReservation);
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        mockTokenReservation
+      );
 
       const result = await service.getOneTokenReservationByGroupId(groupId);
 
       expect(result).toEqual(mockTokenReservation);
-      expect(mockPrismaService.beneficiaryGroupTokens.findUnique).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.findUnique
+      ).toHaveBeenCalledWith({
         where: { groupId },
       });
     });
@@ -1098,7 +1400,9 @@ describe('BeneficiaryService', () => {
         _sum: { benTokens: 5000 },
       };
 
-      mockPrismaService.beneficiary.aggregate.mockResolvedValue(mockAggregateResult);
+      mockPrismaService.beneficiary.aggregate.mockResolvedValue(
+        mockAggregateResult
+      );
 
       const result = await service.getReservationStats(payload);
 
@@ -1172,12 +1476,16 @@ describe('BeneficiaryService', () => {
         updatedAt: new Date(),
       };
 
-      mockPrismaService.beneficiaryGroupTokens.update.mockResolvedValue(mockUpdatedToken);
+      mockPrismaService.beneficiaryGroupTokens.update.mockResolvedValue(
+        mockUpdatedToken
+      );
 
       const result = await service.updateGroupToken(payload);
 
       expect(result).toEqual(mockUpdatedToken);
-      expect(mockPrismaService.beneficiaryGroupTokens.update).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.update
+      ).toHaveBeenCalledWith({
         where: { groupId: 'group-123' },
         data: {
           title: 'Updated Title',
@@ -1247,9 +1555,15 @@ describe('BeneficiaryService', () => {
     it('should update beneficiary redeem successfully', async () => {
       const uuid = 'redeem-123';
       const payload = { status: 'COMPLETED', txHash: 'tx-hash-123' } as any;
-      const mockUpdatedRedeem = { uuid, status: 'COMPLETED', txHash: 'tx-hash-123' };
+      const mockUpdatedRedeem = {
+        uuid,
+        status: 'COMPLETED',
+        txHash: 'tx-hash-123',
+      };
 
-      mockPrismaService.beneficiaryRedeem.update.mockResolvedValue(mockUpdatedRedeem);
+      mockPrismaService.beneficiaryRedeem.update.mockResolvedValue(
+        mockUpdatedRedeem
+      );
 
       const result = await service.updateBeneficiaryRedeem(uuid, payload);
 
@@ -1267,7 +1581,9 @@ describe('BeneficiaryService', () => {
 
       mockPrismaService.beneficiaryRedeem.update.mockRejectedValue(error);
 
-      await expect(service.updateBeneficiaryRedeem(uuid, payload)).rejects.toThrow(error);
+      await expect(
+        service.updateBeneficiaryRedeem(uuid, payload)
+      ).rejects.toThrow(error);
     });
   });
 
@@ -1277,12 +1593,16 @@ describe('BeneficiaryService', () => {
       const payload = { status: 'COMPLETED' } as any;
       const mockResult = { count: 3 };
 
-      mockPrismaService.beneficiaryRedeem.updateMany.mockResolvedValue(mockResult);
+      mockPrismaService.beneficiaryRedeem.updateMany.mockResolvedValue(
+        mockResult
+      );
 
       const result = await service.updateBeneficiaryRedeemBulk(uuids, payload);
 
       expect(result).toEqual(mockResult);
-      expect(mockPrismaService.beneficiaryRedeem.updateMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryRedeem.updateMany
+      ).toHaveBeenCalledWith({
         where: { uuid: { in: uuids } },
         data: payload,
       });
@@ -1301,7 +1621,9 @@ describe('BeneficiaryService', () => {
 
       const mockCreatedRedeem = { uuid: 'redeem-123', ...payload };
 
-      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue(mockCreatedRedeem);
+      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue(
+        mockCreatedRedeem
+      );
 
       const result = await service.createBeneficiaryRedeem(payload);
 
@@ -1323,7 +1645,9 @@ describe('BeneficiaryService', () => {
       const error = new Error('Creation failed');
       mockPrismaService.beneficiaryRedeem.create.mockRejectedValue(error);
 
-      await expect(service.createBeneficiaryRedeem(payload)).rejects.toThrow(error);
+      await expect(service.createBeneficiaryRedeem(payload)).rejects.toThrow(
+        error
+      );
     });
   });
 });
