@@ -10,7 +10,7 @@ import {
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
-import { GetBenfGroupDto } from './dto/get-group.dto';
+import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -67,11 +67,9 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
-    const { isVerified,  ...rest } = dto;
+    const { isVerified, ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
-
-      data: rest  
-
+      data: rest,
     });
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
@@ -115,6 +113,7 @@ export class BeneficiaryService {
   }
 
   async getAllGroups(dto: GetBenfGroupDto) {
+    this.logger.log('Getting all beneficiary groups data');
     const { page, perPage, sort, order, tokenAssigned, search, hasPayout } =
       dto;
 
@@ -205,6 +204,37 @@ export class BeneficiaryService {
     });
 
     return res;
+  }
+
+  async getAllGroupsByUuids(payload: getGroupByUuidDto) {
+    this.logger.log('Fetching all beneficiary group by group uuids');
+    const { uuids, selectField } = payload;
+    try {
+      let selectFields;
+
+      if (selectField && selectField.length > 0) {
+        // Convert fields array into an object for Prisma select
+        selectFields = selectField.reduce((acc, field) => {
+          acc[field] = true;
+          return acc;
+        }, {});
+      }
+
+      const groups = await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          uuid: {
+            in: uuids,
+          },
+        },
+        ...(selectFields ? { select: selectFields } : {}),
+      });
+
+      return groups;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching beneficiary groups by uuids. ${err.message}`
+      );
+    }
   }
 
   async findByUUID(uuid: UUID) {

@@ -7,6 +7,7 @@ import {
   CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
+  getGroupByUuidDto,
   GetOneGroup,
   GetStakeholdersData,
   RemoveStakeholdersData,
@@ -367,6 +368,37 @@ export class StakeholdersService {
       page,
       perPage,
     });
+  }
+
+  async getAllGroupsByUuids(payload: getGroupByUuidDto) {
+    this.logger.log('Fetching all stakeholders group by group uuids');
+    const { uuids, selectField } = payload;
+    try {
+      let selectFields;
+
+      if (selectField && selectField.length > 0) {
+        // Convert fields array into an object for Prisma select
+        selectFields = selectField.reduce((acc, field) => {
+          acc[field] = true;
+          return acc;
+        }, {});
+      }
+
+      const groups = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          uuid: {
+            in: uuids,
+          },
+        },
+        ...(selectFields ? { select: selectFields } : {}),
+      });
+
+      return groups;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching stakeholders groups by uuids. ${err.message}`
+      );
+    }
   }
 
   async getOneGroup(payload: GetOneGroup) {

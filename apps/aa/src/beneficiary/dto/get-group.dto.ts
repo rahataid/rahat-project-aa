@@ -1,4 +1,12 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -9,11 +17,11 @@ export class GetBenfGroupDto {
 
   @IsOptional()
   @IsString()
-  search?: string
+  search?: string;
 
   @IsOptional()
   @IsBoolean()
-  tokenAssigned?: boolean
+  tokenAssigned?: boolean;
 
   @ApiProperty({
     example: 1,
@@ -51,4 +59,16 @@ export class GetBenfGroupDto {
   @IsString()
   @IsIn(['asc', 'desc'])
   order: 'asc' | 'desc' = 'asc';
-} 
+}
+
+export class getGroupByUuidDto {
+  @IsArray()
+  @ArrayNotEmpty({ message: 'uuids array cannot be empty' })
+  @IsString({ each: true, message: 'Each UUID must be a string' })
+  uuids: string[];
+
+  @IsArray()
+  @ArrayNotEmpty({ message: 'selectField array cannot be empty' })
+  @IsString({ each: true, message: 'Each field name must be a string' })
+  selectField: string[];
+}
