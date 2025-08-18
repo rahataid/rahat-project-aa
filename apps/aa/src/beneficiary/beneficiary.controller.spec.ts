@@ -1,9 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
-import { CreateBeneficiaryDto, AddTokenToGroup } from './dto/create-beneficiary.dto';
+import {
+  CreateBeneficiaryDto,
+  AddTokenToGroup,
+} from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
-import { GetBenfGroupDto } from './dto/get-group.dto';
+import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { JOBS, CONTROLLERS } from '../constants';
 import { CVA_JOBS } from '@rahat-project/cva';
 
@@ -21,6 +24,7 @@ describe('BeneficiaryController', () => {
     update: jest.fn(),
     addGroupToProject: jest.fn(),
     getAllGroups: jest.fn(),
+    getAllGroupsByUuids: jest.fn(),
     getOneGroup: jest.fn(),
     getBeneficiaryRedeemInfo: jest.fn(),
     reserveTokenToGroup: jest.fn(),
@@ -121,12 +125,16 @@ describe('BeneficiaryController', () => {
         walletAddress: 'wallet-address',
       };
 
-      mockBeneficiaryService.findOneBeneficiary.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.findOneBeneficiary.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.findOneBeneficiary(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.findOneBeneficiary).toHaveBeenCalledWith(payload);
+      expect(mockBeneficiaryService.findOneBeneficiary).toHaveBeenCalledWith(
+        payload
+      );
     });
   });
 
@@ -154,7 +162,10 @@ describe('BeneficiaryController', () => {
 
     it('should handle empty results for findAllPii', async () => {
       const data = { page: 1, perPage: 20 };
-      const expectedResult = { data: [], meta: { total: 0, page: 1, perPage: 20 } };
+      const expectedResult = {
+        data: [],
+        meta: { total: 0, page: 1, perPage: 20 },
+      };
 
       mockBeneficiaryService.findAll.mockResolvedValue(expectedResult);
 
@@ -223,13 +234,20 @@ describe('BeneficiaryController', () => {
         phone: '+1234567890',
       };
 
-      const expectedResult = { id: 1, name: 'Updated Name', phone: '+1234567890' };
+      const expectedResult = {
+        id: 1,
+        name: 'Updated Name',
+        phone: '+1234567890',
+      };
       mockBeneficiaryService.update.mockResolvedValue(expectedResult);
 
       const result = await controller.update(updateDto);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.update).toHaveBeenCalledWith(updateDto.id, updateDto);
+      expect(mockBeneficiaryService.update).toHaveBeenCalledWith(
+        updateDto.id,
+        updateDto
+      );
     });
 
     it('should handle validation errors during update', async () => {
@@ -254,13 +272,20 @@ describe('BeneficiaryController', () => {
         },
       };
 
-      const expectedResult = { groupId: 'group-123', message: 'Group added successfully' };
-      mockBeneficiaryService.addGroupToProject.mockResolvedValue(expectedResult);
+      const expectedResult = {
+        groupId: 'group-123',
+        message: 'Group added successfully',
+      };
+      mockBeneficiaryService.addGroupToProject.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.addGroupToProject(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.addGroupToProject).toHaveBeenCalledWith(payload);
+      expect(mockBeneficiaryService.addGroupToProject).toHaveBeenCalledWith(
+        payload
+      );
     });
   });
 
@@ -300,7 +325,10 @@ describe('BeneficiaryController', () => {
         order: 'desc',
       };
 
-      const expectedResult = { data: [], meta: { total: 0, page: 1, perPage: 10 } };
+      const expectedResult = {
+        data: [],
+        meta: { total: 0, page: 1, perPage: 10 },
+      };
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       mockBeneficiaryService.getAllGroups.mockResolvedValue(expectedResult);
 
@@ -310,6 +338,80 @@ describe('BeneficiaryController', () => {
       expect(consoleSpy).toHaveBeenCalledWith(payload);
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('getAllGroupsByUuids', () => {
+    it('should get groups by UUIDs with select fields', async () => {
+      const payload: getGroupByUuidDto = {
+        uuids: [
+          '123e4567-e89b-12d3-a456-426614174000',
+          '123e4567-e89b-12d3-a456-426614174001',
+        ],
+        selectField: ['uuid', 'name'],
+      };
+      const expectedResult = [
+        { uuid: '123e4567-e89b-12d3-a456-426614174000', name: 'Group 1' },
+        { uuid: '123e4567-e89b-12d3-a456-426614174001', name: 'Group 2' },
+      ];
+
+      mockBeneficiaryService.getAllGroupsByUuids.mockResolvedValue(
+        expectedResult
+      );
+
+      const result = await controller.getAllGroupsByUuids(payload);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockBeneficiaryService.getAllGroupsByUuids).toHaveBeenCalledWith(
+        payload
+      );
+    });
+
+    it('should handle getAllGroupsByUuids with minimal payload', async () => {
+      const payload: getGroupByUuidDto = {
+        uuids: ['123e4567-e89b-12d3-a456-426614174000'],
+        selectField: undefined,
+      };
+      const expectedResult = [
+        {
+          id: 1,
+          uuid: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Single Group',
+          description: 'Single Description',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      mockBeneficiaryService.getAllGroupsByUuids.mockResolvedValue(
+        expectedResult
+      );
+
+      const result = await controller.getAllGroupsByUuids(payload);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockBeneficiaryService.getAllGroupsByUuids).toHaveBeenCalledWith(
+        payload
+      );
+    });
+
+    it('should handle empty UUIDs array', async () => {
+      const payload: getGroupByUuidDto = {
+        uuids: [],
+        selectField: undefined,
+      };
+      const expectedResult = [];
+
+      mockBeneficiaryService.getAllGroupsByUuids.mockResolvedValue(
+        expectedResult
+      );
+
+      const result = await controller.getAllGroupsByUuids(payload);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockBeneficiaryService.getAllGroupsByUuids).toHaveBeenCalledWith(
+        payload
+      );
     });
   });
 
@@ -328,7 +430,9 @@ describe('BeneficiaryController', () => {
       const result = await controller.getOneGroup(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.getOneGroup).toHaveBeenCalledWith(payload.uuid);
+      expect(mockBeneficiaryService.getOneGroup).toHaveBeenCalledWith(
+        payload.uuid
+      );
     });
 
     it('should handle group not found', async () => {
@@ -354,14 +458,16 @@ describe('BeneficiaryController', () => {
         },
       ];
 
-      mockBeneficiaryService.getBeneficiaryRedeemInfo.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.getBeneficiaryRedeemInfo.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.getBeneficiaryRedeemInfo(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.getBeneficiaryRedeemInfo).toHaveBeenCalledWith(
-        payload.beneficiaryUUID
-      );
+      expect(
+        mockBeneficiaryService.getBeneficiaryRedeemInfo
+      ).toHaveBeenCalledWith(payload.beneficiaryUUID);
     });
 
     it('should handle empty redeem info', async () => {
@@ -389,12 +495,16 @@ describe('BeneficiaryController', () => {
         message: 'Tokens reserved successfully',
       };
 
-      mockBeneficiaryService.reserveTokenToGroup.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.reserveTokenToGroup.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.reserveTokenToGroup(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.reserveTokenToGroup).toHaveBeenCalledWith(payload);
+      expect(mockBeneficiaryService.reserveTokenToGroup).toHaveBeenCalledWith(
+        payload
+      );
     });
 
     it('should handle insufficient tokens scenario', async () => {
@@ -408,7 +518,9 @@ describe('BeneficiaryController', () => {
       const error = new Error('Insufficient tokens');
       mockBeneficiaryService.reserveTokenToGroup.mockRejectedValue(error);
 
-      await expect(controller.reserveTokenToGroup(payload)).rejects.toThrow(error);
+      await expect(controller.reserveTokenToGroup(payload)).rejects.toThrow(
+        error
+      );
     });
   });
 
@@ -420,12 +532,16 @@ describe('BeneficiaryController', () => {
         meta: { total: 1, page: 1, perPage: 20 },
       };
 
-      mockBeneficiaryService.getAllTokenReservations.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.getAllTokenReservations.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.getTokenReservations(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.getAllTokenReservations).toHaveBeenCalledWith(payload);
+      expect(
+        mockBeneficiaryService.getAllTokenReservations
+      ).toHaveBeenCalledWith(payload);
     });
   });
 
@@ -439,12 +555,16 @@ describe('BeneficiaryController', () => {
         status: 'ACTIVE',
       };
 
-      mockBeneficiaryService.getOneTokenReservation.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.getOneTokenReservation.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.getOneTokenReservations(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.getOneTokenReservation).toHaveBeenCalledWith(payload);
+      expect(
+        mockBeneficiaryService.getOneTokenReservation
+      ).toHaveBeenCalledWith(payload);
     });
   });
 
@@ -458,12 +578,16 @@ describe('BeneficiaryController', () => {
         expiredReservations: 2,
       };
 
-      mockBeneficiaryService.getReservationStats.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.getReservationStats.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.getReservationStats(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockBeneficiaryService.getReservationStats).toHaveBeenCalledWith(payload);
+      expect(mockBeneficiaryService.getReservationStats).toHaveBeenCalledWith(
+        payload
+      );
     });
 
     it('should handle empty stats', async () => {
@@ -475,7 +599,9 @@ describe('BeneficiaryController', () => {
         expiredReservations: 0,
       };
 
-      mockBeneficiaryService.getReservationStats.mockResolvedValue(expectedResult);
+      mockBeneficiaryService.getReservationStats.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.getReservationStats(payload);
 
@@ -515,19 +641,40 @@ describe('BeneficiaryController', () => {
       const patterns = [
         { method: 'create', cmd: JOBS.BENEFICIARY.ADD_TO_PROJECT },
         { method: 'findOne', cmd: JOBS.BENEFICIARY.GET },
-        { method: 'findOneBeneficiary', cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY },
+        {
+          method: 'findOneBeneficiary',
+          cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY,
+        },
         { method: 'findAllPii', cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII },
         { method: 'createMany', cmd: JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT },
         { method: 'remove', cmd: JOBS.BENEFICIARY.REMOVE },
         { method: 'update', cmd: CONTROLLERS.BENEFICIARY.UPDATE },
-        { method: 'addGroupToProject', cmd: JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT },
+        {
+          method: 'addGroupToProject',
+          cmd: JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT,
+        },
         { method: 'getAllGroups', cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS },
         { method: 'getOneGroup', cmd: JOBS.BENEFICIARY.GET_ONE_GROUP },
-        { method: 'getBeneficiaryRedeemInfo', cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO },
-        { method: 'reserveTokenToGroup', cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP },
-        { method: 'getTokenReservations', cmd: JOBS.BENEFICIARY.GET_ALL_TOKEN_RESERVATION },
-        { method: 'getOneTokenReservations', cmd: JOBS.BENEFICIARY.GET_ONE_TOKEN_RESERVATION },
-        { method: 'getReservationStats', cmd: JOBS.BENEFICIARY.GET_RESERVATION_STATS },
+        {
+          method: 'getBeneficiaryRedeemInfo',
+          cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO,
+        },
+        {
+          method: 'reserveTokenToGroup',
+          cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
+        },
+        {
+          method: 'getTokenReservations',
+          cmd: JOBS.BENEFICIARY.GET_ALL_TOKEN_RESERVATION,
+        },
+        {
+          method: 'getOneTokenReservations',
+          cmd: JOBS.BENEFICIARY.GET_ONE_TOKEN_RESERVATION,
+        },
+        {
+          method: 'getReservationStats',
+          cmd: JOBS.BENEFICIARY.GET_RESERVATION_STATS,
+        },
         { method: 'assignToken', cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN },
       ];
 
@@ -556,7 +703,9 @@ describe('BeneficiaryController', () => {
       const rpcError = new Error('RPC Error');
       mockBeneficiaryService.findOne.mockRejectedValue(rpcError);
 
-      await expect(controller.findOne({ uuid: 'test' })).rejects.toThrow(rpcError);
+      await expect(controller.findOne({ uuid: 'test' })).rejects.toThrow(
+        rpcError
+      );
     });
   });
-}); 
+});

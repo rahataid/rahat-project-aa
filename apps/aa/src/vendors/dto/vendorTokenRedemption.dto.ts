@@ -69,6 +69,10 @@ export class ListVendorTokenRedemptionDto {
 
   @IsString()
   @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
   sort?: string = 'createdAt';
 
   @IsString()
