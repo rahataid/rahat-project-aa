@@ -88,7 +88,8 @@ export class VendorOfflinePayoutProcessor {
       // Send OTP to all beneficiaries in the group
       const result = await this.sendOtpToGroupDirect(
         beneficiaries,
-        'd87847ea-fcd2-4099-90b2-c7292dfec2ac', // use actual vendor uuid
+        payout.payoutProcessorId,
+        // 'd87847ea-fcd2-4099-90b2-c7292dfec2ac', // use actual vendor uuid
         data.amount
       );
 
