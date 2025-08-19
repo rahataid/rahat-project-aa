@@ -14,6 +14,7 @@ export class GetVendorOfflineBeneficiariesDto {
 
 export interface OfflineBeneficiaryDetail {
   uuid: string;
+  beneficiaryUuid: string;
   beneficiaryName: string;
   phoneNumber: string;
   otpHash: string;
@@ -41,8 +42,8 @@ export interface OtpVerificationResult {
 }
 
 export class VendorOfflineSyncItem {
-  @IsUUID()
-  uuid: string; // UUID of OfflineBeneficiaryMCN record
+  @IsString()
+  beneficiaryUuid: string;
 
   @IsString()
   otp: string; // OTP provided by beneficiary

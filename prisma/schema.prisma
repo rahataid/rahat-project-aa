@@ -8,445 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Beneficiary {
-  id                    Int                     @id @default(autoincrement())
-  uuid                  String                  @unique @db.Uuid
-  walletAddress         String                  @unique
-  phone                 String?
-  gender                Gender?                 @default(UNKNOWN)
-  benTokens             Int?                    @default(0)
-  extras                Json?
-  isVerified            Boolean                 @default(false)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime?               @updatedAt
-  deletedAt             DateTime?
-  BeneficiaryToGroup    BeneficiaryToGroup[]
-  BeneficiaryGroup      BeneficiaryGroup[]
-  BeneficiaryRedeem     BeneficiaryRedeem[]
-  OfflineBeneficiaryMCN OfflineBeneficiaryMCN[]
-
-  @@map("tbl_beneficiaries")
-}
-
-model BeneficiaryGroups {
-  id             Int                     @id @default(autoincrement())
-  uuid           String                  @unique @default(uuid())
-  name           String
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime?               @updatedAt
-  deletedAt      DateTime?
-  groupPurpose   GroupPurpose?
-  tokensReserved BeneficiaryGroupTokens?
-  beneficiaries  BeneficiaryToGroup[]
-
-  @@map("tbl_beneficiaries_groups")
-}
-
-model BeneficiaryToGroup {
-  id            Int               @id @default(autoincrement())
-  uuid          String            @unique @default(uuid())
-  beneficiaryId String            @db.Uuid
-  groupId       String
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime?         @updatedAt
-  beneficiary   Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
-  group         BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
-
-  @@unique([beneficiaryId, groupId])
-  @@map("tbl_beneficiaries_to_groups")
-}
-
-model BeneficiaryGroupTokens {
-  id               Int               @id @default(autoincrement())
-  uuid             String            @unique @default(uuid())
-  title            String
-  numberOfTokens   Int               @default(0)
-  groupId          String            @unique
-  createdBy        String?
-  info             Json?
-  isDisbursed      Boolean           @default(false)
-  status           String            @default("NOT_DISBURSED")
-  payoutId         String?           @unique
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime?         @updatedAt
-  beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
-  payout           Payouts?          @relation(fields: [payoutId], references: [uuid])
-
-  @@map("tbl_beneficiaries_groups_tokens")
-}
-
-model Payouts {
-  int                   Int                     @id @default(autoincrement())
-  uuid                  String                  @unique @default(uuid())
-  type                  PayoutType
-  mode                  PayoutMode
-  status                String?
-  extras                Json?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime?               @updatedAt
-  payoutProcessorId     String?
-  beneficiaryGroupToken BeneficiaryGroupTokens?
-  beneficiaryRedeem     BeneficiaryRedeem[]
-
-  @@map("tbl_beneficiaries_groups_payouts")
-}
-
-model Setting {
-  name           String          @id @unique
-  value          Json
-  dataType       SettingDataType
-  requiredFields String[]
-  isReadOnly     Boolean         @default(false)
-  isPrivate      Boolean         @default(true)
-
-  @@map("tbl_settings")
-}
-
-model Stakeholders {
-  id                 Int                  @id @default(autoincrement())
-  uuid               String               @unique @default(uuid())
-  name               String
-  email              String?
-  phone              String?              @unique
-  designation        String
-  organization       String
-  district           String
-  municipality       String
-  isDeleted          Boolean              @default(false)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime?            @updatedAt
-  supportArea        String[]
-  stakeholdersGroups StakeholdersGroups[] @relation("StakeholdersToStakeholdersGroups")
-
-  @@map("tbl_stakeholders")
-}
-
-model StakeholdersGroups {
-  id           Int            @id @default(autoincrement())
-  uuid         String         @unique @default(uuid())
-  name         String
-  isDeleted    Boolean        @default(false)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime?      @updatedAt
-  stakeholders Stakeholders[] @relation("StakeholdersToStakeholdersGroups")
-
-  @@map("tbl_stakeholders_groups")
-}
-
-model Phases {
-  id                        Int          @id @default(autoincrement())
-  uuid                      String       @unique @default(uuid())
-  name                      Phase        @unique
-  requiredMandatoryTriggers Int?         @default(0)
-  requiredOptionalTriggers  Int?         @default(0)
-  receivedMandatoryTriggers Int?         @default(0)
-  receivedOptionalTriggers  Int?         @default(0)
-  canRevert                 Boolean      @default(false)
-  canTriggerPayout          Boolean      @default(false)
-  isActive                  Boolean      @default(false)
-  activatedAt               DateTime?
-  createdAt                 DateTime     @default(now())
-  updatedAt                 DateTime?    @updatedAt
-  activities                Activities[]
-  triggers                  Triggers[]
-
-  @@map("tbl_phases")
-}
-
-model ActivityCategories {
-  id         Int          @id @default(autoincrement())
-  uuid       String       @unique @default(uuid())
-  name       String
-  isDeleted  Boolean      @default(false)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime?    @updatedAt
-  activities Activities[]
-
-  @@map("tbl_activity_categories")
-}
-
-model Activities {
-  id                                       Int                @id @default(autoincrement())
-  uuid                                     String             @unique @default(uuid())
-  title                                    String
-  phaseId                                  String
-  categoryId                               String
-  leadTime                                 String
-  responsibility                           String
-  source                                   String
-  description                              String?
-  notes                                    String?
-  status                                   ActivitiesStatus   @default(NOT_STARTED)
-  isAutomated                              Boolean
-  activityDocuments                        Json?
-  activityCommunication                    Json?
-  activityPayout                           Json?
-  isDeleted                                Boolean            @default(false)
-  completedBy                              String?
-  completedAt                              DateTime?
-  differenceInTriggerAndActivityCompletion String?
-  createdAt                                DateTime           @default(now())
-  updatedAt                                DateTime?          @updatedAt
-  category                                 ActivityCategories @relation(fields: [categoryId], references: [uuid])
-  phase                                    Phases             @relation(fields: [phaseId], references: [uuid])
-
-  @@map("tbl_activities")
-}
-
-model Triggers {
-  id               Int        @id @default(autoincrement())
-  uuid             String     @unique
-  repeatKey        String     @unique
-  title            String?
-  dataSource       DataSource
-  location         String?
-  repeatEvery      String?
-  triggerStatement Json?
-  triggerDocuments Json?
-  notes            String?
-  phaseId          String?
-  isMandatory      Boolean    @default(false)
-  isTriggered      Boolean    @default(false)
-  isDeleted        Boolean    @default(false)
-  triggeredBy      String?
-  triggeredAt      DateTime?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime?  @updatedAt
-  isOnchainSuccess Boolean    @default(false)
-  phase            Phases?    @relation(fields: [phaseId], references: [uuid])
-
-  @@map("tbl_triggers")
-}
-
-model SourcesData {
-  id        Int       @id @default(autoincrement())
-  uuid      String    @unique @default(uuid())
-  source    String?
-  location  String?
-  data      Json
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  @@map("tbl_sources_data")
-}
-
-model Stats {
-  name      String    @id @unique
-  data      Json
-  group     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  @@map("tbl_stats")
-}
-
-model DailyMonitoring {
-  id          Int       @id @default(autoincrement())
-  uuid        String    @unique @default(uuid())
-  dataEntryBy String
-  source      String?
-  location    String?
-  data        Json
-  createdBy   String?
-  isDeleted   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime? @updatedAt
-
-  @@map("tbl_daily_monitoring")
-}
-
-model Vendor {
-  id                    Int                     @id @default(autoincrement())
-  uuid                  String                  @unique @db.Uuid
-  name                  String
-  walletAddress         String                  @unique
-  phone                 String?
-  location              String?
-  extras                Json?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime?               @updatedAt
-  deletedAt             DateTime?
-  BeneficiaryRedeem     BeneficiaryRedeem[]
-  OfflineBeneficiary    OfflineBeneficiary[]
-  OfflineBeneficiaryMCN OfflineBeneficiaryMCN[]
-  VendorReimbursment    VendorReimbursment[]
-  VendorTokenRedemption VendorTokenRedemption[]
-
-  @@map("tbl_vendors")
-}
-
-model Group {
-  id               Int                @id @default(autoincrement())
-  uuid             String             @unique @default(uuid()) @db.Uuid
-  name             String             @unique
-  isSystem         Boolean            @default(false)
-  autoCreated      Boolean            @default(false)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime?          @updatedAt
-  createdBy        String?
-  BeneficiaryGroup BeneficiaryGroup[]
-
-  @@map("tbl_groups")
-}
-
-model BeneficiaryGroup {
-  id             Int         @id @default(autoincrement())
-  uuid           String      @unique @default(uuid()) @db.Uuid
-  beneficiaryUID String      @db.Uuid
-  groupUID       String      @db.Uuid
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime?   @updatedAt
-  beneficiary    Beneficiary @relation(fields: [beneficiaryUID], references: [uuid])
-  group          Group       @relation(fields: [groupUID], references: [uuid])
-
-  @@unique([beneficiaryUID, groupUID], name: "benefGroupIdentifier")
-  @@map("tbl_beneficiary_groups")
-}
-
-model Communication {
-  id          Int       @id @default(autoincrement())
-  uuid        String    @unique @default(uuid()) @db.Uuid
-  name        String
-  message     String
-  transportId String
-  groupUID    String?   @db.Uuid
-  sessionId   String?
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime? @updatedAt
-
-  @@map("tbl_communications")
-}
-
-model Disbursement {
-  id                 Int                 @id @default(autoincrement())
-  uuid               String              @unique @default(uuid()) @db.Uuid
-  amount             Float               @default(0)
-  walletAddress      String              @unique
-  planUid            String?             @db.Uuid
-  status             DisbursementStatus  @default(ONLINE)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime?           @updatedAt
-  deletedAt          DateTime?
-  OfflineBeneficiary OfflineBeneficiary?
-
-  @@map("tbl_disbursement")
-}
-
-model VendorReimbursment {
-  id            Int          @id @default(autoincrement())
-  uuid          String       @unique @default(uuid()) @db.Uuid
-  tokenAddress  String
-  voucherAmount Int
-  status        ReedemStatus @default(REQUESTED)
-  vendorUid     String       @db.Uuid
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime?    @updatedAt
-  deletedAt     DateTime?
-  vendor        Vendor       @relation(fields: [vendorUid], references: [uuid])
-
-  @@map("tbl_vendor_reimbursment")
-}
-
-model VendorTokenRedemption {
-  id               Int                   @id @default(autoincrement())
-  uuid             String                @unique @default(uuid()) @db.Uuid
-  vendorUuid       String                @db.Uuid
-  redemptionStatus TokenRedemptionStatus @default(REQUESTED)
-  tokenAmount      Int                   @default(0)
-  transactionHash  String?
-  approvedBy       String?
-  approvedAt       DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime?             @updatedAt
-  vendor           Vendor                @relation(fields: [vendorUuid], references: [uuid])
-
-  @@map("tbl_vendor_token_redemption")
-}
-
-model BeneficiaryRedeem {
-  id                       Int                     @id @default(autoincrement())
-  uuid                     String                  @unique @default(uuid())
-  beneficiaryWalletAddress String
-  vendorUid                String?                 @db.Uuid
-  createdAt                DateTime                @default(now())
-  updatedAt                DateTime?               @updatedAt
-  fspId                    String?
-  amount                   Int                     @default(0)
-  txHash                   String?
-  info                     Json?
-  isCompleted              Boolean                 @default(false)
-  payoutId                 String?
-  status                   PayoutTransactionStatus @default(PENDING)
-  transactionType          PayoutTransactionType
-  Beneficiary              Beneficiary             @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
-  payout                   Payouts?                @relation(fields: [payoutId], references: [uuid])
-  Vendor                   Vendor?                 @relation(fields: [vendorUid], references: [uuid])
-
-  @@map("tbl_beneficiary_redeem")
-}
-
-model BeneficiaryOTP {
-  id                       Int      @id @default(autoincrement())
-  uuid                     String   @unique @default(uuid())
-  otp                      String
-  otpHash                  String
-  beneficiaryWalletAddress String
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  @@map("tbl_beneficiary_otp")
-}
-
-model OfflineBeneficiary {
-  id             Int                      @id @default(autoincrement())
-  uuid           String                   @unique @default(uuid())
-  otpHash        String
-  txHash         String
-  vendorId       String                   @db.Uuid
-  disbursementId String                   @unique @db.Uuid
-  amount         Float
-  status         OfflineBeneficiaryStatus @default(PENDING)
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-  deletedAt      DateTime?
-  Disbursement   Disbursement             @relation(fields: [disbursementId], references: [uuid])
-  Vendor         Vendor                   @relation(fields: [vendorId], references: [uuid])
-
-  @@map("tbl_offline_beneficiaries")
-}
-
-model OfflineBeneficiaryMCN {
-  id            Int                      @id @default(autoincrement())
-  uuid          String                   @unique @default(uuid())
-  otpHash       String
-  vendorId      String                   @db.Uuid
-  amount        Float
-  status        OfflineBeneficiaryStatus @default(PENDING)
-  extras        Json?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
-  deletedAt     DateTime?
-  beneficiaryId String                   @db.Uuid
-  Beneficiary   Beneficiary              @relation(fields: [beneficiaryId], references: [uuid])
-  Vendor        Vendor                   @relation(fields: [vendorId], references: [uuid])
-
-  @@map("tbl_offline_beneficiaries_mcn")
-}
-
-model Otp {
-  id          Int      @id @default(autoincrement())
-  phoneNumber String   @unique
-  otpHash     String
-  amount      Float
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isVerified  Boolean  @default(false)
-
-  @@map("tbl_otp")
-}
-
 enum Phase {
   PREPAREDNESS
   READINESS
@@ -492,7 +53,6 @@ enum PayoutTransactionType {
   TOKEN_TRANSFER
   FIAT_TRANSFER
   VENDOR_REIMBURSEMENT
-  VENDOR_OFFLINE_PAYOUT
 }
 
 enum PayoutTransactionStatus {
@@ -513,6 +73,331 @@ enum GroupPurpose {
   COMMUNICATION
 }
 
+// ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
+
+model Beneficiary {
+  id            Int     @id @default(autoincrement()) @db.Integer()
+  uuid          String  @unique @db.Uuid()
+  walletAddress String  @unique
+  phone         String?
+
+  gender    Gender? @default(UNKNOWN)
+  benTokens Int?    @default(0)
+  extras    Json?
+
+  isVerified Boolean @default(false)
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  BeneficiaryGroup   BeneficiaryGroup[]
+  BeneficiaryToGroup BeneficiaryToGroup[]
+
+  @@map("tbl_beneficiaries")
+}
+
+model BeneficiaryGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  groupPurpose GroupPurpose?
+
+  tokensReserved BeneficiaryGroupTokens?
+  beneficiaries  BeneficiaryToGroup[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_beneficiaries_groups")
+}
+
+model BeneficiaryToGroup {
+  id            Int               @id @default(autoincrement()) @db.Integer()
+  uuid          String            @unique @default(uuid())
+  beneficiary   Beneficiary       @relation(fields: [beneficiaryId], references: [uuid])
+  beneficiaryId String            @db.Uuid()
+  group         BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  groupId       String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([beneficiaryId, groupId])
+  @@map("tbl_beneficiaries_to_groups")
+}
+
+model BeneficiaryGroupTokens {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  title          String
+  numberOfTokens Int    @default(0)
+
+  status      String  @default("NOT_DISBURSED")
+  isDisbursed Boolean @default(false)
+  info        Json?
+
+  groupId          String            @unique
+  beneficiaryGroup BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+
+  payoutId String?  @unique
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
+
+  createdBy String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups_tokens")
+}
+
+model Payouts {
+  int  Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  type   PayoutType
+  mode   PayoutMode
+  status String?
+  extras Json?
+
+  payoutProcessorId     String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
+  beneficiaryGroupToken BeneficiaryGroupTokens?
+  beneficiaryRedeem     BeneficiaryRedeem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiaries_groups_payouts")
+}
+
+// ++++++++++++++++++ END: @el/beneficiaries +++++++++++++++++++++++++++
+
+// ++++++++++++++++++ START: @rumsan/settings +++++++++++++++++++++++++++
+model Setting {
+  name           String          @id @unique
+  value          Json
+  dataType       SettingDataType
+  requiredFields String[]
+  isReadOnly     Boolean         @default(false)
+  isPrivate      Boolean         @default(true)
+
+  @@map("tbl_settings")
+}
+
+// ++++++++++++++++++ END: @rumsan/settings +++++++++++++++++++++++++++
+
+model Stakeholders {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name         String
+  email        String?
+  phone        String?  @unique
+  designation  String
+  organization String
+  district     String
+  municipality String
+  supportArea  String[]
+
+  stakeholdersGroups StakeholdersGroups[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders")
+}
+
+model StakeholdersGroups {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  name String
+
+  stakeholders Stakeholders[]
+
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stakeholders_groups")
+}
+
+model Phases {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name Phase @unique
+
+  activities Activities[]
+  triggers   Triggers[]
+
+  requiredMandatoryTriggers Int? @default(0)
+  requiredOptionalTriggers  Int? @default(0)
+
+  receivedMandatoryTriggers Int? @default(0)
+  receivedOptionalTriggers  Int? @default(0)
+
+  canRevert        Boolean @default(false)
+  canTriggerPayout Boolean @default(false)
+  isActive         Boolean @default(false)
+
+  activatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
+
+  @@map("tbl_phases")
+}
+
+model ActivityCategories {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name       String
+  activities Activities[]
+
+  isDeleted Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activity_categories")
+}
+
+model Activities {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  title          String
+  phase          Phases?             @relation(fields: [phaseId], references: [uuid])
+  phaseId        String
+  category       ActivityCategories? @relation(fields: [categoryId], references: [uuid])
+  categoryId     String
+  leadTime       String
+  responsibility String
+  source         String
+  description    String?
+  notes          String?
+
+  status ActivitiesStatus @default(NOT_STARTED)
+
+  isAutomated Boolean
+
+  activityDocuments     Json? @db.JsonB()
+  activityCommunication Json? @db.JsonB()
+  activityPayout        Json? @db.JsonB()
+
+  isDeleted Boolean @default(false)
+
+  completedBy String?
+  completedAt DateTime?
+
+  differenceInTriggerAndActivityCompletion String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_activities")
+}
+
+model Triggers {
+  id        Int    @id @default(autoincrement())
+  uuid      String @unique
+  repeatKey String @unique
+
+  title            String?
+  dataSource       DataSource
+  location         String?
+  repeatEvery      String?
+  triggerStatement Json?      @db.JsonB()
+
+  triggerDocuments Json?   @db.JsonB()
+  notes            String?
+
+  phase   Phases? @relation(fields: [phaseId], references: [uuid])
+  phaseId String?
+
+  isMandatory      Boolean @default(false)
+  isTriggered      Boolean @default(false)
+  isDeleted        Boolean @default(false)
+  isOnchainSuccess Boolean @default(false)
+
+  triggeredBy String?
+
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt()
+
+  @@map("tbl_triggers")
+}
+
+model SourcesData {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  source   String?
+  location String?
+  data     Json    @db.JsonB()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_sources_data")
+}
+
+model Stats {
+  name  String  @id @unique
+  data  Json
+  group String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_stats")
+}
+
+model DailyMonitoring {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  dataEntryBy String
+  source      String?
+  location    String?
+  data        Json    @db.JsonB()
+
+  createdBy String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_daily_monitoring")
+}
+
+model Vendor {
+  id            Int     @id @default(autoincrement())
+  uuid          String  @unique @db.Uuid()
+  name          String
+  walletAddress String  @unique
+  phone         String?
+  location      String?
+  extras        Json?
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime?            @updatedAt()
+  deletedAt          DateTime?
+  VendorReimbursment VendorReimbursment[]
+  VendorTokenRedemption VendorTokenRedemption[]
+  BeneficiaryRedeem  BeneficiaryRedeem[]
+  OfflineBeneficiary OfflineBeneficiary[]
+
+  @@map("tbl_vendors")
+}
+
+// ============== OTHER CORE CVA SCHEMAS================
 enum DisbursementStatus {
   SYNCING_OFFLINE
   SYNCED_OFFLINE
@@ -534,11 +419,190 @@ enum TokenRedemptionStatus {
 }
 
 enum OfflineBeneficiaryStatus {
+  PROCESSED
   PENDING
-  REQUESTED
   SYNCED
-  FAILED
 }
+
+model Group {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String  @unique
+  isSystem    Boolean @default(false) // Non deleteable
+  autoCreated Boolean @default(false)
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime?          @updatedAt()
+  createdBy        String?
+  BeneficiaryGroup BeneficiaryGroup[]
+
+  @@map("tbl_groups")
+}
+
+model BeneficiaryGroup {
+  id             Int         @id @default(autoincrement()) @db.Integer()
+  uuid           String      @unique @default(uuid()) @db.Uuid()
+  beneficiary    Beneficiary @relation(fields: [beneficiaryUID], references: [uuid])
+  beneficiaryUID String      @db.Uuid()
+  group          Group       @relation(fields: [groupUID], references: [uuid])
+  groupUID       String      @db.Uuid()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([beneficiaryUID, groupUID], name: "benefGroupIdentifier")
+  @@map("tbl_beneficiary_groups")
+}
+
+model Communication {
+  id          Int     @id @default(autoincrement()) @db.Integer()
+  uuid        String  @unique @default(uuid()) @db.Uuid()
+  name        String
+  message     String
+  transportId String
+  groupUID    String? @db.Uuid()
+  sessionId   String? // If sessionID is null, it means the message is not sent
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_communications")
+}
+
+model Disbursement {
+  id            Int                @id @default(autoincrement())
+  uuid          String             @unique @default(uuid()) @db.Uuid()
+  amount        Float              @default(0)
+  walletAddress String             @unique
+  planUid       String?            @db.Uuid()
+  status        DisbursementStatus @default(ONLINE)
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime?           @updatedAt()
+  deletedAt          DateTime?
+  OfflineBeneficiary OfflineBeneficiary?
+
+  @@map("tbl_disbursement")
+}
+
+model VendorReimbursment {
+  id            Int          @id @default(autoincrement())
+  uuid          String       @unique @default(uuid()) @db.Uuid()
+  tokenAddress  String
+  voucherAmount Int
+  status        ReedemStatus @default(REQUESTED)
+
+  vendorUid String @db.Uuid()
+  vendor    Vendor @relation(fields: [vendorUid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_vendor_reimbursment")
+}
+
+model VendorTokenRedemption {
+  id                Int                    @id @default(autoincrement())
+  uuid              String                 @unique @default(uuid()) @db.Uuid()
+  vendorUuid        String                 @db.Uuid()
+  redemptionStatus  TokenRedemptionStatus @default(REQUESTED)
+  tokenAmount       Int                    @default(0)
+  
+  // Additional fields for better tracking
+  transactionHash   String?
+  approvedBy        String?
+  approvedAt        DateTime?
+
+  vendor            Vendor                 @relation(fields: [vendorUuid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_vendor_token_redemption")
+}
+
+model BeneficiaryRedeem {
+  id                       Int     @id @default(autoincrement())
+  uuid                     String  @unique @default(uuid())
+  beneficiaryWalletAddress String
+  isCompleted              Boolean @default(false)
+  amount                   Int     @default(0)
+
+  transactionType PayoutTransactionType
+  status          PayoutTransactionStatus @default(PENDING)
+  fspId           String? // refer PaymentProvider Id from rahat-offramp-service
+  txHash          String?
+
+  Beneficiary Beneficiary @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  vendorUid   String?     @db.Uuid()
+  Vendor      Vendor?     @relation(fields: [vendorUid], references: [uuid])
+
+  payoutId String?
+  payout   Payouts? @relation(fields: [payoutId], references: [uuid])
+
+  info Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiary_redeem")
+}
+
+model BeneficiaryOTP {
+  id                       Int    @id @default(autoincrement())
+  uuid                     String @unique @default(uuid())
+  otp                      String
+  otpHash                  String
+  beneficiaryWalletAddress String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tbl_beneficiary_otp")
+}
+
+model OfflineBeneficiary {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  otpHash String
+  txHash  String
+
+  vendorId       String @db.Uuid()
+  disbursementId String @unique @db.Uuid()
+  amount         Float
+
+  Vendor       Vendor                   @relation(fields: [vendorId], references: [uuid])
+  Disbursement Disbursement?            @relation(fields: [disbursementId], references: [uuid])
+  status       OfflineBeneficiaryStatus @default(PENDING)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map(name: "tbl_offline_beneficiaries")
+}
+
+// ============== END CORE CVA SCHEMAS================
+
+// ============== Start OTP SCHEMAS ================
+model Otp {
+  id          Int      @id @default(autoincrement())
+  phoneNumber String   @unique
+  otpHash     String
+  amount      Float
+  expiresAt   DateTime
+
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map(name: "tbl_otp")
+}
+
+// ============== End OTP SCHEMAS ================
 
 enum Gender {
   MALE

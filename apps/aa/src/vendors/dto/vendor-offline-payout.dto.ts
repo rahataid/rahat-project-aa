@@ -76,7 +76,6 @@ export interface BeneficiaryOtpData {
   walletAddress: string;
   amount: number;
   otpHash: string;
-  expiryDate: Date;
   txHash?: string | null;
 }
 

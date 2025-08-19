@@ -4,7 +4,7 @@ This document describes the essential flow for vendor offline payouts, including
 
 ## 1. Payout Creation and OTP Distribution
 
-- When a payout is created for a vendor, the system looks up the payout, beneficiary, and beneficiary group tables to determine which beneficiaries are associated with the relevant group.
+- When a payout is created for a vendor, the system looks up the beneficiary, and beneficiary group tables to determine which beneficiaries are associated with the relevant group.
 - All these beneficiaries will receive an OTP.
 - The OTP is generated and stored in the `otp` table in the database.
 
