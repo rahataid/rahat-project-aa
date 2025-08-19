@@ -636,6 +636,7 @@ export class VendorsService {
     }
   }
 
+  // todo: remove after test
   async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
     try {
       this.logger.log(

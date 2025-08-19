@@ -228,7 +228,7 @@ export class PayoutsService {
 
       if (createPayoutDto.mode === 'OFFLINE') {
         await this.vendorsService.processVendorOfflinePayout({
-          beneficiaryGroupUuid: groupId,
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
           amount: String(beneficiaryGroup.numberOfTokens),
         });
       }
