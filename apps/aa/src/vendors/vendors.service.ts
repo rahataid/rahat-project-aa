@@ -811,6 +811,15 @@ export class VendorsService {
             continue;
           }
 
+          if (offlineRecord.status === 'SYNCED') {
+            results.push({
+              uuid: item.uuid,
+              success: false,
+              message: 'Already synced',
+            });
+            continue;
+          }
+
           // Add to queue for token transfer
           await this.vendorOfflinePayoutQueue.add(
             JOBS.VENDOR.PROCESS_OFFLINE_TOKEN_TRANSFER,

@@ -145,12 +145,48 @@ export class VendorOfflinePayoutProcessor {
         throw new Error(`Offline record ${offlineRecordUuid} not found`);
       }
 
+      // Prevent transfer if already SYNCED
+      if (offlineRecord.status === 'SYNCED') {
+        this.logger.warn(
+          `Offline record ${offlineRecordUuid} is already SYNCED. Aborting transfer.`,
+          VendorOfflinePayoutProcessor.name
+        );
+        throw new RpcException(
+          'This offline record is already synced. Transfer not allowed.'
+        );
+      }
+
       // Get beneficiary and vendor details
       const beneficiary = offlineRecord.Beneficiary;
-      const vendor = offlineRecord.Vendor;
+      const vendorFromRecord = offlineRecord.Vendor;
 
-      if (!beneficiary || !vendor) {
-        throw new Error('Beneficiary or vendor not found');
+      if (!beneficiary) {
+        throw new Error('Beneficiary not found');
+      }
+      if (!vendorFromRecord) {
+        throw new Error('Vendor not found in offline record');
+      }
+
+      // Fetch vendor from vendorUuid (authoritative)
+      const vendor = await this.prismaService.vendor.findUnique({
+        where: { uuid: vendorUuid },
+      });
+      if (!vendor) {
+        throw new Error(`Vendor with UUID ${vendorUuid} not found`);
+      }
+
+      // Check if vendorUuid matches offlineRecord's vendor uuid
+      if (vendorFromRecord.uuid !== vendorUuid) {
+        this.logger.error(
+          `Vendor UUID mismatch: job=${vendorUuid}, record=${vendorFromRecord.uuid}`,
+          VendorOfflinePayoutProcessor.name
+        );
+        // Optionally update status to FAILED here
+        await this.prismaService.offlineBeneficiaryMCN.update({
+          where: { uuid: offlineRecordUuid },
+          data: { status: 'FAILED' },
+        });
+        throw new RpcException('Vendor UUID mismatch, aborting transfer');
       }
 
       // Send tokens from beneficiary to vendor using Stellar service (offline flow)
@@ -161,34 +197,51 @@ export class VendorOfflinePayoutProcessor {
           amount: amount.toString(),
           otp: otp,
         },
-        true // skipOtpVerification flag for offline flow
+        true
       );
+
+      // Check for existing beneficiaryRedeem record for this transfer
+      const existingRedeem =
+        await this.prismaService.beneficiaryRedeem.findFirst({
+          where: {
+            vendorUid: vendorUuid,
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            transactionType: 'VENDOR_OFFLINE_PAYOUT',
+            txHash: transferResult.txHash,
+          },
+        });
+      if (existingRedeem) {
+        this.logger.warn(
+          `Beneficiary redeem record already exists for txHash ${transferResult.txHash}. Skipping creation.`,
+          VendorOfflinePayoutProcessor.name
+        );
+      } else {
+        // Create beneficiary redeem record for offline flow
+        await this.prismaService.beneficiaryRedeem.create({
+          data: {
+            vendorUid: vendorUuid,
+            amount: typeof amount === 'string' ? parseInt(amount, 10) : amount,
+            transactionType: 'VENDOR_OFFLINE_PAYOUT',
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            txHash: transferResult.txHash,
+            isCompleted: true,
+            status: 'COMPLETED',
+            info: {
+              message: 'Offline beneficiary redemption successful',
+              transactionHash: transferResult.txHash,
+              offrampWalletAddress: vendor.walletAddress,
+              beneficiaryWalletAddress: beneficiary.walletAddress,
+              otp: otp,
+            },
+          },
+        });
+      }
 
       // Update the offline record status to SYNCED
       await this.prismaService.offlineBeneficiaryMCN.update({
         where: { uuid: offlineRecordUuid },
         data: {
           status: 'SYNCED',
-        },
-      });
-
-      // Create beneficiary redeem record for offline flow
-      await this.prismaService.beneficiaryRedeem.create({
-        data: {
-          vendorUid: vendor.uuid,
-          amount: amount,
-          transactionType: 'VENDOR_REIMBURSEMENT',
-          beneficiaryWalletAddress: beneficiary.walletAddress,
-          txHash: transferResult.txHash,
-          isCompleted: true,
-          status: 'COMPLETED',
-          info: {
-            message: 'Offline beneficiary redemption successful',
-            transactionHash: transferResult.txHash,
-            offrampWalletAddress: vendor.walletAddress,
-            beneficiaryWalletAddress: beneficiary.walletAddress,
-            otp: otp,
-          },
         },
       });
 
@@ -338,15 +391,10 @@ export class VendorOfflinePayoutProcessor {
                 continue;
               }
 
-              console.log(result.otp);
-              console.log(request.amount);
-
               const otpHash = await bcrypt.hash(
                 `${result.otp}:${request.amount}`,
                 10
               );
-
-              console.log(otpHash);
 
               // Check if record already exists for this beneficiary and vendor
               const existingRecord =

@@ -382,6 +382,12 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
+      console.log(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount.toString()
+      );
+
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
@@ -412,14 +418,15 @@ export class StellarService {
 
       if (!existingRedeem) {
         this.logger.warn(
-          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and 
+          vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
         );
         // Create a new record since the transfer was successful
         await this.prisma.beneficiaryRedeem.create({
           data: {
             beneficiaryWalletAddress: keys.publicKey,
             vendorUid: vendor.uuid,
-            amount: amount as number,
+            amount: Number(amount) as number,
             transactionType: 'VENDOR_REIMBURSEMENT',
             txHash: result.tx.hash,
             isCompleted: true,

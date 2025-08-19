@@ -214,6 +214,12 @@ export class PayoutsService {
               `Vendor with ID '${createPayoutDto.payoutProcessorId}' not found`
             );
           }
+
+          // Call the vendor offline payout processor
+          await this.vendorsService.processVendorOfflinePayout({
+            beneficiaryGroupUuid: groupId,
+            amount: String(beneficiaryGroup.numberOfTokens),
+          });
         }
       }
 

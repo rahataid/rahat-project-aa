@@ -492,6 +492,7 @@ enum PayoutTransactionType {
   TOKEN_TRANSFER
   FIAT_TRANSFER
   VENDOR_REIMBURSEMENT
+  VENDOR_OFFLINE_PAYOUT
 }
 
 enum PayoutTransactionStatus {
