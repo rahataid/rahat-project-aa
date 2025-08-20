@@ -836,7 +836,7 @@ export class FlowTrackingManager {
       );
 
       // Process transfers to build flows
-      const flows = this.processTransferEvents(
+      const flows = await this.processTransferEvents(
         transferEvents,
         trackedAddresses
       );
@@ -897,10 +897,10 @@ export class FlowTrackingManager {
   /**
    * Process transfer events to extract flows
    */
-  private processTransferEvents(
+  private async processTransferEvents(
     transferEvents: any[],
     trackedAddresses: string[]
-  ): any[] {
+  ): Promise<any[]> {
     const flows: any[] = [];
     const trackedAddressesChecksum = trackedAddresses.map((addr) =>
       ethers.getAddress(addr)
@@ -918,6 +918,7 @@ export class FlowTrackingManager {
           trackedAddressesChecksum.includes(fromAddr) ||
           trackedAddressesChecksum.includes(toAddr)
         ) {
+          const block = await this.provider?.getBlock(event.blockNumber);
           flows.push({
             from: fromAddr,
             to: toAddr,
@@ -925,7 +926,7 @@ export class FlowTrackingManager {
             type: 'transfer',
             transactionHash: event.transactionHash,
             blockNumber: event.blockNumber,
-            timestamp: Date.now(), // We'll get actual timestamp later if needed
+            timestamp: (block?.timestamp ?? 0) * 1000, // We'll get actual timestamp later if needed
           });
         }
       }
@@ -1149,6 +1150,7 @@ export class FlowTrackingManager {
       pending: Array<{
         to: string;
         amount: string;
+        timestamp: number;
       }>;
       balance: string;
       sent: string;
@@ -1203,6 +1205,7 @@ export class FlowTrackingManager {
       pending: Array<{
         to: string;
         amount: string;
+        timestamp: number;
       }>;
       balance: string;
       sent: string;
@@ -1213,13 +1216,14 @@ export class FlowTrackingManager {
         amount: string;
         transactionHash: string;
         type: 'sent' | 'received';
+        timestamp: number;
       }>;
     }>
   > {
     if (!entities || !this.cashTokenContract) {
       return [];
     }
-
+    const blockCache: Record<number, number> = {};
     const entityMap = new Map<
       string,
       {
@@ -1230,6 +1234,7 @@ export class FlowTrackingManager {
         pendingAllowances: Array<{
           to: string;
           amount: string;
+          timestamp: number;
         }>;
         flows: Array<{
           from: string;
@@ -1237,6 +1242,7 @@ export class FlowTrackingManager {
           amount: string;
           transactionHash: string;
           type: 'sent' | 'received';
+          timestamp: number;
         }>;
       }
     >();
@@ -1279,9 +1285,31 @@ export class FlowTrackingManager {
                 );
                 const unusedAmount = allowance - usedAmount;
                 if (unusedAmount > 0n) {
+                  let ts: number | undefined;
+                  const filter = this.cashTokenContract.filters.Approval(
+                    address,
+                    otherAddress
+                  );
+                  const events = await this.cashTokenContract.queryFilter(
+                    filter,
+                    -10000
+                  );
+
+                  if (events.length > 0) {
+                    const lastApproval = events[events.length - 1];
+                    if (!blockCache[lastApproval.blockNumber]) {
+                      const block = await this.provider?.getBlock(
+                        lastApproval.blockNumber
+                      );
+                      blockCache[lastApproval.blockNumber] =
+                        (block?.timestamp ?? 0) * 1000;
+                    }
+                    ts = blockCache[lastApproval.blockNumber];
+                  }
                   entity.pendingAllowances.push({
                     to: otherEntity.alias || otherAddress,
                     amount: ethers.formatEther(unusedAmount),
+                    timestamp: ts || Date.now(),
                   });
                 }
               }
@@ -1320,6 +1348,7 @@ export class FlowTrackingManager {
             amount: flow.amount,
             transactionHash: flow.transactionHash,
             type: 'sent',
+            timestamp: flow.timestamp,
           });
         }
       }
@@ -1341,6 +1370,7 @@ export class FlowTrackingManager {
             amount: flow.amount,
             transactionHash: flow.transactionHash,
             type: 'received',
+            timestamp: flow.timestamp,
           });
         }
       }
