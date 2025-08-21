@@ -272,6 +272,7 @@ export class VendorsService {
       const transactions = await this.prisma.beneficiaryRedeem.findMany({
         where: {
           vendorUid: walletBalanceDto.uuid,
+          status: 'COMPLETED',
         },
         orderBy: {
           createdAt: 'desc',
