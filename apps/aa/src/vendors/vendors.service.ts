@@ -164,10 +164,8 @@ export class VendorsService {
       const query = {
         where: {
           vendorUid: uuid,
+          status: 'COMPLETED',
           ...(txHash && { txHash }),
-          ...(status === 'success' && {
-            status: 'TOKEN_TRANSACTION_COMPLETED',
-          }),
         },
         include: {
           Beneficiary: {
