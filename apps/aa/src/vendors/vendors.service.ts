@@ -95,6 +95,9 @@ export class VendorsService {
           vendorWallet.uuid,
           true
         ),
+        vendorAssignedBalance: await this.getVendorAssignedBalance(
+          vendorWallet.uuid
+        ),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
       };
@@ -131,6 +134,27 @@ export class VendorsService {
       }, 0);
 
       return totalAssignedTokens;
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorAssignedBalance(vendorUuid: string) {
+    try {
+      this.logger.log(`Getting assigned balance for vendor ${vendorUuid}`);
+
+      const result = await this.prisma.beneficiaryRedeem.aggregate({
+        where: {
+          vendorUid: vendorUuid,
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      });
+
+      return result._sum.amount || 0;
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);
