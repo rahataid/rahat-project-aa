@@ -383,6 +383,7 @@ export class VendorsService {
             where: {
               beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
               transactionType: 'VENDOR_REIMBURSEMENT',
+              status: 'COMPLETED',
             },
             select: {
               beneficiaryWalletAddress: true,
@@ -403,8 +404,13 @@ export class VendorsService {
           }
         });
 
+        // Filter beneficiaries to only include those with COMPLETED status
+        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) =>
+          statusMap.has(ben.walletAddress)
+        );
+
         // Attach beneficiary name, transaction hash, and status to each beneficiary
-        const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
+        const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
@@ -561,6 +567,7 @@ export class VendorsService {
             where: {
               beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
               transactionType: 'VENDOR_REIMBURSEMENT',
+              status: 'COMPLETED',
             },
             select: {
               beneficiaryWalletAddress: true,
@@ -581,8 +588,13 @@ export class VendorsService {
           }
         });
 
+        // Filter beneficiaries to only include those with COMPLETED status
+        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) =>
+          statusMap.has(ben.walletAddress)
+        );
+
         // Attach beneficiary name, transaction hash, and status to each beneficiary
-        const enrichedBeneficiaries = uniqueBeneficiaries.map((ben) => {
+        const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
             ...ben,
