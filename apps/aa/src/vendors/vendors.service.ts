@@ -641,20 +641,44 @@ export class VendorsService {
         return [];
       }
 
+      // Get beneficiary wallet addresses for API call
+      const beneficiaryWalletAddresses = redeems
+        .map((redeem) => redeem.Beneficiary?.walletAddress)
+        .filter(Boolean);
+
+      // Get beneficiary details from API
+      let benResponse = [];
+      if (beneficiaryWalletAddresses.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' },
+            beneficiaryWalletAddresses
+          )
+        );
+      }
+
       // For each redeem, get the OTP hash from the OTP table
       const beneficiaries: OfflineBeneficiaryDetail[] = [];
       for (const redeem of redeems) {
         const beneficiary = redeem.Beneficiary;
         if (!beneficiary) continue;
+
+        // Find beneficiary info from API response
+        const benInfo = benResponse.find(
+          (b) => b.walletAddress === beneficiary.walletAddress
+        );
+        const phoneNumber = benInfo?.piiData?.phone || '';
+        const beneficiaryName = benInfo?.piiData?.name || 'Unknown';
+
         // Get OTP for this beneficiary
-        const phoneNumber = (beneficiary.extras as any)?.phone || '';
         const otpData = await this.prisma.otp.findUnique({
           where: { phoneNumber },
         });
+
         beneficiaries.push({
           uuid: redeem.uuid,
           beneficiaryUuid: beneficiary.uuid,
-          beneficiaryName: (beneficiary.extras as any)?.name || 'Unknown',
+          beneficiaryName,
           phoneNumber,
           otpHash: otpData?.otpHash || '',
           amount: redeem.amount,
