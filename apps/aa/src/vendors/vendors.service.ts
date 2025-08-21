@@ -413,17 +413,20 @@ export class VendorsService {
               txHash: true,
               status: true,
               createdAt: true,
+              info: true,
             },
             orderBy: { createdAt: 'desc' },
           });
 
-        // Create maps of wallet address to latest transaction hash and status
+        // Create maps of wallet address to latest transaction hash, status, and info
         const transactionMap = new Map();
         const statusMap = new Map();
+        const infoMap = new Map();
         beneficiaryTransactions.forEach((tx) => {
           if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
             transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
             statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+            infoMap.set(tx.beneficiaryWalletAddress, tx.info);
           }
         });
 
@@ -432,7 +435,7 @@ export class VendorsService {
           statusMap.has(ben.walletAddress)
         );
 
-        // Attach beneficiary name, transaction hash, and status to each beneficiary
+        // Attach beneficiary name, transaction hash, status, and info to each beneficiary
         const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
@@ -440,6 +443,7 @@ export class VendorsService {
             name: benInfo?.name || null,
             txHash: transactionMap.get(ben.walletAddress) || null,
             status: statusMap.get(ben.walletAddress) || null,
+            info: infoMap.get(ben.walletAddress) || null,
           };
         });
 
@@ -597,17 +601,20 @@ export class VendorsService {
               txHash: true,
               status: true,
               createdAt: true,
+              info: true,
             },
             orderBy: { createdAt: 'desc' },
           });
 
-        // Create maps of wallet address to latest transaction hash and status
+        // Create maps of wallet address to latest transaction hash, status, and info
         const transactionMap = new Map();
         const statusMap = new Map();
+        const infoMap = new Map();
         beneficiaryTransactions.forEach((tx) => {
           if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
             transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
             statusMap.set(tx.beneficiaryWalletAddress, tx.status);
+            infoMap.set(tx.beneficiaryWalletAddress, tx.info);
           }
         });
 
@@ -616,7 +623,7 @@ export class VendorsService {
           statusMap.has(ben.walletAddress)
         );
 
-        // Attach beneficiary name, transaction hash, and status to each beneficiary
+        // Attach beneficiary name, transaction hash, status, and info to each beneficiary
         const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
           const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
           return {
@@ -624,6 +631,7 @@ export class VendorsService {
             name: benInfo?.name || null,
             txHash: transactionMap.get(ben.walletAddress) || null,
             status: statusMap.get(ben.walletAddress) || null,
+            info: infoMap.get(ben.walletAddress) || null,
           };
         });
 
