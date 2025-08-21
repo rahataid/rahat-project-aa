@@ -337,322 +337,113 @@ export class VendorsService {
         );
       }
 
+      // Build where clause for beneficiary redeem query
+      const redeemWhereClause: any = {
+        transactionType: 'VENDOR_REIMBURSEMENT',
+        vendorUid: payload.vendorUuid,
+      };
+
+      // Add wallet address filter if provided
+      if (payload.walletAddress) {
+        redeemWhereClause.beneficiaryWalletAddress = payload.walletAddress;
+      }
+
+      // Case Online: Get all beneficiary redeem of that vendor with status completed
+      // Case Offline: Get all beneficiaryRedeem of that vendor (don't care for status)
       if (payload.payoutMode === 'ONLINE') {
-        // For ONLINE mode: Get beneficiaries who have been charged by this vendor
-        this.logger.log(
-          `Getting beneficiaries charged by vendor ${payload.vendorUuid} for ONLINE mode`
-        );
+        redeemWhereClause.status = 'COMPLETED';
+      }
 
-        // Build where clause for beneficiary redeem query
-        const redeemWhereClause: any = {
-          transactionType: 'VENDOR_REIMBURSEMENT',
-          vendorUid: payload.vendorUuid,
-        };
-
-        // Add wallet address filter if provided
-        if (payload.walletAddress) {
-          redeemWhereClause.beneficiaryWalletAddress = payload.walletAddress;
-        }
-
-        // Get beneficiaries who have been charged by this vendor
-        const chargedBeneficiaries =
-          await this.prisma.beneficiaryRedeem.findMany({
-            where: redeemWhereClause,
-            include: {
-              Beneficiary: {
-                select: {
-                  uuid: true,
-                  walletAddress: true,
-                  phone: true,
-                  gender: true,
-                  benTokens: true,
-                  isVerified: true,
-                  createdAt: true,
-                },
-              },
-            },
-          });
-
-        // Extract unique beneficiaries (remove duplicates based on UUID)
-        const uniqueBeneficiaries = chargedBeneficiaries
-          .map((redeem) => redeem.Beneficiary)
-          .filter(
-            (beneficiary, index, self) =>
-              index === self.findIndex((b) => b.uuid === beneficiary.uuid)
-          );
-
-        this.logger.log(
-          `Found ${uniqueBeneficiaries.length} unique beneficiaries charged by vendor ${payload.vendorUuid}`
-        );
-
-        // Get beneficiary UUIDs for enrichment
-        const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
-        let benResponse = [];
-        if (beneficiaryUuids.length) {
-          benResponse = await lastValueFrom(
-            this.client.send(
-              { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
-              beneficiaryUuids
-            )
-          );
-        }
-
-        // Get transaction hash and status information for each beneficiary
-        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
-          (ben) => ben.walletAddress
-        );
-        const beneficiaryTransactions =
-          await this.prisma.beneficiaryRedeem.findMany({
-            where: {
-              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
-              transactionType: 'VENDOR_REIMBURSEMENT',
-              status: 'COMPLETED',
-            },
+      const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
+        where: redeemWhereClause,
+        include: {
+          Beneficiary: {
             select: {
-              beneficiaryWalletAddress: true,
-              txHash: true,
-              status: true,
+              uuid: true,
+              walletAddress: true,
+              phone: true,
+              gender: true,
+              benTokens: true,
+              isVerified: true,
               createdAt: true,
-              info: true,
             },
-            orderBy: { createdAt: 'desc' },
-          });
-
-        // Create maps of wallet address to latest transaction hash, status, and info
-        const transactionMap = new Map();
-        const statusMap = new Map();
-        const infoMap = new Map();
-        beneficiaryTransactions.forEach((tx) => {
-          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
-            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
-            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
-            infoMap.set(tx.beneficiaryWalletAddress, tx.info);
-          }
-        });
-
-        // Filter beneficiaries to only include those with COMPLETED status
-        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) =>
-          statusMap.has(ben.walletAddress)
-        );
-
-        // Attach beneficiary name, transaction hash, status, and info to each beneficiary
-        const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
-          const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
-          return {
-            ...ben,
-            name: benInfo?.name || null,
-            txHash: transactionMap.get(ben.walletAddress) || null,
-            status: statusMap.get(ben.walletAddress) || null,
-            info: infoMap.get(ben.walletAddress) || null,
-          };
-        });
-
-        // Use the reusable paginator
-        return paginate(
-          {
-            findMany: async () => enrichedBeneficiaries,
-            count: async () => enrichedBeneficiaries.length,
           },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: payload.perPage || 20,
+        skip: ((payload.page || 1) - 1) * (payload.perPage || 20),
+      });
+
+      if (!beneficiaryRedeems.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
           {},
           { page: payload.page, perPage: payload.perPage }
         );
-      } else if (payload.payoutMode === 'OFFLINE') {
-        // For OFFLINE mode: Keep existing logic unchanged
-        this.logger.log(
-          `Getting beneficiaries for vendor ${payload.vendorUuid} in OFFLINE mode`
-        );
+      }
 
-        const payoutsQuery = {
-          where: {
-            type: 'VENDOR' as const,
-            mode: 'OFFLINE' as const,
-            payoutProcessorId: payload.vendorUuid,
-            beneficiaryGroupToken: {
-              isNot: null,
-            },
-          },
-        };
-
-        // Get payouts that match the criteria
-        const payouts = await this.prisma.payouts.findMany({
-          ...payoutsQuery,
-        });
-        this.logger.log('Payouts found: ' + JSON.stringify(payouts));
-
-        if (!payouts.length) {
-          return paginate(
-            { findMany: async () => [], count: async () => 0 },
-            {},
-            { page: payload.page, perPage: payload.perPage }
-          );
-        }
-
-        // Get all beneficiary group tokens that are associated with these payouts
-        const payoutIds = payouts.map((payout) => payout.uuid);
-        const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
-          where: {
-            payoutId: {
-              in: payoutIds,
-            },
-          },
-        });
-        this.logger.log('Group tokens found: ' + JSON.stringify(groupTokens));
-
-        if (!groupTokens.length) {
-          return paginate(
-            { findMany: async () => [], count: async () => 0 },
-            {},
-            { page: payload.page, perPage: payload.perPage }
-          );
-        }
-
-        // Get group IDs from tokens
-        const groupIds = groupTokens.map((token) => token.groupId);
-        this.logger.log(
-          'Group IDs for beneficiary query: ' + JSON.stringify(groupIds)
-        );
-
-        // Fetch group details and filter by purpose (exclude COMMUNICATION)
-        const groups = await this.prisma.beneficiaryGroups.findMany({
-          where: {
-            uuid: { in: groupIds },
-            groupPurpose: { not: 'COMMUNICATION' },
-          },
-        });
-        const payoutGroupIds = groups.map((g) => g.uuid);
-        this.logger.log(
-          'Filtered payout group IDs: ' + JSON.stringify(payoutGroupIds)
-        );
-
-        if (!payoutGroupIds.length) {
-          return paginate(
-            { findMany: async () => [], count: async () => 0 },
-            {},
-            { page: payload.page, perPage: payload.perPage }
-          );
-        }
-
-        // Build where clause for beneficiary query
-        const beneficiaryWhereClause: any = {
-          groupId: { in: payoutGroupIds },
-        };
-
-        // Add wallet address filter if provided
-        if (payload.walletAddress) {
-          beneficiaryWhereClause.beneficiary = {
-            walletAddress: payload.walletAddress,
-          };
-        }
-
-        // Use only payout-eligible group IDs for beneficiary query
-        const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
-          where: beneficiaryWhereClause,
-          include: {
-            beneficiary: {
-              select: {
-                uuid: true,
-                walletAddress: true,
-                phone: true,
-                gender: true,
-                benTokens: true,
-                isVerified: true,
-                createdAt: true,
-              },
-            },
-          },
-        });
-
-        // Extract beneficiary data
-        const allBeneficiaries = beneficiaries.map(
-          (beneficiaryToGroup) => beneficiaryToGroup.beneficiary
-        );
-
-        // Remove duplicates based on UUID
-        const uniqueBeneficiaries = allBeneficiaries.filter(
+      // Extract unique beneficiaries (remove duplicates based on UUID)
+      const uniqueBeneficiaries = beneficiaryRedeems
+        .map((redeem) => ({
+          ...redeem.Beneficiary,
+          txHash: redeem.txHash,
+          status: redeem.status,
+          info: redeem.info,
+        }))
+        .filter(
           (beneficiary, index, self) =>
             index === self.findIndex((b) => b.uuid === beneficiary.uuid)
         );
 
-        // Get beneficiary UUIDs
-        const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
-        let benResponse = [];
-        if (beneficiaryUuids.length) {
-          benResponse = await lastValueFrom(
-            this.client.send(
-              { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
-              beneficiaryUuids
-            )
-          );
-        }
-
-        // Get transaction hash and status information for each beneficiary
-        const beneficiaryWalletAddresses = uniqueBeneficiaries.map(
-          (ben) => ben.walletAddress
+      // Get beneficiary UUIDs for enrichment
+      const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
+      let benResponse = [];
+      if (beneficiaryUuids.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+            beneficiaryUuids
+          )
         );
-        const beneficiaryTransactions =
-          await this.prisma.beneficiaryRedeem.findMany({
-            where: {
-              beneficiaryWalletAddress: { in: beneficiaryWalletAddresses },
-              transactionType: 'VENDOR_REIMBURSEMENT',
-              status: 'COMPLETED',
-            },
-            select: {
-              beneficiaryWalletAddress: true,
-              txHash: true,
-              status: true,
-              createdAt: true,
-              info: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          });
-
-        // Create maps of wallet address to latest transaction hash, status, and info
-        const transactionMap = new Map();
-        const statusMap = new Map();
-        const infoMap = new Map();
-        beneficiaryTransactions.forEach((tx) => {
-          if (!transactionMap.has(tx.beneficiaryWalletAddress)) {
-            transactionMap.set(tx.beneficiaryWalletAddress, tx.txHash);
-            statusMap.set(tx.beneficiaryWalletAddress, tx.status);
-            infoMap.set(tx.beneficiaryWalletAddress, tx.info);
-          }
-        });
-
-        // Filter beneficiaries to only include those with COMPLETED status and OFFLINE mode
-        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) => {
-          const info = infoMap.get(ben.walletAddress);
-          return (
-            statusMap.has(ben.walletAddress) &&
-            info &&
-            typeof info === 'object' &&
-            info.mode === 'OFFLINE'
-          );
-        });
-
-        // Attach beneficiary name, transaction hash, status, and info to each beneficiary
-        const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
-          const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
-          return {
-            ...ben,
-            name: benInfo?.name || null,
-            txHash: transactionMap.get(ben.walletAddress) || null,
-            status: statusMap.get(ben.walletAddress) || null,
-            info: infoMap.get(ben.walletAddress) || null,
-          };
-        });
-
-        // Use the reusable paginator
-        return paginate(
-          {
-            findMany: async () => enrichedBeneficiaries,
-            count: async () => enrichedBeneficiaries.length,
-          },
-          {},
-          { page: payload.page, perPage: payload.perPage }
-        );
-      } else {
-        throw new RpcException(`Invalid payout mode: ${payload.payoutMode}`);
       }
+
+      // Filter based on mode
+      const filteredBeneficiaries = uniqueBeneficiaries.filter((ben) => {
+        const info = ben.info;
+        const hasOfflineMode =
+          info &&
+          typeof info === 'object' &&
+          !Array.isArray(info) &&
+          'mode' in info &&
+          info.mode === 'OFFLINE';
+
+        if (payload.payoutMode === 'ONLINE') {
+          // Remove beneficiaries which have mode: offline in info
+          return !hasOfflineMode;
+        } else {
+          // Only return beneficiaries which have mode: offline in info
+          return hasOfflineMode;
+        }
+      });
+
+      // Attach beneficiary name to each beneficiary
+      const enrichedBeneficiaries = filteredBeneficiaries.map((ben) => {
+        const benInfo = benResponse.find((b) => b.uuid === ben.uuid);
+        return {
+          ...ben,
+          name: benInfo?.name || null,
+        };
+      });
+
+      // Use the reusable paginator
+      return paginate(
+        {
+          findMany: async () => enrichedBeneficiaries,
+          count: async () => enrichedBeneficiaries.length,
+        },
+        {},
+        { page: payload.page, perPage: payload.perPage }
+      );
     } catch (error) {
       this.logger.error(error.message);
       throw new RpcException(error.message);
