@@ -618,10 +618,16 @@ export class VendorsService {
           }
         });
 
-        // Filter beneficiaries to only include those with COMPLETED status
-        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) =>
-          statusMap.has(ben.walletAddress)
-        );
+        // Filter beneficiaries to only include those with COMPLETED status and OFFLINE mode
+        const completedBeneficiaries = uniqueBeneficiaries.filter((ben) => {
+          const info = infoMap.get(ben.walletAddress);
+          return (
+            statusMap.has(ben.walletAddress) &&
+            info &&
+            typeof info === 'object' &&
+            info.mode === 'OFFLINE'
+          );
+        });
 
         // Attach beneficiary name, transaction hash, status, and info to each beneficiary
         const enrichedBeneficiaries = completedBeneficiaries.map((ben) => {
