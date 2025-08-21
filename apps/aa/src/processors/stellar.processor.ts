@@ -1,7 +1,7 @@
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
 import { Job, Queue } from 'bull';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { StellarService } from '../stellar/stellar.service';
 import { SettingsService } from '@rumsan/settings';
 import {
@@ -32,6 +32,7 @@ import { BeneficiaryWallet } from '@rahataid/stellar-sdk';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { canProcessJob } from '../utils/bullUtils';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 interface BatchInfo {
   batchIndex: number;
@@ -57,6 +58,7 @@ export class StellarProcessor {
     private readonly stellarService: StellarService,
     private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
+    private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue<IDisbursementStatusJob>,
     @InjectQueue(BQUEUE.OFFRAMP)
@@ -694,7 +696,7 @@ export class StellarProcessor {
         const currentDate = new Date();
         if (
           groupUpdatedAt.getTime() >
-          (currentDate.getTime() - 24 * 60 * 60 * 1000)
+          currentDate.getTime() - 24 * 60 * 60 * 1000
         ) {
           this.logger.log(
             `Group ${groupUuid} updated more then 60 min ago, so assuming the disbursement is failed`,
@@ -753,10 +755,9 @@ export class StellarProcessor {
           StellarProcessor.name
         );
 
-        const timeTakenToDisburse = 
-        new Date(disbursement.updated_at).getTime() 
-        - new Date(disbursement.created_at).getTime();
-
+        const timeTakenToDisburse =
+          new Date(disbursement.updated_at).getTime() -
+          new Date(disbursement.created_at).getTime();
 
         // update the status of the disbursement in the database
         await this.beneficiaryService.updateGroupToken({
@@ -768,6 +769,10 @@ export class StellarProcessor {
             disbursementTimeTaken: timeTakenToDisburse,
             disbursement,
           },
+        });
+        // emitting new event
+        this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, {
+          groupUuid,
         });
         return;
       }
@@ -884,7 +889,7 @@ export class StellarProcessor {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: await this.getNetworkPassphrase(),
       })
         .addOperation(
           contract.call(
@@ -944,7 +949,7 @@ export class StellarProcessor {
 
       const transaction = new TransactionBuilder(sourceAccount, {
         fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: await this.getNetworkPassphrase(),
       })
         .addOperation(
           contract.call(
@@ -1149,5 +1154,18 @@ export class StellarProcessor {
       throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
     }
     return settings.value[key];
+  }
+
+  private async getNetworkPassphrase(): Promise<string> {
+    try {
+      const network = await this.getFromSettings('NETWORK');
+      return network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+    } catch (error) {
+      this.logger.warn(
+        'Failed to get network from settings, defaulting to testnet',
+        StellarProcessor.name
+      );
+      return Networks.TESTNET;
+    }
   }
 }

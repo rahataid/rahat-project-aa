@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { ClientProxy } from '@nestjs/microservices';
 import { JOBS, TRIGGGERS_MODULE } from '../constants';
 import { firstValueFrom } from 'rxjs';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class StatsService {
@@ -75,6 +76,32 @@ export class StatsService {
       };
     } catch (error) {
       console.error('Error from microservice:', error);
+    }
+  }
+
+  async mapLocation(payload) {
+    const { ward_no, location } = payload;
+
+    try {
+      const whereClause: Prisma.StatsWhereInput = {
+        group: 'beneficiary_gps_location',
+
+        ...(ward_no && {
+          name: {
+            contains: `WARD${ward_no}`,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        }),
+      };
+
+      const mapLocation = await this.prismaService.stats.findMany({
+        where: whereClause,
+      });
+
+      return mapLocation;
+    } catch (error) {
+      console.error('Error from microservice:', error);
+      throw error;
     }
   }
 

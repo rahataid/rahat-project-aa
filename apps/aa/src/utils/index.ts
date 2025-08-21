@@ -75,3 +75,82 @@ export function countResult(data: any[]) {
   }
   return counts;
 }
+
+export function generateLocationStats<T>({
+  dataList,
+  getKeyParts,
+  getCoordinates,
+  keyFormat = (ward) => `WARD${ward}`,
+}: {
+  dataList: T[];
+  getKeyParts: (item: T) => { ward_no: number } | undefined;
+  getCoordinates: (
+    item: T
+  ) => { latitude: number; longitude: number } | undefined;
+  keyFormat?: (ward: number) => string;
+}): Record<
+  string,
+  {
+    count: number;
+    locations: { lat: number; long: number }[];
+  }
+> {
+  const result: Record<
+    string,
+    {
+      count: number;
+      locations: { lat: number; long: number }[];
+    }
+  > = {};
+
+  for (const item of dataList) {
+    const keyParts = getKeyParts(item);
+    const coords = getCoordinates(item);
+
+    if (!keyParts || !coords) continue;
+
+    const { ward_no } = keyParts;
+    const { latitude, longitude } = coords;
+
+    if (ward_no == null || latitude == null || longitude == null) continue;
+
+    const key = keyFormat(ward_no);
+
+    if (!result[key]) {
+      result[key] = {
+        count: 0,
+        locations: [],
+      };
+    }
+
+    result[key].count += 1;
+    result[key].locations.push({ lat: latitude, long: longitude });
+  }
+
+  return result;
+}
+
+export function extractLatLng(gps?: string) {
+  if (!gps) return { latitude: null, longitude: null };
+
+  const parts = gps.trim().split(/\s+/);
+  const latitude = parseFloat(parts[0]);
+  const longitude = parseFloat(parts[1]);
+
+  if (isNaN(latitude) || isNaN(longitude)) {
+    return { latitude: null, longitude: null };
+  }
+
+  return { latitude, longitude };
+}
+
+export function toPascalCase(input: string): string {
+  return input
+    .replace(/^channel/, '')
+    .replace(/_+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+}

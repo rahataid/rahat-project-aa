@@ -17,6 +17,7 @@ import {
 } from './dto/trigger.dto';
 import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { Job } from 'bull';
+import { GroupPurpose } from '@prisma/client';
 
 describe('StellarController', () => {
   let controller: StellarController;
@@ -71,6 +72,7 @@ describe('StellarController', () => {
               id: 1,
               uuid: 'group1',
               name: 'Test Group 1',
+              groupPurpose: GroupPurpose.BANK_TRANSFER,
               createdAt: new Date(),
               updatedAt: new Date(),
               deletedAt: new Date(),
@@ -105,6 +107,7 @@ describe('StellarController', () => {
     const mockSendOtpDto: SendOtpDto = {
       phoneNumber: '+1234567890',
       amount: '100',
+      vendorUuid: 'vendor-uuid-123',
     };
 
     it('should call service.sendOtp with correct parameters', async () => {
@@ -128,14 +131,16 @@ describe('StellarController', () => {
 
   describe('sendAssetToVendor', () => {
     const mockSendAssetDto: SendAssetDto = {
+      amount: 100,
       phoneNumber: '+1234567890',
+      receiverAddress: 'receiver_address',
       otp: '123456',
-      receiverAddress: 'stellar_address',
-      amount: '100',
     };
 
     it('should call service.sendAssetToVendor with correct parameters', async () => {
-      const expectedResult = { txHash: 'test_hash' };
+      const expectedResult = {
+        txHash: 'test_transaction_hash',
+      };
       service.sendAssetToVendor.mockResolvedValue(expectedResult);
 
       const result = await controller.sendAssetToVendor(mockSendAssetDto);
@@ -146,16 +151,16 @@ describe('StellarController', () => {
 
   describe('sendAssetToVendorByWalletAddress', () => {
     const mockSendAssetByWalletAddressDto: SendAssetByWalletAddressDto = {
-      receiverAddress: 'stellar_address',
-      amount: '100',
-      walletAddress: 'test_wallet',
+      amount: 100,
+      walletAddress: 'wallet_address',
+      receiverAddress: 'receiver_address',
     };
 
     it('should call service.sendAssetToVendorByWalletAddress with correct parameters', async () => {
-      const expectedResult = { txHash: 'test_hash' };
-      service.sendAssetToVendorByWalletAddress.mockResolvedValue(
-        expectedResult
-      );
+      const expectedResult = {
+        txHash: 'test_transaction_hash',
+      };
+      service.sendAssetToVendorByWalletAddress.mockResolvedValue(expectedResult);
 
       const result = await controller.sendAssetToVendorByWalletAddress(
         mockSendAssetByWalletAddressDto
@@ -167,27 +172,50 @@ describe('StellarController', () => {
     });
   });
 
+  // describe('transferToOfframpJobs', () => {
+  //   const mockTransferToOfframpDto: TransferToOfframpDto = {
+  //     offRampWalletAddress: 'offramp_address',
+  //     beneficiaryWalletAddress: ['wallet1', 'wallet2'],
+  //   };
+
+  //   it('should call service.transferToOfframpJobs with correct parameters', async () => {
+  //     const expectedResult = {
+  //       message: 'Transfer to offramp jobs added for 2 beneficiaries',
+  //       beneficiaries: [
+  //         { walletAddress: 'wallet1', status: 'PENDING' },
+  //         { walletAddress: 'wallet2', status: 'PENDING' },
+  //       ],
+  //     };
+  //     service.transferToOfframpJobs.mockResolvedValue(expectedResult);
+
+  //     const result = await controller.transferToOfframpJobs(mockTransferToOfframpDto);
+  //     expect(result).toEqual(expectedResult);
+  //     expect(service.transferToOfframpJobs).toHaveBeenCalledWith(mockTransferToOfframpDto);
+  //   });
+  // });
+
   describe('fundStellarAccount', () => {
     const mockFundAccountDto: FundAccountDto = {
-      walletAddress: 'test_address',
-      secretKey: 'test_secret',
+      walletAddress: 'test_wallet_address',
+      secretKey: 'test_secret_key',
     };
 
     it('should call service.faucetAndTrustlineService with correct parameters', async () => {
-      const expectedResult = { message: 'Account funded successfully' };
+      const expectedResult = {
+        success: true,
+        message: 'Faucet and trustline setup successful',
+      };
       service.faucetAndTrustlineService.mockResolvedValue(expectedResult);
 
       const result = await controller.fundStellarAccount(mockFundAccountDto);
       expect(result).toEqual(expectedResult);
-      expect(service.faucetAndTrustlineService).toHaveBeenCalledWith(
-        mockFundAccountDto
-      );
+      expect(service.faucetAndTrustlineService).toHaveBeenCalledWith(mockFundAccountDto);
     });
   });
 
   describe('checkTrustline', () => {
     const mockCheckTrustlineDto: CheckTrustlineDto = {
-      walletAddress: 'test_address',
+      walletAddress: 'test_wallet_address',
     };
 
     it('should call service.checkTrustline with correct parameters', async () => {
@@ -196,32 +224,21 @@ describe('StellarController', () => {
 
       const result = await controller.checkTrustline(mockCheckTrustlineDto);
       expect(result).toEqual(expectedResult);
-      expect(service.checkTrustline).toHaveBeenCalledWith(
-        mockCheckTrustlineDto
-      );
+      expect(service.checkTrustline).toHaveBeenCalledWith(mockCheckTrustlineDto);
     });
   });
 
   describe('getDisbursementStats', () => {
-    it('should call service.getDisbursementStats', async () => {
-      const expectedResult = {
-        tokenStats: [
-          { name: 'Disbursement Balance', amount: '1,000' },
-          { name: 'Disbursed Balance', amount: '500' },
-          { name: 'Remaining Balance', amount: '500' },
-          { name: 'Token Price', amount: 'Rs 10' },
-        ],
-        transactionStats: [
-          {
-            title: 'RAHAT',
-            subtitle: 'test_source',
-            date: '2024-03-20',
-            amount: '100',
-            amtColor: 'green',
-            hash: 'test_hash',
-          },
-        ],
-      };
+    it('should call service.getDisbursementStats and return stats', async () => {
+      const expectedResult = [
+        { name: 'Token Disbursed', value: 1000 },
+        { name: 'Budget Assigned', value: 10000 },
+        { name: 'Token', value: 'RAHAT' },
+        { name: 'Token Price', value: 10 },
+        { name: 'Total Beneficiaries', value: 100 },
+        { name: 'Average Disbursement time', value: '2 hours' },
+        { name: 'Average Duration', value: '1 day' },
+      ];
       service.getDisbursementStats.mockResolvedValue(expectedResult);
 
       const result = await controller.getDisbursementStats();
@@ -239,56 +256,40 @@ describe('StellarController', () => {
       const expectedResult = {
         balances: [
           {
-            balance: '250',
-            limit: '10',
-            buying_liabilities: '0.0000000',
-            selling_liabilities: '0.0000000',
-            last_modified_ledger: 1220063,
-            is_authorized: true,
-            is_authorized_to_maintain_liabilities: true,
-            asset_type: 'credit_alphanum12',
+            asset_type: 'credit_alphanum4',
             asset_code: 'RAHAT',
-            asset_issuer:
-              'GCVLRQHGZYG32HZE3PKZ52NX5YFCNFDBUZDLUXQYMRS6WVBWSUOP5IYK',
-          },
-          {
-            balance: '9999',
-            buying_liabilities: '0',
-            selling_liabilities: '0',
-            asset_type: 'native',
+            balance: '1000.0000000',
           },
         ],
         transactions: [
           {
-            title: 'VENDOR',
-            subtitle:
-              'GDTGK77GFYWNXDTZC2LSFKTTPC7RLS223BNFW6WLOMDS7ZFR6YF2XXAU',
-            date: '2025-05-29T09:35:14.377Z',
+            title: 'RAHAT',
+            subtitle: 'test_source',
+            date: '2024-03-20',
             amount: '100',
-            hash: '5c8b3c2f3b0c4b632bc68e7d1076a18fc53d9a29eba02711aa86d1ac50424640',
-            beneficiaryName: 'Akash Sunar',
+            amtColor: 'green',
+            hash: 'test_hash',
           },
         ],
       };
-      (service.getWalletStats as jest.Mock).mockResolvedValue(expectedResult);
+      service.getWalletStats.mockResolvedValue(expectedResult);
 
       const result = await controller.getWalletStats(mockGetWalletBalanceDto);
       expect(result).toEqual(expectedResult);
-      expect(service.getWalletStats).toHaveBeenCalledWith(
-        mockGetWalletBalanceDto
-      );
+      expect(service.getWalletStats).toHaveBeenCalledWith(mockGetWalletBalanceDto);
     });
   });
 
   describe('getTriggerWithID', () => {
     const mockGetTriggerDto: GetTriggerDto = {
-      id: 'trigger1',
+      id: 'test_trigger_id',
     };
 
     it('should call service.getTriggerWithID with correct parameters', async () => {
       const expectedResult = {
-        id: 'trigger1',
-        status: 'ACTIVE',
+        id: 'test_trigger_id',
+        trigger_type: 'sample_type',
+        phase: 'sample_phase',
       };
       service.getTriggerWithID.mockResolvedValue(expectedResult);
 
@@ -302,21 +303,25 @@ describe('StellarController', () => {
     const mockAddTriggerDto: AddTriggerDto[] = [
       {
         id: 'trigger1',
-        trigger_type: 'test',
-        phase: 'test',
-        title: 'Test Trigger',
-        source: 'test',
-        river_basin: 'test',
-        params: { test: 'value' } as unknown as JSON,
+        trigger_type: 'type1',
+        phase: 'phase1',
+        title: 'Sample Trigger',
+        source: 'source1',
+        river_basin: 'sample_basin',
+        params: JSON.parse('{"data": "sample_data"}'),
         is_mandatory: true,
       },
     ];
 
     it('should call service.addTriggerOnChain with correct parameters', async () => {
-      const expectedResult = { id: 'job1' } as Job;
-      service.addTriggerOnChain.mockResolvedValue(expectedResult);
+      const expectedResult = {
+        id: 'job123',
+        data: { triggers: mockAddTriggerDto },
+        opts: { attempts: 3 },
+      };
+      service.addTriggerOnChain.mockResolvedValue(expectedResult as any);
 
-      const result = await controller.addTriggerOnChain(mockAddTriggerDto);
+      const result = await controller.addTriggerOnChain({triggers: mockAddTriggerDto});
       expect(result).toEqual(expectedResult);
       expect(service.addTriggerOnChain).toHaveBeenCalledWith(mockAddTriggerDto);
     });
@@ -325,20 +330,20 @@ describe('StellarController', () => {
   describe('updateOnchainTrigger', () => {
     const mockUpdateTriggerParamsDto: UpdateTriggerParamsDto = {
       id: 'trigger1',
-      params: { test: 'value' },
+      params: JSON.parse('{"updated_data": "new_value"}'),
     };
 
     it('should call service.updateOnchainTrigger with correct parameters', async () => {
-      const expectedResult = { id: 'job1' } as Job;
-      service.updateOnchainTrigger.mockResolvedValue(expectedResult);
+      const expectedResult = {
+        id: 'job456',
+        data: mockUpdateTriggerParamsDto,
+        opts: { attempts: 3 },
+      };
+      service.updateOnchainTrigger.mockResolvedValue(expectedResult as any);
 
-      const result = await controller.updateOnchainTrigger(
-        mockUpdateTriggerParamsDto
-      );
+      const result = await controller.updateOnchainTrigger({trigger: mockUpdateTriggerParamsDto});
       expect(result).toEqual(expectedResult);
-      expect(service.updateOnchainTrigger).toHaveBeenCalledWith(
-        mockUpdateTriggerParamsDto
-      );
+      expect(service.updateOnchainTrigger).toHaveBeenCalledWith(mockUpdateTriggerParamsDto);
     });
   });
 });

@@ -183,8 +183,12 @@ export class OfframpProcessor {
     };
 
     if (offrampType.toLocaleLowerCase() === 'vpa') {
+      const trimmedPhoneNumber = fspOfframpDetails.beneficiaryPhoneNumber.startsWith('+977')
+      ? fspOfframpDetails.beneficiaryPhoneNumber.slice(-10)
+      : fspOfframpDetails.beneficiaryPhoneNumber;
+
       offrampRequest.paymentDetails = {
-        vpa: fspOfframpDetails.beneficiaryPhoneNumber,
+        vpa: trimmedPhoneNumber,
       };
     }
 

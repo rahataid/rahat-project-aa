@@ -88,8 +88,12 @@ export class PayoutsService {
           this.prisma.beneficiaryRedeem.count({
             where: {
               status: {
-                in: ['FAILED', 'FIAT_TRANSACTION_FAILED', 'TOKEN_TRANSACTION_FAILED']
-              }
+                in: [
+                  'FAILED',
+                  'FIAT_TRANSACTION_FAILED',
+                  'TOKEN_TRANSACTION_FAILED',
+                ],
+              },
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -1404,14 +1408,22 @@ export class PayoutsService {
       `Getting payout log for beneficiary redeem with UUID: ${uuid}`
     );
     try {
-      const log = await this.prisma.beneficiaryRedeem.findMany({
-        where: {
-          uuid,
-        },
+      const log = await this.prisma.payouts.findUnique({
+        where: { uuid },
         include: {
-          Beneficiary: true,
-          payout: true,
-          Vendor: true,
+          beneficiaryRedeem: {
+            include: {
+              Beneficiary: true,
+              payout: true,
+              Vendor: true,
+            },
+          },
+          beneficiaryGroupToken: {
+            select: {
+              numberOfTokens: true,
+              status: true,
+            },
+          },
         },
       });
 
@@ -1421,29 +1433,46 @@ export class PayoutsService {
         );
       }
 
-      const result = log.map((log) => {
-        const extras = parseJsonField(log.Beneficiary?.extras);
-        const info = parseJsonField(log.info);
+      const result = log.beneficiaryRedeem.map((redeemLog) => {
+        const extras = parseJsonField(redeemLog.Beneficiary?.extras);
+        const info = parseJsonField(redeemLog.info);
 
-        return {
-          'Beneficiary Wallet Address': log.beneficiaryWalletAddress,
-          'Bank a/c name': extras.bank_ac_name || null,
-          'Bank a/c number': extras.bank_ac_number || null,
-          'Bank Name': extras.bank_name || null,
-          'Phone number': extras.phone || null,
-          'Transaction Type': log.transactionType,
-          'Bank Transaction ID': log.payoutId,
-          'Transacrion Wallet ID': log.txHash,
-          'Payout Status': log.payout?.status || null,
-          'Created at': log.createdAt
-            ? format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm')
+        const payoutType = redeemLog.payout?.type;
+        const payoutMode = redeemLog.payout?.mode;
+
+        const base = {
+          'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
+          'Phone number': extras?.phone || '',
+          'Transaction Wallet ID': redeemLog.txHash || '',
+          'Transaction Hash': info?.transactionHash || '',
+          'Payout Status': redeemLog.payout?.status || '',
+          'Transaction Type': redeemLog.transactionType || '',
+          'Created At': redeemLog.createdAt
+            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
             : '',
-          'Updated at': log.updatedAt
-            ? format(new Date(log.updatedAt), 'yyyy-MM-dd HH:mm')
+          'Updated At': redeemLog.updatedAt
+            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
             : '',
-          'No of Attempts': info.numberOfAttempts || 0,
+          'Actual Budget':
+            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+          'Amount Disbursed':
+            redeemLog.payout?.status === 'FAILED'
+              ? 0
+              : (redeemLog.Beneficiary?.benTokens || 0) * ONE_TOKEN_VALUE,
         };
+
+        if (payoutType === 'FSP') {
+          return {
+            ...base,
+            'Bank a/c name': extras?.bank_ac_name || '',
+            'Bank a/c number': extras?.bank_ac_number || '',
+            'Bank Name': extras?.bank_name || '',
+          };
+        } else {
+          return base;
+        }
       });
+
       return result;
     } catch (error) {
       this.logger.error(

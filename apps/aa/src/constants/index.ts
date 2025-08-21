@@ -72,6 +72,7 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
@@ -200,6 +201,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
     GET_ALL_GROUPS: 'aa.jobs.stakeholders.getAllGroups',
+    GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.stakeholders.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.stakeholders.getOneGroup',
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
@@ -247,6 +249,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
@@ -263,6 +266,15 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
+    GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
+    UPDATE_TOKEN_REDEMPTION_STATUS:
+      'aa.jobs.vendor.token_redemption.update_status',
+    LIST_TOKEN_REDEMPTIONS: 'aa.jobs.vendor.token_redemption.list',
+    GET_VENDOR_REDEMPTIONS:
+      'aa.jobs.vendor.token_redemption.get_vendor_redemptions',
+    GET_TOKEN_REDEMPTION_STATS: 'aa.jobs.vendor.token_redemption.get_stats',
+    VERIFY_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.verify',
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
@@ -294,6 +306,7 @@ export const EVENTS = {
   STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
+  TOKEN_DISBURSED: 'events.token_disbursed',
 };
 
 export const BQUEUE = {
@@ -306,6 +319,7 @@ export const BQUEUE = {
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
   // EVM:"EVM"
+  VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
