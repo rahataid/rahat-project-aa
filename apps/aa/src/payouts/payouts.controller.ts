@@ -48,8 +48,8 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  triggerPayout(@Payload() payload: { uuid: string }) {
-    return this.payoutsService.triggerPayout(payload.uuid);
+  triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
+    return this.payoutsService.triggerPayout(payload.user, payload.uuid);
   }
 
   @MessagePattern({

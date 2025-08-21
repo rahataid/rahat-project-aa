@@ -1,7 +1,7 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { BeneficiaryStatService } from '../beneficiary/beneficiaryStat.service';
 import { OnEvent } from '@nestjs/event-emitter';
-import { BQUEUE, EVENTS } from '../constants';
+import { BQUEUE, EVENTS, JOBS } from '../constants';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
@@ -15,6 +15,7 @@ export class ListernersService {
     private readonly aaStats: BeneficiaryStatService,
     private readonly stakeholderStats: StakeholdersService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
+    @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
     private disbService: CvaDisbursementService
   ) {}
@@ -49,5 +50,25 @@ export class ListernersService {
   }) {
     console.log('Disbursing tokens:', payload);
     return this.disbService.create(payload);
+  }
+
+  @OnEvent(EVENTS.NOTIFICATION.CREATE)
+  async handleNotification(event: { payload: any }) {
+    console.log(event);
+    const { payload } = event;
+    try {
+      this.logger.log(`✅ Notification event emitted`);
+
+      this.notificationQueue.add(JOBS.NOTIFICATION.CREATE, payload, {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      });
+      this.logger.log(`✅ Notification job queued`);
+    } catch (error) {
+      console.error('❌ Notification emit failed:', error);
+      throw error;
+    }
   }
 }

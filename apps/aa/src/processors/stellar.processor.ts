@@ -416,8 +416,9 @@ export class StellarProcessor {
 
     console.log(rest);
     const groupUuid = rest.groups[0];
-
-    console.log(groupUuid);
+    const group = await this.beneficiaryService.getOneTokenReservationByGroupId(
+      groupUuid
+    );
 
     try {
       const result: IDisbursementResultDto = await this.stellarService.disburse(
@@ -465,7 +466,16 @@ export class StellarProcessor {
           stack: error.stack,
         },
       });
-
+      if (job.attemptsMade === job.opts.attempts) {
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Failed Fund Disbursement`,
+            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            group: 'Fund Management',
+            notify: true,
+          },
+        });
+      }
       this.logger.error(
         `Error in disbursement: ${error.message}`,
         error.stack,
@@ -652,14 +662,16 @@ export class StellarProcessor {
 
   @Process({ name: JOBS.STELLAR.DISBURSEMENT_STATUS_UPDATE, concurrency: 1 })
   async disbursementStatusUpdate(job: Job<IDisbursementStatusJob>) {
+    this.logger.log(
+      'Processing disbursement status update job...',
+      StellarProcessor.name
+    );
+
+    const { disbursementID, assetIssuer, groupUuid } = job.data;
+    const group = await this.beneficiaryService.getOneTokenReservationByGroupId(
+      groupUuid
+    );
     try {
-      this.logger.log(
-        'Processing disbursement status update job...',
-        StellarProcessor.name
-      );
-
-      const { disbursementID, assetIssuer, groupUuid } = job.data;
-
       const disbursement = await this.stellarService.getDisbursement(
         disbursementID
       );
@@ -672,11 +684,6 @@ export class StellarProcessor {
 
         return;
       }
-
-      const group =
-        await this.beneficiaryService.getOneTokenReservationByGroupId(
-          groupUuid
-        );
 
       if (!group) {
         this.logger.error(
@@ -746,6 +753,14 @@ export class StellarProcessor {
           },
         });
 
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Failed Fund Disbursement`,
+            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            group: 'Fund Management',
+            notify: true,
+          },
+        });
         return;
       }
 
@@ -774,6 +789,15 @@ export class StellarProcessor {
         this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, {
           groupUuid,
         });
+
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Funds Disbursed`,
+            description: `Funds disbursed have been disbursed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            group: 'Fund Management',
+            notify: true,
+          },
+        });
         return;
       }
 
@@ -789,6 +813,16 @@ export class StellarProcessor {
         error.stack,
         StellarProcessor.name
       );
+      if (job.attemptsMade === job.opts.attempts) {
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Failed Fund Disbursement`,
+            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            group: 'Fund Management',
+            notify: true,
+          },
+        });
+      }
       throw error;
     }
   }
