@@ -85,12 +85,21 @@ export class VendorOfflinePayoutProcessor {
         VendorOfflinePayoutProcessor.name
       );
 
+      // Calculate amount per beneficiary (total amount divided by number of beneficiaries)
+      const totalAmount = parseFloat(data.amount);
+      const amountPerBeneficiary = totalAmount / beneficiaries.length;
+
+      this.logger.log(
+        `Total amount: ${data.amount}, Beneficiaries: ${beneficiaries.length}, Amount per beneficiary: ${amountPerBeneficiary}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
       // Send OTP to all beneficiaries in the group
       const result = await this.sendOtpToGroupDirect(
         beneficiaries,
         payout.payoutProcessorId,
         // 'd87847ea-fcd2-4099-90b2-c7292dfec2ac', // use actual vendor uuid
-        data.amount
+        amountPerBeneficiary.toString()
       );
 
       this.logger.log(
