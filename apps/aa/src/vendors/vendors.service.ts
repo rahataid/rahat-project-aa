@@ -690,6 +690,39 @@ export class VendorsService {
         `Found ${beneficiaries.length} offline beneficiaries for vendor ${payload.vendorUuid}`
       );
 
+      // Check if all records are in PENDING state and update to TOKEN_TRANSACTION_INITIATED
+      if (redeems.length > 0) {
+        const anyAlreadyInitiated = redeems.some(
+          (redeem) => redeem.status === 'TOKEN_TRANSACTION_INITIATED'
+        );
+
+        if (!anyAlreadyInitiated) {
+          this.logger.log(
+            `Updating ${redeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+          );
+
+          // Update all redeem records to TOKEN_TRANSACTION_INITIATED
+          await this.prisma.beneficiaryRedeem.updateMany({
+            where: {
+              uuid: {
+                in: redeems.map((redeem) => redeem.uuid),
+              },
+            },
+            data: {
+              status: 'TOKEN_TRANSACTION_INITIATED',
+            },
+          });
+
+          this.logger.log(
+            `Successfully updated ${redeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+          );
+        } else {
+          this.logger.log(
+            `Skipping status update: ${redeems.length} records found, anyAlreadyInitiated: ${anyAlreadyInitiated}`
+          );
+        }
+      }
+
       return beneficiaries;
     } catch (error) {
       this.logger.error(error.message);
