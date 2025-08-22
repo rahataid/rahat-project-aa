@@ -98,8 +98,8 @@ export class VendorOfflinePayoutProcessor {
       const result = await this.sendOtpToGroupDirect(
         beneficiaries,
         payout.payoutProcessorId,
-        // 'd87847ea-fcd2-4099-90b2-c7292dfec2ac', // use actual vendor uuid
-        amountPerBeneficiary.toString()
+        amountPerBeneficiary.toString(),
+        payout.uuid // Pass the payout UUID
       );
 
       this.logger.log(
@@ -234,7 +234,8 @@ export class VendorOfflinePayoutProcessor {
   private async sendOtpToGroupDirect(
     beneficiaries: any[],
     vendorUuid: string,
-    amount?: string
+    amount?: string,
+    payoutUuid?: string
   ) {
     this.logger.log(
       `Sending OTP to ${beneficiaries.length} beneficiaries for vendor ${vendorUuid} with amount: ${amount}`,
@@ -386,6 +387,7 @@ export class VendorOfflinePayoutProcessor {
                     amount: parseInt(request.amount),
                     status: 'PENDING',
                     isCompleted: false,
+                    payoutId: payoutUuid, // Include the payout ID for offline records
                     updatedAt: new Date(),
                     info: { ...infoObj, mode: 'OFFLINE' },
                   },
@@ -400,6 +402,7 @@ export class VendorOfflinePayoutProcessor {
                   transactionType: 'VENDOR_REIMBURSEMENT',
                   status: 'PENDING',
                   isCompleted: false,
+                  payoutId: payoutUuid, // Include the payout ID for offline records
                   info: { mode: 'OFFLINE' },
                 },
               });
