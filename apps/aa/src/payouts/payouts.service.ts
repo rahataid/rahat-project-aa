@@ -152,6 +152,10 @@ export class PayoutsService {
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
     const { groupId, ...createPayoutDto } = payload;
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -240,13 +244,14 @@ export class PayoutsService {
         payload: {
           title: `Payout Created`,
           description: `Payout has been created in ${
-            process.env.PROJECT_ID
+            projectName.value['project_name'] || process.env.PROJECT_ID
           } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
             beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
-          } beneficiaries with Rs${
+          } beneficiaries with Rs ${
             beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE
           } each`,
           group: 'Payout',
+          projectId: process.env.PROJECT_ID,
           notify: true,
         },
       });
@@ -757,6 +762,10 @@ export class PayoutsService {
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
     if (payoutDetails.isPayoutTriggered) {
       throw new RpcException(
         `Payout with UUID '${uuid}' has already been triggered`
@@ -792,8 +801,13 @@ export class PayoutsService {
     this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
       payload: {
         title: `Payout Triggered`,
-        description: `Payout ${payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name} has been triggered by ${user?.name} in ${process.env.PROJECT_ID}`,
+        description: `Payout ${
+          payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name
+        } has been triggered by ${user?.name} in ${
+          projectName.value['project_name'] || process.env.PROJECT_ID
+        }`,
         group: 'Payout',
+        projectID: process.env.PROJECT_ID,
         notify: true,
       },
     });

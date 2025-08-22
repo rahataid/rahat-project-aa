@@ -9,6 +9,7 @@ import { BeneficiaryRedeem } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { CipsResponseData } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AppService } from '../app/app.service';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -17,12 +18,16 @@ export class OfframpProcessor {
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly appService: AppService
   ) {}
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
 
     this.logger.log(
       `Processing offramp request of type ${fspOfframpDetails.offrampType} for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
@@ -112,8 +117,11 @@ export class OfframpProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Fiat Transaction Completed`,
-            description: `Fiat Transaction has been completed in ${process.env.PROJECT_ID}`,
+            description: `Fiat Transaction has been completed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            }`,
             group: 'Payout',
+            projectId: process.env.PROJECT_ID,
             notify: true,
           },
         });
@@ -132,8 +140,11 @@ export class OfframpProcessor {
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         payload: {
           title: `Fiat Transaction Failed`,
-          description: `Fiat Transaction has been failed in ${process.env.PROJECT_ID}`,
+          description: `Fiat Transaction has been failed in ${
+            projectName.value['project_name'] || process.env.PROJECT_ID
+          }`,
           group: 'Payout',
+          projectId: process.env.PROJECT_ID,
           notify: true,
         },
       });
@@ -154,9 +165,12 @@ export class OfframpProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Fiat Transaction Failed`,
-            description: `Fiat Transaction has been failed in ${process.env.PROJECT_ID}`,
+            description: `Fiat Transaction has been failed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            }`,
             group: 'Payout',
             notify: true,
+            projectId: process.env.PROJECT_ID,
           },
         });
       }

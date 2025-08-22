@@ -33,6 +33,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { canProcessJob } from '../utils/bullUtils';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AppService } from '../app/app.service';
 
 interface BatchInfo {
   batchIndex: number;
@@ -63,7 +64,8 @@ export class StellarProcessor {
     private readonly stellarQueue: Queue<IDisbursementStatusJob>,
     @InjectQueue(BQUEUE.OFFRAMP)
     private readonly offrampQueue: Queue,
-    private readonly prismaService: PrismaService
+    private readonly prismaService: PrismaService,
+    private readonly appService: AppService
   ) {}
 
   @Process({ name: JOBS.STELLAR.ADD_ONCHAIN_TRIGGER_QUEUE, concurrency: 1 })
@@ -414,7 +416,9 @@ export class StellarProcessor {
 
     const { ...rest } = job.data;
 
-    console.log(rest);
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
     const groupUuid = rest.groups[0];
     const group = await this.beneficiaryService.getOneTokenReservationByGroupId(
       groupUuid
@@ -470,8 +474,13 @@ export class StellarProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Failed Fund Disbursement`,
-            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            description: `Funds disbursed have been failed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            } for ${
+              group.beneficiaryGroup.name
+            } after activation of Activation Phase`,
             group: 'Fund Management',
+            projectId: process.env.PROJECT_ID,
             notify: true,
           },
         });
@@ -671,6 +680,9 @@ export class StellarProcessor {
     const group = await this.beneficiaryService.getOneTokenReservationByGroupId(
       groupUuid
     );
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
     try {
       const disbursement = await this.stellarService.getDisbursement(
         disbursementID
@@ -756,9 +768,14 @@ export class StellarProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Failed Fund Disbursement`,
-            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            description: `Funds disbursed have been failed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            } for ${
+              group.beneficiaryGroup.name
+            } after activation of Activation Phase`,
             group: 'Fund Management',
             notify: true,
+            projecId: process.env.PROJECT_ID,
           },
         });
         return;
@@ -793,9 +810,14 @@ export class StellarProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Funds Disbursed`,
-            description: `Funds disbursed have been disbursed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            description: `Funds disbursed have been disbursed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            } for ${
+              group.beneficiaryGroup.name
+            } after activation of Activation Phase`,
             group: 'Fund Management',
             notify: true,
+            projectId: process.env.PROJECT_ID,
           },
         });
         return;
@@ -817,9 +839,14 @@ export class StellarProcessor {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Failed Fund Disbursement`,
-            description: `Funds disbursed have been failed in ${process.env.PROJECT_ID} for ${group.beneficiaryGroup.name} after activation of Activation Phase`,
+            description: `Funds disbursed have been failed in ${
+              projectName.value['project_name'] || process.env.PROJECT_ID
+            } for ${
+              group.beneficiaryGroup.name
+            } after activation of Activation Phase`,
             group: 'Fund Management',
             notify: true,
+            projectId: process.env.PROJECT_ID,
           },
         });
       }

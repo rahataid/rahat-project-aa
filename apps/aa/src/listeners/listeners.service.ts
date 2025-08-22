@@ -60,7 +60,7 @@ export class ListernersService {
       this.logger.log(`✅ Notification event emitted`);
 
       this.notificationQueue.add(JOBS.NOTIFICATION.CREATE, payload, {
-        attempts: 5,
+        attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
         removeOnComplete: true,
         removeOnFail: false,

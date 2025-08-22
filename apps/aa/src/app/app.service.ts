@@ -18,14 +18,17 @@ export class AppService {
 
   async listSettings() {
     const res = await this.settingService.listAll();
-    const lowerCaseRes = lowerCaseObjectKeys(res)
+    const lowerCaseRes = lowerCaseObjectKeys(res);
     return lowerCaseRes;
-
   }
   async getSettings(dto: any) {
-    const { name } = dto
+    const { name } = dto;
     const res = await this.settingService.getPublic(name);
-    return lowerCaseObjectKeys(res);
+
+    const rdata = lowerCaseObjectKeys(res);
+    // console.log((rdata.value as any)?.project_name);
+    // console.log('rdata', rdata.value['project_name']);
+    return rdata;
   }
 
   async refreshSettings() {
@@ -40,12 +43,11 @@ export class AppService {
   }
 
   async resetAll() {
-    return "ok"
+    return 'ok';
   }
 
   //TODO: optimize for multiple dynamic settings
   async setupProjectSettings(payload: any) {
-
     const settings = [];
 
     // Process contracts
@@ -56,7 +58,7 @@ export class AppService {
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: false
+        isPrivate: false,
       });
     }
 
@@ -68,7 +70,7 @@ export class AppService {
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: false
+        isPrivate: false,
       });
     }
 
@@ -80,7 +82,7 @@ export class AppService {
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: false
+        isPrivate: false,
       });
     }
 
@@ -92,7 +94,7 @@ export class AppService {
         dataType: 'STRING',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: true
+        isPrivate: true,
       });
     }
 
@@ -103,7 +105,7 @@ export class AppService {
         dataType: 'STRING',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: false
+        isPrivate: false,
       });
     }
 
@@ -114,10 +116,9 @@ export class AppService {
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,
-        isPrivate: false
+        isPrivate: false,
       });
     }
-
 
     await this.settingService.bulkCreate(settings);
     return { message: 'Project Setup Successfully' };
