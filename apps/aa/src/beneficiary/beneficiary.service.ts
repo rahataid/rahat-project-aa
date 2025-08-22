@@ -855,8 +855,11 @@ export class BeneficiaryService {
       const benfIds = beneficiaryGroup.beneficiaries.map(
         (benf) => benf.beneficiaryId
       );
-      const tokensPerBeneficiary =
-        beneficiaryGroup.tokensReserved.numberOfTokens;
+
+      const tokensPerBeneficiary = Math.floor(
+        beneficiaryGroup.tokensReserved.numberOfTokens /
+          beneficiaryGroup.beneficiaries.length
+      );
 
       await this.prisma.beneficiary.updateMany({
         where: {
