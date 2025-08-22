@@ -427,7 +427,7 @@ export class BeneficiaryService {
         }
       );
 
-      const tokenAssignedBenfIds = [];
+      const tokenAssignedBenfWallet = [];
 
       for (const benf of benfIdsAndWalletAddress) {
         const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany(
@@ -445,17 +445,17 @@ export class BeneficiaryService {
           }
         );
         if (tokenAssignedGroup.length > 0) {
-          tokenAssignedBenfIds.push(benf.walletAddress);
+          tokenAssignedBenfWallet.push(benf.walletAddress);
         }
       }
 
-      if (tokenAssignedBenfIds.length > 0) {
+      if (tokenAssignedBenfWallet.length > 0) {
         // Handle the case where tokens are already assigned to some beneficiaries
         return {
           status: 'error',
           message:
             'Tokens have already been assigned to the following beneficiaries wallet addresses',
-          wallets: tokenAssignedBenfIds,
+          wallets: tokenAssignedBenfWallet,
           groupName: benfGroup.name,
         };
       }
