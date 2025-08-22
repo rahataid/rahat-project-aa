@@ -183,7 +183,8 @@ export class VendorOfflinePayoutProcessor {
           amount: amount.toString(),
           otp: otp,
         },
-        true
+        true, // skipOtpVerification
+        true // skipBeneficiaryRedeemCreation
       );
 
       // Update the beneficiaryRedeem record
