@@ -1376,6 +1376,7 @@ describe('BeneficiaryService', () => {
         id: 1,
         groupId: 'group-123',
         title: 'Test Reservation',
+        beneficiaryGroup: { id: 10, name: 'Test Group' },
       };
 
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
@@ -1389,6 +1390,7 @@ describe('BeneficiaryService', () => {
         mockPrismaService.beneficiaryGroupTokens.findUnique
       ).toHaveBeenCalledWith({
         where: { groupId },
+        include: { beneficiaryGroup: true },
       });
     });
   });

@@ -7,6 +7,7 @@ import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import { PayoutType, PayoutMode } from '@prisma/client';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 describe('PayoutsController', () => {
   let controller: PayoutsController;
@@ -95,7 +96,9 @@ describe('PayoutsController', () => {
       const error = new Error('Group not found');
       mockPayoutsService.create.mockRejectedValue(error);
 
-      await expect(controller.create(createPayoutDto)).rejects.toThrow('Group not found');
+      await expect(controller.create(createPayoutDto)).rejects.toThrow(
+        'Group not found'
+      );
     });
   });
 
@@ -170,7 +173,9 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.getOne.mockRejectedValue(error);
 
-      await expect(controller.findOne(payload)).rejects.toThrow('Payout not found');
+      await expect(controller.findOne(payload)).rejects.toThrow(
+        'Payout not found'
+      );
     });
   });
 
@@ -208,7 +213,9 @@ describe('PayoutsController', () => {
       const error = new Error('Payout not found');
       mockPayoutsService.update.mockRejectedValue(error);
 
-      await expect(controller.update(updatePayoutDto)).rejects.toThrow('Payout not found');
+      await expect(controller.update(updatePayoutDto)).rejects.toThrow(
+        'Payout not found'
+      );
     });
   });
 
@@ -239,7 +246,7 @@ describe('PayoutsController', () => {
 
   describe('triggerPayout', () => {
     it('should trigger payout successfully', async () => {
-      const payload = { uuid: 'payout-uuid-123' };
+      const payload = { uuid: 'payout-uuid-123', user: 'user-name' };
       const expectedResult = { success: true, message: 'Payout triggered' };
 
       mockPayoutsService.triggerPayout.mockResolvedValue(expectedResult);
@@ -247,7 +254,10 @@ describe('PayoutsController', () => {
       const result = await controller.triggerPayout(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPayoutsService.triggerPayout).toHaveBeenCalledWith('payout-uuid-123');
+      expect(mockPayoutsService.triggerPayout).toHaveBeenCalledWith(
+        'payout-uuid-123',
+        'user-name'
+      );
     });
 
     it('should handle trigger payout errors', async () => {
@@ -256,21 +266,30 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.triggerPayout.mockRejectedValue(error);
 
-      await expect(controller.triggerPayout(payload)).rejects.toThrow('Payout not found');
+      await expect(controller.triggerPayout(payload)).rejects.toThrow(
+        'Payout not found'
+      );
     });
   });
 
   describe('triggerOneFailedPayoutRequest', () => {
     it('should trigger one failed payout request successfully', async () => {
       const payload = { beneficiaryRedeemUuid: 'redeem-uuid-123' };
-      const expectedResult = { success: true, message: 'Failed payout retriggered' };
+      const expectedResult = {
+        success: true,
+        message: 'Failed payout retriggered',
+      };
 
-      mockPayoutsService.triggerOneFailedPayoutRequest.mockResolvedValue(expectedResult);
+      mockPayoutsService.triggerOneFailedPayoutRequest.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.triggerOneFailedPayoutRequest(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPayoutsService.triggerOneFailedPayoutRequest).toHaveBeenCalledWith(payload);
+      expect(
+        mockPayoutsService.triggerOneFailedPayoutRequest
+      ).toHaveBeenCalledWith(payload);
     });
 
     it('should handle errors in triggerOneFailedPayoutRequest', async () => {
@@ -279,23 +298,30 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.triggerOneFailedPayoutRequest.mockRejectedValue(error);
 
-      await expect(controller.triggerOneFailedPayoutRequest(payload)).rejects.toThrow(
-        'Redeem not found'
-      );
+      await expect(
+        controller.triggerOneFailedPayoutRequest(payload)
+      ).rejects.toThrow('Redeem not found');
     });
   });
 
   describe('triggerFailedPayoutRequest', () => {
     it('should trigger failed payout request successfully', async () => {
       const payload = { payoutUUID: 'payout-uuid-123' };
-      const expectedResult = { success: true, message: 'Failed payouts retriggered' };
+      const expectedResult = {
+        success: true,
+        message: 'Failed payouts retriggered',
+      };
 
-      mockPayoutsService.triggerFailedPayoutRequest.mockResolvedValue(expectedResult);
+      mockPayoutsService.triggerFailedPayoutRequest.mockResolvedValue(
+        expectedResult
+      );
 
       const result = await controller.triggerFailedPayoutRequest(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPayoutsService.triggerFailedPayoutRequest).toHaveBeenCalledWith(payload);
+      expect(
+        mockPayoutsService.triggerFailedPayoutRequest
+      ).toHaveBeenCalledWith(payload);
     });
 
     it('should handle errors in triggerFailedPayoutRequest', async () => {
@@ -304,9 +330,9 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.triggerFailedPayoutRequest.mockRejectedValue(error);
 
-      await expect(controller.triggerFailedPayoutRequest(payload)).rejects.toThrow(
-        'Payout not found'
-      );
+      await expect(
+        controller.triggerFailedPayoutRequest(payload)
+      ).rejects.toThrow('Payout not found');
     });
   });
 
@@ -351,7 +377,9 @@ describe('PayoutsController', () => {
       const error = new Error('Logs not found');
       mockPayoutsService.getPayoutLogs.mockRejectedValue(error);
 
-      await expect(controller.getPayoutLogs(payload)).rejects.toThrow('Logs not found');
+      await expect(controller.getPayoutLogs(payload)).rejects.toThrow(
+        'Logs not found'
+      );
     });
   });
 
@@ -369,7 +397,9 @@ describe('PayoutsController', () => {
       const result = await controller.getPayoutLog(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPayoutsService.getPayoutLog).toHaveBeenCalledWith('log-uuid-123');
+      expect(mockPayoutsService.getPayoutLog).toHaveBeenCalledWith(
+        'log-uuid-123'
+      );
     });
 
     it('should handle errors in getPayoutLog', async () => {
@@ -378,7 +408,9 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.getPayoutLog.mockRejectedValue(error);
 
-      await expect(controller.getPayoutLog(payload)).rejects.toThrow('Log not found');
+      await expect(controller.getPayoutLog(payload)).rejects.toThrow(
+        'Log not found'
+      );
     });
   });
 
@@ -407,7 +439,9 @@ describe('PayoutsController', () => {
       const error = new Error('Failed to fetch stats');
       mockPayoutsService.getPayoutStats.mockRejectedValue(error);
 
-      await expect(controller.getPayoutStats()).rejects.toThrow('Failed to fetch stats');
+      await expect(controller.getPayoutStats()).rejects.toThrow(
+        'Failed to fetch stats'
+      );
     });
   });
 
@@ -428,7 +462,9 @@ describe('PayoutsController', () => {
       const result = await controller.downloadPayoutLogs(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(mockPayoutsService.downloadPayoutLogs).toHaveBeenCalledWith('payout-uuid-123');
+      expect(mockPayoutsService.downloadPayoutLogs).toHaveBeenCalledWith(
+        'payout-uuid-123'
+      );
     });
 
     it('should handle errors in downloadPayoutLogs', async () => {
@@ -437,7 +473,9 @@ describe('PayoutsController', () => {
 
       mockPayoutsService.downloadPayoutLogs.mockRejectedValue(error);
 
-      await expect(controller.downloadPayoutLogs(payload)).rejects.toThrow('Logs not found');
+      await expect(controller.downloadPayoutLogs(payload)).rejects.toThrow(
+        'Logs not found'
+      );
     });
   });
 });

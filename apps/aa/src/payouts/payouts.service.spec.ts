@@ -9,13 +9,19 @@ import { AppService } from '../app/app.service';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { Queue } from 'bull';
 import { getQueueToken } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS } from '../constants';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import { PayoutType, PayoutMode, PayoutTransactionStatus } from '@prisma/client';
+import {
+  PayoutType,
+  PayoutMode,
+  PayoutTransactionStatus,
+} from '@prisma/client';
 import { of } from 'rxjs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 describe('PayoutsService', () => {
   let service: PayoutsService;
@@ -118,7 +124,15 @@ describe('PayoutsService', () => {
     add: jest.fn(),
     addBulk: jest.fn(),
   };
-
+  const mockEventEmitter = {
+    emit: jest.fn(),
+  };
+  const mockConfigService = {
+    get: jest.fn((key) => {
+      if (key === 'PROJECT_ID') return 'mock-project-id';
+      return null;
+    }),
+  };
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -155,9 +169,17 @@ describe('PayoutsService', () => {
           provide: getQueueToken(BQUEUE.STELLAR),
           useValue: mockStellarQueue,
         },
+        {
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
       ],
     }).compile();
-
+    let eventEmitter: EventEmitter2;
     service = module.get<PayoutsService>(PayoutsService);
     prismaService = module.get<PrismaService>(PrismaService);
     vendorsService = module.get<VendorsService>(VendorsService);
@@ -167,6 +189,10 @@ describe('PayoutsService', () => {
     appService = module.get<AppService>(AppService);
     clientProxy = module.get<ClientProxy>(CORE_MODULE);
     stellarQueue = module.get<Queue>(getQueueToken(BQUEUE.STELLAR));
+    eventEmitter = module.get(EventEmitter2);
+    mockAppService.getSettings.mockResolvedValue({
+      value: { project_name: 'Test Project' },
+    });
   });
 
   afterEach(() => {
@@ -191,7 +217,9 @@ describe('PayoutsService', () => {
         .mockResolvedValueOnce(2) // failed
         .mockResolvedValueOnce(15); // success
 
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockBeneficiaryRedeems);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockBeneficiaryRedeems
+      );
 
       const result = await service.getPayoutStats();
 
@@ -212,14 +240,18 @@ describe('PayoutsService', () => {
         },
       });
 
-      expect(mockPrismaService.beneficiaryRedeem.count).toHaveBeenCalledTimes(4);
+      expect(mockPrismaService.beneficiaryRedeem.count).toHaveBeenCalledTimes(
+        4
+      );
     });
 
     it('should handle errors in getPayoutStats', async () => {
       const error = new Error('Database error');
       mockPrismaService.beneficiaryRedeem.count.mockRejectedValue(error);
 
-      await expect(service.getPayoutStats()).rejects.toThrow('Failed to fetch payout stats');
+      await expect(service.getPayoutStats()).rejects.toThrow(
+        'Failed to fetch payout stats'
+      );
     });
   });
 
@@ -236,6 +268,10 @@ describe('PayoutsService', () => {
       const mockBeneficiaryGroup = {
         uuid: 'group-uuid-123',
         numberOfTokens: 1000,
+        beneficiaryGroup: {
+          name: 'Test Group',
+          beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+        },
       };
 
       const mockCreatedPayout = {
@@ -245,20 +281,43 @@ describe('PayoutsService', () => {
         payoutProcessorId: 'processor-123',
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
       mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
 
       const result = await service.create(mockCreatePayoutDto);
 
       expect(result).toEqual(mockCreatedPayout);
-      expect(mockPrismaService.beneficiaryGroupTokens.findFirst).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.findFirst
+      ).toHaveBeenCalledWith({
         where: { uuid: 'group-uuid-123' },
+        include: {
+          beneficiaryGroup: {
+            include: {
+              beneficiaries: true,
+            },
+          },
+        },
       });
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.NOTIFICATION.CREATE,
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            title: 'Payout Created',
+            group: 'Payout',
+            description: expect.stringContaining('Test Project'),
+          }),
+        })
+      );
     });
 
     it('should throw error when beneficiary group not found', async () => {
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(null);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        null
+      );
 
       await expect(service.create(mockCreatePayoutDto)).rejects.toThrow(
         `Beneficiary group tokens with UUID 'group-uuid-123' not found`
@@ -269,7 +328,9 @@ describe('PayoutsService', () => {
       const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
       const mockExistingPayout = { uuid: 'existing-payout' };
 
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(mockExistingPayout);
 
       await expect(service.create(mockCreatePayoutDto)).rejects.toThrow(
@@ -278,10 +339,15 @@ describe('PayoutsService', () => {
     });
 
     it('should throw error when FSP payout missing processor ID', async () => {
-      const payloadWithoutProcessor = { ...mockCreatePayoutDto, payoutProcessorId: undefined };
+      const payloadWithoutProcessor = {
+        ...mockCreatePayoutDto,
+        payoutProcessorId: undefined,
+      };
       const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
 
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
 
       await expect(service.create(payloadWithoutProcessor)).rejects.toThrow(
@@ -297,11 +363,26 @@ describe('PayoutsService', () => {
         payoutProcessorId: '123e4567-e89b-12d3-a456-426614174000',
       };
 
-      const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
-      const mockVendor = { uuid: '123e4567-e89b-12d3-a456-426614174000', name: 'Test Vendor' };
-      const mockCreatedPayout = { uuid: 'payout-uuid-123', type: PayoutType.VENDOR };
+      const mockBeneficiaryGroup = {
+        uuid: 'group-uuid-123',
+        numberOfTokens: 1000,
+        beneficiaryGroup: {
+          name: 'Test Group',
+          beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+        },
+      };
+      const mockVendor = {
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        name: 'Test Vendor',
+      };
+      const mockCreatedPayout = {
+        uuid: 'payout-uuid-123',
+        type: PayoutType.VENDOR,
+      };
 
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
       mockVendorsService.findOne.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
@@ -309,7 +390,19 @@ describe('PayoutsService', () => {
       const result = await service.create(vendorPayoutDto);
 
       expect(result).toEqual(mockCreatedPayout);
-      expect(mockVendorsService.findOne).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174000');
+      expect(mockVendorsService.findOne).toHaveBeenCalledWith(
+        '123e4567-e89b-12d3-a456-426614174000'
+      );
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.NOTIFICATION.CREATE,
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            title: 'Payout Created',
+            group: 'Payout',
+            description: expect.stringContaining('Test Project'),
+          }),
+        })
+      );
     });
 
     it('should throw error when VENDOR OFFLINE payout missing processor ID', async () => {
@@ -321,7 +414,9 @@ describe('PayoutsService', () => {
       };
 
       const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
 
       await expect(service.create(vendorPayoutDto)).rejects.toThrow(
@@ -338,7 +433,9 @@ describe('PayoutsService', () => {
       };
 
       const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
       mockVendorsService.findOne.mockResolvedValue(null);
 
@@ -356,7 +453,9 @@ describe('PayoutsService', () => {
       };
 
       const mockBeneficiaryGroup = { uuid: 'group-uuid-123' };
-      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(mockBeneficiaryGroup);
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
 
       await expect(service.create(vendorPayoutDto)).rejects.toThrow(
@@ -454,7 +553,9 @@ describe('PayoutsService', () => {
       };
 
       mockAppService.getSettings.mockResolvedValue(mockProjectInfo);
-      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(mockPayoutLastLog);
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(
+        mockPayoutLastLog
+      );
 
       const result = await service.calculatePayoutCompletionGap('payout-123');
 
@@ -467,9 +568,9 @@ describe('PayoutsService', () => {
     it('should handle missing project info', async () => {
       mockAppService.getSettings.mockResolvedValue(null);
 
-      await expect(service.calculatePayoutCompletionGap('payout-123')).rejects.toThrow(
-        'Project info not found, in SETTINGS'
-      );
+      await expect(
+        service.calculatePayoutCompletionGap('payout-123')
+      ).rejects.toThrow('Project info not found, in SETTINGS');
     });
   });
 
@@ -502,8 +603,12 @@ describe('PayoutsService', () => {
 
       mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
       mockBeneficiaryService.getOneGroup.mockResolvedValue(mockGroup);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockRedeemDetails);
-      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue([]);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedeemDetails
+      );
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
 
       const result = await service.findOne('payout-123');
 
@@ -541,7 +646,9 @@ describe('PayoutsService', () => {
       };
 
       mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
-      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue([]);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
 
       const result = await service.getOne('payout-123');
 
@@ -581,7 +688,9 @@ describe('PayoutsService', () => {
         extras: { note: 'Payout completed' },
       };
 
-      mockPrismaService.payouts.findUnique.mockResolvedValue(mockExistingPayout);
+      mockPrismaService.payouts.findUnique.mockResolvedValue(
+        mockExistingPayout
+      );
       mockPrismaService.payouts.update.mockResolvedValue(mockUpdatedPayout);
 
       const result = await service.update('payout-123', updateDto);
@@ -609,4 +718,4 @@ describe('PayoutsService', () => {
       expect(mockOfframpService.getPaymentProvider).toHaveBeenCalled();
     });
   });
-}); 
+});
