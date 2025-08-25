@@ -41,4 +41,19 @@ export class BankScrapeController {
   getCzbilTransactions(data: TransactionRequestDto) {
     return this.bankScrapeService.getCzbilTransactions(data);
   }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.bank-scrape.banks',
+    uuid: process.env.PROJECT_ID,
+  })
+  getBanks() {
+    return this.bankScrapeService.getBankList();
+  }
+  @MessagePattern({
+    cmd: 'aa.jobs.bank-scrape.transactions',
+    uuid: process.env.PROJECT_ID,
+  })
+  getTransactions(data: TransactionRequestDto) {
+    return this.bankScrapeService.getTransactions(data);
+  }
 }

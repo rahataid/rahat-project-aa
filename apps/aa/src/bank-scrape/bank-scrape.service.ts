@@ -120,4 +120,62 @@ export class BankScrapeService implements OnModuleInit {
       };
     }
   }
+
+  async getAccounts(
+    loginData: LoginRequestDto
+  ): Promise<BankAutomationResponse> {
+    try {
+      const payload = {
+        username: loginData.username,
+        password: loginData.password,
+        totp: loginData.totp,
+      };
+      const response = await this.apiInstance.post(
+        `/automations/${loginData.code}/accounts`,
+        payload
+      );
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
+    }
+  }
+
+  async getTransactions(
+    transactionData: TransactionRequestDto
+  ): Promise<BankAutomationResponse> {
+    try {
+      const account = await this.getAccounts({
+        code: transactionData.code,
+        username: transactionData.username,
+        password: transactionData.password,
+        totp: transactionData.totpSecret,
+      });
+      transactionData.accountNumber = account.data?.accountNumber || '1234567';
+      const payload = {
+        accountNumber: transactionData.accountNumber,
+        username: transactionData.username,
+        password: transactionData.password,
+        totpSecret: transactionData.totpSecret,
+      };
+      const response = await this.apiInstance.post(
+        `/automations/${transactionData.code}/transactions`,
+        payload
+      );
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
+    }
+  }
 }

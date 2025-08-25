@@ -29,6 +29,14 @@ export class LoginRequestDto {
   })
   @IsString()
   totp: string;
+
+  @ApiProperty({
+    description: 'Bank code',
+    example: 'hbl',
+  })
+  @IsString()
+  @IsOptional()
+  code?: string;
 }
 
 export class TransactionRequestDto {
@@ -36,8 +44,9 @@ export class TransactionRequestDto {
     description: 'Bank account number',
     example: '1234567890',
   })
+  @IsOptional()
   @IsString()
-  accountNumber: string;
+  accountNumber?: string;
 
   @ApiProperty({
     description: 'Bank username',
@@ -81,6 +90,13 @@ export class TransactionRequestDto {
   })
   @IsEnum(['ALL', 'DEBIT', 'CREDIT'])
   transactionType: 'ALL' | 'DEBIT' | 'CREDIT';
+
+  @ApiProperty({
+    description: 'Bank code',
+    example: 'hbl',
+  })
+  @IsString()
+  code: string;
 }
 
 export class BankAutomationResponse {
