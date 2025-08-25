@@ -3,7 +3,7 @@ import { RpcException } from '@nestjs/microservices';
 import { PrismaService, paginator, PaginatorTypes } from '@rumsan/prisma';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { BQUEUE, JOBS } from '../constants';
+import { BQUEUE, EVENTS, JOBS } from '../constants';
 import {
   CreateVendorTokenRedemptionDto,
   UpdateVendorTokenRedemptionDto,
@@ -14,6 +14,8 @@ import {
   VendorTokenRedemptionStatsResponseDto,
   TokenRedemptionStatus,
 } from './dto/vendorTokenRedemption.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -24,7 +26,9 @@ export class VendorTokenRedemptionService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.VENDOR)
-    private readonly vendorQueue: Queue
+    private readonly vendorQueue: Queue,
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
@@ -102,6 +106,7 @@ export class VendorTokenRedemptionService {
   }
 
   async update(dto: UpdateVendorTokenRedemptionDto) {
+    const projectId = this.configService.get('PROJECT_ID');
     try {
       const redemption = await this.prisma.vendorTokenRedemption.findUnique({
         where: { uuid: dto.uuid },
@@ -154,6 +159,27 @@ export class VendorTokenRedemptionService {
         `Updated token redemption ${dto.uuid} to status ${dto.redemptionStatus}`
       );
 
+      if (updatedRedemption.redemptionStatus === 'APPROVED') {
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Vendor Settled with Fiat`,
+            description: `Vendor ${updatedRedemption?.vendor?.name} has been redeemed Rs ${updatedRedemption?.tokenAmount} by ${dto?.user?.name}`,
+            group: 'Vendor Management',
+            projectId: projectId,
+            notify: true,
+          },
+        });
+      }
+      if (updatedRedemption.redemptionStatus === 'REQUESTED')
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Vendor Requested for Settlement`,
+            description: `Vendor ${updatedRedemption?.vendor?.name} has requested to redeem  Rs ${updatedRedemption?.tokenAmount}`,
+            group: 'Vendor Management',
+            projectId: projectId,
+            notify: true,
+          },
+        });
       return updatedRedemption;
     } catch (error) {
       this.logger.error(`Error updating token redemption: ${error.message}`);

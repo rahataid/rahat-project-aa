@@ -3,25 +3,31 @@ import { StellarService } from './stellar.service';
 import { ClientProxy } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
-import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import {
+  DisbursementServices,
+  ReceiveService,
+  TransactionService,
+} from '@rahataid/stellar-sdk';
 import { of, throwError } from 'rxjs';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { AppService } from '../app/app.service';
 import { getQueueToken } from '@nestjs/bull';
 import { GroupPurpose } from '@prisma/client';
 
 // Import Stellar SDK classes for mocking
-import { 
-  TransactionBuilder, 
-  Networks, 
-  BASE_FEE, 
-  Contract, 
+import {
+  TransactionBuilder,
+  Networks,
+  BASE_FEE,
+  Contract,
   Keypair,
   xdr,
-  scValToNative 
+  scValToNative,
 } from '@stellar/stellar-sdk';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 jest.mock('@rahataid/stellar-sdk');
 jest.mock('bcryptjs');
@@ -103,14 +109,18 @@ describe('StellarService', () => {
 
   const mockBullQueueStellar = {
     add: jest.fn().mockResolvedValue({ id: 'job-123', data: {}, opts: {} }),
-    addBulk: jest.fn().mockResolvedValue([{ id: 'job-123', data: {}, opts: {} }]),
+    addBulk: jest
+      .fn()
+      .mockResolvedValue([{ id: 'job-123', data: {}, opts: {} }]),
     process: jest.fn(),
     on: jest.fn(),
   };
 
   const mockBullQueueCheckTrustline = {
     add: jest.fn().mockResolvedValue({ id: 'job-456', data: {}, opts: {} }),
-    addBulk: jest.fn().mockResolvedValue([{ id: 'job-456', data: {}, opts: {} }]),
+    addBulk: jest
+      .fn()
+      .mockResolvedValue([{ id: 'job-456', data: {}, opts: {} }]),
     process: jest.fn(),
     on: jest.fn(),
   };
@@ -143,6 +153,15 @@ describe('StellarService', () => {
     }),
   };
 
+  const mockEventEmitter = {
+    emit: jest.fn(),
+  };
+  const mockConfigService = {
+    get: jest.fn((key) => {
+      if (key === 'PROJECT_ID') return 'mock-project-id';
+      return null;
+    }),
+  };
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -183,9 +202,17 @@ describe('StellarService', () => {
           provide: DisbursementServices,
           useValue: mockDisbursementServices,
         },
+        {
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
       ],
     }).compile();
-
+    let eventEmitter: EventEmitter2;
     service = module.get<StellarService>(StellarService);
     clientProxy = module.get(CORE_MODULE);
     prismaService = module.get(PrismaService);
@@ -195,8 +222,13 @@ describe('StellarService', () => {
     disbursementServices = module.get(DisbursementServices);
     appService = module.get(AppService);
     stellarQueue = module.get(getQueueToken(BQUEUE.STELLAR));
-    checkTrustlineQueue = module.get(getQueueToken(BQUEUE.STELLAR_CHECK_TRUSTLINE));
-
+    checkTrustlineQueue = module.get(
+      getQueueToken(BQUEUE.STELLAR_CHECK_TRUSTLINE)
+    );
+    eventEmitter = module.get(EventEmitter2);
+    mockAppService.getSettings.mockResolvedValue({
+      value: { project_name: 'Test Project' },
+    });
     // Reset all mocks before each test
     jest.clearAllMocks();
   });
@@ -207,7 +239,7 @@ describe('StellarService', () => {
 
   describe('getTriggerWithID', () => {
     const mockTriggerDto = { id: 'trigger-123' };
-    
+
     beforeEach(() => {
       // Mock Stellar SDK classes
       const mockServer = {
@@ -215,17 +247,21 @@ describe('StellarService', () => {
         simulateTransaction: jest.fn(),
         getAccount: jest.fn(),
       };
-      
+
       const mockTransaction = {
         addOperation: jest.fn().mockReturnThis(),
         setTimeout: jest.fn().mockReturnThis(),
         build: jest.fn().mockReturnThis(),
       };
-      
+
       const mockKeypair = {
-        publicKey: jest.fn().mockReturnValue('GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),
+        publicKey: jest
+          .fn()
+          .mockReturnValue(
+            'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+          ),
       };
-      
+
       const mockContract = {
         call: jest.fn(),
       };
@@ -234,17 +270,17 @@ describe('StellarService', () => {
       (Contract as any).mockImplementation(() => mockContract);
       (Keypair.fromSecret as any).mockReturnValue(mockKeypair);
       (xdr.ScVal.scvString as any).mockReturnValue('mock-scval');
-      
+
       mockServer.prepareTransaction.mockResolvedValue(mockTransaction);
       mockServer.simulateTransaction.mockResolvedValue({
-        result: { retval: 'mock-result' }
+        result: { retval: 'mock-result' },
       });
       mockServer.getAccount.mockResolvedValue({ account: 'mock-account' });
 
       // Mock the rpc Server
       const { rpc } = require('@stellar/stellar-sdk');
       rpc.Server.mockImplementation(() => mockServer);
-      
+
       // Mock getStellarObjects method
       jest.spyOn(service as any, 'getStellarObjects').mockResolvedValue({
         server: mockServer,
@@ -258,11 +294,11 @@ describe('StellarService', () => {
         {
           _attributes: {
             key: { _value: 'test-key' },
-            val: { _value: 'test-value' }
-          }
-        }
+            val: { _value: 'test-value' },
+          },
+        },
       ];
-      
+
       (scValToNative as any).mockReturnValue(mockArrayResult);
 
       const result = await service.getTriggerWithID(mockTriggerDto);
@@ -272,7 +308,7 @@ describe('StellarService', () => {
 
     it('should successfully get trigger with object result', async () => {
       const mockObjectResult = { status: 'active', data: 'test' };
-      
+
       (scValToNative as any).mockReturnValue(mockObjectResult);
 
       const result = await service.getTriggerWithID(mockTriggerDto);
@@ -293,17 +329,17 @@ describe('StellarService', () => {
         {
           _attributes: {
             key: { _value: { complex: 'key' } },
-            val: { _value: { complex: 'value' } }
-          }
-        }
+            val: { _value: { complex: 'value' } },
+          },
+        },
       ];
-      
+
       (scValToNative as any).mockReturnValue(mockArrayResult);
 
       const result = await service.getTriggerWithID(mockTriggerDto);
 
-      expect(result).toEqual({ 
-        '{"complex":"key"}': '{"complex":"value"}' 
+      expect(result).toEqual({
+        '{"complex":"key"}': '{"complex":"value"}',
       });
     });
 
@@ -312,26 +348,30 @@ describe('StellarService', () => {
         {
           _attributes: {
             key: { _value: 'valid-key' },
-            val: { _value: 'valid-value' }
-          }
+            val: { _value: 'valid-value' },
+          },
         },
         {
           // Malformed item that will cause JSON.stringify to fail
           _attributes: {
             key: { _value: { circular: {} as any } },
-            val: { _value: 'test' }
-          }
-        }
+            val: { _value: 'test' },
+          },
+        },
       ];
-      
+
       // Make the circular reference
-      (mockArrayResult[1]._attributes.key._value as any).circular.self = (mockArrayResult[1]._attributes.key._value as any).circular;
-      
+      (mockArrayResult[1]._attributes.key._value as any).circular.self = (
+        mockArrayResult[1]._attributes.key._value as any
+      ).circular;
+
       (scValToNative as any).mockReturnValue(mockArrayResult);
 
       await expect(service.getTriggerWithID(mockTriggerDto)).rejects.toThrow(
         expect.objectContaining({
-          message: expect.stringContaining('Failed to process contract result:')
+          message: expect.stringContaining(
+            'Failed to process contract result:'
+          ),
         })
       );
     });
@@ -341,18 +381,22 @@ describe('StellarService', () => {
 
       await expect(service.getTriggerWithID(mockTriggerDto)).rejects.toThrow(
         expect.objectContaining({
-          message: expect.stringContaining('Failed to process contract result:')
+          message: expect.stringContaining(
+            'Failed to process contract result:'
+          ),
         })
       );
     });
 
     it('should throw RpcException on contract processing error', async () => {
-      jest.spyOn(service as any, 'getStellarObjects').mockRejectedValue(
-        new Error('Contract processing failed')
-      );
+      jest
+        .spyOn(service as any, 'getStellarObjects')
+        .mockRejectedValue(new Error('Contract processing failed'));
 
       await expect(service.getTriggerWithID(mockTriggerDto)).rejects.toThrow(
-        new RpcException('Failed to process contract result: Contract processing failed')
+        new RpcException(
+          'Failed to process contract result: Contract processing failed'
+        )
       );
     });
   });
@@ -371,7 +415,9 @@ describe('StellarService', () => {
     };
 
     beforeEach(() => {
-      mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendorWithOfflineBeneficiaries);
+      mockPrismaService.vendor.findUnique.mockResolvedValue(
+        mockVendorWithOfflineBeneficiaries
+      );
     });
 
     it('should successfully send group OTP', async () => {
@@ -414,15 +460,17 @@ describe('StellarService', () => {
 
   describe('getActivityActivationTime - Edge Cases', () => {
     beforeEach(() => {
-      mockClientProxy.send.mockReturnValue(of({
-        data: [
-          {
-            name: 'ACTIVATION',
-            isActive: true,
-            activatedAt: '2024-01-01T00:00:00Z',
-          },
-        ],
-      }));
+      mockClientProxy.send.mockReturnValue(
+        of({
+          data: [
+            {
+              name: 'ACTIVATION',
+              isActive: true,
+              activatedAt: '2024-01-01T00:00:00Z',
+            },
+          ],
+        })
+      );
     });
 
     it('should return null when activeYear is missing', async () => {
@@ -475,16 +523,22 @@ describe('StellarService', () => {
       };
 
       it('should use batch size from settings when available', async () => {
-        const result = await service.internalFaucetAndTrustline(mockBeneficiaries);
+        const result = await service.internalFaucetAndTrustline(
+          mockBeneficiaries
+        );
 
         expect(result.message).toContain('Created');
         expect(stellarQueue.addBulk).toHaveBeenCalled();
       });
 
       it('should use default batch size when settings fail', async () => {
-        mockSettingsService.getPublic.mockRejectedValue(new Error('Settings error'));
+        mockSettingsService.getPublic.mockRejectedValue(
+          new Error('Settings error')
+        );
 
-        const result = await service.internalFaucetAndTrustline(mockBeneficiaries);
+        const result = await service.internalFaucetAndTrustline(
+          mockBeneficiaries
+        );
 
         expect(result.message).toContain('Created');
         expect(stellarQueue.addBulk).toHaveBeenCalled();
@@ -497,7 +551,9 @@ describe('StellarService', () => {
           },
         });
 
-        const result = await service.internalFaucetAndTrustline(mockBeneficiaries);
+        const result = await service.internalFaucetAndTrustline(
+          mockBeneficiaries
+        );
 
         expect(result.message).toContain('Created');
         expect(stellarQueue.addBulk).toHaveBeenCalled();
@@ -506,9 +562,13 @@ describe('StellarService', () => {
 
     describe('getSecretByPhone and getSecretByWallet (via public methods)', () => {
       it('should test getSecretByPhone error handling via getBenTotal', async () => {
-        mockClientProxy.send.mockReturnValue(throwError(() => new Error('Phone not found')));
+        mockClientProxy.send.mockReturnValue(
+          throwError(() => new Error('Phone not found'))
+        );
 
-        await expect((service as any).getBenTotal('+1234567890')).rejects.toThrow(RpcException);
+        await expect(
+          (service as any).getBenTotal('+1234567890')
+        ).rejects.toThrow(RpcException);
 
         expect(mockClientProxy.send).toHaveBeenCalledWith(
           { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
@@ -517,9 +577,13 @@ describe('StellarService', () => {
       });
 
       it('should test getSecretByWallet error handling', async () => {
-        mockClientProxy.send.mockReturnValue(throwError(() => new Error('Wallet not found')));
+        mockClientProxy.send.mockReturnValue(
+          throwError(() => new Error('Wallet not found'))
+        );
 
-        await expect(service.getSecretByWallet('wallet-address')).rejects.toThrow(
+        await expect(
+          service.getSecretByWallet('wallet-address')
+        ).rejects.toThrow(
           new RpcException('Beneficiary with wallet wallet-address not found')
         );
 
@@ -549,22 +613,28 @@ describe('StellarService', () => {
           privateKey: 'beneficiary-private-key',
         };
 
-        jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+        jest
+          .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+          .mockResolvedValue(mockPayoutType);
         jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
-        jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue(mockBeneficiaryKeys);
+        jest
+          .spyOn(service as any, 'getSecretByPhone')
+          .mockResolvedValue(mockBeneficiaryKeys);
         mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
         mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
         mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(null);
-        mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({ uuid: 'redeem-uuid' });
+        mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({
+          uuid: 'redeem-uuid',
+        });
       });
 
       it('should test storeOTP with successful OTP creation', async () => {
         (bcrypt.hash as jest.Mock).mockResolvedValue('hashedOtp');
-        mockPrismaService.otp.upsert.mockResolvedValue({ 
-          id: 1, 
+        mockPrismaService.otp.upsert.mockResolvedValue({
+          id: 1,
           phoneNumber: '+1234567890',
           amount: 100,
-          otpHash: 'hashedOtp'
+          otpHash: 'hashedOtp',
         });
 
         const mockSendOtpDto = {
@@ -598,7 +668,10 @@ describe('StellarService', () => {
           expiresAt: new Date(Date.now() + 300000), // 5 minutes from now
         });
         (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-        mockReceiveService.sendAsset.mockResolvedValue({ tx: { hash: 'tx-hash' } });
+        mockReceiveService.sendAsset.mockResolvedValue({
+          tx: { hash: 'tx-hash' },
+        });
+
         mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
           uuid: 'redeem-uuid',
           beneficiaryWalletAddress: 'beneficiary-public-key',
@@ -606,6 +679,16 @@ describe('StellarService', () => {
           status: 'PENDING',
           isCompleted: false,
           txHash: null,
+          updateAt: new Date().toISOString(),
+          Vendor: { name: 'Test Vendor' },
+        });
+        mockPrismaService.beneficiaryRedeem.update.mockResolvedValue({
+          uuid: 'redeem-uuid',
+          status: 'COMPLETED',
+          isCompleted: true,
+          txHash: 'tx-hash',
+          updateAt: new Date().toISOString(),
+          Vendor: { name: 'Test Vendor' },
         });
 
         const result = await service.sendAssetToVendor(mockSendAssetDto);
@@ -623,9 +706,9 @@ describe('StellarService', () => {
           amount: 100,
         };
 
-        await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(
-          new RpcException('OTP record not found')
-        );
+        await expect(
+          service.sendAssetToVendor(mockSendAssetDto)
+        ).rejects.toThrow(new RpcException('OTP record not found'));
       });
 
       it('should test verifyOTP when OTP already verified', async () => {
@@ -645,9 +728,9 @@ describe('StellarService', () => {
           amount: 100,
         };
 
-        await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(
-          new RpcException('OTP already verified')
-        );
+        await expect(
+          service.sendAssetToVendor(mockSendAssetDto)
+        ).rejects.toThrow(new RpcException('OTP already verified'));
       });
 
       it('should test verifyOTP when OTP expired', async () => {
@@ -667,9 +750,9 @@ describe('StellarService', () => {
           amount: 100,
         };
 
-        await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(
-          new RpcException('OTP has expired')
-        );
+        await expect(
+          service.sendAssetToVendor(mockSendAssetDto)
+        ).rejects.toThrow(new RpcException('OTP has expired'));
       });
 
       it('should test verifyOTP when OTP is invalid', async () => {
@@ -690,18 +773,20 @@ describe('StellarService', () => {
           amount: 100,
         };
 
-        await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(
-          new RpcException('Invalid OTP or amount mismatch')
-        );
+        await expect(
+          service.sendAssetToVendor(mockSendAssetDto)
+        ).rejects.toThrow(new RpcException('Invalid OTP or amount mismatch'));
       });
     });
 
     describe('getRahatBalance', () => {
       beforeEach(() => {
-        jest.spyOn(service as any, 'getFromSettings').mockImplementation((key) => {
-          if (key === 'ASSETCODE') return Promise.resolve('RAHAT');
-          return Promise.resolve(null);
-        });
+        jest
+          .spyOn(service as any, 'getFromSettings')
+          .mockImplementation((key) => {
+            if (key === 'ASSETCODE') return Promise.resolve('RAHAT');
+            return Promise.resolve(null);
+          });
       });
 
       it('should get RAHAT balance successfully', async () => {
@@ -716,7 +801,9 @@ describe('StellarService', () => {
         const result = await service.getRahatBalance('test-wallet-address');
 
         expect(result).toBe(500); // Math.floor of 500.5
-        expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith('test-wallet-address');
+        expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith(
+          'test-wallet-address'
+        );
       });
 
       it('should return 0 when RAHAT asset not found', async () => {
@@ -733,7 +820,9 @@ describe('StellarService', () => {
       });
 
       it('should return 0 on error', async () => {
-        mockReceiveService.getAccountBalance.mockRejectedValue(new Error('Network error'));
+        mockReceiveService.getAccountBalance.mockRejectedValue(
+          new Error('Network error')
+        );
 
         const result = await service.getRahatBalance('test-wallet-address');
 
@@ -769,9 +858,13 @@ describe('StellarService', () => {
         };
 
         mockClientProxy.send.mockReturnValue(of(mockBeneficiary));
-        mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockBeneficiaryGroup);
+        mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+          mockBeneficiaryGroup
+        );
 
-        const result = await (service as any).getBeneficiaryPayoutTypeByPhone('+1234567890');
+        const result = await (service as any).getBeneficiaryPayoutTypeByPhone(
+          '+1234567890'
+        );
 
         expect(result).toEqual({
           uuid: 'payout-uuid',
@@ -792,7 +885,7 @@ describe('StellarService', () => {
           (service as any).getBeneficiaryPayoutTypeByPhone('+1234567890')
         ).rejects.toThrow(
           expect.objectContaining({
-            message: expect.stringContaining('Failed to retrieve payout type:')
+            message: expect.stringContaining('Failed to retrieve payout type:'),
           })
         );
       });
@@ -814,7 +907,7 @@ describe('StellarService', () => {
           (service as any).getBeneficiaryPayoutTypeByPhone('+1234567890')
         ).rejects.toThrow(
           expect.objectContaining({
-            message: expect.stringContaining('Failed to retrieve payout type:')
+            message: expect.stringContaining('Failed to retrieve payout type:'),
           })
         );
       });
@@ -837,7 +930,7 @@ describe('StellarService', () => {
           (service as any).getBeneficiaryPayoutTypeByPhone('+1234567890')
         ).rejects.toThrow(
           expect.objectContaining({
-            message: expect.stringContaining('Failed to retrieve payout type:')
+            message: expect.stringContaining('Failed to retrieve payout type:'),
           })
         );
       });
@@ -859,13 +952,15 @@ describe('StellarService', () => {
         };
 
         mockClientProxy.send.mockReturnValue(of(mockBeneficiary));
-        mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(mockBeneficiaryGroup);
+        mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+          mockBeneficiaryGroup
+        );
 
         await expect(
           (service as any).getBeneficiaryPayoutTypeByPhone('+1234567890')
         ).rejects.toThrow(
           expect.objectContaining({
-            message: expect.stringContaining('Failed to retrieve payout type:')
+            message: expect.stringContaining('Failed to retrieve payout type:'),
           })
         );
       });
@@ -875,9 +970,13 @@ describe('StellarService', () => {
   describe('Edge cases and error scenarios', () => {
     describe('disburse method edge cases', () => {
       it('should handle empty beneficiary list', async () => {
-        jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue([]);
-        mockDisbursementServices.createDisbursementProcess.mockResolvedValue({ success: true });
-        
+        jest
+          .spyOn(service as any, 'getBeneficiaryTokenBalance')
+          .mockResolvedValue([]);
+        mockDisbursementServices.createDisbursementProcess.mockResolvedValue({
+          success: true,
+        });
+
         const mockDiburseDto = {
           dName: 'test_disbursement',
           groups: ['group1'],
@@ -893,8 +992,12 @@ describe('StellarService', () => {
           { walletAddress: 'addr2', amount: '200', phone: '456', id: 'ben2' },
         ];
 
-        jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue(mockBeneficiaries);
-        mockDisbursementServices.createDisbursementProcess.mockResolvedValue({ success: true });
+        jest
+          .spyOn(service as any, 'getBeneficiaryTokenBalance')
+          .mockResolvedValue(mockBeneficiaries);
+        mockDisbursementServices.createDisbursementProcess.mockResolvedValue({
+          success: true,
+        });
 
         const mockDiburseDto = {
           dName: 'test_disbursement',
@@ -903,7 +1006,9 @@ describe('StellarService', () => {
 
         const result = await service.disburse(mockDiburseDto);
 
-        expect(mockDisbursementServices.createDisbursementProcess).toHaveBeenCalledWith(
+        expect(
+          mockDisbursementServices.createDisbursementProcess
+        ).toHaveBeenCalledWith(
           'test_disbursement',
           expect.any(Buffer), // CSV buffer
           'test_disbursement_file',
@@ -914,12 +1019,16 @@ describe('StellarService', () => {
 
     describe('getWalletStats edge cases', () => {
       it('should handle non-phone address that starts with 9', async () => {
-        const mockWalletBalanceDto = { address: '9XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' };
+        const mockWalletBalanceDto = {
+          address: '9XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+        };
         const mockBeneficiary = { walletAddress: 'converted-wallet-address' };
-        
+
         mockClientProxy.send.mockReturnValue(of(mockBeneficiary));
         mockReceiveService.getAccountBalance.mockResolvedValue([]);
-        jest.spyOn(service as any, 'getRecentTransaction').mockResolvedValue([]);
+        jest
+          .spyOn(service as any, 'getRecentTransaction')
+          .mockResolvedValue([]);
 
         const result = await service.getWalletStats(mockWalletBalanceDto);
 
@@ -933,12 +1042,14 @@ describe('StellarService', () => {
 
       it('should handle getWalletStats error', async () => {
         const mockWalletBalanceDto = { address: 'test-wallet' };
-        
-        mockReceiveService.getAccountBalance.mockRejectedValue(new Error('Network error'));
 
-        await expect(service.getWalletStats(mockWalletBalanceDto)).rejects.toThrow(
-          new RpcException('Network error')
+        mockReceiveService.getAccountBalance.mockRejectedValue(
+          new Error('Network error')
         );
+
+        await expect(
+          service.getWalletStats(mockWalletBalanceDto)
+        ).rejects.toThrow(new RpcException('Network error'));
       });
     });
 
@@ -950,17 +1061,24 @@ describe('StellarService', () => {
           mode: 'ONLINE',
         };
 
-        jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+        jest
+          .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+          .mockResolvedValue(mockPayoutType);
         jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(500);
         jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue({
           publicKey: 'public-key',
         });
         jest.spyOn(service as any, 'storeOTP').mockResolvedValue({ id: 1 });
 
-        const mockVendor = { uuid: 'vendor-uuid', walletAddress: 'vendor-wallet' };
+        const mockVendor = {
+          uuid: 'vendor-uuid',
+          walletAddress: 'vendor-wallet',
+        };
         mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
         mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(null);
-        mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({ uuid: 'redeem-uuid' });
+        mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({
+          uuid: 'redeem-uuid',
+        });
         mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
 
         const mockSendOtpDto = {
@@ -985,7 +1103,9 @@ describe('StellarService', () => {
           mode: 'ONLINE',
         };
 
-        jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+        jest
+          .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+          .mockResolvedValue(mockPayoutType);
         jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(100); // Low balance
 
         const mockSendOtpDto = {
@@ -1006,7 +1126,9 @@ describe('StellarService', () => {
           mode: 'ONLINE',
         };
 
-        jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+        jest
+          .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+          .mockResolvedValue(mockPayoutType);
         jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
 
         const mockSendOtpDto = {
@@ -1027,18 +1149,25 @@ describe('StellarService', () => {
           mode: 'ONLINE',
         };
 
-        jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+        jest
+          .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+          .mockResolvedValue(mockPayoutType);
         jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
         jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue({
           publicKey: 'public-key',
         });
         jest.spyOn(service as any, 'storeOTP').mockResolvedValue({ id: 1 });
 
-        const mockVendor = { uuid: 'vendor-uuid', walletAddress: 'vendor-wallet' };
+        const mockVendor = {
+          uuid: 'vendor-uuid',
+          walletAddress: 'vendor-wallet',
+        };
         const existingRedeem = { uuid: 'existing-redeem-uuid' };
 
         mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-        mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(existingRedeem);
+        mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(
+          existingRedeem
+        );
         mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
 
         const mockSendOtpDto = {
@@ -1049,18 +1178,20 @@ describe('StellarService', () => {
 
         await service.sendOtp(mockSendOtpDto);
 
-        expect(mockPrismaService.beneficiaryRedeem.update).toHaveBeenCalledWith({
-          where: { uuid: 'existing-redeem-uuid' },
-          data: expect.objectContaining({
-            vendorUid: 'vendor-uuid-123',
-            amount: '100',
-            status: 'PENDING',
-            isCompleted: false,
-            txHash: null,
-            payoutId: 'payout-uuid-123',
-            info: expect.any(Object),
-          }),
-        });
+        expect(mockPrismaService.beneficiaryRedeem.update).toHaveBeenCalledWith(
+          {
+            where: { uuid: 'existing-redeem-uuid' },
+            data: expect.objectContaining({
+              vendorUid: 'vendor-uuid-123',
+              amount: '100',
+              status: 'PENDING',
+              isCompleted: false,
+              txHash: null,
+              payoutId: 'payout-uuid-123',
+              info: expect.any(Object),
+            }),
+          }
+        );
       });
     });
   });
@@ -1093,7 +1224,9 @@ describe('StellarService', () => {
     ];
 
     beforeEach(() => {
-      jest.spyOn(service as any, 'getGroupsFromUuid').mockResolvedValue(mockGroups);
+      jest
+        .spyOn(service as any, 'getGroupsFromUuid')
+        .mockResolvedValue(mockGroups);
     });
 
     it('should successfully add disbursement jobs for provided groups', async () => {
@@ -1115,8 +1248,10 @@ describe('StellarService', () => {
     });
 
     it('should get disbursable groups when no groups provided', async () => {
-      jest.spyOn(service as any, 'getDisbursableGroupsUuids').mockResolvedValue(['group1']);
-      
+      jest
+        .spyOn(service as any, 'getDisbursableGroupsUuids')
+        .mockResolvedValue(['group1']);
+
       const result = await service.addDisbursementJobs({ dName: 'test' });
 
       expect(service['getDisbursableGroupsUuids']).toHaveBeenCalled();
@@ -1124,7 +1259,9 @@ describe('StellarService', () => {
     });
 
     it('should return empty result when no groups found', async () => {
-      jest.spyOn(service as any, 'getDisbursableGroupsUuids').mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'getDisbursableGroupsUuids')
+        .mockResolvedValue([]);
       jest.spyOn(service as any, 'getGroupsFromUuid').mockResolvedValue([]);
 
       const result = await service.addDisbursementJobs({ dName: 'test' });
@@ -1137,12 +1274,16 @@ describe('StellarService', () => {
   describe('getDisbursement', () => {
     it('should get disbursement by ID', async () => {
       const mockDisbursement = { id: '123', status: 'completed' };
-      mockDisbursementServices.getDisbursement.mockResolvedValue(mockDisbursement);
+      mockDisbursementServices.getDisbursement.mockResolvedValue(
+        mockDisbursement
+      );
 
       const result = await service.getDisbursement('123');
 
       expect(result).toEqual(mockDisbursement);
-      expect(mockDisbursementServices.getDisbursement).toHaveBeenCalledWith('123');
+      expect(mockDisbursementServices.getDisbursement).toHaveBeenCalledWith(
+        '123'
+      );
     });
   });
 
@@ -1173,7 +1314,9 @@ describe('StellarService', () => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
       jest.spyOn(service as any, 'verifyOTP').mockResolvedValue(true);
-      jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue(mockBeneficiaryKeys);
+      jest
+        .spyOn(service as any, 'getSecretByPhone')
+        .mockResolvedValue(mockBeneficiaryKeys);
       mockReceiveService.sendAsset.mockResolvedValue(mockTransaction);
       mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
         uuid: 'redeem-uuid',
@@ -1182,6 +1325,30 @@ describe('StellarService', () => {
         status: 'PENDING',
         isCompleted: false,
         txHash: null,
+        updateAt: new Date().toISOString(),
+        Vendor: { name: 'Test Vendor' },
+      });
+
+      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({
+        uuid: 'new-redeem-uuid',
+        beneficiaryWalletAddress: 'beneficiary-public-key',
+        vendorUid: 'vendor-uuid',
+        status: 'COMPLETED',
+        isCompleted: true,
+        txHash: 'transaction-hash',
+        updateAt: new Date().toISOString(),
+        Vendor: { name: 'Test Vendor' },
+      });
+
+      mockPrismaService.beneficiaryRedeem.update.mockResolvedValue({
+        uuid: 'redeem-uuid',
+        beneficiaryWalletAddress: 'beneficiary-public-key',
+        vendorUid: 'vendor-uuid',
+        status: 'COMPLETED',
+        isCompleted: true,
+        txHash: 'transaction-hash',
+        updateAt: new Date().toISOString(),
+        Vendor: { name: 'Test Vendor' },
       });
     });
 
@@ -1195,6 +1362,16 @@ describe('StellarService', () => {
         '100'
       );
       expect(mockPrismaService.beneficiaryRedeem.update).toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.NOTIFICATION.CREATE,
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            title: 'Vendor Redemption Completed',
+            group: 'Vendor Management',
+            projectId: 'mock-project-id',
+          }),
+        })
+      );
     });
 
     it('should throw RpcException when vendor not found', async () => {
@@ -1218,7 +1395,9 @@ describe('StellarService', () => {
       const error = new Error('Transfer failed');
       mockReceiveService.sendAsset.mockRejectedValue(error);
 
-      await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(RpcException);
+      await expect(service.sendAssetToVendor(mockSendAssetDto)).rejects.toThrow(
+        RpcException
+      );
       expect(mockPrismaService.beneficiaryRedeem.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -1251,12 +1430,18 @@ describe('StellarService', () => {
     beforeEach(() => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       jest.spyOn(service as any, 'getRahatBalance').mockResolvedValue(1000);
-      jest.spyOn(service as any, 'getSecretByWallet').mockResolvedValue(mockBeneficiaryKeys);
-      mockReceiveService.sendAsset.mockResolvedValue({ tx: { hash: 'transaction-hash' } });
+      jest
+        .spyOn(service as any, 'getSecretByWallet')
+        .mockResolvedValue(mockBeneficiaryKeys);
+      mockReceiveService.sendAsset.mockResolvedValue({
+        tx: { hash: 'transaction-hash' },
+      });
     });
 
     it('should successfully send asset by wallet address', async () => {
-      const result = await service.sendAssetToVendorByWalletAddress(mockSendAssetByWalletDto);
+      const result = await service.sendAssetToVendorByWalletAddress(
+        mockSendAssetByWalletDto
+      );
 
       expect(result).toEqual({ txHash: 'transaction-hash' });
       expect(mockPrismaService.beneficiaryRedeem.create).toHaveBeenCalled();
@@ -1267,15 +1452,17 @@ describe('StellarService', () => {
 
       await expect(
         service.sendAssetToVendorByWalletAddress(mockSendAssetByWalletDto)
-      ).rejects.toThrow(new RpcException('Amount is greater than rahat balance'));
+      ).rejects.toThrow(
+        new RpcException('Amount is greater than rahat balance')
+      );
     });
 
     it('should throw RpcException when amount is zero or negative', async () => {
       const invalidDto = { ...mockSendAssetByWalletDto, amount: -10 };
 
-      await expect(service.sendAssetToVendorByWalletAddress(invalidDto)).rejects.toThrow(
-        new RpcException('Amount must be greater than 0')
-      );
+      await expect(
+        service.sendAssetToVendorByWalletAddress(invalidDto)
+      ).rejects.toThrow(new RpcException('Amount must be greater than 0'));
     });
   });
 
@@ -1287,7 +1474,9 @@ describe('StellarService', () => {
       const result = await service.checkTrustline(mockCheckDto);
 
       expect(result).toBe(true);
-      expect(mockTransactionService.hasTrustline).toHaveBeenCalledWith('test-wallet');
+      expect(mockTransactionService.hasTrustline).toHaveBeenCalledWith(
+        'test-wallet'
+      );
     });
   });
 
@@ -1299,9 +1488,13 @@ describe('StellarService', () => {
 
     it('should successfully fund account and add trustline', async () => {
       const mockResult = { success: true };
-      mockReceiveService.faucetAndTrustlineService.mockResolvedValue(mockResult);
+      mockReceiveService.faucetAndTrustlineService.mockResolvedValue(
+        mockResult
+      );
 
-      const result = await service.faucetAndTrustlineService(mockFundAccountDto);
+      const result = await service.faucetAndTrustlineService(
+        mockFundAccountDto
+      );
 
       expect(result).toEqual(mockResult);
       expect(mockReceiveService.faucetAndTrustlineService).toHaveBeenCalledWith(
@@ -1314,7 +1507,9 @@ describe('StellarService', () => {
       const error = new Error('Faucet failed');
       mockReceiveService.faucetAndTrustlineService.mockRejectedValue(error);
 
-      await expect(service.faucetAndTrustlineService(mockFundAccountDto)).rejects.toThrow('Faucet failed');
+      await expect(
+        service.faucetAndTrustlineService(mockFundAccountDto)
+      ).rejects.toThrow('Faucet failed');
     });
   });
 
@@ -1345,8 +1540,12 @@ describe('StellarService', () => {
     const mockTokens = [{ numberOfTokens: 200, groupId: 'group1' }];
 
     beforeEach(() => {
-      jest.spyOn(service as any, 'fetchGroupedBeneficiaries').mockResolvedValue(mockGroups);
-      jest.spyOn(service as any, 'fetchGroupTokenAmounts').mockResolvedValue(mockTokens);
+      jest
+        .spyOn(service as any, 'fetchGroupedBeneficiaries')
+        .mockResolvedValue(mockGroups);
+      jest
+        .spyOn(service as any, 'fetchGroupTokenAmounts')
+        .mockResolvedValue(mockTokens);
     });
 
     it('should return beneficiary token distribution', async () => {
@@ -1378,7 +1577,9 @@ describe('StellarService', () => {
     ];
 
     beforeEach(() => {
-      mockReceiveService.getAccountBalance.mockResolvedValue(mockAccountBalances);
+      mockReceiveService.getAccountBalance.mockResolvedValue(
+        mockAccountBalances
+      );
       jest.spyOn(service as any, 'getRecentTransaction').mockResolvedValue([
         {
           title: 'RAHAT',
@@ -1396,7 +1597,9 @@ describe('StellarService', () => {
 
       expect(result).toHaveProperty('balances', mockAccountBalances);
       expect(result).toHaveProperty('transactions');
-      expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith('test-wallet-address');
+      expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith(
+        'test-wallet-address'
+      );
     });
 
     it('should handle phone number input', async () => {
@@ -1410,7 +1613,9 @@ describe('StellarService', () => {
         { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
         '+1234567890'
       );
-      expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith('wallet-from-phone');
+      expect(mockReceiveService.getAccountBalance).toHaveBeenCalledWith(
+        'wallet-from-phone'
+      );
     });
 
     it('should throw RpcException when beneficiary not found by phone', async () => {
@@ -1500,7 +1705,9 @@ describe('StellarService', () => {
       const result = await service.getActivityActivationTime();
 
       expect(result).toBe('2024-01-01T00:00:00Z');
-      expect(mockAppService.getSettings).toHaveBeenCalledWith({ name: 'PROJECTINFO' });
+      expect(mockAppService.getSettings).toHaveBeenCalledWith({
+        name: 'PROJECTINFO',
+      });
       expect(mockClientProxy.send).toHaveBeenCalledWith(
         { cmd: 'ms.jobs.phases.getAll' },
         { activeYear: '2024', riverBasin: 'test-basin' }
@@ -1576,14 +1783,19 @@ describe('StellarService', () => {
     ];
 
     beforeEach(() => {
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockBeneficiaryGroupTokens);
-      jest.spyOn(service as any, 'getFromSettings')
+      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+        mockBeneficiaryGroupTokens
+      );
+      jest
+        .spyOn(service as any, 'getFromSettings')
         .mockImplementation((key) => {
           if (key === 'ONE_TOKEN_PRICE') return Promise.resolve(1);
           if (key === 'ASSETCODE') return Promise.resolve('RAHAT');
           return Promise.resolve(null);
         });
-      jest.spyOn(service, 'getActivityActivationTime').mockResolvedValue('2024-01-01T00:00:00Z');
+      jest
+        .spyOn(service, 'getActivityActivationTime')
+        .mockResolvedValue('2024-01-01T00:00:00Z');
     });
 
     it('should return disbursement statistics', async () => {
@@ -1662,7 +1874,7 @@ describe('StellarService', () => {
 
       await expect(service.rahatFaucet(mockRahatFaucetDto)).rejects.toThrow(
         expect.objectContaining({
-          message: 'Faucet failed'
+          message: 'Faucet failed',
         })
       );
     });
@@ -1680,11 +1892,15 @@ describe('StellarService', () => {
     };
 
     beforeEach(() => {
-      jest.spyOn(service as any, 'getBatchSizeFromSettings').mockResolvedValue(3);
+      jest
+        .spyOn(service as any, 'getBatchSizeFromSettings')
+        .mockResolvedValue(3);
     });
 
     it('should create batch jobs for internal faucet and trustline', async () => {
-      const result = await service.internalFaucetAndTrustline(mockBeneficiaries);
+      const result = await service.internalFaucetAndTrustline(
+        mockBeneficiaries
+      );
 
       expect(result.message).toBe('Created 2 batch jobs for 4 wallets');
       expect(result.batchesCreated).toBe(2);
@@ -1748,7 +1964,9 @@ describe('StellarService', () => {
     ];
 
     it('should add bulk jobs to token transfer queue', async () => {
-      const result = await service.addBulkToTokenTransferQueue(mockPayoutDetails);
+      const result = await service.addBulkToTokenTransferQueue(
+        mockPayoutDetails
+      );
 
       expect(stellarQueue.addBulk).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -1778,13 +1996,15 @@ describe('StellarService', () => {
     };
 
     it('should add single job to token transfer queue', async () => {
-      jest.spyOn(service, 'addBulkToTokenTransferQueue').mockResolvedValue([
-        { id: 'job-123', data: {}, opts: {} } as any
-      ]);
+      jest
+        .spyOn(service, 'addBulkToTokenTransferQueue')
+        .mockResolvedValue([{ id: 'job-123', data: {}, opts: {} } as any]);
 
       const result = await service.addToTokenTransferQueue(mockPayoutDetail);
 
-      expect(service.addBulkToTokenTransferQueue).toHaveBeenCalledWith([mockPayoutDetail]);
+      expect(service.addBulkToTokenTransferQueue).toHaveBeenCalledWith([
+        mockPayoutDetail,
+      ]);
       expect(result).toEqual([{ id: 'job-123', data: {}, opts: {} }]);
     });
   });
@@ -1796,12 +2016,24 @@ describe('StellarService', () => {
     };
 
     const mockBeneficiaries = [
-      { walletAddress: 'addr1', amount: '100', phone: '9841234567', id: 'ben1' },
-      { walletAddress: 'addr2', amount: '200', phone: '9847654321', id: 'ben2' },
+      {
+        walletAddress: 'addr1',
+        amount: '100',
+        phone: '9841234567',
+        id: 'ben1',
+      },
+      {
+        walletAddress: 'addr2',
+        amount: '200',
+        phone: '9847654321',
+        id: 'ben2',
+      },
     ];
 
     beforeEach(() => {
-      jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue(mockBeneficiaries);
+      jest
+        .spyOn(service as any, 'getBeneficiaryTokenBalance')
+        .mockResolvedValue(mockBeneficiaries);
       mockDisbursementServices.createDisbursementProcess.mockResolvedValue({
         success: true,
       });
@@ -1810,19 +2042,25 @@ describe('StellarService', () => {
     it('should successfully create a disbursement process', async () => {
       const result = await service.disburse(mockDiburseDto);
       expect(result).toEqual({ success: true });
-      expect(mockDisbursementServices.createDisbursementProcess).toHaveBeenCalled();
+      expect(
+        mockDisbursementServices.createDisbursementProcess
+      ).toHaveBeenCalled();
     });
 
     it('should throw error when no beneficiaries found', async () => {
-      jest.spyOn(service as any, 'getBeneficiaryTokenBalance').mockResolvedValue(null);
+      jest
+        .spyOn(service as any, 'getBeneficiaryTokenBalance')
+        .mockResolvedValue(null);
       await expect(service.disburse(mockDiburseDto)).rejects.toThrow(TypeError);
     });
 
     it('should use disbursable groups when no groups provided', async () => {
-      jest.spyOn(service as any, 'getDisbursableGroupsUuids').mockResolvedValue(['group1']);
-      
+      jest
+        .spyOn(service as any, 'getDisbursableGroupsUuids')
+        .mockResolvedValue(['group1']);
+
       const result = await service.disburse({ dName: 'test' });
-      
+
       expect(service['getDisbursableGroupsUuids']).toHaveBeenCalled();
       expect(result).toEqual({ success: true });
     });
@@ -1832,10 +2070,12 @@ describe('StellarService', () => {
     describe('getGroupsFromUuid edge case', () => {
       it('should return empty array when no UUIDs provided', async () => {
         // Test via addDisbursementJobs with empty groups
-        jest.spyOn(service as any, 'getDisbursableGroupsUuids').mockResolvedValue([]);
-        
+        jest
+          .spyOn(service as any, 'getDisbursableGroupsUuids')
+          .mockResolvedValue([]);
+
         const result = await service.addDisbursementJobs({ dName: 'test' });
-        
+
         expect(result.groups).toEqual([]);
         expect(result.message).toBe('No groups found for disbursement');
       });
@@ -1854,12 +2094,16 @@ describe('StellarService', () => {
           { uuid: 'group-token-2', groupId: 'group-2' },
         ];
 
-        mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockBenGroups);
+        mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+          mockBenGroups
+        );
 
         const result = await (service as any).getDisbursableGroupsUuids();
 
         expect(result).toEqual(['group-1', 'group-2']);
-        expect(mockPrismaService.beneficiaryGroupTokens.findMany).toHaveBeenCalledWith({
+        expect(
+          mockPrismaService.beneficiaryGroupTokens.findMany
+        ).toHaveBeenCalledWith({
           where: {
             AND: [
               { numberOfTokens: { gt: 0 } },
@@ -1884,7 +2128,9 @@ describe('StellarService', () => {
 
         const result = await (service as any).getFromSettings('ASSETCODE');
         expect(result).toBe('RAHAT');
-        expect(mockSettingsService.getPublic).toHaveBeenCalledWith('STELLAR_SETTINGS');
+        expect(mockSettingsService.getPublic).toHaveBeenCalledWith(
+          'STELLAR_SETTINGS'
+        );
       });
     });
 
@@ -1909,9 +2155,13 @@ describe('StellarService', () => {
           },
         ];
 
-        mockTransactionService.getTransaction.mockResolvedValue(mockTransactions);
+        mockTransactionService.getTransaction.mockResolvedValue(
+          mockTransactions
+        );
 
-        const result = await (service as any).getRecentTransaction('test-wallet');
+        const result = await (service as any).getRecentTransaction(
+          'test-wallet'
+        );
 
         expect(result).toEqual([
           {
@@ -1932,19 +2182,23 @@ describe('StellarService', () => {
           },
         ]);
 
-        expect(mockTransactionService.getTransaction).toHaveBeenCalledWith('test-wallet', 10, 'desc');
+        expect(mockTransactionService.getTransaction).toHaveBeenCalledWith(
+          'test-wallet',
+          10,
+          'desc'
+        );
       });
     });
 
     describe('getStellarObjects', () => {
       it('should create stellar objects correctly', async () => {
         // Mock the Stellar SDK components
-        const mockServer = { 
+        const mockServer = {
           test: 'server',
-          getAccount: jest.fn().mockResolvedValue({ account: 'mock-account' })
+          getAccount: jest.fn().mockResolvedValue({ account: 'mock-account' }),
         };
-        const mockKeypair = { 
-          publicKey: jest.fn().mockReturnValue('public-key-value')
+        const mockKeypair = {
+          publicKey: jest.fn().mockReturnValue('public-key-value'),
         };
         const mockSourceAccount = { account: 'mock-account' };
         const mockContract = { contract: 'mock-contract' };
@@ -1975,7 +2229,10 @@ describe('StellarService', () => {
 
         mockClientProxy.send.mockReturnValue(of(mockResponse));
 
-        const result = await (service as any).fetchGroupedBeneficiaries(['group1', 'group2']);
+        const result = await (service as any).fetchGroupedBeneficiaries([
+          'group1',
+          'group2',
+        ]);
 
         expect(result).toEqual(mockResponse.data);
         expect(mockClientProxy.send).toHaveBeenCalledWith(
@@ -1988,7 +2245,9 @@ describe('StellarService', () => {
         const mockResponse = { data: null };
         mockClientProxy.send.mockReturnValue(of(mockResponse));
 
-        const result = await (service as any).fetchGroupedBeneficiaries(['group1']);
+        const result = await (service as any).fetchGroupedBeneficiaries([
+          'group1',
+        ]);
 
         expect(result).toEqual([]);
       });
@@ -1999,12 +2258,19 @@ describe('StellarService', () => {
           { numberOfTokens: 200, groupId: 'group2' },
         ];
 
-        mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockTokens);
+        mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+          mockTokens
+        );
 
-        const result = await (service as any).fetchGroupTokenAmounts(['group1', 'group2']);
+        const result = await (service as any).fetchGroupTokenAmounts([
+          'group1',
+          'group2',
+        ]);
 
         expect(result).toEqual(mockTokens);
-        expect(mockPrismaService.beneficiaryGroupTokens.findMany).toHaveBeenCalledWith({
+        expect(
+          mockPrismaService.beneficiaryGroupTokens.findMany
+        ).toHaveBeenCalledWith({
           where: { groupId: { in: ['group1', 'group2'] } },
           select: { numberOfTokens: true, groupId: true },
         });
@@ -2038,7 +2304,9 @@ describe('StellarService', () => {
 
         const mockTokens = [{ numberOfTokens: 200, groupId: 'group1' }];
 
-        const result = await (service as any).computeBeneficiaryTokenDistribution(mockGroups, mockTokens);
+        const result = await (
+          service as any
+        ).computeBeneficiaryTokenDistribution(mockGroups, mockTokens);
 
         expect(result).toHaveLength(2);
         expect(result[0]).toEqual({
@@ -2090,7 +2358,9 @@ describe('StellarService', () => {
           { numberOfTokens: 50, groupId: 'group2' },
         ];
 
-        const result = await (service as any).computeBeneficiaryTokenDistribution(mockGroups, mockTokens);
+        const result = await (
+          service as any
+        ).computeBeneficiaryTokenDistribution(mockGroups, mockTokens);
 
         expect(result).toHaveLength(1); // Should merge the same phone
         expect(result[0]).toEqual({
@@ -2129,33 +2399,43 @@ describe('StellarService', () => {
 
     beforeEach(() => {
       // Set up the spy for getBeneficiaryPayoutTypeByPhone first
-      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(mockPayoutType);
+      jest
+        .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+        .mockResolvedValue(mockPayoutType);
       jest.spyOn(service as any, 'getBenTotal').mockResolvedValue(1000);
-      jest.spyOn(service as any, 'getSecretByPhone').mockResolvedValue(mockBeneficiaryKeys);
+      jest
+        .spyOn(service as any, 'getSecretByPhone')
+        .mockResolvedValue(mockBeneficiaryKeys);
       jest.spyOn(service as any, 'storeOTP').mockResolvedValue({ id: 1 });
-      
+
       // Mock the external dependencies
       mockClientProxy.send.mockReturnValue(of({ otp: '123456' }));
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedOtp');
       mockPrismaService.otp.upsert.mockResolvedValue({ id: 1 });
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(null);
-      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({ uuid: 'redeem-uuid' });
+      mockPrismaService.beneficiaryRedeem.create.mockResolvedValue({
+        uuid: 'redeem-uuid',
+      });
     });
 
     it('should successfully send and store OTP', async () => {
       const result = await service.sendOtp(mockSendOtpDto);
       expect(result).toEqual({ id: 1 });
       expect(mockClientProxy.send).toHaveBeenCalled();
-      expect(service['getBeneficiaryPayoutTypeByPhone']).toHaveBeenCalledWith(mockSendOtpDto.phoneNumber);
+      expect(service['getBeneficiaryPayoutTypeByPhone']).toHaveBeenCalledWith(
+        mockSendOtpDto.phoneNumber
+      );
       expect(service['storeOTP']).toHaveBeenCalled();
     });
 
     it('should throw RpcException if payout type is not VENDOR', async () => {
-      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue({
-        ...mockPayoutType,
-        type: 'CASH',
-      });
+      jest
+        .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+        .mockResolvedValue({
+          ...mockPayoutType,
+          type: 'CASH',
+        });
 
       await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
         new RpcException('Payout type is not VENDOR')
@@ -2163,10 +2443,12 @@ describe('StellarService', () => {
     });
 
     it('should throw RpcException if payout mode is not ONLINE', async () => {
-      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue({
-        ...mockPayoutType,
-        mode: 'OFFLINE',
-      });
+      jest
+        .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+        .mockResolvedValue({
+          ...mockPayoutType,
+          mode: 'OFFLINE',
+        });
 
       await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
         new RpcException('Payout mode is not ONLINE')
@@ -2174,7 +2456,9 @@ describe('StellarService', () => {
     });
 
     it('should throw RpcException if payout not initiated', async () => {
-      jest.spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone').mockResolvedValue(null);
+      jest
+        .spyOn(service as any, 'getBeneficiaryPayoutTypeByPhone')
+        .mockResolvedValue(null);
 
       await expect(service.sendOtp(mockSendOtpDto)).rejects.toThrow(
         new RpcException('Payout not initiated')

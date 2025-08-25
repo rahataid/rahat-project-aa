@@ -32,7 +32,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { SettingsService } from '@rumsan/settings';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { Queue } from 'bull';
 import {
   AddTriggerDto,
@@ -44,6 +44,8 @@ import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
 import { AppService } from '../app/app.service';
 import { getFormattedTimeDiff } from '../utils/date';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 interface BatchInfo {
   batchIndex: number;
@@ -79,7 +81,9 @@ export class StellarService {
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
-    private readonly appService: AppService
+    private readonly appService: AppService,
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -343,6 +347,8 @@ export class StellarService {
 
   // todo: Make this dynamic for evm
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+    const projectId = this.configService.get('PROJECT_ID');
+
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -402,14 +408,19 @@ export class StellarService {
         orderBy: {
           createdAt: 'desc',
         },
+        include: {
+          Vendor: true,
+        },
       });
+
+      let updatedRedemption;
 
       if (!existingRedeem) {
         this.logger.warn(
           `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
         );
         // Create a new record since the transfer was successful
-        await this.prisma.beneficiaryRedeem.create({
+        updatedRedemption = await this.prisma.beneficiaryRedeem.create({
           data: {
             beneficiaryWalletAddress: keys.publicKey,
             vendorUid: vendor.uuid,
@@ -425,10 +436,13 @@ export class StellarService {
               beneficiaryWalletAddress: keys.publicKey,
             },
           },
+          include: {
+            Vendor: true,
+          },
         });
       } else {
         // Update the existing BeneficiaryRedeem record with transaction details
-        await this.prisma.beneficiaryRedeem.update({
+        updatedRedemption = await this.prisma.beneficiaryRedeem.update({
           where: {
             uuid: existingRedeem.uuid,
           },
@@ -444,9 +458,32 @@ export class StellarService {
               beneficiaryWalletAddress: keys.publicKey,
             },
           },
+          include: {
+            Vendor: true,
+          },
         });
       }
-
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Vendor Redemption Completed`,
+          description: `Vendor ${
+            updatedRedemption?.Vendor?.name
+          } redeemed for beneficiary ${
+            updatedRedemption?.beneficiaryWalletAddress
+          } on ${new Intl.DateTimeFormat('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(
+            new Date(updatedRedemption?.updateAt)
+          )}. Transaction completed`,
+          group: 'Vendor Management',
+          projectId: projectId,
+          notify: true,
+        },
+      });
       return {
         txHash: result.tx.hash,
       };
@@ -826,11 +863,11 @@ export class StellarService {
     );
 
     const totalBeneficiaries = benfTokens
-    .filter((token) => token.isDisbursed)
-    .reduce(
-      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-      0
-    );
+      .filter((token) => token.isDisbursed)
+      .reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
 
     const disbursementsInfo = benfTokens
       .filter(
@@ -838,7 +875,6 @@ export class StellarService {
           token.isDisbursed && (token.info as any)?.disbursementTimeTaken
       )
       .map((token) => (token.info as any)?.disbursementTimeTaken);
-
 
     const averageDisbursementTime =
       disbursementsInfo.reduce((acc, time) => acc + time, 0) /
@@ -871,7 +907,6 @@ export class StellarService {
           .length;
 
       averageDuration = averageDuration;
-
     }
 
     return [
@@ -889,8 +924,15 @@ export class StellarService {
       },
       { name: 'Token Price', value: oneTokenPrice },
       { name: 'Total Beneficiaries', value: totalBeneficiaries },
-      { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
-      { name: 'Average Duration', value: averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+      {
+        name: 'Average Disbursement time',
+        value: getFormattedTimeDiff(averageDisbursementTime),
+      },
+      {
+        name: 'Average Duration',
+        value:
+          averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+      },
     ];
   }
 

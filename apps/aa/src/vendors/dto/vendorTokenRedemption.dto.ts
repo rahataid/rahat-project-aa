@@ -50,6 +50,10 @@ export class UpdateVendorTokenRedemptionDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  user?: any;
 }
 
 export class GetVendorTokenRedemptionDto {
