@@ -775,7 +775,7 @@ export class StellarProcessor {
             } after activation of Activation Phase`,
             group: 'Fund Management',
             notify: true,
-            projecId: process.env.PROJECT_ID,
+            projectId: process.env.PROJECT_ID,
           },
         });
         return;
