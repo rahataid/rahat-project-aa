@@ -10,6 +10,7 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { CipsResponseData } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
+import { ConfigService } from '@nestjs/config';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -19,7 +20,8 @@ export class OfframpProcessor {
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
     private readonly eventEmitter: EventEmitter2,
-    private readonly appService: AppService
+    private readonly appService: AppService,
+    private configService: ConfigService
   ) {}
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
@@ -28,6 +30,7 @@ export class OfframpProcessor {
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
+    const projectId = this.configService.get('PROJECT_ID');
 
     this.logger.log(
       `Processing offramp request of type ${fspOfframpDetails.offrampType} for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
@@ -141,10 +144,10 @@ export class OfframpProcessor {
         payload: {
           title: `Fiat Transaction Failed`,
           description: `Fiat Transaction has been failed in ${
-            projectName.value['project_name'] || process.env.PROJECT_ID
+            projectName.value['project_name'] || projectId
           }`,
           group: 'Payout',
-          projectId: process.env.PROJECT_ID,
+          projectId: projectId,
           notify: true,
         },
       });

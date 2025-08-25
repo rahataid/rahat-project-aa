@@ -49,7 +49,7 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
-    return this.payoutsService.triggerPayout(payload.user, payload.uuid);
+    return this.payoutsService.triggerPayout(payload.uuid, payload.user);
   }
 
   @MessagePattern({

@@ -67,7 +67,7 @@ export class ListernersService {
       });
       this.logger.log(`✅ Notification job queued`);
     } catch (error) {
-      console.error('❌ Notification emit failed:', error);
+      this.logger.error('❌ Notification emit failed:', error);
       throw error;
     }
   }

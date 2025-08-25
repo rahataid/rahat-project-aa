@@ -25,10 +25,7 @@ export class AppService {
     const { name } = dto;
     const res = await this.settingService.getPublic(name);
 
-    const rdata = lowerCaseObjectKeys(res);
-    // console.log((rdata.value as any)?.project_name);
-    // console.log('rdata', rdata.value['project_name']);
-    return rdata;
+    return lowerCaseObjectKeys(res);
   }
 
   async refreshSettings() {

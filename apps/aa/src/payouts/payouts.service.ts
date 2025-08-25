@@ -44,6 +44,7 @@ import { AppService } from '../app/app.service';
 import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -62,6 +63,7 @@ export class PayoutsService {
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
+    private configService: ConfigService,
     private appService: AppService,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
@@ -155,6 +157,7 @@ export class PayoutsService {
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
+    const projectId = this.configService.get('PROJECT_ID');
 
     try {
       this.logger.log(
@@ -244,14 +247,14 @@ export class PayoutsService {
         payload: {
           title: `Payout Created`,
           description: `Payout has been created in ${
-            projectName.value['project_name'] || process.env.PROJECT_ID
+            projectName.value['project_name'] || projectId
           } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
             beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
           } beneficiaries with Rs ${
             beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE
           } each`,
           group: 'Payout',
-          projectId: process.env.PROJECT_ID,
+          projectId: projectId,
           notify: true,
         },
       });
@@ -762,6 +765,7 @@ export class PayoutsService {
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
+    const projectId = this.configService.get('PROJECT_ID');
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
@@ -804,10 +808,10 @@ export class PayoutsService {
         description: `Payout ${
           payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name
         } has been triggered by ${user?.name} in ${
-          projectName.value['project_name'] || process.env.PROJECT_ID
+          projectName.value['project_name'] || projectId
         }`,
         group: 'Payout',
-        projectID: process.env.PROJECT_ID,
+        projectID: projectId,
         notify: true,
       },
     });
