@@ -202,7 +202,9 @@ describe('VendorsService', () => {
           beneficiaryGroupToken: { numberOfTokens: 1000 },
         },
       ]);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockTransactions);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockTransactions
+      );
       mockClientProxy.send.mockReturnValue(of(mockBenResponse));
 
       // Mock the private methods via spies
@@ -280,9 +282,7 @@ describe('VendorsService', () => {
 
     it('should return disbursed tokens for vendor', async () => {
       const vendorUuid = 'vendor-123';
-      const mockPayouts = [
-        { beneficiaryGroupToken: { numberOfTokens: 200 } },
-      ];
+      const mockPayouts = [{ beneficiaryGroupToken: { numberOfTokens: 200 } }];
 
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
 
@@ -331,35 +331,43 @@ describe('VendorsService', () => {
         },
       ];
 
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockRedemptions);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedemptions
+      );
 
       const result = await service.getRedemptionRequest(vendorWallet);
 
       expect(result).toEqual(mockRedemptions);
-      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith({
-        where: {
-          vendorUid: 'vendor-123',
-        },
-        take: 10,
-        skip: 0,
-      });
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            vendorUid: 'vendor-123',
+          },
+          take: 10,
+          skip: 0,
+        }
+      );
     });
 
     it('should use default take and skip values', async () => {
       const vendorWallet = { uuid: 'vendor-123' };
       const mockRedemptions = [{ uuid: 'redeem-1', vendorUid: 'vendor-123' }];
 
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockRedemptions);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedemptions
+      );
 
       await service.getRedemptionRequest(vendorWallet);
 
-      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith({
-        where: {
-          vendorUid: 'vendor-123',
-        },
-        take: 10,
-        skip: 0,
-      });
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            vendorUid: 'vendor-123',
+          },
+          take: 10,
+          skip: 0,
+        }
+      );
     });
 
     it('should throw error when no redemption requests found', async () => {
@@ -523,17 +531,17 @@ describe('VendorsService', () => {
         },
         {
           beneficiaryWalletAddress: 'wallet-2',
-            vendorUid: 'test-vendor-uuid',
-            transactionType: 'VENDOR_REIMBURSEMENT',
-            Beneficiary: {
-              uuid: 'ben-2',
-              walletAddress: 'wallet-2',
-              phone: '0987654321',
-              gender: 'FEMALE',
-              benTokens: 200,
-              isVerified: false,
-              createdAt: new Date(),
-            },
+          vendorUid: 'test-vendor-uuid',
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          Beneficiary: {
+            uuid: 'ben-2',
+            walletAddress: 'wallet-2',
+            phone: '0987654321',
+            gender: 'FEMALE',
+            benTokens: 200,
+            isVerified: false,
+            createdAt: new Date(),
+          },
         },
       ];
 
@@ -543,7 +551,9 @@ describe('VendorsService', () => {
       ];
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(mockBeneficiaryRedeems);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockBeneficiaryRedeems
+      );
       mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
 
       const result = await service.getVendorBeneficiaries(payload);
@@ -567,25 +577,27 @@ describe('VendorsService', () => {
         where: { uuid: 'test-vendor-uuid' },
       });
 
-      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith({
-        where: {
-          transactionType: 'VENDOR_REIMBURSEMENT',
-          vendorUid: 'test-vendor-uuid',
-        },
-        include: {
-          Beneficiary: {
-            select: {
-              uuid: true,
-              walletAddress: true,
-              phone: true,
-              gender: true,
-              benTokens: true,
-              isVerified: true,
-              createdAt: true,
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            transactionType: 'VENDOR_REIMBURSEMENT',
+            vendorUid: 'test-vendor-uuid',
+          },
+          include: {
+            Beneficiary: {
+              select: {
+                uuid: true,
+                walletAddress: true,
+                phone: true,
+                gender: true,
+                benTokens: true,
+                isVerified: true,
+                createdAt: true,
+              },
             },
           },
-        },
-      });
+        }
+      );
     });
 
     it('should return beneficiaries for OFFLINE payout mode', async () => {
@@ -640,15 +652,19 @@ describe('VendorsService', () => {
         },
       ];
 
-      const mockBeneficiaryResponse = [
-        { uuid: 'ben-1', name: 'John Doe' },
-      ];
+      const mockBeneficiaryResponse = [{ uuid: 'ben-1', name: 'John Doe' }];
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockGroupTokens);
-      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(mockGroups);
-      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(mockBeneficiaryToGroups);
+      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+        mockGroupTokens
+      );
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(
+        mockGroups
+      );
+      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(
+        mockBeneficiaryToGroups
+      );
       mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
 
       const result = await service.getVendorBeneficiaries(payload);
@@ -673,12 +689,14 @@ describe('VendorsService', () => {
         },
       });
 
-      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith({
-        where: {
-          uuid: { in: ['group-1'] },
-          groupPurpose: { not: 'COMMUNICATION' },
-        },
-      });
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            uuid: { in: ['group-1'] },
+            groupPurpose: { not: 'COMMUNICATION' },
+          },
+        }
+      );
     });
 
     it('should throw error when vendor not found', async () => {
@@ -764,7 +782,9 @@ describe('VendorsService', () => {
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockGroupTokens);
+      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+        mockGroupTokens
+      );
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);
@@ -816,8 +836,12 @@ describe('VendorsService', () => {
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(mockGroupTokens);
-      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(mockGroups);
+      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+        mockGroupTokens
+      );
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(
+        mockGroups
+      );
       mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);

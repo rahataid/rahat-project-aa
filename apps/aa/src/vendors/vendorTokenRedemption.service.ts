@@ -180,7 +180,13 @@ export class VendorTokenRedemptionService {
       }
 
       if (redemptionStatus) {
-        where.redemptionStatus = redemptionStatus;
+        if (redemptionStatus === 'REQUESTED') {
+          where.redemptionStatus = {
+            in: ['STELLAR_VERIFIED', 'REQUESTED'],
+          };
+        } else {
+          where.redemptionStatus = redemptionStatus;
+        }
       }
 
       if (name) {

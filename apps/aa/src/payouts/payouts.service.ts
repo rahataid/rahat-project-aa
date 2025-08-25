@@ -226,6 +226,13 @@ export class PayoutsService {
         },
       });
 
+      if (createPayoutDto.mode === 'OFFLINE') {
+        await this.vendorsService.processVendorOfflinePayout({
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
+          amount: String(beneficiaryGroup.numberOfTokens),
+        });
+      }
+
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       return payout;
     } catch (error) {
