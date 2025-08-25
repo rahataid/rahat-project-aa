@@ -28,6 +28,7 @@ contract AAProject is
   );
 
   event BenTokensAssigned(address indexed beneficiary, uint indexed amount);
+  event TokenTransferred(address indexed beneficiary, address indexed vendor,uint indexed amount);
 
   /// @dev Interface ID for IAAProject
   bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
@@ -153,6 +154,24 @@ contract AAProject is
     _assignClaims(_beneficiary, defaultToken, _tokenAssigned, _msgSender());
   }
 
+function transferTokenToVendor(
+    address _benAddress,
+    address _vendorAddress,
+    uint _amount
+  ) public  restricted{
+    require(
+      benTokens[_benAddress] >= _amount,
+      'not enough balace'
+    );
+    benTokens[_benAddress] -= _amount;
+    require(
+      IERC20(defaultToken).transfer(_vendorAddress, _amount),
+      'transfer failed'
+    );
+    emit TokenTransferred(_benAddress, _vendorAddress, _amount);
+  }
+
+  
   // #endregion
 
   /// @dev overriding the method to ERC2771Context
