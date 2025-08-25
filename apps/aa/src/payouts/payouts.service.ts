@@ -769,7 +769,6 @@ export class PayoutsService {
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
-
     if (payoutDetails.isPayoutTriggered) {
       throw new RpcException(
         `Payout with UUID '${uuid}' has already been triggered`
@@ -811,7 +810,7 @@ export class PayoutsService {
           projectName.value['project_name'] || projectId
         }`,
         group: 'Payout',
-        projectID: projectId,
+        projectId: projectId,
         notify: true,
       },
     });

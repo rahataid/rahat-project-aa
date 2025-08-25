@@ -45,6 +45,7 @@ import { FSPPayoutDetails } from '../processors/types';
 import { AppService } from '../app/app.service';
 import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 interface BatchInfo {
   batchIndex: number;
@@ -81,7 +82,8 @@ export class StellarService {
     private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
     private readonly appService: AppService,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -345,6 +347,8 @@ export class StellarService {
 
   // todo: Make this dynamic for evm
   async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+    const projectId = this.configService.get('PROJECT_ID');
+
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -466,9 +470,17 @@ export class StellarService {
             updatedRedemption?.Vendor?.name
           } redeemed for beneficiary ${
             updatedRedemption?.beneficiaryWalletAddress
-          } on ${new Date().toLocaleString()}. Transaction completed`,
+          } on ${new Intl.DateTimeFormat('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(
+            new Date(updatedRedemption?.updateAt)
+          )}. Transaction completed`,
           group: 'Vendor Management',
-          projectId: process.env.PROJECT_ID,
+          projectId: projectId,
           notify: true,
         },
       });
