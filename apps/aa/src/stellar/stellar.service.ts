@@ -383,12 +383,6 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      console.log(
-        keys.privateKey,
-        verifyOtpDto.receiverAddress,
-        amount.toString()
-      );
-
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
