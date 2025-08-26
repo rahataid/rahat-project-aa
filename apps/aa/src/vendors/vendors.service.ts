@@ -392,7 +392,7 @@ export class VendorsService {
           isVerified: redeem.Beneficiary.isVerified,
           createdAt: redeem.Beneficiary.createdAt,
           // Use the individual redeem amount instead of total benTokens
-          amount: redeem.amount,
+          benTokens: redeem.amount,
           txHash: redeem.txHash,
           status: redeem.status,
           info: redeem.info,
