@@ -4,7 +4,7 @@ import { RpcException } from '@nestjs/microservices';
 import { AppService } from '../app/app.service';
 import { IPaymentProvider } from '../payouts/dto/types';
 import { CipsApiResponse, CipsResponseData } from './dto/types';
-import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
+import { FSPOfframpDetails, FSPPayoutDetails, FSPManualPayoutDetails } from '../processors/types';
 import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, JOBS } from '../constants';
 import { Queue } from 'bull';
@@ -61,7 +61,7 @@ export class OfframpService {
 
     try {
       const {
-        data: { data },
+        data: { data: paymentProviders },
       } = await this.httpService.axiosRef.get<{
         success: boolean;
         data: IPaymentProvider[];
@@ -71,7 +71,16 @@ export class OfframpService {
         },
       });
 
-      return data;
+      return [
+        ...paymentProviders,
+          {
+            "id": "manual-bank-transfer",
+            "name": "Manual Bank Transfer", 
+            "type": "manual_bank_transfer",
+            "createdAt": "2025-01-27T10:00:00.000Z",
+            "updatedAt": "2025-01-27T10:00:00.000Z"
+        }
+      ];
     } catch (error) {
       throw new RpcException(
         `Failed to fetch payment provider: ${error.message}`
@@ -158,5 +167,35 @@ export class OfframpService {
 
   async addToOfframpQueue(payload: FSPOfframpDetails | FSPPayoutDetails) {
     return await this.addBulkToOfframpQueue([payload]);
+  }
+
+  async addToVerifyManualPayoutQueue(payload: any[]) {
+    return await this.addBulkToVerifyManualPayoutQueue(payload);
+  }
+
+  async addBulkToVerifyManualPayoutQueue(payload: any[]) {
+    return await this.offrampQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT,
+        data: payload,
+        opts: { ...this.offrampQueueOpts },
+      }))
+    );
+  }
+
+  async addBulkToManualPayoutQueue(payload: FSPManualPayoutDetails[]) {
+    const result = await this.offrampQueue.add(
+      JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT,
+      payload,
+      { ...this.offrampQueueOpts }
+    );
+
+    this.logger.log(`Added ${payload.length} manual payout jobs to offramp queue`);
+
+    return result;
+  }
+
+  async addToManualPayoutQueue(payload: FSPManualPayoutDetails[]) {
+    return await this.addBulkToManualPayoutQueue(payload);
   }
 }

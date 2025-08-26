@@ -167,8 +167,19 @@ describe('OfframpService', () => {
           type: 'mobile',
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T00:00:00Z',
-        },
+        }
       ];
+
+      const response = [
+        ...mockProviders,
+        {
+            "id": "manual-bank-transfer",
+            "name": "Manual Bank Transfer", 
+            "type": "manual_bank_transfer",
+            "createdAt": "2025-01-27T10:00:00.000Z",
+            "updatedAt": "2025-01-27T10:00:00.000Z"
+        }
+      ]
 
       const mockApiResponse = {
         data: {
@@ -182,12 +193,13 @@ describe('OfframpService', () => {
 
       const result = await service.getPaymentProvider();
 
-      expect(result).toEqual(mockProviders);
+      expect(result).toHaveLength(response.length);
+      expect(result).toEqual(response);
       expect(mockHttpService.axiosRef.get).toHaveBeenCalledWith(
         'https://api.offramp.com/payment-provider',
         {
           headers: {
-            'APP_ID': 'test-app-id',
+            APP_ID: 'test-app-id',
           },
         }
       );
@@ -249,7 +261,7 @@ describe('OfframpService', () => {
         'https://api.offramp.com/app/test-app-id',
         {
           headers: {
-            'APP_ID': 'test-app-id',
+            APP_ID: 'test-app-id',
           },
         }
       );
@@ -319,7 +331,7 @@ describe('OfframpService', () => {
         offrampPayload,
         {
           headers: {
-            'APP_ID': 'test-app-id',
+            APP_ID: 'test-app-id',
           },
         }
       );
@@ -472,7 +484,9 @@ describe('OfframpService', () => {
 
       const mockQueueJobs = [] as any[];
 
-      jest.spyOn(service as any, 'addBulkToOfframpQueue').mockResolvedValue(mockQueueJobs);
+      jest
+        .spyOn(service as any, 'addBulkToOfframpQueue')
+        .mockResolvedValue(mockQueueJobs);
 
       const result = await service.addToOfframpQueue(payload);
 
@@ -499,7 +513,9 @@ describe('OfframpService', () => {
       const error = new Error('Queue error');
       jest.spyOn(service, 'addBulkToOfframpQueue').mockRejectedValue(error);
 
-      await expect(service.addToOfframpQueue(payload)).rejects.toThrow('Queue error');
+      await expect(service.addToOfframpQueue(payload)).rejects.toThrow(
+        'Queue error'
+      );
     });
   });
-}); 
+});
