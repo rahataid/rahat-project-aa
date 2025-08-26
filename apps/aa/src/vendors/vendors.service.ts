@@ -385,7 +385,14 @@ export class VendorsService {
       // Extract unique beneficiaries (remove duplicates based on UUID)
       const uniqueBeneficiaries = beneficiaryRedeems
         .map((redeem) => ({
-          ...redeem.Beneficiary,
+          uuid: redeem.Beneficiary.uuid,
+          walletAddress: redeem.Beneficiary.walletAddress,
+          phone: redeem.Beneficiary.phone,
+          gender: redeem.Beneficiary.gender,
+          isVerified: redeem.Beneficiary.isVerified,
+          createdAt: redeem.Beneficiary.createdAt,
+          // Use the individual redeem amount instead of total benTokens
+          amount: redeem.amount,
           txHash: redeem.txHash,
           status: redeem.status,
           info: redeem.info,
