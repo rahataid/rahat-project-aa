@@ -115,73 +115,13 @@ export class EvmChainService implements IChainService {
   }
 
   async addTrigger(data: AddTriggerDto): Promise<any> {
-    try {
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.ADD_TRIGGER,
-        {
-          triggers: [data],
-        },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-        }
-      );
-
-      this.logger.log(
-        `Queued EVM add trigger job ${job.id}`,
-        EvmChainService.name
-      );
-
-      return {
-        jobId: job.id,
-        status: 'QUEUED',
-        triggerCount: 1,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error queuing EVM trigger: ${error.message}`,
-        error.stack,
-        EvmChainService.name
-      );
-      throw error;
-    }
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
   }
 
   async updateTriggerParams(triggerUpdate: any): Promise<any> {
-    try {
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.UPDATE_TRIGGER_PARAMS,
-        triggerUpdate,
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-        }
-      );
-
-      this.logger.log(
-        `Queued EVM update trigger params job ${job.id}`,
-        EvmChainService.name
-      );
-
-      return {
-        jobId: job.id,
-        status: 'QUEUED',
-        triggerId: triggerUpdate.id,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error queuing EVM trigger update: ${error.message}`,
-        error.stack,
-        EvmChainService.name
-      );
-      throw error;
-    }
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
   }
 
   async addBeneficiary(beneficiaryAddress: string): Promise<any> {
@@ -379,10 +319,19 @@ export class EvmChainService implements IChainService {
     );
 
     this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+
+    return {
+      message: `Disbursement jobs added for ${groups.length} groups`,
+      groups: groups.map((group) => ({
+        uuid: group.uuid,
+        status: 'PENDING',
+      })),
+    };
   }
 
   async getDisbursementStats() {
     const subgraphUrl = await this.settingsService.getPublic('SUBGRAPH_URL');
+    const chainConfig = await this.getChainConfig();
 
     const response = await querySubgraph(
       subgraphUrl.value as string,
@@ -398,13 +347,27 @@ export class EvmChainService implements IChainService {
         { name: 'Token Price', amount: 'Rs 10' },
       ],
       transactionStats: response.benTokensAssigneds.map((item) => ({
-        title: item.id,
+        title: `Token Assignment - ${item.beneficiary.slice(
+          0,
+          8
+        )}...${item.beneficiary.slice(-6)}`,
         subtitle: item.beneficiary,
         date: new Date(item.blockTimestamp * 1000),
         amount: Number(item.amount).toFixed(0),
         amtColor: 'green',
         hash: item.transactionHash,
       })),
+      chainInfo: {
+        name: chainConfig.name,
+        chainId: chainConfig.chainId,
+        rpcUrl: chainConfig.rpcUrl,
+        explorerUrl: chainConfig.explorerUrl,
+        currencyName: chainConfig.currencyName,
+        currencySymbol: chainConfig.currencySymbol,
+        currencyDecimals: chainConfig.currencyDecimals,
+        projectContractAddress: chainConfig.projectContractAddress,
+        tokenContractAddress: chainConfig.tokenContractAddress,
+      },
     };
   }
 
