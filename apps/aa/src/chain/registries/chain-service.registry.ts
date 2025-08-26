@@ -4,30 +4,28 @@ import {
   ChainType,
   IChainService,
 } from '../interfaces/chain-service.interface';
-
-interface ChainServiceConfig {
-  name: ChainType;
-  service: any;
-}
+import { StellarChainService } from '../chain-services/stellar-chain.service';
+import { EvmChainService } from '../chain-services/evm-chain.service';
 
 @Injectable()
 export class ChainServiceRegistry {
   private readonly logger = new Logger(ChainServiceRegistry.name);
   private chainServices = new Map<ChainType, IChainService>();
 
-  constructor(private settingsService: SettingsService) {}
-
-  setServices(services: Map<ChainType, IChainService>): void {
-    this.chainServices = services;
-    this.logger.log(
-      `Registered chain services: ${Array.from(services.keys()).join(', ')}`
-    );
+  constructor(
+    private settingsService: SettingsService,
+    private stellarChainService: StellarChainService,
+    private evmChainService: EvmChainService
+  ) {
+    // Register services directly in constructor
+    this.chainServices.set('stellar', this.stellarChainService);
+    this.chainServices.set('evm', this.evmChainService);
   }
 
   async getChainService(chainType?: ChainType): Promise<IChainService> {
     const detectedChain = chainType || (await this.detectChainFromSettings());
-
     const service = this.chainServices.get(detectedChain);
+
     if (!service) {
       throw new Error(`Chain service not found for type: ${detectedChain}`);
     }
@@ -91,26 +89,5 @@ export class ChainServiceRegistry {
       // Fallback to settings detection
       return this.getChainService();
     }
-  }
-
-  static registerServices(configs: ChainServiceConfig[]) {
-    return {
-      provide: ChainServiceRegistry,
-      useFactory: (
-        settingsService: SettingsService,
-        ...services: IChainService[]
-      ) => {
-        const registry = new ChainServiceRegistry(settingsService);
-        const serviceMap = new Map<ChainType, IChainService>();
-
-        configs.forEach((config, index) => {
-          serviceMap.set(config.name, services[index]);
-        });
-
-        registry.setServices(serviceMap);
-        return registry;
-      },
-      inject: [SettingsService, ...configs.map((config) => config.service)],
-    };
   }
 }

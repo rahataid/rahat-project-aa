@@ -1,0 +1,156 @@
+import { AGE_GROUPS, FIELD_MAP, TYPE_OF_SSA } from '../constants';
+
+export function getAgeGroup(age: number): string {
+  if (age < 20) return AGE_GROUPS.BELOW_20;
+  if (age >= 20 && age <= 29) return AGE_GROUPS.AGE_19_TO_29;
+  if (age >= 30 && age <= 45) return AGE_GROUPS.AGE_30_TO_45;
+  if (age >= 46 && age <= 59) return AGE_GROUPS.AGE_46_TO_59;
+  return AGE_GROUPS.ABOVE_60;
+}
+export function mapAgeGroupCounts(data: any[]): Record<string, number> {
+  const counts: Record<string, number> = {
+    [AGE_GROUPS.BELOW_20]: 0,
+    [AGE_GROUPS.AGE_19_TO_29]: 0,
+    [AGE_GROUPS.AGE_30_TO_45]: 0,
+    [AGE_GROUPS.AGE_46_TO_59]: 0,
+    [AGE_GROUPS.ABOVE_60]: 0,
+  };
+
+  for (const item of data) {
+    const age = item?.extras?.interviewee_age;
+    if (typeof age === 'number') {
+      const group = getAgeGroup(age);
+      counts[group]++;
+    }
+  }
+
+  return counts;
+}
+
+export function countBySSAType(data: any[]) {
+  const counts: Record<string, number> = {};
+
+  // Initialize counts with zero
+  Object.values(TYPE_OF_SSA).forEach((val) => {
+    counts[val] = 0;
+  });
+
+  for (const item of data) {
+    const ssaType = item?.extras?.type_of_ssa;
+
+    // Skip if ssaType is '-' or falsy
+    if (!ssaType || ssaType === '-') continue;
+
+    if (Object.values(TYPE_OF_SSA).includes(ssaType)) {
+      counts[ssaType] = (counts[ssaType] || 0) + 1;
+    }
+  }
+
+  return counts;
+}
+function isPositive(val: any): boolean {
+  const num = parseInt(val);
+  return !isNaN(num) && num > 0;
+}
+
+export function countResult(data: any[]) {
+  const counts: Record<string, number> = {
+    [FIELD_MAP.NO_OF_LACTATING_WOMEN]: 0,
+    [FIELD_MAP.NO_OF_PERSONS_WITH_DISABILITY]: 0,
+    [FIELD_MAP.NO_OF_PREGNANT_WOMEN]: 0,
+  };
+
+  for (const item of data) {
+    const extras = item.extras || {};
+    for (const field of Object.values(FIELD_MAP)) {
+      const rawVal = extras[field];
+      if (rawVal === '' || rawVal === '-' || rawVal == null) {
+        continue;
+      }
+      const val = parseInt(rawVal);
+      if (!isNaN(val) && val > 0) {
+        counts[field] += val;
+      }
+    }
+  }
+  return counts;
+}
+
+export function generateLocationStats<T>({
+  dataList,
+  getKeyParts,
+  getCoordinates,
+  keyFormat = (ward) => `WARD${ward}`,
+}: {
+  dataList: T[];
+  getKeyParts: (item: T) => { ward_no: number } | undefined;
+  getCoordinates: (
+    item: T
+  ) => { latitude: number; longitude: number } | undefined;
+  keyFormat?: (ward: number) => string;
+}): Record<
+  string,
+  {
+    count: number;
+    locations: { lat: number; long: number }[];
+  }
+> {
+  const result: Record<
+    string,
+    {
+      count: number;
+      locations: { lat: number; long: number }[];
+    }
+  > = {};
+
+  for (const item of dataList) {
+    const keyParts = getKeyParts(item);
+    const coords = getCoordinates(item);
+
+    if (!keyParts || !coords) continue;
+
+    const { ward_no } = keyParts;
+    const { latitude, longitude } = coords;
+
+    if (ward_no == null || latitude == null || longitude == null) continue;
+
+    const key = keyFormat(ward_no);
+
+    if (!result[key]) {
+      result[key] = {
+        count: 0,
+        locations: [],
+      };
+    }
+
+    result[key].count += 1;
+    result[key].locations.push({ lat: latitude, long: longitude });
+  }
+
+  return result;
+}
+
+export function extractLatLng(gps?: string) {
+  if (!gps) return { latitude: null, longitude: null };
+
+  const parts = gps.trim().split(/\s+/);
+  const latitude = parseFloat(parts[0]);
+  const longitude = parseFloat(parts[1]);
+
+  if (isNaN(latitude) || isNaN(longitude)) {
+    return { latitude: null, longitude: null };
+  }
+
+  return { latitude, longitude };
+}
+
+export function toPascalCase(input: string): string {
+  return input
+    .replace(/^channel/, '')
+    .replace(/_+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+}

@@ -9,7 +9,7 @@ import {
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
-import { GetBenfGroupDto } from './dto/get-group.dto';
+import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 
 @Controller()
 export class BeneficiaryController {
@@ -88,11 +88,29 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS_BY_UUIDS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getAllGroupsByUuids(payload: getGroupByUuidDto) {
+    return this.beneficiaryService.getAllGroupsByUuids(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ONE_GROUP,
     uuid: process.env.PROJECT_ID,
   })
   async getOneGroup(payload: { uuid: UUID }) {
     return this.beneficiaryService.getOneGroup(payload.uuid);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryRedeemInfo(payload: { beneficiaryUUID: string }) {
+    return this.beneficiaryService.getBeneficiaryRedeemInfo(
+      payload.beneficiaryUUID
+    );
   }
   // ***** groups end ********** //
 

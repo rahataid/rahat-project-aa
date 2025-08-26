@@ -56,6 +56,7 @@ export interface FundAccountDto {
 export interface SendOtpDto {
   phoneNumber: string;
   amount: number;
+  vendorUuid: string;
 }
 
 export interface TransferTokensDto {

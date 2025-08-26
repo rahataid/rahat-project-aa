@@ -42,16 +42,7 @@ import { SettingsService } from '@rumsan/settings';
     ChainQueueService,
     StellarChainService,
     EvmChainService,
-    ChainServiceRegistry.registerServices([
-      {
-        name: 'stellar',
-        service: StellarChainService,
-      },
-      {
-        name: 'evm',
-        service: EvmChainService,
-      },
-    ]),
+    ChainServiceRegistry,
     PrismaService,
     {
       provide: ReceiveService,

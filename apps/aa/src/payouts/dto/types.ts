@@ -97,16 +97,29 @@ export type PayoutStats = {
       FSP: number;
       VENDOR: number;
     };
-    completionStatus: {
-      COMPLETED: number;
-      NOT_COMPLETED: number;
+    payoutStatus: {
+      SUCCESS: number;
+      FAILED: number;
     };
   };
   payoutStats: {
-    tokenAssigned: number;
-    tokenDisbursed: number;
-    oneTokenValue: string;
-    amountDisbursed: number;
-    projectBalance: number;
+    beneficiaries: number;
+    totalCashDistribution: number;
   };
+};
+
+export type DownloadPayoutLogsType = {
+  'Beneficiary Wallet Address': string;
+  'Phone number': string;
+  'Transaction Wallet ID': string;
+  'Transaction Hash': string;
+  'Payout Status': string;
+  'Transaction Type': string;
+  'Created At': string;
+  'Updated At': string;
+  'Actual Budget': number;
+  'Amount Disbursed': number;
+  'Bank a/c name'?: string;
+  'Bank a/c number'?: string;
+  'Bank Name'?: string;
 };

@@ -76,7 +76,7 @@ export class EVMProcessor {
 
       this.logger.log('EVM Provider initialized successfully');
     } catch (error) {
-      this.logger.error('Failed to initialize EVM provider:', error);
+      this.logger.error('Failed to initialize EVM providerss:', error);
       this.isInitialized = false;
     }
   }
@@ -207,6 +207,8 @@ export class EVMProcessor {
           name: key,
         },
       });
+
+      console.log('settings', settings);
 
       if (!settings?.value) {
         throw new Error('CHAIN_SETTINGS not found');

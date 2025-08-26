@@ -5,6 +5,7 @@ import { BQUEUE, EVENTS } from '../constants';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
+import { StakeholdersService } from '../stakeholders/stakeholders.service';
 
 @Injectable()
 export class ListernersService {
@@ -12,6 +13,7 @@ export class ListernersService {
 
   constructor(
     private readonly aaStats: BeneficiaryStatService,
+    private readonly stakeholderStats: StakeholdersService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
     private disbService: CvaDisbursementService
@@ -24,7 +26,13 @@ export class ListernersService {
   async onBeneficiaryChanged() {
     await this.aaStats.saveAllStats();
   }
-
+  @OnEvent(EVENTS.STAKEHOLDER_CREATED)
+  @OnEvent(EVENTS.STAKEHOLDER_REMOVED)
+  @OnEvent(EVENTS.STAKEHOLDER_UPDATED)
+  @OnEvent(EVENTS.TOKEN_RESERVED)
+  async onstakeholderChanged() {
+    await this.stakeholderStats.stakeholdersCount();
+  }
   @OnEvent(EVENTS.AUTOMATED_TRIGGERED)
   async handleAutomatedTrigger(payload: { repeatKey: string }) {
     const allJobs = await this.scheduleQueue.getRepeatableJobs();

@@ -3,6 +3,7 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 
 export const STELLER_UID = 'stellar';
 
@@ -65,11 +66,13 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
+    GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
+    GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -144,12 +147,14 @@ export const JOBS = {
       'aa.jobs.payout.triggerOneFailedPayoutRequest',
     GET_PAYOUT_LOGS: 'aa.jobs.payout.getPayoutLogs',
     GET_PAYOUT_LOG: 'aa.jobs.payout.getPayoutLog',
+    GET_PAYOUT_DETAILS: 'aa.jobs.payout.getPayoutDetails',
     CREATE: 'aa.jobs.payout.create',
     LIST: 'aa.jobs.payout.list',
     GET: 'aa.jobs.payout.get',
     GET_STATS: 'aa.jobs.payout.get_stats',
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
+    EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -186,6 +191,7 @@ export const JOBS = {
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
     GET_ALL_GROUPS: 'aa.jobs.stakeholders.getAllGroups',
+    GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.stakeholders.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.stakeholders.getOneGroup',
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
@@ -233,7 +239,9 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
+    MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
   DAILY_MONITORING: {
     ADD: 'aa.jobs.dailyMonitoring.add',
@@ -248,9 +256,19 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
+    GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
+    UPDATE_TOKEN_REDEMPTION_STATUS:
+      'aa.jobs.vendor.token_redemption.update_status',
+    LIST_TOKEN_REDEMPTIONS: 'aa.jobs.vendor.token_redemption.list',
+    GET_VENDOR_REDEMPTIONS:
+      'aa.jobs.vendor.token_redemption.get_vendor_redemptions',
+    GET_TOKEN_REDEMPTION_STATS: 'aa.jobs.vendor.token_redemption.get_stats',
+    VERIFY_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.verify',
     GET: 'rahat.jobs.vendor.get',
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
+    GET_BENEFICIARIES: 'rahat.jobs.vendor.get_beneficiaries',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
   },
@@ -275,6 +293,10 @@ export const EVENTS = {
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
   AUTOMATED_TRIGGERED: 'events.automated_triggered',
   TOKEN_RESERVED: 'events.token_reserved',
+  STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
+  STAKEHOLDER_CREATED: 'events.stakeholders_created',
+  STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
+  TOKEN_DISBURSED: 'events.token_disbursed',
 };
 
 export const BQUEUE = {
@@ -287,6 +309,7 @@ export const BQUEUE = {
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
   // EVM:"EVM"
+  VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
@@ -295,4 +318,29 @@ export const VULNERABILITY_FIELD = {
   TYPE_OF_SSA_1: 'type_of_ssa_1',
   TYPE_OF_SSA_2: 'type_of_ssa_2',
   TYPE_OF_SSA_3: 'type_of_ssa_3',
+};
+
+export const TYPE_OF_SSA = {
+  SENIOR_CITIZEN_ABOVE_70: 'senior_citizen__70',
+  SENIOR_CITIZEN_DALIT_ABOVE_60: 'senior_citizen__60__dalit',
+  CHILD_NUTRITION: 'child_nutrition',
+  SINGLE_WOMEN: 'single_woman',
+  WIDOW: 'widow',
+  RED_CARD: 'red_class',
+  BLUE_CARD: 'blue_card',
+  INDIGENOUS_COMMUNITY: 'indigenous_community',
+};
+
+export const AGE_GROUPS = {
+  BELOW_20: '<20',
+  AGE_19_TO_29: '20-29',
+  AGE_30_TO_45: '30-45',
+  AGE_46_TO_59: '46-59',
+  ABOVE_60: '>60',
+};
+
+export const FIELD_MAP = {
+  NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
+  NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
+  NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
 };

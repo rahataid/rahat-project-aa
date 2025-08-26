@@ -4,6 +4,9 @@
   "license": "MIT",
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
+    "test:aa": "npx nx test aa",
+    "test":"nx test aa",
+    "test-coverage":"nx test aa --coverage",
     "start": "nx serve aa",
     "dev": "nx serve aa --watch --verbose",
     "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
@@ -75,6 +78,7 @@
     "cheerio": "1.0.0-rc.12",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "date-fns": "^4.1.0",
     "ethers": "^6.12.1",
     "form-data": "^4.0.2",
     "inquirer": "^12.6.1",

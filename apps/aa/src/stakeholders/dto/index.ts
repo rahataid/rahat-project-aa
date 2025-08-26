@@ -61,6 +61,11 @@ export interface GetAllGroups {
   search?: string;
 }
 
+export class getGroupByUuidDto {
+  uuids: string[];
+  selectField: string[];
+}
+
 export interface GetOneGroup {
   uuid: string;
 }

@@ -7,6 +7,7 @@ import {
   CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
+  getGroupByUuidDto,
   GetOneGroup,
   GetStakeholdersData,
   RemoveStakeholdersData,
@@ -19,6 +20,9 @@ import { CommunicationService } from '@rumsan/communication';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ValidateStakeholdersResponse } from './dto/type';
+import { StatsService } from '../stats';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EVENTS } from '../constants';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -28,7 +32,9 @@ export class StakeholdersService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly statsService: StatsService,
+    private eventEmitter: EventEmitter2
   ) {
     this.communicationService = new CommunicationService({
       baseURL: this.configService.get('COMMUNICATION_URL'),
@@ -54,12 +60,16 @@ export class StakeholdersService {
         throw new RpcException('Phone number must be unique');
     }
 
-    return await this.prisma.stakeholders.create({
+    const rData = await this.prisma.stakeholders.create({
       data: {
         ...rest,
         phone: validPhone ? phone : null,
       },
     });
+
+    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_CREATED);
+
+    return rData;
   }
 
   async bulkAdd(payloads: any) {
@@ -142,6 +152,8 @@ export class StakeholdersService {
       data: cleanedPayloads,
     });
 
+    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_CREATED);
+
     return {
       successCount: result.count,
       message: 'All stakeholders successfully added.',
@@ -213,7 +225,7 @@ export class StakeholdersService {
     });
   }
   async remove(payload: RemoveStakeholdersData) {
-    return await this.prisma.stakeholders.update({
+    const rData = await this.prisma.stakeholders.update({
       where: {
         uuid: payload.uuid,
       },
@@ -221,6 +233,8 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
+    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_REMOVED);
+    return rData;
   }
 
   async update(payload: UpdateStakeholdersData) {
@@ -274,6 +288,7 @@ export class StakeholdersService {
         updatedAt: new Date(),
       },
     });
+    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_UPDATED);
 
     return updatedStakeholder;
   }
@@ -353,6 +368,37 @@ export class StakeholdersService {
       page,
       perPage,
     });
+  }
+
+  async getAllGroupsByUuids(payload: getGroupByUuidDto) {
+    this.logger.log('Fetching all stakeholders group by group uuids');
+    const { uuids, selectField } = payload;
+    try {
+      let selectFields;
+
+      if (selectField && selectField.length > 0) {
+        // Convert fields array into an object for Prisma select
+        selectFields = selectField.reduce((acc, field) => {
+          acc[field] = true;
+          return acc;
+        }, {});
+      }
+
+      const groups = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          uuid: {
+            in: uuids,
+          },
+        },
+        ...(selectFields ? { select: selectFields } : {}),
+      });
+
+      return groups;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching stakeholders groups by uuids. ${err.message}`
+      );
+    }
   }
 
   async getOneGroup(payload: GetOneGroup) {
@@ -475,4 +521,19 @@ export class StakeholdersService {
   }
 
   // ***** stakeholders groups end ********** //
+
+  // stakeholders count
+  async stakeholdersCount() {
+    const countStake = await this.prisma.stakeholders.count({
+      where: {
+        isDeleted: false,
+      },
+    });
+
+    return this.statsService.save({
+      name: 'stakeholders_total',
+      group: 'stakeholders',
+      data: { count: countStake },
+    });
+  }
 }
