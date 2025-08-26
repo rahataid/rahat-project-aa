@@ -1433,7 +1433,7 @@ export class PayoutsService {
     return getFormattedTimeDiff(diffInMs);
   }
 
-  async verifyManualPayout(payoutUUID: string) {
+  async verifyManualPayout(payoutUUID: string, data?: any) {
     if (!payoutUUID) {
       throw new RpcException('Payout UUID is required');
     }
@@ -1448,7 +1448,26 @@ export class PayoutsService {
       throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
     }
 
-    return payout;
+    let rows = Object.values(data) as any[];
+    const benfs = await this.fetchBeneficiaryPayoutDetails(payoutUUID);
+
+    // match benfs with rows
+    rows = rows.map(row => {
+      const benf = benfs.find(benf => benf.bankDetails.accountNumber === row['Bank Account Number']);
+      return {
+        ...row,
+        beneficary: benf || null,
+        payoutId: payoutUUID,
+      };
+    });
+
+    // filter rows where beneficary is null
+    const filteredRows = rows.filter(row => row.beneficary !== null);
+
+    // send to offramp queue
+    await this.offrampService.addToVerifyManualPayoutQueue(filteredRows);
+
+    return filteredRows;
   }
 
   async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {

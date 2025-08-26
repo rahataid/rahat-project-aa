@@ -130,6 +130,7 @@ export const JOBS = {
     GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
     INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp`,
     INSTANT_MANUAL_PAYOUT: `aa.jobs.offramp.instantManualPayout`,
+    VERIFY_MANUAL_PAYOUT: `aa.jobs.offramp.verifyManualPayout`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',

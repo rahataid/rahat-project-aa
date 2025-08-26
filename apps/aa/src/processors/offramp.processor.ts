@@ -187,6 +187,21 @@ export class OfframpProcessor {
     }
   }
 
+  @Process({ name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT, concurrency: 1 })
+  async verifyManualPayout(job: Job<any>) {
+    const data = job.data;
+    console.log('data in verify manual payout', data);
+
+    try {
+      // match tranfer to benf 
+      // mark benf as token redeemed and burn the token
+      return data;
+    } catch (error) {
+      this.logger.error(`Failed to verify manual payout: ${error.message}`, error.stack);
+      throw new Error(`Failed to verify manual payout: ${error.message}`);
+    }
+  }
+
   private async updateBeneficiaryRedeemAsFailed(
     uuid: string,
     error: string,

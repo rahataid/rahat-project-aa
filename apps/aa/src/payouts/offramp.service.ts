@@ -169,6 +169,20 @@ export class OfframpService {
     return await this.addBulkToOfframpQueue([payload]);
   }
 
+  async addToVerifyManualPayoutQueue(payload: any[]) {
+    return await this.addBulkToVerifyManualPayoutQueue(payload);
+  }
+
+  async addBulkToVerifyManualPayoutQueue(payload: any[]) {
+    return await this.offrampQueue.addBulk(
+      payload.map((payload) => ({
+        name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT,
+        data: payload,
+        opts: { ...this.offrampQueueOpts },
+      }))
+    );
+  }
+
   async addBulkToManualPayoutQueue(payload: FSPManualPayoutDetails[]) {
     const result = await this.offrampQueue.add(
       JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT,
