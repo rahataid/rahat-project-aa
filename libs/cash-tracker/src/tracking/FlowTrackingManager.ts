@@ -1,51 +1,29 @@
 import { ethers } from 'ethers';
-import {
-  SDKConfig,
-  FlowTrackingConfig,
-  TokenFlowData,
-  TokenFlow,
-  TokenBalance,
-  TokenAllowance,
-  FlowHistory,
-  FlowHistoryEntry,
-  FlowHistoryOptions,
-  TransactionFlowHistory,
-  EntityOutcome,
-  ApprovalEvent,
-  TransactionFlowPath,
-  TransactionFlowStep,
-  TransactionFlow,
-} from '../types';
 import { SDKError } from '../core/SDKError';
-import { EventManager } from './EventManager';
-import { FlowTrackingEvent } from '../types/events';
+import {
+  FlowTrackingConfig,
+  SDKConfig,
+  TokenAllowance,
+  TokenBalance,
+  TokenFlow,
+  TokenFlowData,
+} from '../types';
 
 /**
  * Flow Tracking Manager for monitoring token flow between smart addresses
+ * Uses GraphQL endpoint for efficient data retrieval
  */
 export class FlowTrackingManager {
   private provider: ethers.Provider | null = null;
   private cashTokenContract: ethers.Contract | null = null;
   private config: SDKConfig | null = null;
   private flowConfig: FlowTrackingConfig | null = null;
-  private isTracking = false;
-  private trackingInterval: NodeJS.Timeout | null = null;
-  private eventManager: EventManager;
   private previousBalances: Map<string, bigint> = new Map();
   private previousAllowances: Map<string, Map<string, bigint>> = new Map();
+  private graphqlEndpoint: string =
+    'https://api.studio.thegraph.com/query/89203/cash-tracker-dev/version/latest/graphql';
 
-  // Flow history tracking
-  private flowHistories: Map<string, FlowHistory> = new Map();
-  private activeFlows: Map<string, FlowHistory> = new Map();
-  private flowHistoryOptions: FlowHistoryOptions = {
-    maxHistory: 100,
-    includeBlockNumbers: true,
-    includeDescriptions: true,
-  };
-
-  constructor() {
-    this.eventManager = new EventManager();
-  }
+  constructor() {}
 
   /**
    * Initialize the flow tracking manager
@@ -62,251 +40,39 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Set flow history options
+   * Execute GraphQL query
    */
-  setFlowHistoryOptions(options: FlowHistoryOptions): void {
-    this.flowHistoryOptions = { ...this.flowHistoryOptions, ...options };
-  }
+  private async executeGraphQLQuery(
+    query: string,
+    variables?: any
+  ): Promise<any> {
+    try {
+      const response = await fetch(this.graphqlEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables,
+        }),
+      });
 
-  /**
-   * Get complete flow history
-   */
-  getFlowHistory(): FlowHistory[] {
-    return Array.from(this.flowHistories.values()).sort(
-      (a, b) => b.startTime - a.startTime
-    );
-  }
-
-  /**
-   * Get active flows
-   */
-  getActiveFlows(): FlowHistory[] {
-    return Array.from(this.activeFlows.values());
-  }
-
-  /**
-   * Get flow history by ID
-   */
-  getFlowHistoryById(flowId: string): FlowHistory | undefined {
-    return this.flowHistories.get(flowId);
-  }
-
-  /**
-   * Get flow history for a specific path (A->B->C)
-   */
-  getFlowHistoryByPath(path: string[]): FlowHistory[] {
-    const pathKey = path.join('->');
-    return Array.from(this.flowHistories.values()).filter(
-      (flow) => flow.path.join('->') === pathKey
-    );
-  }
-
-  /**
-   * Get flow history for a specific address
-   */
-  getFlowHistoryByAddress(address: string): FlowHistory[] {
-    return Array.from(this.flowHistories.values()).filter((flow) =>
-      flow.path.includes(address)
-    );
-  }
-
-  /**
-   * Display complete flow history
-   */
-  displayFlowHistory(): void {
-    console.log('\n=== Complete Flow History ===');
-
-    const histories = this.getFlowHistory();
-    if (histories.length === 0) {
-      console.log('No flow history found.');
-      return;
-    }
-
-    for (const history of histories) {
-      console.log(`\n📊 Flow ID: ${history.flowId}`);
-      console.log(`   Path: ${history.path.join(' -> ')}`);
-      console.log(`   Total Amount: ${history.formattedTotalAmount} CASH`);
-      console.log(`   Status: ${history.status}`);
-      console.log(`   Start: ${new Date(history.startTime).toLocaleString()}`);
-      if (history.endTime) {
-        console.log(`   End: ${new Date(history.endTime).toLocaleString()}`);
-      }
-      console.log(
-        `   Duration: ${this.formatDuration(
-          history.startTime,
-          history.endTime || Date.now()
-        )}`
-      );
-
-      if (history.description) {
-        console.log(`   Description: ${history.description}`);
+      if (!response.ok) {
+        throw new Error(`GraphQL request failed: ${response.statusText}`);
       }
 
-      console.log('   Steps:');
-      for (const entry of history.entries) {
-        const direction = entry.type === 'balance_change' ? '↔' : '→';
-        const time = new Date(entry.timestamp).toLocaleTimeString();
-        console.log(
-          `     ${entry.step}. ${entry.from} ${direction} ${entry.to}: ${entry.formatted} CASH (${entry.type}) - ${time}`
-        );
-        if (entry.transactionHash) {
-          console.log(`        TX: ${entry.transactionHash}`);
-        }
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
       }
-      console.log('─'.repeat(50));
+
+      return result.data;
+    } catch (error) {
+      console.error('GraphQL query failed:', error);
+      throw error;
     }
-  }
-
-  /**
-   * Display active flows
-   */
-  displayActiveFlows(): void {
-    console.log('\n=== Active Flows ===');
-
-    const activeFlows = this.getActiveFlows();
-    if (activeFlows.length === 0) {
-      console.log('No active flows found.');
-      return;
-    }
-
-    for (const flow of activeFlows) {
-      console.log(`\n🔄 Active Flow ID: ${flow.flowId}`);
-      console.log(`   Path: ${flow.path.join(' -> ')}`);
-      console.log(`   Current Amount: ${flow.formattedTotalAmount} CASH`);
-      console.log(`   Start: ${new Date(flow.startTime).toLocaleString()}`);
-      console.log(
-        `   Duration: ${this.formatDuration(flow.startTime, Date.now())}`
-      );
-
-      console.log('   Steps:');
-      for (const entry of flow.entries) {
-        const direction = entry.type === 'balance_change' ? '↔' : '→';
-        const time = new Date(entry.timestamp).toLocaleTimeString();
-        console.log(
-          `     ${entry.step}. ${entry.from} ${direction} ${entry.to}: ${entry.formatted} CASH (${entry.type}) - ${time}`
-        );
-      }
-      console.log('─'.repeat(50));
-    }
-  }
-
-  /**
-   * Start flow tracking with smart addresses array
-   */
-  async startFlowTracking(
-    smartAddresses: string[],
-    options?: {
-      interval?: number;
-      onFlowUpdate?: (flowData: TokenFlowData) => void;
-    }
-  ): Promise<void> {
-    if (!this.cashTokenContract) {
-      throw SDKError.configError('Flow tracking manager not initialized');
-    }
-
-    if (smartAddresses.length < 2) {
-      throw SDKError.validationError(
-        'Need at least 2 smart addresses for flow tracking'
-      );
-    }
-
-    // Stop existing tracking if running
-    if (this.isTracking) {
-      await this.stopFlowTracking();
-    }
-
-    this.flowConfig = {
-      smartAddresses,
-      interval: options?.interval || 5000,
-      onFlowUpdate: options?.onFlowUpdate,
-    };
-
-    this.isTracking = true;
-
-    // Initialize previous state
-    await this.initializePreviousState();
-
-    // Start tracking loop
-    const trackFlow = async () => {
-      if (!this.isTracking) return;
-
-      try {
-        const flowData = await this.getCurrentFlowData();
-
-        // Process flow history
-        await this.processFlowHistory(flowData);
-
-        // Emit flow update event
-        const flowUpdateEvent: FlowTrackingEvent = {
-          id: this.generateEventId(),
-          type: 'flow_update',
-          timestamp: Date.now(),
-          data: flowData,
-        };
-        this.eventManager.emit(flowUpdateEvent);
-
-        // Call onFlowUpdate callback if provided
-        if (this.flowConfig?.onFlowUpdate) {
-          this.flowConfig.onFlowUpdate(flowData);
-        }
-
-        // Update previous state
-        this.updatePreviousState(flowData);
-      } catch (error) {
-        console.error('Flow tracking error:', error);
-        const flowErrorEvent: FlowTrackingEvent = {
-          id: this.generateEventId(),
-          type: 'flow_tracking_error',
-          timestamp: Date.now(),
-          error: error instanceof Error ? error.message : String(error),
-        };
-        this.eventManager.emit(flowErrorEvent);
-      }
-    };
-
-    // Initial tracking
-    await trackFlow();
-
-    // Set up interval
-    this.trackingInterval = setInterval(trackFlow, this.flowConfig.interval);
-
-    // Emit tracking started event
-    const flowStartedEvent: FlowTrackingEvent = {
-      id: this.generateEventId(),
-      type: 'flow_tracking_started',
-      timestamp: Date.now(),
-      smartAddresses,
-    };
-    this.eventManager.emit(flowStartedEvent);
-
-    console.log(
-      `🚀 Flow tracking started for ${smartAddresses.length} smart addresses`
-    );
-  }
-
-  /**
-   * Stop flow tracking
-   */
-  async stopFlowTracking(): Promise<void> {
-    this.isTracking = false;
-
-    if (this.trackingInterval) {
-      clearInterval(this.trackingInterval);
-      this.trackingInterval = null;
-    }
-
-    // Clear previous state
-    this.previousBalances.clear();
-    this.previousAllowances.clear();
-
-    // Emit tracking stopped event
-    this.eventManager.emit({
-      id: this.generateEventId(),
-      type: 'flow_tracking_stopped',
-      timestamp: Date.now(),
-    });
-
-    console.log('🛑 Flow tracking stopped');
   }
 
   /**
@@ -408,54 +174,6 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Display current flow status
-   */
-  async displayFlowStatus(): Promise<void> {
-    if (!this.cashTokenContract || !this.flowConfig) {
-      throw SDKError.configError('Flow tracking not initialized');
-    }
-
-    this.clearConsole();
-    console.log('\n=== CashToken Flow Tracker ===');
-    console.log(
-      `Tracking ${this.flowConfig.smartAddresses.length} smart addresses`
-    );
-    console.log('Press Ctrl+C to stop tracking\n');
-
-    const flowData = await this.getCurrentFlowData();
-
-    // Display balances
-    console.log('=== Token Balances ===');
-    for (const balance of flowData.balances) {
-      console.log(
-        `${balance.entityId}: ${balance.formatted} ${balance.symbol}`
-      );
-    }
-
-    // Display allowances
-    console.log('\n=== Token Allowances ===');
-    for (const allowance of flowData.allowances) {
-      if (allowance.allowance > 0n) {
-        console.log(
-          `${allowance.ownerId} → ${allowance.spenderId}: ${allowance.formatted} CASH`
-        );
-      }
-    }
-
-    // Display recent flows
-    if (flowData.flows.length > 0) {
-      console.log('\n=== Recent Flows ===');
-      for (const flow of flowData.flows.slice(-5)) {
-        // Show last 5 flows
-        const direction = flow.type === 'balance_change' ? '↔' : '→';
-        console.log(
-          `${flow.from} ${direction} ${flow.to}: ${flow.formatted} CASH (${flow.type})`
-        );
-      }
-    }
-  }
-
-  /**
    * Initialize previous state for change detection
    */
   private async initializePreviousState(): Promise<void> {
@@ -481,212 +199,6 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Update previous state with current data
-   */
-  private updatePreviousState(flowData: TokenFlowData): void {
-    // Update balances
-    for (const balance of flowData.balances) {
-      this.previousBalances.set(balance.entityId, balance.balance);
-    }
-
-    // Update allowances
-    for (const allowance of flowData.allowances) {
-      if (!this.previousAllowances.has(allowance.ownerId)) {
-        this.previousAllowances.set(allowance.ownerId, new Map());
-      }
-      this.previousAllowances
-        .get(allowance.ownerId)!
-        .set(allowance.spenderId, allowance.allowance);
-    }
-  }
-
-  /**
-   * Process flow history from current flow data
-   */
-  private async processFlowHistory(flowData: TokenFlowData): Promise<void> {
-    for (const flow of flowData.flows) {
-      // Check if this flow is part of an existing active flow
-      let foundActiveFlow = false;
-
-      for (const [flowId, activeFlow] of this.activeFlows) {
-        if (this.isFlowPartOfPath(flow, activeFlow.path)) {
-          // Add to existing active flow
-          const entry: FlowHistoryEntry = {
-            step: activeFlow.entries.length + 1,
-            from: flow.from,
-            to: flow.to,
-            amount: flow.amount,
-            formatted: flow.formatted,
-            transactionHash: flow.transactionHash,
-            timestamp: flow.timestamp,
-            type: flow.type,
-            blockNumber: this.flowHistoryOptions.includeBlockNumbers
-              ? await this.getCurrentBlockNumber()
-              : undefined,
-          };
-
-          activeFlow.entries.push(entry);
-          activeFlow.totalAmount += flow.amount;
-          activeFlow.formattedTotalAmount = this.formatAmount(
-            activeFlow.totalAmount
-          );
-
-          // Check if flow is complete (reached the end of the path)
-          if (this.isFlowComplete(activeFlow)) {
-            activeFlow.status = 'completed';
-            activeFlow.endTime = Date.now();
-            this.activeFlows.delete(flowId);
-            this.flowHistories.set(flowId, activeFlow);
-          }
-
-          foundActiveFlow = true;
-          break;
-        }
-      }
-
-      // If not part of existing flow, check if it starts a new flow
-      if (!foundActiveFlow) {
-        const newFlow = this.detectNewFlow(flow, flowData);
-        if (newFlow) {
-          this.activeFlows.set(newFlow.flowId, newFlow);
-        }
-      }
-    }
-
-    // Clean up old histories if max limit reached
-    this.cleanupOldHistories();
-  }
-
-  /**
-   * Detect if a flow starts a new flow path
-   */
-  private detectNewFlow(
-    flow: TokenFlow,
-    flowData: TokenFlowData
-  ): FlowHistory | null {
-    if (!this.flowConfig) return null;
-
-    const smartAddresses = this.flowConfig.smartAddresses;
-
-    // Check if this flow starts a new path (from first address)
-    if (flow.from === smartAddresses[0] && flow.type === 'allowance') {
-      // Look for potential path continuation
-      const potentialPath = this.findPotentialPath(flow.to, smartAddresses);
-      if (potentialPath.length > 2) {
-        // At least A->B->C
-        const flowId = this.generateFlowId();
-        const entry: FlowHistoryEntry = {
-          step: 1,
-          from: flow.from,
-          to: flow.to,
-          amount: flow.amount,
-          formatted: flow.formatted,
-          transactionHash: flow.transactionHash,
-          timestamp: flow.timestamp,
-          type: flow.type,
-          blockNumber: this.flowHistoryOptions.includeBlockNumbers
-            ? undefined
-            : undefined, // Will be set in next update
-        };
-
-        return {
-          flowId,
-          startTime: flow.timestamp,
-          path: potentialPath,
-          entries: [entry],
-          totalAmount: flow.amount,
-          formattedTotalAmount: flow.formatted,
-          status: 'active',
-          description: this.flowHistoryOptions.includeDescriptions
-            ? `Flow from ${flow.from} to ${
-                potentialPath[potentialPath.length - 1]
-              }`
-            : undefined,
-        };
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Find potential flow path starting from an address
-   */
-  private findPotentialPath(
-    startAddress: string,
-    smartAddresses: string[]
-  ): string[] {
-    const path = [startAddress];
-    let currentAddress = startAddress;
-
-    // Find next address in the flow
-    for (let i = 0; i < smartAddresses.length - 1; i++) {
-      const currentIndex = smartAddresses.indexOf(currentAddress);
-      if (currentIndex !== -1 && currentIndex < smartAddresses.length - 1) {
-        const nextAddress = smartAddresses[currentIndex + 1];
-        path.push(nextAddress);
-        currentAddress = nextAddress;
-      } else {
-        break;
-      }
-    }
-
-    return path;
-  }
-
-  /**
-   * Check if a flow is part of a path
-   */
-  private isFlowPartOfPath(flow: TokenFlow, path: string[]): boolean {
-    for (let i = 0; i < path.length - 1; i++) {
-      if (flow.from === path[i] && flow.to === path[i + 1]) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Check if a flow is complete (reached the end of the path)
-   */
-  private isFlowComplete(flow: FlowHistory): boolean {
-    const lastEntry = flow.entries[flow.entries.length - 1];
-    const lastPathAddress = flow.path[flow.path.length - 1];
-
-    return lastEntry.to === lastPathAddress;
-  }
-
-  /**
-   * Clean up old flow histories
-   */
-  private cleanupOldHistories(): void {
-    if (
-      this.flowHistoryOptions.maxHistory &&
-      this.flowHistories.size > this.flowHistoryOptions.maxHistory
-    ) {
-      const histories = Array.from(this.flowHistories.entries()).sort(
-        (a, b) => b[1].startTime - a[1].startTime
-      );
-
-      const toRemove = histories.slice(this.flowHistoryOptions.maxHistory);
-      for (const [flowId] of toRemove) {
-        this.flowHistories.delete(flowId);
-      }
-    }
-  }
-
-  /**
-   * Get current block number
-   */
-  private async getCurrentBlockNumber(): Promise<number | undefined> {
-    try {
-      return await this.provider?.getBlockNumber();
-    } catch (error) {
-      return undefined;
-    }
-  }
-
-  /**
    * Format amount with decimals
    */
   private formatAmount(amount: bigint): string {
@@ -695,89 +207,14 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Format duration
-   */
-  private formatDuration(startTime: number, endTime: number): string {
-    const duration = endTime - startTime;
-    const seconds = Math.floor(duration / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  }
-
-  /**
-   * Generate unique flow ID
-   */
-  private generateFlowId(): string {
-    return `flow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Get flow tracking status
-   */
-  isFlowTracking(): boolean {
-    return this.isTracking;
-  }
-
-  /**
-   * Get tracked smart addresses
-   */
-  getTrackedAddresses(): string[] {
-    return this.flowConfig?.smartAddresses || [];
-  }
-
-  /**
-   * Subscribe to flow events
-   */
-  on(event: string, callback: (event: FlowTrackingEvent) => void): void {
-    this.eventManager.subscribe(event, callback);
-  }
-
-  /**
-   * Unsubscribe from flow events
-   */
-  off(event: string): void {
-    this.eventManager.unsubscribe(event);
-  }
-
-  /**
-   * Clear console (platform-specific)
-   */
-  private clearConsole(): void {
-    console.clear();
-  }
-
-  /**
-   * Generate unique event ID
-   */
-  private generateEventId(): string {
-    return `flow_event_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-  }
-
-  /**
-   * Get all flows as JSON by querying blockchain directly
-   * This queries actual transactions from the blockchain
+   * Get all flows as JSON using GraphQL
+   * This queries indexed data from The Graph
    *
    * @param entities - Array of strings (addresses) or array of objects with smartAddress and alias
    */
   async getAllFlowsAsJSON(
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<any[]> {
-    if (!this.cashTokenContract || !this.provider) {
-      throw new Error('SDK not properly initialized');
-    }
-
-    const allFlows: any[] = [];
-
     // Determine tracked addresses and create alias mapping
     let trackedAddresses: string[];
     const aliasMap = new Map<string, string>();
@@ -812,60 +249,45 @@ export class FlowTrackingManager {
           aliasMap.set(obj.smartAddress, obj.alias)
         );
       } else {
-        // Use existing tracked addresses from flow tracking
-        trackedAddresses = this.getTrackedAddresses();
-        trackedAddresses.forEach((addr) => aliasMap.set(addr, addr));
+        return [];
       }
     }
 
-    if (trackedAddresses.length < 2) {
-      return allFlows;
+    if (trackedAddresses.length < 1) {
+      return [];
     }
 
     try {
-      // Get current block number
-      const currentBlock = await this.provider.getBlockNumber();
-      const fromBlock = Math.max(0, currentBlock - 10000); // Last 10k blocks
+      // Get transfers from GraphQL
+      const transfers = await this.getTransfersFromGraphQL(trackedAddresses);
 
-      // Get all Transfer events
-      const transferFilter = this.cashTokenContract.filters.Transfer();
-      const transferEvents = await this.cashTokenContract.queryFilter(
-        transferFilter,
-        fromBlock,
-        currentBlock
-      );
-
-      // Process transfers to build flows
-      const flows = await this.processTransferEvents(
-        transferEvents,
+      // Process and group flows
+      const allFlows: any[] = [];
+      const groupedFlows = this.groupTransfersByPath(
+        transfers,
         trackedAddresses
-      );
-
-      // Group flows by path
-      const trackedAddressesChecksum = trackedAddresses.map((addr) =>
-        ethers.getAddress(addr)
-      );
-      const groupedFlows = this.groupFlowsByPath(
-        flows,
-        trackedAddressesChecksum
       );
 
       // Convert to JSON format
       for (const [pathKey, pathFlows] of groupedFlows.entries()) {
         const path = pathKey.split('->');
         const totalAmount = pathFlows.reduce(
-          (sum: number, flow: any) => sum + flow.amount,
+          (sum: number, flow: any) =>
+            sum + parseFloat(ethers.formatEther(flow.amount)),
           0
         );
 
         // Calculate entity totals
-        const entityTotals = this.calculateEntityTotals(pathFlows, path);
+        const entityTotals = this.calculateEntityTotalsFromGraphQL(
+          pathFlows,
+          path
+        );
 
         allFlows.push({
           path: path,
           pathAliases: path.map((addr) => aliasMap.get(addr) || addr),
           totalFlows: pathFlows.length,
-          totalAmount: this.formatAmount(totalAmount),
+          totalAmount: totalAmount.toString(),
           entityTotals: entityTotals,
           entityTotalsWithAliases: Object.fromEntries(
             Object.entries(entityTotals).map(([addr, totals]) => [
@@ -878,18 +300,18 @@ export class FlowTrackingManager {
             fromAlias: aliasMap.get(flow.from) || flow.from,
             to: flow.to,
             toAlias: aliasMap.get(flow.to) || flow.to,
-            amount: this.formatAmount(flow.amount),
-            type: flow.type,
+            amount: ethers.formatEther(flow.amount),
+            type: 'transfer',
             transactionHash: flow.transactionHash,
             blockNumber: flow.blockNumber,
-            timestamp: flow.timestamp,
+            timestamp: parseInt(flow.timestamp) * 1000,
           })),
         });
       }
 
       return allFlows;
     } catch (error) {
-      console.error('Error querying blockchain for flows:', error);
+      console.error('Error querying GraphQL for flows:', error);
       return [];
     }
   }
@@ -1141,348 +563,344 @@ export class FlowTrackingManager {
   /**
    * Get comprehensive transaction flow history with steps, summary, and blockchain info
    * Perfect for frontend mapping and visualization
+   * Uses GraphQL for efficient data retrieval
    */
   async getTransactionFlowHistory(
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<{
     entityOutcomes: Array<{
       alias: string;
-      pending: Array<{
+      allowances: Array<{
         to: string;
         amount: string;
         timestamp: number;
       }>;
-      balance: string;
-      sent: string;
-      received: string;
-      flows: Array<{
+      pending: Array<{
         from: string;
-        to: string;
         amount: string;
-        transactionHash: string;
-        type: 'sent' | 'received';
+        timestamp: number;
       }>;
+      balance: string;
     }>;
     allFlows: any[];
   }> {
-    if (!this.cashTokenContract || !this.provider) {
-      throw new Error('SDK not properly initialized');
+    if (!entities || entities.length === 0) {
+      throw new Error('Entities are required for transaction flow history');
     }
 
-    const allFlowsData = await this.getAllFlowsAsJSON(entities);
+    // Prepare entity addresses and aliases
+    const entityMap = new Map<string, string>();
+    const addresses: string[] = [];
 
-    // Flatten all flows from the data structure
-    const allFlows: any[] = [];
-    allFlowsData.forEach((pathData: any) => {
-      pathData.flows.forEach((flow: any) => {
-        allFlows.push({
-          ...flow,
-          from: { address: flow.from, alias: flow.fromAlias },
-          to: { address: flow.to, alias: flow.toAlias },
-        });
-      });
+    entities.forEach((entity) => {
+      if (typeof entity === 'string') {
+        addresses.push(entity);
+        entityMap.set(entity, entity);
+      } else {
+        addresses.push(entity.smartAddress);
+        entityMap.set(entity.smartAddress, entity.alias);
+      }
     });
 
-    // Get simplified entity outcomes with flows
-    const entityOutcomes = await this.getSimplifiedEntityOutcomesWithFlows(
-      entities,
-      allFlows
+    // Query GraphQL for comprehensive data
+    const [transfers, approvals, balances] = await Promise.all([
+      this.getTransfersFromGraphQL(addresses),
+      this.getApprovalsFromGraphQL(addresses),
+      this.getBalancesFromGraphQL(addresses),
+    ]);
+
+    // Process entity outcomes
+    const entityOutcomes = this.processEntityOutcomes(
+      addresses,
+      entityMap,
+      transfers,
+      approvals,
+      balances
     );
 
+    // Process all flows
+    const allFlows = this.processAllFlows(transfers, entityMap);
+
     return {
-      entityOutcomes: entityOutcomes,
-      allFlows: allFlows,
+      entityOutcomes,
+      allFlows,
     };
   }
 
-  // Simplified entity outcomes method with flows
-  private async getSimplifiedEntityOutcomesWithFlows(
-    entities?: string[] | Array<{ smartAddress: string; alias: string }>,
-    flows?: any[]
-  ): Promise<
-    Array<{
+  /**
+   * Get transfers from GraphQL
+   */
+  private async getTransfersFromGraphQL(addresses: string[]): Promise<any[]> {
+    const query = `
+      query GetTransfers($addresses: [String!]!) {
+        transfers(
+          where: {
+            or: [
+              { from_in: $addresses },
+              { to_in: $addresses }
+            ]
+          }
+          orderBy: timestamp
+          orderDirection: desc
+          first: 1000
+        ) {
+          id
+          from
+          to
+          amount
+          timestamp
+          transactionHash
+          blockNumber
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLQuery(query, { addresses });
+    return result.transfers || [];
+  }
+
+  /**
+   * Get approvals from GraphQL
+   */
+  private async getApprovalsFromGraphQL(addresses: string[]): Promise<any[]> {
+    const query = `
+      query GetApprovals($addresses: [String!]!) {
+        approvals(
+          where: {
+            or: [
+              { owner_in: $addresses },
+              { spender_in: $addresses }
+            ]
+          }
+          orderBy: timestamp
+          orderDirection: desc
+          first: 1000
+        ) {
+          id
+          owner
+          spender
+          amount
+          timestamp
+          transactionHash
+          blockNumber
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLQuery(query, { addresses });
+    return result.approvals || [];
+  }
+
+  /**
+   * Get current balances from GraphQL
+   */
+  private async getBalancesFromGraphQL(addresses: string[]): Promise<any[]> {
+    const query = `
+      query GetBalances($addresses: [String!]!) {
+        balances(
+          where: { account_in: $addresses }
+        ) {
+          id
+          account
+          amount
+          timestamp
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLQuery(query, { addresses });
+    return result.balances || [];
+  }
+
+  /**
+   * Process entity outcomes from GraphQL data
+   */
+  private processEntityOutcomes(
+    addresses: string[],
+    entityMap: Map<string, string>,
+    transfers: any[],
+    approvals: any[],
+    balances: any[]
+  ): Array<{
+    alias: string;
+    allowances: Array<{
+      to: string;
+      amount: string;
+      timestamp: number;
+    }>;
+    pending: Array<{
+      from: string;
+      amount: string;
+      timestamp: number;
+    }>;
+    balance: string;
+  }> {
+    const outcomes: Array<{
       alias: string;
-      pending: Array<{
+      allowances: Array<{
         to: string;
+        amount: string;
+        timestamp: number;
+      }>;
+      pending: Array<{
+        from: string;
         amount: string;
         timestamp: number;
       }>;
       balance: string;
-      sent: string;
-      received: string;
-      flows: Array<{
-        from: string;
-        to: string;
-        amount: string;
-        transactionHash: string;
-        type: 'sent' | 'received';
-        timestamp: number;
-      }>;
-    }>
-  > {
-    if (!entities || !this.cashTokenContract) {
-      return [];
-    }
-    const blockCache: Record<number, number> = {};
-    const entityMap = new Map<
-      string,
-      {
-        alias: string;
-        sent: number;
-        received: number;
-        currentBalance: bigint;
-        pendingAllowances: Array<{
-          to: string;
-          amount: string;
-          timestamp: number;
-        }>;
-        flows: Array<{
-          from: string;
-          to: string;
-          amount: string;
-          transactionHash: string;
-          type: 'sent' | 'received';
-          timestamp: number;
-        }>;
-      }
-    >();
+    }> = [];
 
-    // Initialize entity map
-    entities.forEach((entity) => {
-      const address = typeof entity === 'string' ? entity : entity.smartAddress;
-      const alias = typeof entity === 'string' ? entity : entity.alias;
+    addresses.forEach((address) => {
+      const alias = entityMap.get(address) || address;
 
-      entityMap.set(address, {
+      // Get current balance
+      const balanceData = balances.find(
+        (b) => b.account.toLowerCase() === address.toLowerCase()
+      );
+      const balance = balanceData
+        ? ethers.formatEther(balanceData.amount)
+        : '0';
+
+      // Get allowances provided by this entity (where this entity is the owner)
+      const entityAllowances = approvals
+        .filter(
+          (approval) =>
+            approval.owner.toLowerCase() === address.toLowerCase() &&
+            parseFloat(ethers.formatEther(approval.amount)) > 0
+        )
+        .map((approval) => ({
+          to: entityMap.get(approval.spender) || approval.spender,
+          amount: ethers.formatEther(approval.amount),
+          timestamp: parseInt(approval.timestamp) * 1000,
+        }));
+
+      // Get pending allowances (where this entity is the spender with unused allowances)
+      const pendingAllowances = approvals
+        .filter(
+          (approval) =>
+            approval.spender.toLowerCase() === address.toLowerCase() &&
+            parseFloat(ethers.formatEther(approval.amount)) > 0
+        )
+        .map((approval) => ({
+          from: entityMap.get(approval.owner) || approval.owner,
+          amount: ethers.formatEther(approval.amount),
+          timestamp: parseInt(approval.timestamp) * 1000,
+        }));
+
+      outcomes.push({
         alias,
-        sent: 0,
-        received: 0,
-        currentBalance: 0n,
-        pendingAllowances: [],
-        flows: [],
+        allowances: entityAllowances,
+        pending: pendingAllowances,
+        balance,
       });
     });
 
-    // Get current balances and unused allowances
-    for (const [address, entity] of entityMap.entries()) {
-      try {
-        // Get current balance
-        const balance = await this.cashTokenContract.balanceOf(address);
-        entity.currentBalance = balance;
+    return outcomes;
+  }
 
-        // Get unused allowances (pending) with spender information
-        for (const [otherAddress, otherEntity] of entityMap.entries()) {
-          if (address !== otherAddress) {
-            try {
-              const allowance = await this.cashTokenContract.allowance(
-                address,
-                otherAddress
-              );
-              if (allowance > 0n) {
-                // Check if this allowance has been used
-                const usedAmount = await this.getUsedAllowanceAmount(
-                  address,
-                  otherAddress
-                );
-                const unusedAmount = allowance - usedAmount;
-                if (unusedAmount > 0n) {
-                  let ts: number | undefined;
-                  const filter = this.cashTokenContract.filters.Approval(
-                    address,
-                    otherAddress
-                  );
-                  const events = await this.cashTokenContract.queryFilter(
-                    filter,
-                    -10000
-                  );
-
-                  if (events.length > 0) {
-                    const lastApproval = events[events.length - 1];
-                    if (!blockCache[lastApproval.blockNumber]) {
-                      const block = await this.provider?.getBlock(
-                        lastApproval.blockNumber
-                      );
-                      blockCache[lastApproval.blockNumber] =
-                        (block?.timestamp ?? 0) * 1000;
-                    }
-                    ts = blockCache[lastApproval.blockNumber];
-                  }
-                  entity.pendingAllowances.push({
-                    to: otherEntity.alias || otherAddress,
-                    amount: ethers.formatEther(unusedAmount),
-                    timestamp: ts || Date.now(),
-                  });
-                }
-              }
-            } catch (error) {
-              console.warn(
-                `Error getting allowance from ${address} to ${otherAddress}:`,
-                error
-              );
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(`Error getting balance for ${address}:`, error);
-      }
-    }
-
-    // Calculate sent and received from flows and add relevant flows to each entity
-    flows?.forEach((flow) => {
-      const fromAddress = flow.from.address;
-      const toAddress = flow.to.address;
-      const amount = parseFloat(flow.amount);
-
-      // Add flow to sender's flows (deduplicate by transaction hash)
-      if (entityMap.has(fromAddress)) {
-        const senderEntity = entityMap.get(fromAddress)!;
-        senderEntity.sent += amount;
-
-        // Check if this flow already exists for this entity
-        const existingFlow = senderEntity.flows.find(
-          (f) => f.transactionHash === flow.transactionHash && f.type === 'sent'
-        );
-        if (!existingFlow) {
-          senderEntity.flows.push({
-            from: flow.from.alias || flow.from.address,
-            to: flow.to.alias || flow.to.address,
-            amount: flow.amount,
-            transactionHash: flow.transactionHash,
-            type: 'sent',
-            timestamp: flow.timestamp,
-          });
-        }
-      }
-
-      // Add flow to receiver's flows (deduplicate by transaction hash)
-      if (entityMap.has(toAddress)) {
-        const receiverEntity = entityMap.get(toAddress)!;
-        receiverEntity.received += amount;
-
-        // Check if this flow already exists for this entity
-        const existingFlow = receiverEntity.flows.find(
-          (f) =>
-            f.transactionHash === flow.transactionHash && f.type === 'received'
-        );
-        if (!existingFlow) {
-          receiverEntity.flows.push({
-            from: flow.from.alias || flow.from.address,
-            to: flow.to.alias || flow.to.address,
-            amount: flow.amount,
-            transactionHash: flow.transactionHash,
-            type: 'received',
-            timestamp: flow.timestamp,
-          });
-        }
-      }
-    });
-
-    // Convert to simplified format
-    return Array.from(entityMap.values()).map((entity) => ({
-      alias: entity.alias,
-      pending: entity.pendingAllowances,
-      balance: ethers.formatEther(entity.currentBalance),
-      sent: entity.sent.toString(),
-      received: entity.received.toString(),
-      flows: entity.flows,
+  /**
+   * Process all flows from GraphQL data
+   */
+  private processAllFlows(
+    transfers: any[],
+    entityMap: Map<string, string>
+  ): any[] {
+    return transfers.map((transfer) => ({
+      id: transfer.id,
+      from: {
+        address: transfer.from,
+        alias: entityMap.get(transfer.from) || transfer.from,
+      },
+      to: {
+        address: transfer.to,
+        alias: entityMap.get(transfer.to) || transfer.to,
+      },
+      amount: ethers.formatEther(transfer.amount),
+      timestamp: parseInt(transfer.timestamp) * 1000,
+      transactionHash: transfer.transactionHash,
+      blockNumber: transfer.blockNumber,
+      type: 'transfer',
     }));
   }
 
-  // Helper method to get used allowance amount
-  private async getUsedAllowanceAmount(
-    owner: string,
-    spender: string
-  ): Promise<bigint> {
-    try {
-      // This is a simplified approach - in practice you'd need to track actual usage
-      // For now, we'll assume allowances are unused if they exist
-      return 0n;
-    } catch (error) {
-      return 0n;
-    }
-  }
-
-  // New method to calculate entity outcomes
-  private async calculateEntityOutcomes(
-    entities?: string[] | Array<{ smartAddress: string; alias: string }>,
-    flows?: any[],
-    approvals?: ApprovalEvent[]
-  ): Promise<EntityOutcome[]> {
-    if (!entities || !flows) {
-      return [];
-    }
-
-    const entityMap = new Map<
-      string,
-      {
-        smartAddress: string;
-        alias?: string;
-        received: number;
-        sent: number;
-        pending: number;
-      }
-    >();
-
-    // Initialize entity map
-    entities.forEach((entity) => {
-      const address = typeof entity === 'string' ? entity : entity.smartAddress;
-      const alias = typeof entity === 'string' ? undefined : entity.alias;
-
-      entityMap.set(address, {
-        smartAddress: address,
-        alias,
-        received: 0,
-        sent: 0,
-        pending: 0,
-      });
-    });
-
-    // Calculate received and sent from flows
-    flows.forEach((flow) => {
-      const fromAddress = flow.from.address;
-      const toAddress = flow.to.address;
-      const amount = parseFloat(flow.amount);
-
-      if (entityMap.has(fromAddress)) {
-        entityMap.get(fromAddress)!.sent += amount;
-      }
-      if (entityMap.has(toAddress)) {
-        entityMap.get(toAddress)!.received += amount;
-      }
-    });
-
-    // Calculate pending from approvals
-    approvals?.forEach((approval) => {
-      const ownerAddress = approval.owner.address;
-      const amount = parseFloat(approval.amount);
-
-      if (entityMap.has(ownerAddress)) {
-        entityMap.get(ownerAddress)!.pending += amount;
-      }
-    });
-
-    // Convert to EntityOutcome array
-    return Array.from(entityMap.values()).map((entity) => ({
-      smartAddress: entity.smartAddress,
-      alias: entity.alias,
-      balance: (entity.received - entity.sent).toString(),
-      pending: entity.pending.toString(),
-      received: entity.received.toString(),
-      sent: entity.sent.toString(),
-      netFlow: (entity.received - entity.sent).toString(),
-    }));
-  }
-
-  // Helper method to find alias for an address
-  private findAliasForAddress(
-    address: string,
-    entities?: string[] | Array<{ smartAddress: string; alias: string }>
-  ): string | undefined {
-    if (!entities) return undefined;
-
-    const entity = entities.find(
-      (e) => (typeof e === 'string' ? e : e.smartAddress) === address
+  /**
+   * Group transfers by path from GraphQL data
+   */
+  private groupTransfersByPath(
+    transfers: any[],
+    trackedAddresses: string[]
+  ): Map<string, any[]> {
+    const groupedFlows = new Map<string, any[]>();
+    const trackedAddressesChecksum = trackedAddresses.map((addr) =>
+      ethers.getAddress(addr)
     );
 
-    return typeof entity === 'string' ? undefined : entity?.alias;
+    // Find all possible paths through tracked addresses
+    const paths = this.generateAllPaths(trackedAddressesChecksum);
+
+    for (const path of paths) {
+      const pathKey = path.join('->');
+      const pathFlows: any[] = [];
+
+      // Find flows that follow this path
+      for (let i = 0; i < path.length - 1; i++) {
+        const from = path[i];
+        const to = path[i + 1];
+
+        const matchingFlows = transfers.filter(
+          (transfer) =>
+            ethers.getAddress(transfer.from) === from &&
+            ethers.getAddress(transfer.to) === to
+        );
+
+        pathFlows.push(...matchingFlows);
+      }
+
+      if (pathFlows.length > 0) {
+        groupedFlows.set(pathKey, pathFlows);
+      }
+    }
+
+    return groupedFlows;
+  }
+
+  /**
+   * Calculate entity totals from GraphQL data
+   */
+  private calculateEntityTotalsFromGraphQL(flows: any[], path: string[]): any {
+    const entityTotals: any = {};
+
+    // Initialize totals for each entity
+    for (const entity of path) {
+      entityTotals[entity] = {
+        received: 0,
+        sent: 0,
+        balance: 0,
+      };
+    }
+
+    // Calculate totals from flows
+    for (const flow of flows) {
+      const amount = parseFloat(ethers.formatEther(flow.amount));
+
+      if (entityTotals[flow.from]) {
+        entityTotals[flow.from].sent += amount;
+        entityTotals[flow.from].balance -= amount;
+      }
+
+      if (entityTotals[flow.to]) {
+        entityTotals[flow.to].received += amount;
+        entityTotals[flow.to].balance += amount;
+      }
+    }
+
+    // Format amounts as strings
+    for (const entity in entityTotals) {
+      entityTotals[entity].received = entityTotals[entity].received.toString();
+      entityTotals[entity].sent = entityTotals[entity].sent.toString();
+      entityTotals[entity].balance = entityTotals[entity].balance.toString();
+    }
+
+    return entityTotals;
   }
 }
