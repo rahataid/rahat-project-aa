@@ -154,6 +154,32 @@ class ContractSeed extends ContractLib {
       donorContractAddress,
       deployerAccount
     );
+
+    // !!!! todo: Remove after test
+    console.log('Adding donor as token owner, remove after test');
+    await this.callContractMethod(
+      'RahatDonor',
+      'addTokenOwner',
+      [await RahatToken.contract.getAddress(), donorContractAddress],
+      donorContractAddress,
+      deployerAccount
+    );
+
+    console.log('Minting initial tokens to project');
+    // Mint 1,000,000 tokens (with 1 decimal, this is 1,000,000 * 10^1 = 10,000,000)
+    const initialTokenAmount = BigInt(1000000) * BigInt(10); // 1 million tokens with 1 decimal
+    await this.callContractMethod(
+      'RahatDonor',
+      'mintTokens',
+      [
+        await RahatToken.contract.getAddress(),
+        AAProjectContract.contract.target,
+        initialTokenAmount,
+      ],
+      donorContractAddress,
+      deployerAccount
+    );
+    console.log(`Minted ${initialTokenAmount} tokens to project`);
   }
 
   public async addContractSettings() {
