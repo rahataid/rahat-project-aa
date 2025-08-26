@@ -32,6 +32,8 @@ export class VendorTokenRedemptionService {
   ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
+    const projectId = this.configService.get('PROJECT_ID');
+
     try {
       // Verify vendor exists
       const vendor = await this.prisma.vendor.findUnique({
@@ -76,6 +78,15 @@ export class VendorTokenRedemptionService {
         `Added verification job for token redemption ${redemption.uuid}`
       );
 
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Vendor Requested for Settlement`,
+          description: `Vendor ${redemption?.vendor?.name} has requested to redeem  Rs ${redemption?.tokenAmount}`,
+          group: 'Vendor Management',
+          projectId: projectId,
+          notify: true,
+        },
+      });
       return redemption;
     } catch (error) {
       this.logger.error(`Error creating token redemption: ${error.message}`);
@@ -170,16 +181,7 @@ export class VendorTokenRedemptionService {
           },
         });
       }
-      if (updatedRedemption.redemptionStatus === 'REQUESTED')
-        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-          payload: {
-            title: `Vendor Requested for Settlement`,
-            description: `Vendor ${updatedRedemption?.vendor?.name} has requested to redeem  Rs ${updatedRedemption?.tokenAmount}`,
-            group: 'Vendor Management',
-            projectId: projectId,
-            notify: true,
-          },
-        });
+
       return updatedRedemption;
     } catch (error) {
       this.logger.error(`Error updating token redemption: ${error.message}`);

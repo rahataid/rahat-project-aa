@@ -262,6 +262,7 @@ describe('PayoutsService', () => {
       mode: PayoutMode.ONLINE,
       payoutProcessorId: 'processor-123',
       status: 'PENDING',
+      user: { name: 'Admin User' },
     };
 
     it('should create FSP payout successfully', async () => {

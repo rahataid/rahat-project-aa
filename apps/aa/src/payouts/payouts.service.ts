@@ -153,7 +153,7 @@ export class PayoutsService {
   }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
-    const { groupId, ...createPayoutDto } = payload;
+    const { groupId, user, ...createPayoutDto } = payload;
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
@@ -246,12 +246,13 @@ export class PayoutsService {
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         payload: {
           title: `Payout Created`,
-          description: `Payout has been created in ${
+          description: `Payout has been created by ${user.name} in ${
             projectName.value['project_name'] || projectId
           } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
             beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
           } beneficiaries with Rs ${
-            beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE
+            (beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE) /
+            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
           } each`,
           group: 'Payout',
           projectId: projectId,
