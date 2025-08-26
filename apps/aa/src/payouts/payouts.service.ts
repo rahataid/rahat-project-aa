@@ -149,7 +149,7 @@ export class PayoutsService {
   }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
-    const { groupId, ...createPayoutDto } = payload;
+    const { groupId, user, ...createPayoutDto } = payload;
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
