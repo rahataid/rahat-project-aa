@@ -3,9 +3,9 @@ import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
-import { FSPOfframpDetails } from './types';
+import { FSPManualPayoutDetails, FSPOfframpDetails } from './types';
 import { getBankId } from '../utils/bank';
-import { BeneficiaryRedeem } from '@prisma/client';
+import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { CipsResponseData } from '../payouts/dto/types';
 
@@ -137,6 +137,53 @@ export class OfframpProcessor {
       );
 
       throw error(`Failed to process instant offramp: ${error.message}`);
+    }
+  }
+
+  @Process({ name: JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT, concurrency: 1 })
+  async sendInstantManualPayoutRequest(job: Job<FSPManualPayoutDetails[]>) {
+    const fspManualPayoutDetailsArray = job.data;
+
+    this.logger.log(
+      `Processing instant manual payout request for ${fspManualPayoutDetailsArray.length} beneficiaries`
+    );
+
+    try {
+      const payload: Prisma.BeneficiaryRedeemCreateManyInput[] = fspManualPayoutDetailsArray.map((fspManualPayoutDetails) => ({
+          status: 'FIAT_TRANSACTION_INITIATED',
+          transactionType: 'FIAT_TRANSFER',
+          beneficiaryWalletAddress: fspManualPayoutDetails.beneficiaryWalletAddress,
+          fspId: fspManualPayoutDetails.payoutProcessorId,
+          amount: +fspManualPayoutDetails.amount,
+          payoutId: fspManualPayoutDetails.payoutUUID,
+          info: {
+            paymentProviderType: 'manual_bank_transfer',
+            beneficiaryWalletAddress: fspManualPayoutDetails.beneficiaryWalletAddress,
+            beneficiaryBankDetails: fspManualPayoutDetails.beneficiaryBankDetails,
+            beneficiaryPhoneNumber: fspManualPayoutDetails.beneficiaryPhoneNumber,
+            numberOfAttempts: 1,
+            message: 'Manual bank transfer initiated - requires manual processing',
+          },
+
+      }));
+
+      await this.beneficiaryService.createBeneficiaryRedeemBulk(payload);
+
+      this.logger.log(
+        `Successfully processed ${fspManualPayoutDetailsArray.length} manual payout requests`
+      );
+      
+      return {
+        success: true,
+        message: `Processed ${fspManualPayoutDetailsArray.length} manual payout requests`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Instant manual payout failed: ${error.message}`,
+        error.stack
+      );
+
+      throw new Error(`Failed to process instant manual payout: ${error.message}`);
     }
   }
 

@@ -26,13 +26,9 @@ import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
-import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
+import { FSPOfframpDetails, FSPPayoutDetails, FSPManualPayoutDetails } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import {
-  GetPayoutDetailsDto,
-  PayoutDetailsResponse,
-} from './dto/get-payout-details.dto';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -58,8 +54,6 @@ export class PayoutsService {
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
     private stellarService: StellarService,
-    @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue,
     private appService: AppService,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
@@ -225,6 +219,28 @@ export class PayoutsService {
           },
         },
       });
+
+      if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
+        this.logger.log(`Processing manual bank transfer payout for UUID: ${payout.uuid}`);
+        
+        const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
+          payout.uuid
+        );
+        
+        const manualPayoutDetails: FSPManualPayoutDetails[] =
+          BeneficiaryPayoutDetails.map((beneficiary) => ({
+            amount: beneficiary.amount,
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            beneficiaryBankDetails: beneficiary.bankDetails,
+            payoutUUID: payout.uuid,
+            payoutProcessorId: createPayoutDto.payoutProcessorId,
+            beneficiaryPhoneNumber: beneficiary.phoneNumber,
+          }));
+
+        await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
+        
+        this.logger.log(`Manual bank transfer queue added for payout UUID: ${payout.uuid}`);
+      }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       return payout;
@@ -738,6 +754,13 @@ export class PayoutsService {
       );
     }
 
+    // Check if this is a manual bank transfer payout - these cannot be triggered
+    if (payoutDetails.payoutProcessorId === 'manual-bank-transfer') {
+      throw new RpcException(
+        `Manual bank transfer payouts cannot be triggered. They are processed automatically upon creation.`
+      );
+    }
+
     const payoutExtras = payoutDetails.extras as {
       paymentProviderType: string;
       paymentProviderName: string;
@@ -746,6 +769,8 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
       await this.offrampService.getOfframpWalletAddress();
 
