@@ -21,6 +21,9 @@ import { CORE_MODULE } from '../../constants';
 import { PrismaService } from '@rumsan/prisma';
 import { querySubgraph } from '../../utils/subgraph';
 import { getBeneficiaryAdded } from '@rahataid/subgraph';
+import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+import { RpcException } from '@nestjs/microservices';
+import bcrypt from 'bcryptjs';
 
 export interface EVMChainConfig {
   name: string;
@@ -375,12 +378,96 @@ export class EvmChainService implements IChainService {
     return this.getTransactionStatus(id);
   }
 
-  async sendOtp(data: SendOtpDto): Promise<any> {
-    throw new Error('OTP not supported for EVM');
+  async sendOtp(sendOtpDto: SendOtpDto): Promise<any> {
+    return this.sendOtpByPhone(sendOtpDto);
   }
 
-  async sendAssetToVendor(data: any): Promise<any> {
-    throw new Error('Send asset to vendor not implemented for EVM');
+  async sendAssetToVendor(verifyOtpDto: SendAssetDto): Promise<any> {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          walletAddress: verifyOtpDto.receiverAddress,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException('Vendor not found');
+      }
+
+      const amount =
+        verifyOtpDto?.amount ||
+        (await this.getBenTotal(verifyOtpDto?.phoneNumber));
+
+      this.logger.log(
+        `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
+      );
+
+      await this.verifyOTP(
+        verifyOtpDto.otp,
+        verifyOtpDto.phoneNumber,
+        amount as number
+      );
+
+      const keys = (await this.getSecretByPhone(
+        verifyOtpDto.phoneNumber
+      )) as any;
+
+      if (!keys) {
+        throw new RpcException('Beneficiary address not found');
+      }
+
+      const result = await this.transferTokensEVM(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount.toString()
+      );
+
+      if (!result) {
+        throw new RpcException(
+          `Token transfer to ${verifyOtpDto.receiverAddress} failed`
+        );
+      }
+
+      this.logger.log(`Transfer successful: ${result.txHash}`);
+
+      // Find and update the existing BeneficiaryRedeem record
+      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        where: {
+          beneficiaryWalletAddress: keys.address,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!existingRedeem) {
+        throw new RpcException('No pending BeneficiaryRedeem record found');
+      }
+
+      // Update the BeneficiaryRedeem record with transaction details
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          uuid: existingRedeem.uuid,
+        },
+        data: {
+          vendorUid: vendor.uuid,
+          txHash: result.txHash,
+          isCompleted: true,
+          status: 'COMPLETED',
+        },
+      });
+
+      return {
+        txHash: result.txHash,
+      };
+    } catch (error) {
+      throw new RpcException(
+        error ? error : 'Transferring asset to vendor failed'
+      );
+    }
   }
 
   async fundAccount(data: FundAccountDto): Promise<any> {
@@ -526,5 +613,246 @@ export class EvmChainService implements IChainService {
     });
 
     return groups;
+  }
+
+  private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber },
+    });
+
+    if (!record) {
+      this.logger.log('OTP record not found');
+      throw new RpcException('OTP record not found');
+    }
+
+    if (record.isVerified) {
+      this.logger.log('OTP already verified');
+      throw new RpcException('OTP already verified');
+    }
+
+    const now = new Date();
+    if (record.expiresAt < now) {
+      this.logger.log('OTP has expired');
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+
+    if (!isValid) {
+      this.logger.log('Invalid OTP or amount mismatch');
+      throw new RpcException('Invalid OTP or amount mismatch');
+    }
+
+    this.logger.log('OTP verified successfully');
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
+
+    return true;
+  }
+
+  private async getBenTotal(phoneNumber: string) {
+    try {
+      const keys = await this.getSecretByPhone(phoneNumber);
+      this.logger.log('Keys: ', keys);
+      return this.getRahatBalance(keys.address);
+    } catch (error) {
+      throw new RpcException(error);
+    }
+  }
+
+  private async getSecretByPhone(phoneNumber: string) {
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
+          { phoneNumber, chain: 'evm' }
+        )
+      );
+      this.logger.log(`Beneficiary found: ${ben.address}`);
+      return ben;
+    } catch (error) {
+      this.logger.log(
+        `Couldn't find secret for phone ${phoneNumber}`,
+        error.message
+      );
+      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
+  }
+
+  private async getRahatBalance(address: string) {
+    try {
+      const chainConfig = await this.getChainConfig();
+      const tokenContract = new ethers.Contract(
+        chainConfig.tokenContractAddress,
+        ['function balanceOf(address account) view returns (uint256)'],
+        this.provider
+      );
+
+      const balance = await tokenContract.balanceOf(address);
+      return ethers.formatUnits(balance, 18);
+    } catch (error) {
+      this.logger.error(`Error getting balance: ${error.message}`);
+      throw new RpcException('Failed to get balance');
+    }
+  }
+
+  private async transferTokensEVM(
+    privateKey: string,
+    toAddress: string,
+    amount: string
+  ): Promise<any> {
+    try {
+      const chainConfig = await this.getChainConfig();
+      const wallet = new ethers.Wallet(privateKey, this.provider);
+
+      const tokenContract = new ethers.Contract(
+        chainConfig.tokenContractAddress,
+        [
+          'function transfer(address to, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)',
+        ],
+        wallet
+      );
+
+      // Check balance before transfer
+      const balance = await tokenContract.balanceOf(wallet.address);
+      const transferAmount = ethers.parseUnits(amount, 18);
+
+      if (balance < transferAmount) {
+        throw new Error(
+          `Insufficient balance. Required: ${amount}, Available: ${ethers.formatUnits(
+            balance,
+            18
+          )}`
+        );
+      }
+
+      // Transfer tokens
+      const tx = await tokenContract.transfer(toAddress, transferAmount);
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully transferred ${amount} tokens from ${wallet.address} to ${toAddress}. Transaction: ${receipt.hash}`
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from: wallet.address,
+        to: toAddress,
+        amount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error in EVM transfer tokens: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
+    const beneficiaryRahatAmount = await this.getBenTotal(
+      sendOtpDto?.phoneNumber
+    );
+
+    const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
+
+    if (Number(amount) > Number(beneficiaryRahatAmount)) {
+      throw new RpcException('Amount is greater than rahat balance');
+    }
+
+    if (Number(amount) <= 0) {
+      throw new RpcException('Amount must be greater than 0');
+    }
+
+    const res = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: sendOtpDto.phoneNumber, amount }
+      )
+    );
+
+    // Get beneficiary wallet address
+    const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
+    if (!keys) {
+      throw new RpcException('Beneficiary address not found');
+    }
+
+    // Find existing BeneficiaryRedeem record for this beneficiary
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: {
+        beneficiaryWalletAddress: keys.address,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (existingRedeem) {
+      // Update existing record with new vendor and reset status
+      await this.prisma.beneficiaryRedeem.update({
+        where: {
+          uuid: existingRedeem.uuid,
+        },
+        data: {
+          vendorUid: sendOtpDto.vendorUuid,
+          amount: amount as number,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+      });
+    } else {
+      // Create new record if none exists
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          beneficiaryWalletAddress: keys.address,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          vendorUid: sendOtpDto.vendorUuid,
+        },
+      });
+    }
+
+    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
+
+  private async storeOTP(otp: string, phoneNumber: string, amount: number) {
+    const expiresAt = new Date();
+    this.logger.log('Expires at: ', expiresAt);
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+    this.logger.log('OTP hash: ', otpHash);
+
+    const otpRes = await this.prisma.otp.upsert({
+      where: {
+        phoneNumber,
+      },
+      update: {
+        otpHash,
+        amount,
+        expiresAt,
+        isVerified: false,
+        updatedAt: new Date(),
+      },
+      create: {
+        phoneNumber,
+        otpHash,
+        amount,
+        expiresAt,
+      },
+    });
+
+    delete otpRes.otpHash;
+
+    return otpRes;
   }
 }
