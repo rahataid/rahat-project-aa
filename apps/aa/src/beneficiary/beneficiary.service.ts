@@ -515,6 +515,9 @@ export class BeneficiaryService {
   async getOneTokenReservationByGroupId(groupId: string) {
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
+      include: {
+        beneficiaryGroup: true,
+      },
     });
 
     return benfGroupToken;
