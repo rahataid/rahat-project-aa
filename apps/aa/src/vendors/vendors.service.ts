@@ -70,6 +70,12 @@ export class VendorsService {
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: { uuid: vendorWallet.uuid },
+        select: {
+          uuid: true,
+          walletAddress: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
 
       if (!vendor) {
@@ -100,6 +106,8 @@ export class VendorsService {
         ),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
+        createdAt: vendor.createdAt,
+        updatedAt: vendor.updatedAt,
       };
     } catch (error) {
       this.logger.error(error.message);
