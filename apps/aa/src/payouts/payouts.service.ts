@@ -149,7 +149,7 @@ export class PayoutsService {
   }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
-    const { groupId, ...createPayoutDto } = payload;
+    const { groupId, user, ...createPayoutDto } = payload;
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -225,6 +225,13 @@ export class PayoutsService {
           },
         },
       });
+
+      if (createPayoutDto.mode === 'OFFLINE') {
+        await this.vendorsService.processVendorOfflinePayout({
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
+          amount: String(beneficiaryGroup.numberOfTokens),
+        });
+      }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       return payout;

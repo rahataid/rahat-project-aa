@@ -704,6 +704,7 @@ export class BeneficiaryService {
       status: string;
       txHash: string | null;
       createdAt: Date;
+      updatedAt: Date;
       payoutType?: string;
       mode?: string;
       vendorName?: string;
@@ -753,6 +754,7 @@ export class BeneficiaryService {
             },
           },
           createdAt: true,
+          updatedAt: true,
           Vendor: {
             select: {
               name: true,
@@ -773,6 +775,7 @@ export class BeneficiaryService {
         status: redeem.status,
         txHash: redeem.txHash,
         createdAt: redeem.createdAt,
+        updatedAt: redeem.updatedAt,
         payoutType: redeem?.payout?.type,
         mode: redeem?.payout?.mode,
         vendorName: redeem?.Vendor?.name,
