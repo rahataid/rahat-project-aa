@@ -300,8 +300,6 @@ export class EvmChainService implements IChainService {
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
-    console.log(groups);
-
     this.evmQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
         name: JOBS.EVM.ASSIGN_TOKENS,
@@ -394,19 +392,17 @@ export class EvmChainService implements IChainService {
         throw new RpcException('Vendor not found');
       }
 
-      const amount =
-        verifyOtpDto?.amount ||
-        (await this.getBenTotal(verifyOtpDto?.phoneNumber));
+      const amount = verifyOtpDto?.amount;
 
       this.logger.log(
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      // await this.verifyOTP(
+      //   verifyOtpDto.otp,
+      //   verifyOtpDto.phoneNumber,
+      //   amount as number
+      // );
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -415,6 +411,10 @@ export class EvmChainService implements IChainService {
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
       }
+
+      console.log('keys', keys);
+      console.log('verifyOtpDto', verifyOtpDto);
+      console.log('amount', amount);
 
       const result = await this.transferTokensEVM(
         keys.privateKey,
@@ -652,15 +652,15 @@ export class EvmChainService implements IChainService {
     return true;
   }
 
-  private async getBenTotal(phoneNumber: string) {
-    try {
-      const keys = await this.getSecretByPhone(phoneNumber);
-      this.logger.log('Keys: ', keys);
-      return this.getRahatBalance(keys.address);
-    } catch (error) {
-      throw new RpcException(error);
-    }
-  }
+  // private async getBenTotal(phoneNumber: string) {
+  //   try {
+  //     const keys = await this.getSecretByPhone(phoneNumber);
+  //     this.logger.log('Keys: ', keys);
+  //     return this.getRahatBalance(keys.address);
+  //   } catch (error) {
+  //     throw new RpcException(error);
+  //   }
+  // }
 
   private async getSecretByPhone(phoneNumber: string) {
     try {
@@ -681,22 +681,26 @@ export class EvmChainService implements IChainService {
     }
   }
 
-  private async getRahatBalance(address: string) {
-    try {
-      const chainConfig = await this.getChainConfig();
-      const tokenContract = new ethers.Contract(
-        chainConfig.tokenContractAddress,
-        ['function balanceOf(address account) view returns (uint256)'],
-        this.provider
-      );
+  // private async getRahatBalance(address: string) {
+  //   try {
+  //     const chainConfig = await this.getChainConfig();
+  //     const tokenContract = new ethers.Contract(
+  //       chainConfig.tokenContractAddress,
+  //       ['function balanceOf(address account) view returns (uint256)'],
+  //       this.provider
+  //     );
 
-      const balance = await tokenContract.balanceOf(address);
-      return ethers.formatUnits(balance, 18);
-    } catch (error) {
-      this.logger.error(`Error getting balance: ${error.message}`);
-      throw new RpcException('Failed to get balance');
-    }
-  }
+  //     console.log('tokenContract', tokenContract);
+
+  //     const balance = await tokenContract.balanceOf(address);
+
+  //     console.log('balance', balance);
+  //     return ethers.formatUnits(balance, 18);
+  //   } catch (error) {
+  //     this.logger.error(`Error getting balance: ${error.message}`);
+  //     throw new RpcException('Failed to get balance');
+  //   }
+  // }
 
   private async transferTokensEVM(
     privateKey: string,
@@ -755,9 +759,7 @@ export class EvmChainService implements IChainService {
   }
 
   private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const beneficiaryRahatAmount = await this.getBenTotal(
-      sendOtpDto?.phoneNumber
-    );
+    const beneficiaryRahatAmount = sendOtpDto.amount;
 
     const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
 

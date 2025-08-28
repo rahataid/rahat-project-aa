@@ -94,6 +94,8 @@ export class EVMProcessor {
   @Process({ name: JOBS.EVM.ASSIGN_TOKENS, concurrency: 1 })
   async assignTokens(job: Job<EVMDisbursementJob>) {
     const { groups } = job.data;
+    const BATCH_SIZE = 10;
+
     try {
       this.logger.log('Processing EVM assign tokens...', EVMProcessor.name);
       await this.ensureInitialized();
@@ -114,6 +116,10 @@ export class EVMProcessor {
         benGroups,
       ] as string[]);
 
+      if (!bens || bens.length === 0) {
+        throw new RpcException('Beneficiary Token Balance not found');
+      }
+
       const multicallTxnPayload = [];
       for (const benf of bens) {
         if (benf.amount) {
@@ -121,60 +127,125 @@ export class EVMProcessor {
         }
       }
 
+      console.log('multicallTxnPayload', multicallTxnPayload);
+
       let totalTokens: number = 0;
-
-      if (!bens) {
-        throw new RpcException('Beneficiary Token Balance not found');
-      }
-
       bens?.forEach((ben) => {
         this.logger.log(`Beneficiary: ${ben.walletAddress} has ${ben.amount}`);
         totalTokens += parseInt(ben.amount);
       });
 
-      const assignTokenToBeneficiary = await this.multiSend(
-        aaContract,
-        'assignTokenToBeneficiary',
-        multicallTxnPayload
-      );
+      // Process beneficiaries in batches of 10
+      const transactionHashes: string[] = [];
+      const totalBeneficiaries = multicallTxnPayload.length;
+      const numberOfBatches = Math.ceil(totalBeneficiaries / BATCH_SIZE);
 
       this.logger.log(
-        'contract called with txn hash:',
-        assignTokenToBeneficiary.hash
+        `Processing ${totalBeneficiaries} beneficiaries in ${numberOfBatches} batches of ${BATCH_SIZE}`,
+        EVMProcessor.name
       );
 
-      // TODO: Add the logic to update the group token reservation
+      for (let i = 0; i < numberOfBatches; i++) {
+        const startIndex = i * BATCH_SIZE;
+        const endIndex = Math.min(startIndex + BATCH_SIZE, totalBeneficiaries);
+        const batchPayload = multicallTxnPayload.slice(startIndex, endIndex);
+
+        this.logger.log(
+          `Processing batch ${i + 1}/${numberOfBatches} with ${
+            batchPayload.length
+          } beneficiaries`,
+          EVMProcessor.name
+        );
+
+        try {
+          const assignTokenToBeneficiary = await this.multiSend(
+            aaContract,
+            'assignTokenToBeneficiary',
+            batchPayload
+          );
+
+          transactionHashes.push(assignTokenToBeneficiary.hash);
+
+          this.logger.log(
+            `Batch ${i + 1} completed with txn hash: ${
+              assignTokenToBeneficiary.hash
+            }`,
+            EVMProcessor.name
+          );
+
+          // Add a small delay between batches to avoid overwhelming the network
+          if (i < numberOfBatches - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
+          }
+        } catch (batchError) {
+          this.logger.error(
+            `Error in batch ${i + 1}: ${batchError.message}`,
+            batchError.stack,
+            EVMProcessor.name
+          );
+
+          // Update group status to failed for this batch
+          await this.beneficiaryService.updateGroupToken({
+            groupUuid: Array.isArray(groups) ? groups[0] : groups,
+            status: 'FAILED',
+            isDisbursed: false,
+            info: {
+              error: `Batch ${i + 1} failed: ${batchError.message}`,
+              stack: batchError.stack,
+              completedBatches: i,
+              totalBatches: numberOfBatches,
+            },
+          });
+
+          throw batchError;
+        }
+      }
+
+      // Update group status to started with all transaction hashes
       await this.beneficiaryService.updateGroupToken({
         groupUuid: Array.isArray(groups) ? groups[0] : groups,
         status: 'STARTED',
         isDisbursed: false,
-        info: assignTokenToBeneficiary.hash,
+        info: {
+          transactionHashes,
+          totalBatches: numberOfBatches,
+          totalBeneficiaries,
+        },
       });
 
-      // Add status update job to check transaction confirmation after 3 minutes
-      this.evmQueue.add(
-        JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
-        {
-          txHash: assignTokenToBeneficiary.hash,
-          groupUuid: Array.isArray(groups) ? groups[0] : groups,
-          beneficiaries: bens.map((ben) => ben.walletAddress),
-          amounts: bens.map((ben) => ben.amount),
-          identifier: `disbursement_${Date.now()}`,
-        },
-        {
-          delay: 3 * 60 * 1000, // 3 minutes
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
+      // Add status update jobs for each transaction
+      for (let i = 0; i < transactionHashes.length; i++) {
+        const txHash = transactionHashes[i];
+        const startIndex = i * BATCH_SIZE;
+        const endIndex = Math.min(startIndex + BATCH_SIZE, totalBeneficiaries);
+        const batchBeneficiaries = bens.slice(startIndex, endIndex);
+
+        this.evmQueue.add(
+          JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
+          {
+            txHash,
+            groupUuid: Array.isArray(groups) ? groups[0] : groups,
+            beneficiaries: batchBeneficiaries.map((ben) => ben.walletAddress),
+            amounts: batchBeneficiaries.map((ben) => ben.amount),
+            identifier: `disbursement_batch_${i + 1}_${Date.now()}`,
+            batchNumber: i + 1,
+            totalBatches: numberOfBatches,
           },
-        }
-      );
+          {
+            delay: 3 * 60 * 1000, // 3 minutes
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 2000,
+            },
+          }
+        );
+      }
 
       this.logger.log(
-        `Successfully added disbursement status update job for group ${
+        `Successfully processed all ${numberOfBatches} batches for group ${
           Array.isArray(groups) ? groups[0] : groups
-        }`,
+        } with ${transactionHashes.length} transactions`,
         EVMProcessor.name
       );
     } catch (error) {
