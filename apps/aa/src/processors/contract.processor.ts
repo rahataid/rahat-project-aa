@@ -29,55 +29,12 @@ const ABI = [
       },
       {
         internalType: 'address',
-        name: '_accessManager',
-        type: 'address',
-      },
-      {
-        internalType: 'address',
         name: '_triggerManager',
         type: 'address',
       },
     ],
     stateMutability: 'nonpayable',
     type: 'constructor',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'address',
-        name: 'authority',
-        type: 'address',
-      },
-    ],
-    name: 'AccessManagedInvalidAuthority',
-    type: 'error',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'address',
-        name: 'caller',
-        type: 'address',
-      },
-      {
-        internalType: 'uint32',
-        name: 'delay',
-        type: 'uint32',
-      },
-    ],
-    name: 'AccessManagedRequiredDelay',
-    type: 'error',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'address',
-        name: 'caller',
-        type: 'address',
-      },
-    ],
-    name: 'AccessManagedUnauthorized',
-    type: 'error',
   },
   {
     inputs: [
@@ -94,19 +51,6 @@ const ABI = [
     inputs: [],
     name: 'FailedInnerCall',
     type: 'error',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: 'address',
-        name: 'authority',
-        type: 'address',
-      },
-    ],
-    name: 'AuthorityUpdated',
-    type: 'event',
   },
   {
     anonymous: false,
@@ -285,6 +229,31 @@ const ABI = [
       {
         indexed: true,
         internalType: 'address',
+        name: 'beneficiary',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'vendor',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'TokenTransferred',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: 'address',
         name: 'vendorAddress',
         type: 'address',
       },
@@ -371,19 +340,6 @@ const ABI = [
     name: 'assignTokenToBeneficiary',
     outputs: [],
     stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'authority',
-    outputs: [
-      {
-        internalType: 'address',
-        name: '',
-        type: 'address',
-      },
-    ],
-    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -488,19 +444,6 @@ const ABI = [
     type: 'function',
   },
   {
-    inputs: [],
-    name: 'isConsumingScheduledOp',
-    outputs: [
-      {
-        internalType: 'bytes4',
-        name: '',
-        type: 'bytes4',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
     inputs: [
       {
         internalType: 'address',
@@ -586,19 +529,6 @@ const ABI = [
   {
     inputs: [
       {
-        internalType: 'address',
-        name: 'newAuthority',
-        type: 'address',
-      },
-    ],
-    name: 'setAuthority',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
         internalType: 'bytes4',
         name: 'interfaceId',
         type: 'bytes4',
@@ -641,6 +571,42 @@ const ABI = [
       {
         internalType: 'uint256',
         name: '_totalClaims',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '_benAddress',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: '_vendorAddress',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: '_amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'transferTokenToVendor',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'totalTotalAssigned',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
         type: 'uint256',
       },
     ],
