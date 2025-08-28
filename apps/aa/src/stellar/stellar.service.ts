@@ -342,7 +342,11 @@ export class StellarService {
   }
 
   // todo: Make this dynamic for evm
-  async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+  async sendAssetToVendor(
+    verifyOtpDto: SendAssetDto,
+    skipOtpVerification: boolean = false,
+    skipBeneficiaryRedeemCreation: boolean = false
+  ) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -362,11 +366,14 @@ export class StellarService {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      // Skip OTP verification for offline flows
+      if (!skipOtpVerification) {
+        await this.verifyOTP(
+          verifyOtpDto.otp,
+          verifyOtpDto.phoneNumber,
+          amount as number
+        );
+      }
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -375,6 +382,12 @@ export class StellarService {
       if (!keys) {
         throw new RpcException('Beneficiary address not found');
       }
+
+      console.log(
+        keys.privateKey,
+        verifyOtpDto.receiverAddress,
+        amount.toString()
+      );
 
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
@@ -390,61 +403,65 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // Find and update the existing BeneficiaryRedeem record
-      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
-        where: {
-          beneficiaryWalletAddress: keys.publicKey,
-          vendorUid: vendor.uuid,
-          status: 'PENDING',
-          isCompleted: false,
-          txHash: null,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      if (!existingRedeem) {
-        this.logger.warn(
-          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
-        );
-        // Create a new record since the transfer was successful
-        await this.prisma.beneficiaryRedeem.create({
-          data: {
+      // Skip beneficiary redeem record creation if requested (for offline flows)
+      if (!skipBeneficiaryRedeemCreation) {
+        // Find and update the existing BeneficiaryRedeem record
+        const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
             beneficiaryWalletAddress: keys.publicKey,
             vendorUid: vendor.uuid,
-            amount: amount as number,
-            transactionType: 'VENDOR_REIMBURSEMENT',
-            txHash: result.tx.hash,
-            isCompleted: true,
-            status: 'COMPLETED',
-            info: {
-              message: 'Beneficiary Redemption successful',
-              transactionHash: result.tx.hash,
-              offrampWalletAddress: vendor.walletAddress,
-              beneficiaryWalletAddress: keys.publicKey,
-            },
+            status: 'PENDING',
+            isCompleted: false,
+            txHash: null,
+          },
+          orderBy: {
+            createdAt: 'desc',
           },
         });
-      } else {
-        // Update the existing BeneficiaryRedeem record with transaction details
-        await this.prisma.beneficiaryRedeem.update({
-          where: {
-            uuid: existingRedeem.uuid,
-          },
-          data: {
-            vendorUid: vendor.uuid,
-            txHash: result.tx.hash,
-            isCompleted: true,
-            status: 'COMPLETED',
-            info: {
-              message: 'Beneficiary Redemption successful',
-              transactionHash: result.tx.hash,
-              offrampWalletAddress: vendor.walletAddress,
+
+        if (!existingRedeem) {
+          this.logger.warn(
+            `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and 
+            vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+          );
+          // Create a new record since the transfer was successful
+          await this.prisma.beneficiaryRedeem.create({
+            data: {
               beneficiaryWalletAddress: keys.publicKey,
+              vendorUid: vendor.uuid,
+              amount: Number(amount) as number,
+              transactionType: 'VENDOR_REIMBURSEMENT',
+              txHash: result.tx.hash,
+              isCompleted: true,
+              status: 'COMPLETED',
+              info: {
+                message: 'Beneficiary Redemption successful',
+                transactionHash: result.tx.hash,
+                offrampWalletAddress: vendor.walletAddress,
+                beneficiaryWalletAddress: keys.publicKey,
+              },
             },
-          },
-        });
+          });
+        } else {
+          // Update the existing BeneficiaryRedeem record with transaction details
+          await this.prisma.beneficiaryRedeem.update({
+            where: {
+              uuid: existingRedeem.uuid,
+            },
+            data: {
+              vendorUid: vendor.uuid,
+              txHash: result.tx.hash,
+              isCompleted: true,
+              status: 'COMPLETED',
+              info: {
+                message: 'Beneficiary Redemption successful',
+                transactionHash: result.tx.hash,
+                offrampWalletAddress: vendor.walletAddress,
+                beneficiaryWalletAddress: keys.publicKey,
+              },
+            },
+          });
+        }
       }
 
       return {
@@ -452,49 +469,52 @@ export class StellarService {
       };
     } catch (error) {
       // Update BeneficiaryRedeem record with error information if possible
-      try {
-        const keys = (await this.getSecretByPhone(
-          verifyOtpDto.phoneNumber
-        )) as any;
+      if (!skipBeneficiaryRedeemCreation) {
+        try {
+          const keys = (await this.getSecretByPhone(
+            verifyOtpDto.phoneNumber
+          )) as any;
 
-        if (keys) {
-          const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
-            where: {
-              beneficiaryWalletAddress: keys.publicKey,
-              status: 'PENDING',
-              isCompleted: false,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          });
-
-          if (existingRedeem) {
-            await this.prisma.beneficiaryRedeem.update({
-              where: {
-                uuid: existingRedeem.uuid,
-              },
-              data: {
-                status: 'FAILED',
-                isCompleted: false,
-                info: {
-                  message: `Beneficiary Redemption failed: ${
-                    error.message || 'Unknown error'
-                  }`,
-                  transactionHash: '',
-                  offrampWalletAddress: verifyOtpDto.receiverAddress,
+          if (keys) {
+            const existingRedeem =
+              await this.prisma.beneficiaryRedeem.findFirst({
+                where: {
                   beneficiaryWalletAddress: keys.publicKey,
-                  error: error.message || 'Unknown error',
+                  status: 'PENDING',
+                  isCompleted: false,
                 },
-              },
-            });
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              });
+
+            if (existingRedeem) {
+              await this.prisma.beneficiaryRedeem.update({
+                where: {
+                  uuid: existingRedeem.uuid,
+                },
+                data: {
+                  status: 'FAILED',
+                  isCompleted: false,
+                  info: {
+                    message: `Beneficiary Redemption failed: ${
+                      error.message || 'Unknown error'
+                    }`,
+                    transactionHash: '',
+                    offrampWalletAddress: verifyOtpDto.receiverAddress,
+                    beneficiaryWalletAddress: keys.publicKey,
+                    error: error.message || 'Unknown error',
+                  },
+                },
+              });
+            }
           }
+        } catch (updateError) {
+          this.logger.error(
+            'Failed to update BeneficiaryRedeem record with error info:',
+            updateError
+          );
         }
-      } catch (updateError) {
-        this.logger.error(
-          'Failed to update BeneficiaryRedeem record with error info:',
-          updateError
-        );
       }
 
       throw new RpcException(
@@ -1121,7 +1141,7 @@ export class StellarService {
     return Object.values(csvData);
   }
 
-  private async getBenTotal(phoneNumber: string) {
+  public async getBenTotal(phoneNumber: string) {
     try {
       const keys = await this.getSecretByPhone(phoneNumber);
       this.logger.log('Keys: ', keys);
@@ -1147,7 +1167,9 @@ export class StellarService {
         `Couldn't find secret for phone ${phoneNumber}`,
         error.message
       );
-      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+      throw new RpcException(
+        `Cannot get secret of beneficiary with phone number: ${phoneNumber}`
+      );
     }
   }
 
@@ -1169,7 +1191,7 @@ export class StellarService {
         error.message
       );
       throw new RpcException(
-        `Beneficiary with wallet ${walletAddress} not found`
+        `Cannot get secret of beneficiary with wallet address: ${walletAddress}`
       );
     }
   }

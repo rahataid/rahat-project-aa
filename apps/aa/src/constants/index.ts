@@ -279,8 +279,17 @@ export const JOBS = {
     LIST: 'rahat.jobs.vendor.list',
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
     GET_BENEFICIARIES: 'rahat.jobs.vendor.get_beneficiaries',
+    FETCH_OFFLINE_BENEFICIARIES: 'aa.jobs.vendor.fetch_offline_beneficiaries',
+    VERIFY_OFFLINE_OTP: 'aa.jobs.vendor.verify_offline_otp',
+    TEST_OFFLINE_PAYOUT: 'aa.jobs.vendor.test_offline_payout',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+    OFFLINE_PAYOUT: 'aa.jobs.vendor.offline_payout',
+    SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
+    PROCESS_OFFLINE_TOKEN_TRANSFER:
+      'aa.jobs.vendor.process_offline_token_transfer',
+    SYNC_OFFLINE_DATA: 'aa.jobs.vendor.sync_offline_data',
+    SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
   GRIEVANCES: {
     CREATE: 'aa.jobs.grievances.create',
@@ -319,6 +328,7 @@ export const BQUEUE = {
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
   // EVM:"EVM"
+  VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
 };
 

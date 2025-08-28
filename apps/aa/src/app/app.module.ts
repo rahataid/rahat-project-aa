@@ -68,6 +68,9 @@ import { GrievancesModule } from '../grievances/grievances.module';
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
+      name: BQUEUE.VENDOR_OFFLINE,
+    }),
+    BullModule.registerQueue({
       name: BQUEUE.COMMUNICATION,
     }),
     BullModule.registerQueue({

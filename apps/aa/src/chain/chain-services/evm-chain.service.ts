@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, JOBS } from '../../constants';
@@ -24,6 +24,7 @@ import { getBeneficiaryAdded } from '@rahataid/subgraph';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
+import { EVMProcessor } from '../../processors/evm.processor';
 
 export interface EVMChainConfig {
   name: string;
@@ -48,7 +49,9 @@ export class EvmChainService implements IChainService {
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => EVMProcessor))
+    private readonly evmProcessor: EVMProcessor
   ) {
     this.initializeProvider();
   }
@@ -416,6 +419,26 @@ export class EvmChainService implements IChainService {
       console.log('verifyOtpDto', verifyOtpDto);
       console.log('amount', amount);
 
+      // Check if beneficiary has tokens in the contract before proceeding with transfer
+      const hasTokens = await this.evmProcessor.checkBeneficiaryHasTokens(
+        keys.address
+      );
+
+      if (!hasTokens) {
+        this.logger.warn(
+          `Beneficiary ${keys.address} has no tokens in contract. Transfer denied.`,
+          EvmChainService.name
+        );
+        throw new RpcException(
+          'Beneficiary has no tokens available for transfer'
+        );
+      }
+
+      this.logger.log(
+        `Beneficiary ${keys.address} has tokens. Proceeding with transfer.`,
+        EvmChainService.name
+      );
+
       const result = await this.transferTokensEVM(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
@@ -479,7 +502,39 @@ export class EvmChainService implements IChainService {
   }
 
   async verifyOtp(data: VerifyOtpDto): Promise<any> {
-    throw new Error('OTP verification not supported for EVM');
+    try {
+      this.logger.log(
+        `Verifying OTP for phone: ${data.phoneNumber}`,
+        EvmChainService.name
+      );
+
+      // Get beneficiary wallet address from phone number
+      const keys = await this.getSecretByPhone(data.phoneNumber);
+
+      if (!keys || !keys.address) {
+        throw new RpcException(
+          'Beneficiary wallet not found for this phone number'
+        );
+      }
+
+      // Proceed with OTP verification
+      // Extract amount from transactionData or use a default value
+      const amount = data.transactionData?.amount || 0;
+      await this.verifyOTP(data.otp, data.phoneNumber, amount);
+
+      return {
+        success: true,
+        message: 'OTP verified successfully',
+        beneficiaryAddress: keys.address,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error in verifyOtp: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw new RpcException(`OTP verification failed: ${error.message}`);
+    }
   }
 
   validateAddress(address: string): boolean {
@@ -771,18 +826,38 @@ export class EvmChainService implements IChainService {
       throw new RpcException('Amount must be greater than 0');
     }
 
+    // Get beneficiary wallet address first
+    const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
+    if (!keys) {
+      throw new RpcException('Beneficiary address not found');
+    }
+
+    // Check if beneficiary has tokens in the contract before sending OTP
+    const hasTokens = await this.evmProcessor.checkBeneficiaryHasTokens(
+      keys.address
+    );
+
+    if (!hasTokens) {
+      this.logger.warn(
+        `Beneficiary ${keys.address} has no tokens in contract. OTP sending denied.`,
+        EvmChainService.name
+      );
+      throw new RpcException(
+        'Beneficiary has no tokens available for redemption'
+      );
+    }
+
+    this.logger.log(
+      `Beneficiary ${keys.address} has tokens. Proceeding with OTP sending.`,
+      EvmChainService.name
+    );
+
     const res = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.otp.send_otp' },
         { phoneNumber: sendOtpDto.phoneNumber, amount }
       )
     );
-
-    // Get beneficiary wallet address
-    const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
-    if (!keys) {
-      throw new RpcException('Beneficiary address not found');
-    }
 
     // Find existing BeneficiaryRedeem record for this beneficiary
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({

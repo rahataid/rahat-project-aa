@@ -632,6 +632,97 @@ export class EVMProcessor {
     return new ethers.Contract(contract.AAPROJECT.ADDRESS, formatedAbi, signer);
   }
 
+  private async createContractInstance(contractName: any, abi: any) {
+    const contract = await this.getFromSettings('CONTRACT');
+
+    const formatedAbi = this.convertABI(contract.AAPROJECT.ABI);
+
+    return new ethers.Contract(
+      contract.AAPROJECT.ADDRESS,
+      formatedAbi,
+      this.provider
+    );
+  }
+
+  /**
+   * Check if a beneficiary wallet has tokens in the benTokens mapping
+   * @param beneficiaryAddress - The wallet address to check
+   * @returns Promise<boolean> - True if beneficiary has tokens, false otherwise
+   */
+  async checkBeneficiaryHasTokens(
+    beneficiaryAddress: string
+  ): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Call the benTokens mapping to get the token balance
+      const tokenBalance = await aaContract.benTokens.staticCall(
+        beneficiaryAddress
+      );
+
+      console.log('tokenBalance', tokenBalance);
+
+      this.logger.log(
+        `Beneficiary ${beneficiaryAddress} has ${tokenBalance.toString()} tokens`,
+        EVMProcessor.name
+      );
+
+      // Return true if the beneficiary has more than 0 tokens
+      return tokenBalance > 0n;
+    } catch (error) {
+      this.logger.error(
+        `Error checking beneficiary tokens for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to check beneficiary tokens: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get the token balance for a beneficiary wallet from the benTokens mapping
+   * @param beneficiaryAddress - The wallet address to check
+   * @returns Promise<string> - The token balance as a string
+   */
+  async getBeneficiaryTokenBalanceFromContract(
+    beneficiaryAddress: string
+  ): Promise<string> {
+    try {
+      await this.ensureInitialized();
+
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Call the benTokens mapping to get the token balance
+      const tokenBalance = await aaContract.benTokens(beneficiaryAddress);
+
+      this.logger.log(
+        `Beneficiary ${beneficiaryAddress} token balance: ${tokenBalance.toString()}`,
+        EVMProcessor.name
+      );
+
+      return tokenBalance.toString();
+    } catch (error) {
+      this.logger.error(
+        `Error getting beneficiary token balance for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get beneficiary token balance: ${error.message}`
+      );
+    }
+  }
+
   private convertABI(oldABI: any): any {
     const convertKeysToLowerCase = (obj: any): any => {
       if (Array.isArray(obj)) {

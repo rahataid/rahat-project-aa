@@ -41,6 +41,7 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
     let triggerAddress1;
     let triggerAddress2;
     let triggerAddress3;
+    let rahatTokenAddress;
     const [triggerSource1, triggerSource2, triggerSource3] = triggerSources;
 
 
@@ -50,6 +51,7 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
         admin = addr1;
         ben1 = addr2;
         ben2 = addr3;
+        ven1= addr6;
         triggerAddress1 = addr7;
         triggerAddress2 = addr4;
         triggerAddress3 = addr5;
@@ -69,6 +71,7 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
                 accessManagerContract.target,
                 triggerManagerContract.target
             ]);
+            rahatTokenAddress = rahatTokenContract.getAddress()
 
             await accessManagerContract.connect(admin).grantRole(0, rahatDonorContract.target, 0);
             // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
@@ -135,6 +138,11 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
             expect(await aaProjectContract.benTokens(ben1.address)).to.equal(100);
         })
 
+        it('should be able to transfer the beneficiaries token to vendor ', async function(){
+            await aaProjectContract.connect(admin).transferTokenToVendor(ben1.address,ven1.address,10);
+            expect(await rahatTokenContract.balanceOf(ven1.address),10);
+            expect(await aaProjectContract.benTokens(ben1.address)).to.equal(90);
+        })
 
     })
 })
