@@ -20,9 +20,7 @@ export class FlowTrackingManager {
   private flowConfig: FlowTrackingConfig | null = null;
   private previousBalances: Map<string, bigint> = new Map();
   private previousAllowances: Map<string, Map<string, bigint>> = new Map();
-  private graphqlEndpoint: string =
-    'https://api.studio.thegraph.com/query/89203/cash-tracker-dev/version/latest/graphql';
-
+  private graphqlEndpoint: string = '';
   constructor() {}
 
   /**
@@ -31,12 +29,14 @@ export class FlowTrackingManager {
   async initialize(
     provider: ethers.Provider,
     cashTokenContract: ethers.Contract,
-    config: SDKConfig
+    config: SDKConfig,
+    subGraphUrl: string
   ): Promise<void> {
     this.provider = provider;
     this.cashTokenContract = cashTokenContract;
     this.config = config;
     this.flowConfig = config.flowTracking || null;
+    this.graphqlEndpoint = subGraphUrl;
   }
 
   /**
@@ -640,17 +640,17 @@ export class FlowTrackingManager {
               { to_in: $addresses }
             ]
           }
-          orderBy: timestamp
+          orderBy: blockTimestamp
           orderDirection: desc
           first: 1000
         ) {
           id
           from
           to
-          amount
-          timestamp
           transactionHash
           blockNumber
+          value
+          blockTimestamp
         }
       }
     `;
@@ -672,15 +672,15 @@ export class FlowTrackingManager {
               { spender_in: $addresses }
             ]
           }
-          orderBy: timestamp
+          orderBy: blockTimestamp
           orderDirection: desc
           first: 1000
         ) {
           id
           owner
           spender
-          amount
-          timestamp
+          value
+          blockTimestamp
           transactionHash
           blockNumber
         }
@@ -702,14 +702,15 @@ export class FlowTrackingManager {
         ) {
           id
           account
-          amount
-          timestamp
+          value
+          blockTimestamp
         }
       }
     `;
 
-    const result = await this.executeGraphQLQuery(query, { addresses });
-    return result.balances || [];
+    // const result = await this.executeGraphQLQuery(query, { addresses });
+    return [];
+    // result.balances || [];
   }
 
   /**
@@ -727,13 +728,23 @@ export class FlowTrackingManager {
       to: string;
       amount: string;
       timestamp: number;
+      transactionHash: string;
     }>;
     pending: Array<{
       from: string;
       amount: string;
       timestamp: number;
+      transactionHash: string;
+    }>;
+    approved: Array<{
+      from: string;
+      amount: string;
+      timestamp: number;
+      transactionHash: string;
     }>;
     balance: string;
+    received: string;
+    sent: string;
   }> {
     const outcomes: Array<{
       alias: string;
@@ -741,61 +752,247 @@ export class FlowTrackingManager {
         to: string;
         amount: string;
         timestamp: number;
+        transactionHash: string;
       }>;
       pending: Array<{
         from: string;
         amount: string;
         timestamp: number;
+        transactionHash: string;
+      }>;
+      approved: Array<{
+        from: string;
+        amount: string;
+        timestamp: number;
+        transactionHash: string;
       }>;
       balance: string;
+      received: string;
+      sent: string;
     }> = [];
 
     addresses.forEach((address) => {
       const alias = entityMap.get(address) || address;
 
-      // Get current balance
-      const balanceData = balances.find(
-        (b) => b.account.toLowerCase() === address.toLowerCase()
+      // Calculate received, sent, and balance from transfers
+      const { received, sent, balance } = this.calculateTransferSummary(
+        address,
+        transfers
       );
-      const balance = balanceData
-        ? ethers.formatEther(balanceData.amount)
-        : '0';
 
       // Get allowances provided by this entity (where this entity is the owner)
       const entityAllowances = approvals
-        .filter(
-          (approval) =>
+        .filter((approval) => {
+          if (
+            !approval ||
+            !approval.owner ||
+            !approval.spender ||
+            !approval.value
+          ) {
+            return false;
+          }
+          return (
             approval.owner.toLowerCase() === address.toLowerCase() &&
-            parseFloat(ethers.formatEther(approval.amount)) > 0
-        )
+            this.isValidBigInt(approval.value) &&
+            parseFloat(ethers.formatEther(approval.value)) > 0
+          );
+        })
         .map((approval) => ({
           to: entityMap.get(approval.spender) || approval.spender,
-          amount: ethers.formatEther(approval.amount),
-          timestamp: parseInt(approval.timestamp) * 1000,
+          amount: ethers.formatEther(approval.value),
+          timestamp: this.parseTimestamp(approval.blockTimestamp),
+          transactionHash: approval.transactionHash,
         }));
 
-      // Get pending allowances (where this entity is the spender with unused allowances)
+      // Get pending allowances (allowances received but not used)
       const pendingAllowances = approvals
-        .filter(
-          (approval) =>
+        .filter((approval) => {
+          if (
+            !approval ||
+            !approval.owner ||
+            !approval.spender ||
+            !approval.value
+          ) {
+            return false;
+          }
+          return (
             approval.spender.toLowerCase() === address.toLowerCase() &&
-            parseFloat(ethers.formatEther(approval.amount)) > 0
-        )
+            this.isValidBigInt(approval.value) &&
+            parseFloat(ethers.formatEther(approval.value)) > 0
+          );
+        })
+        .filter((approval) => {
+          // Check if this approval has been used in transfers
+          const approvalUsed = this.isApprovalUsedInTransfers(
+            approval.owner.toLowerCase(),
+            approval.spender.toLowerCase(),
+            approval.value,
+            transfers
+          );
+
+          // Return true if approval exists but hasn't been used (pending)
+          return !approvalUsed;
+        })
         .map((approval) => ({
           from: entityMap.get(approval.owner) || approval.owner,
-          amount: ethers.formatEther(approval.amount),
-          timestamp: parseInt(approval.timestamp) * 1000,
+          amount: ethers.formatEther(approval.value),
+          timestamp: this.parseTimestamp(approval.blockTimestamp),
+          transactionHash: approval.transactionHash,
+        }));
+
+      // Get approved transfers (transfers where this address received tokens)
+      // Simply extract transfers where address === to
+      const approvedTransfers = transfers
+        .filter((transfer) => {
+          if (!transfer || !transfer.from || !transfer.to || !transfer.value) {
+            return false;
+          }
+          return (
+            transfer.to.toLowerCase() === address.toLowerCase() &&
+            this.isValidBigInt(transfer.value)
+          );
+        })
+        .map((transfer) => ({
+          from: entityMap.get(transfer.from) || transfer.from,
+          amount: ethers.formatEther(transfer.value),
+          timestamp: this.parseTimestamp(transfer.blockTimestamp),
+          transactionHash: transfer.transactionHash,
         }));
 
       outcomes.push({
         alias,
         allowances: entityAllowances,
         pending: pendingAllowances,
+        approved: approvedTransfers,
         balance,
+        received,
+        sent,
       });
     });
 
     return outcomes;
+  }
+
+  /**
+   * Calculate received, sent, and balance from transfers
+   */
+  private calculateTransferSummary(
+    address: string,
+    transfers: any[]
+  ): {
+    received: string;
+    sent: string;
+    balance: string;
+  } {
+    try {
+      let totalReceived = 0n;
+      let totalSent = 0n;
+
+      transfers.forEach((transfer) => {
+        if (!transfer || !transfer.from || !transfer.to || !transfer.value) {
+          return; // Skip invalid transfers
+        }
+
+        if (this.isValidBigInt(transfer.value)) {
+          const value = BigInt(transfer.value);
+
+          if (transfer.to.toLowerCase() === address.toLowerCase()) {
+            totalReceived += value;
+          }
+          if (transfer.from.toLowerCase() === address.toLowerCase()) {
+            totalSent += value;
+          }
+        }
+      });
+
+      const balance = totalReceived - totalSent;
+
+      return {
+        received: ethers.formatEther(totalReceived),
+        sent: ethers.formatEther(totalSent),
+        balance: ethers.formatEther(balance >= 0n ? balance : 0n),
+      };
+    } catch (error) {
+      console.error(
+        `Error calculating transfer summary for ${address}:`,
+        error
+      );
+      return {
+        received: '0',
+        sent: '0',
+        balance: '0',
+      };
+    }
+  }
+
+  /**
+   * Check if an approval has been used in transfers
+   * This determines if an allowance is pending (unused) or approved (used)
+   */
+  private isApprovalUsedInTransfers(
+    ownerAddress: string,
+    spenderAddress: string,
+    approvalAmount: any,
+    transfers: any[]
+  ): boolean {
+    try {
+      if (!this.isValidBigInt(approvalAmount)) {
+        return false;
+      }
+
+      const approvalValue = BigInt(approvalAmount);
+
+      // Look for transfers where the spender used the allowance
+      const usedTransfers = transfers.filter((transfer) => {
+        if (!transfer || !transfer.from || !transfer.to || !transfer.value) {
+          return false;
+        }
+
+        // Check if this transfer used the allowance
+        return (
+          transfer.from.toLowerCase() === ownerAddress &&
+          transfer.to.toLowerCase() === spenderAddress &&
+          this.isValidBigInt(transfer.value) &&
+          BigInt(transfer.value) == approvalValue
+        );
+      });
+
+      // If we found transfers using this allowance, it's not pending
+      return usedTransfers.length > 0;
+    } catch (error) {
+      console.error('Error checking if approval was used:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if a value is a valid BigInt
+   */
+  private isValidBigInt(value: any): boolean {
+    try {
+      if (value === null || value === undefined) {
+        return false;
+      }
+      BigInt(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Parse timestamp safely
+   */
+  private parseTimestamp(timestamp: any): number {
+    try {
+      if (timestamp === null || timestamp === undefined) {
+        return Date.now();
+      }
+      const parsed = parseInt(timestamp);
+      return isNaN(parsed) ? Date.now() : parsed * 1000;
+    } catch {
+      return Date.now();
+    }
   }
 
   /**
@@ -805,22 +1002,64 @@ export class FlowTrackingManager {
     transfers: any[],
     entityMap: Map<string, string>
   ): any[] {
-    return transfers.map((transfer) => ({
-      id: transfer.id,
-      from: {
-        address: transfer.from,
-        alias: entityMap.get(transfer.from) || transfer.from,
-      },
-      to: {
-        address: transfer.to,
-        alias: entityMap.get(transfer.to) || transfer.to,
-      },
-      amount: ethers.formatEther(transfer.amount),
-      timestamp: parseInt(transfer.timestamp) * 1000,
-      transactionHash: transfer.transactionHash,
-      blockNumber: transfer.blockNumber,
-      type: 'transfer',
-    }));
+    return transfers
+      .filter((transfer) => {
+        // Filter out invalid transfers
+        return (
+          transfer &&
+          transfer.id &&
+          transfer.from &&
+          transfer.to &&
+          transfer.value &&
+          transfer.blockTimestamp
+        );
+      })
+      .map((transfer) => {
+        try {
+          // Use 'value' instead of 'amount' and 'blockTimestamp' instead of 'timestamp'
+          const amount = this.isValidBigInt(transfer.value)
+            ? ethers.formatEther(transfer.value)
+            : '0';
+
+          const timestamp = this.parseTimestamp(transfer.blockTimestamp);
+
+          return {
+            id: transfer.id,
+            from: {
+              address: transfer.from,
+              alias: entityMap.get(transfer.from) || transfer.from,
+            },
+            to: {
+              address: transfer.to,
+              alias: entityMap.get(transfer.to) || transfer.to,
+            },
+            amount,
+            timestamp,
+            transactionHash: transfer.transactionHash,
+            blockNumber: transfer.blockNumber,
+            type: 'transfer',
+          };
+        } catch (error) {
+          console.error(`Error processing transfer ${transfer.id}:`, error);
+          // Return a safe fallback
+          return {
+            id: transfer.id || 'unknown',
+            from: {
+              address: transfer.from || 'unknown',
+              alias: entityMap.get(transfer.from) || 'unknown',
+            },
+            to: {
+              address: transfer.to || 'unknown',
+              alias: entityMap.get(transfer.to) || 'unknown',
+            },
+            amount: '0',
+            timestamp: Date.now(),
+            transactionHash: transfer.transactionHash || 'unknown',
+            blockNumber: transfer.blockNumber || '0',
+            type: 'transfer',
+          };
+        }
+      });
   }
 
   /**

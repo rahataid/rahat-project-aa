@@ -34,7 +34,7 @@ export class CashTokenSDK {
   public readonly operations: OperationsManager;
   public readonly flowTracking: FlowTrackingManager;
 
-  constructor(config?: SDKConfig) {
+  constructor(public readonly subGraphUrl: string, config?: SDKConfig) {
     this.configManager = new ConfigManager();
     this.entities = new EntityManager();
     this.operations = new OperationsManager();
@@ -112,13 +112,13 @@ export class CashTokenSDK {
       await this.operations.initialize(
         this.provider,
         this.cashTokenContract,
-        this.config!,
-        this
+        this.config!
       );
       await this.flowTracking.initialize(
         this.provider,
         this.cashTokenContract,
-        this.config!
+        this.config!,
+        this.subGraphUrl
       );
 
       this.isInitialized = true;
