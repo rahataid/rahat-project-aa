@@ -174,39 +174,6 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Initialize previous state for change detection
-   */
-  private async initializePreviousState(): Promise<void> {
-    if (!this.cashTokenContract || !this.flowConfig) return;
-
-    for (const address of this.flowConfig.smartAddresses) {
-      // Initialize balances
-      const balance = await this.cashTokenContract.balanceOf(address);
-      this.previousBalances.set(address, balance);
-
-      // Initialize allowances
-      this.previousAllowances.set(address, new Map());
-      for (const spenderAddress of this.flowConfig.smartAddresses) {
-        if (address !== spenderAddress) {
-          const allowance = await this.cashTokenContract.allowance(
-            address,
-            spenderAddress
-          );
-          this.previousAllowances.get(address)!.set(spenderAddress, allowance);
-        }
-      }
-    }
-  }
-
-  /**
-   * Format amount with decimals
-   */
-  private formatAmount(amount: bigint): string {
-    // This would need to be implemented with proper decimal handling
-    return amount.toString();
-  }
-
-  /**
    * Get all flows as JSON using GraphQL
    * This queries indexed data from The Graph
    *
@@ -317,83 +284,6 @@ export class FlowTrackingManager {
   }
 
   /**
-   * Process transfer events to extract flows
-   */
-  private async processTransferEvents(
-    transferEvents: any[],
-    trackedAddresses: string[]
-  ): Promise<any[]> {
-    const flows: any[] = [];
-    const trackedAddressesChecksum = trackedAddresses.map((addr) =>
-      ethers.getAddress(addr)
-    );
-
-    // Process transfer events
-    for (const event of transferEvents) {
-      if ('args' in event) {
-        const { from, to, value } = event.args;
-        const fromAddr = ethers.getAddress(from);
-        const toAddr = ethers.getAddress(to);
-        const amount = Number(value) / Math.pow(10, 18); // Convert from wei
-
-        if (
-          trackedAddressesChecksum.includes(fromAddr) ||
-          trackedAddressesChecksum.includes(toAddr)
-        ) {
-          const block = await this.provider?.getBlock(event.blockNumber);
-          flows.push({
-            from: fromAddr,
-            to: toAddr,
-            amount: amount,
-            type: 'transfer',
-            transactionHash: event.transactionHash,
-            blockNumber: event.blockNumber,
-            timestamp: (block?.timestamp ?? 0) * 1000, // We'll get actual timestamp later if needed
-          });
-        }
-      }
-    }
-
-    return flows;
-  }
-
-  /**
-   * Group flows by their path (sequence of entities)
-   */
-  private groupFlowsByPath(
-    flows: any[],
-    trackedAddresses: string[]
-  ): Map<string, any[]> {
-    const groupedFlows = new Map<string, any[]>();
-
-    // Find all possible paths through tracked addresses
-    const paths = this.generateAllPaths(trackedAddresses);
-
-    for (const path of paths) {
-      const pathKey = path.join('->');
-      const pathFlows: any[] = [];
-
-      // Find flows that follow this path
-      for (let i = 0; i < path.length - 1; i++) {
-        const from = path[i];
-        const to = path[i + 1];
-
-        const matchingFlows = flows.filter(
-          (flow) => flow.from === from && flow.to === to
-        );
-
-        pathFlows.push(...matchingFlows);
-      }
-
-      if (pathFlows.length > 0) {
-        groupedFlows.set(pathKey, pathFlows);
-      }
-    }
-
-    return groupedFlows;
-  }
-
-  /**
    * Generate all possible paths through tracked addresses
    */
   private generateAllPaths(addresses: string[]): string[][] {
@@ -408,48 +298,6 @@ export class FlowTrackingManager {
     }
 
     return paths;
-  }
-
-  /**
-   * Calculate totals for each entity in a flow
-   */
-  private calculateEntityTotals(flows: any[], path: string[]): any {
-    const entityTotals: any = {};
-
-    // Initialize totals for each entity
-    for (const entity of path) {
-      entityTotals[entity] = {
-        received: 0,
-        sent: 0,
-        balance: 0,
-      };
-    }
-
-    // Calculate totals from flows
-    for (const flow of flows) {
-      if (entityTotals[flow.from]) {
-        entityTotals[flow.from].sent += flow.amount;
-        entityTotals[flow.from].balance -= flow.amount;
-      }
-
-      if (entityTotals[flow.to]) {
-        entityTotals[flow.to].received += flow.amount;
-        entityTotals[flow.to].balance += flow.amount;
-      }
-    }
-
-    // Format amounts
-    for (const entity in entityTotals) {
-      entityTotals[entity].received = this.formatAmount(
-        entityTotals[entity].received
-      );
-      entityTotals[entity].sent = this.formatAmount(entityTotals[entity].sent);
-      entityTotals[entity].balance = this.formatAmount(
-        entityTotals[entity].balance
-      );
-    }
-
-    return entityTotals;
   }
 
   /**
