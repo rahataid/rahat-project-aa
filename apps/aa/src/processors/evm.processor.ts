@@ -821,40 +821,13 @@ export class EVMProcessor {
       const beneficiaryBalance = await aaContract.benTokens.staticCall(
         beneficiaryAddress
       );
-      const transferAmount = ethers.parseUnits(amount, 18);
-
-      console.log('signer', this.signer);
+      const transferAmount = amount;
 
       const aaContractSigner = await this.createContractInstanceSign(
         'AAPROJECT',
         AAProjectABI,
         this.signer
       );
-
-      console.log('beneficiaryBalance', beneficiaryBalance);
-
-      console.log('Debug Info:');
-      console.log('- Beneficiary Address:', beneficiaryAddress);
-      console.log('- Vendor Address:', vendorAddress);
-      console.log('- Amount:', amount);
-      console.log('- Transfer Amount (wei):', transferAmount.toString());
-      console.log(
-        '- Beneficiary Balance (wei):',
-        beneficiaryBalance.toString()
-      );
-      console.log(
-        '- Beneficiary Balance (tokens):',
-        ethers.formatUnits(beneficiaryBalance, 18)
-      );
-
-      console.log('transferAmount', transferAmount);
-
-      // Transfer tokens using AAProject contract
-      console.log('Attempting transfer with parameters:');
-      console.log('- beneficiaryAddress:', beneficiaryAddress);
-      console.log('- vendorAddress:', vendorAddress);
-      console.log('- transferAmount:', transferAmount.toString());
-      console.log('signer', this.signer);
 
       const tx = await aaContractSigner.transferTokenToVendor(
         beneficiaryAddress,

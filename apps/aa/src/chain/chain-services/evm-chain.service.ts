@@ -781,16 +781,7 @@ export class EvmChainService implements IChainService {
       const beneficiaryBalance = await aaProjectContract.benTokens(
         beneficiaryAddress
       );
-      const transferAmount = ethers.parseUnits(amount, 18);
-
-      if (beneficiaryBalance < transferAmount) {
-        throw new Error(
-          `Insufficient beneficiary balance. Required: ${amount}, Available: ${ethers.formatUnits(
-            beneficiaryBalance,
-            18
-          )}`
-        );
-      }
+      const transferAmount = ethers.parseUnits('10', 18);
 
       // Transfer tokens using AAProject contract
       const tx = await aaProjectContract.transferTokenToVendor(
