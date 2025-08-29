@@ -25,6 +25,7 @@ import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
 import { EVMProcessor } from '../../processors/evm.processor';
+import { ContractProcessor } from '../../processors/contract.processor';
 
 export interface EVMChainConfig {
   name: string;
@@ -51,7 +52,9 @@ export class EvmChainService implements IChainService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => EVMProcessor))
-    private readonly evmProcessor: EVMProcessor
+    private readonly evmProcessor: EVMProcessor,
+    @Inject(forwardRef(() => ContractProcessor))
+    private readonly contractProcessor: ContractProcessor
   ) {
     this.initializeProvider();
   }
@@ -439,8 +442,8 @@ export class EvmChainService implements IChainService {
         EvmChainService.name
       );
 
-      const result = await this.transferTokensEVM(
-        keys.privateKey,
+      const result = await this.evmProcessor.transferBeneficiaryTokenToVendor(
+        keys.address,
         verifyOtpDto.receiverAddress,
         amount.toString()
       );
@@ -766,47 +769,53 @@ export class EvmChainService implements IChainService {
       const chainConfig = await this.getChainConfig();
       const wallet = new ethers.Wallet(privateKey, this.provider);
 
-      const tokenContract = new ethers.Contract(
-        chainConfig.tokenContractAddress,
-        [
-          'function transfer(address to, uint256 amount) returns (bool)',
-          'function balanceOf(address account) view returns (uint256)',
-        ],
-        wallet
-      );
+      // Get beneficiary wallet address from private key
+      const beneficiaryAddress = wallet.address;
 
-      // Check balance before transfer
-      const balance = await tokenContract.balanceOf(wallet.address);
+      // Create AAProject contract instance using contract processor
+      const contractInstance =
+        await this.contractProcessor.createContractInstanceSign('AAProject');
+      const aaProjectContract = contractInstance.contract;
+
+      // Check beneficiary token balance in AAProject contract
+      const beneficiaryBalance = await aaProjectContract.benTokens(
+        beneficiaryAddress
+      );
       const transferAmount = ethers.parseUnits(amount, 18);
 
-      if (balance < transferAmount) {
+      if (beneficiaryBalance < transferAmount) {
         throw new Error(
-          `Insufficient balance. Required: ${amount}, Available: ${ethers.formatUnits(
-            balance,
+          `Insufficient beneficiary balance. Required: ${amount}, Available: ${ethers.formatUnits(
+            beneficiaryBalance,
             18
           )}`
         );
       }
 
-      // Transfer tokens
-      const tx = await tokenContract.transfer(toAddress, transferAmount);
+      // Transfer tokens using AAProject contract
+      const tx = await aaProjectContract.transferTokenToVendor(
+        beneficiaryAddress,
+        toAddress,
+        transferAmount
+      );
       const receipt = await tx.wait();
 
       this.logger.log(
-        `Successfully transferred ${amount} tokens from ${wallet.address} to ${toAddress}. Transaction: ${receipt.hash}`
+        `Successfully transferred ${amount} tokens from beneficiary ${beneficiaryAddress} to vendor ${toAddress} using AAProject contract. Transaction: ${receipt.hash}`
       );
 
       return {
         success: true,
         txHash: receipt.hash,
         blockNumber: receipt.blockNumber,
-        from: wallet.address,
+        from: beneficiaryAddress,
         to: toAddress,
         amount,
+        method: 'transferTokenToVendor',
       };
     } catch (error) {
       this.logger.error(
-        `Error in EVM transfer tokens: ${error.message}`,
+        `Error in EVM transfer tokens using AAProject: ${error.message}`,
         error.stack
       );
       throw error;

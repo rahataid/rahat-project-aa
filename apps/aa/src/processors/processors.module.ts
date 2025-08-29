@@ -92,6 +92,6 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
       inject: [SettingsService],
     },
   ],
-  exports: [EVMProcessor],
+  exports: [EVMProcessor, ContractProcessor],
 })
 export class ProcessorsModule {}

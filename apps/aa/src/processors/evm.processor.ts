@@ -796,6 +796,99 @@ export class EVMProcessor {
     }
   }
 
+  /**
+   * Transfer beneficiary tokens to vendor using AAProject contract
+   * @param beneficiaryAddress - The beneficiary wallet address
+   * @param vendorAddress - The vendor wallet address
+   * @param amount - The amount of tokens to transfer
+   * @returns Promise<any> - Transaction result with hash and status
+   */
+  async transferBeneficiaryTokenToVendor(
+    beneficiaryAddress: string,
+    vendorAddress: string,
+    amount: string
+  ): Promise<any> {
+    try {
+      await this.ensureInitialized();
+
+      // Create contract instance with signer for transactions
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Check beneficiary token balance first
+      const beneficiaryBalance = await aaContract.benTokens.staticCall(
+        beneficiaryAddress
+      );
+      const transferAmount = ethers.parseUnits(amount, 18);
+
+      console.log('signer', this.signer);
+
+      const aaContractSigner = await this.createContractInstanceSign(
+        'AAPROJECT',
+        AAProjectABI,
+        this.signer
+      );
+
+      console.log('beneficiaryBalance', beneficiaryBalance);
+
+      console.log('Debug Info:');
+      console.log('- Beneficiary Address:', beneficiaryAddress);
+      console.log('- Vendor Address:', vendorAddress);
+      console.log('- Amount:', amount);
+      console.log('- Transfer Amount (wei):', transferAmount.toString());
+      console.log(
+        '- Beneficiary Balance (wei):',
+        beneficiaryBalance.toString()
+      );
+      console.log(
+        '- Beneficiary Balance (tokens):',
+        ethers.formatUnits(beneficiaryBalance, 18)
+      );
+
+      console.log('transferAmount', transferAmount);
+
+      // Transfer tokens using AAProject contract
+      console.log('Attempting transfer with parameters:');
+      console.log('- beneficiaryAddress:', beneficiaryAddress);
+      console.log('- vendorAddress:', vendorAddress);
+      console.log('- transferAmount:', transferAmount.toString());
+      console.log('signer', this.signer);
+
+      const tx = await aaContractSigner.transferTokenToVendor(
+        beneficiaryAddress,
+        vendorAddress,
+        transferAmount
+      );
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully transferred ${amount} tokens from beneficiary ${beneficiaryAddress} to vendor ${vendorAddress} using AAProject contract. Transaction: ${receipt.hash}`,
+        EVMProcessor.name
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from: beneficiaryAddress,
+        to: vendorAddress,
+        amount,
+        method: 'transferTokenToVendor',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error transferring beneficiary tokens to vendor for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to transfer beneficiary tokens to vendor: ${error.message}`
+      );
+    }
+  }
+
   private convertABI(oldABI: any): any {
     const convertKeysToLowerCase = (obj: any): any => {
       if (Array.isArray(obj)) {

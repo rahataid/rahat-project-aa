@@ -8,15 +8,16 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
 import '../interfaces/ITriggerManager.sol';
+import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
 /// @title AAProject - Implementation of IAAProject interface
 /// @notice This contract implements the IAAProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
 /// @dev This contract uses the ERC2771Context for meta-transactions and extends AbstractProject for basic project functionality.
 contract AAProject is
- Multicall,
   AbstractProject,
   IAAProject,
-  ERC2771Context
+  ERC2771Context,
+  AccessManaged
 {
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -49,22 +50,21 @@ contract AAProject is
   /// @dev key-value pair of token address and registered status
   mapping(address => uint) public benTokens;
 
-  /// @notice tracks the total number of tokens assigned to beneficiaries
-  uint public totalTotalAssigned;
-
   ///@notice constructor
   ///@param _name name of the project
   ///@param _defaultToken address of the default token(ERC20)
   ///@param _forwarder address of the forwarder contract
-  ///@param _triggerManager address of the trigger manager contract
+  ///@param _accessManager Access Manager contract address
   constructor(
     string memory _name,
     address _defaultToken,
     address _forwarder,
+    address _accessManager,
     address _triggerManager
   )
     AbstractProject(_name)
     ERC2771Context(_forwarder)
+    AccessManaged(_accessManager)
   {
     defaultToken = _defaultToken;
     TriggerManager = ITriggerManager(_triggerManager);
@@ -106,7 +106,6 @@ contract AAProject is
     );
     _addBeneficiary(_address);
     benTokens[_address] = benTokens[_address] + _amount;
-    totalTotalAssigned = totalTotalAssigned + _amount;
     emit BenTokensAssigned(_address, _amount);
   }
 
@@ -159,7 +158,7 @@ function transferTokenToVendor(
     address _benAddress,
     address _vendorAddress,
     uint _amount
-  ) public  restricted{
+  ) public {
     require(
       benTokens[_benAddress] >= _amount,
       'not enough balace'
