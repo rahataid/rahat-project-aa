@@ -155,6 +155,16 @@ class ContractSeed extends ContractLib {
       deployerAccount
     );
 
+
+    console.log("Adding deployer address as admin in AA Project ");
+    await this.callContractMethod(
+       'RahatAccessManager',
+      'grantRole',
+      [0, deployerAccount, 0],
+      RahatAccessManagerAddress,
+      deployerAccount
+    )
+
     // !!!! todo: Remove after test
     // console.log('Adding donor as token owner, remove after test');
     // await this.callContractMethod(
