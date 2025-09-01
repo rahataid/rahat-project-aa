@@ -1,8 +1,12 @@
--- CreateEnum
-CREATE TYPE "TokenRedemptionStatus" AS ENUM ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED');
+-- CreateEnum (with check if exists)
+DO $$ BEGIN
+    CREATE TYPE "TokenRedemptionStatus" AS ENUM ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
--- CreateTable
-CREATE TABLE "tbl_vendor_token_redemption" (
+-- CreateTable (with check if exists)
+CREATE TABLE IF NOT EXISTS "tbl_vendor_token_redemption" (
     "id" SERIAL NOT NULL,
     "uuid" UUID NOT NULL,
     "vendorUuid" UUID NOT NULL,
@@ -17,8 +21,12 @@ CREATE TABLE "tbl_vendor_token_redemption" (
     CONSTRAINT "tbl_vendor_token_redemption_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "tbl_vendor_token_redemption_uuid_key" ON "tbl_vendor_token_redemption"("uuid");
+-- CreateIndex (with check if exists)
+CREATE UNIQUE INDEX IF NOT EXISTS "tbl_vendor_token_redemption_uuid_key" ON "tbl_vendor_token_redemption"("uuid");
 
--- AddForeignKey
-ALTER TABLE "tbl_vendor_token_redemption" ADD CONSTRAINT "tbl_vendor_token_redemption_vendorUuid_fkey" FOREIGN KEY ("vendorUuid") REFERENCES "tbl_vendors"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (with check if exists)
+DO $$ BEGIN
+    ALTER TABLE "tbl_vendor_token_redemption" ADD CONSTRAINT "tbl_vendor_token_redemption_vendorUuid_fkey" FOREIGN KEY ("vendorUuid") REFERENCES "tbl_vendors"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
