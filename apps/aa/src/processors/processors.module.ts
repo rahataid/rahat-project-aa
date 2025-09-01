@@ -11,7 +11,6 @@ import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
-import { VendorOfflinePayoutProcessor } from './vendor-offline-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
@@ -55,9 +54,6 @@ import { NotificationProcessor } from './notification.processor';
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
-    BullModule.registerQueue({
-      name: BQUEUE.VENDOR_OFFLINE,
-    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -70,7 +66,6 @@ import { NotificationProcessor } from './notification.processor';
     CheckTrustlineProcessor,
     NotificationProcessor,
     OfframpProcessor,
-    VendorOfflinePayoutProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {

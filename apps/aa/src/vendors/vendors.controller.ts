@@ -4,15 +4,9 @@ import { JOBS } from '../constants';
 import { VendorsService } from './vendors.service';
 import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 import { PaginationBaseDto } from './common';
-import { VendorStatsDto } from './dto/vendorStats.dto';
+import { VendorStatsDto, VendorRedeemDto } from './dto/vendorStats.dto';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
-import {
-  GetVendorOfflineBeneficiariesDto,
-  VerifyVendorOfflineOtpDto,
-  VendorOfflineSyncDto,
-} from './dto/vendor-offline-beneficiaries.dto';
-import { TestVendorOfflinePayoutDto } from './dto/vendor-offline-payout.dto';
 import {
   CreateVendorTokenRedemptionDto,
   UpdateVendorTokenRedemptionDto,
@@ -70,45 +64,6 @@ export class VendorsController {
   })
   async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
     return this.vendorService.getVendorBeneficiaries(payload);
-  }
-
-  // Returns offline beneficiary details for a vendor
-  @MessagePattern({
-    cmd: JOBS.VENDOR.FETCH_OFFLINE_BENEFICIARIES,
-    uuid: process.env.PROJECT_ID,
-  })
-  async getVendorOfflineBeneficiaries(
-    payload: GetVendorOfflineBeneficiariesDto
-  ) {
-    return this.vendorService.fetchVendorOfflineBeneficiaries(payload);
-  }
-
-  // Verifies OTP for offline beneficiary payout
-  @MessagePattern({
-    cmd: JOBS.VENDOR.VERIFY_OFFLINE_OTP,
-    uuid: process.env.PROJECT_ID,
-  })
-  async verifyVendorOfflineOtp(payload: VerifyVendorOfflineOtpDto) {
-    return this.vendorService.verifyVendorOfflineOtp(payload);
-  }
-
-  // Todo: Remove after testing bulk otp sending process
-  // Test endpoint for vendor offline payout process
-  @MessagePattern({
-    cmd: JOBS.VENDOR.TEST_OFFLINE_PAYOUT,
-    uuid: process.env.PROJECT_ID,
-  })
-  async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
-    return this.vendorService.testVendorOfflinePayout(payload);
-  }
-
-  // Sync vendor offline data when they come back online
-  @MessagePattern({
-    cmd: JOBS.VENDOR.SYNC_OFFLINE_DATA,
-    uuid: process.env.PROJECT_ID,
-  })
-  async syncVendorOfflineData(payload: VendorOfflineSyncDto) {
-    return this.vendorService.syncVendorOfflineData(payload);
   }
 
   // Token Redemption Endpoints

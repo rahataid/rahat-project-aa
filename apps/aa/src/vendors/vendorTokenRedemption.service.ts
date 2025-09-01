@@ -44,23 +44,6 @@ export class VendorTokenRedemptionService {
         throw new RpcException(`Vendor with UUID ${dto.vendorUuid} not found`);
       }
 
-      // Check if a redemption request already exists with the same transaction hash
-      if (dto?.transactionHash) {
-        const existingRedemption =
-          await this.prisma.vendorTokenRedemption.findFirst({
-            where: {
-              transactionHash: dto.transactionHash,
-            },
-          });
-
-        if (existingRedemption) {
-          this.logger.log(
-            `Token redemption request already exists with transaction hash ${dto.transactionHash}. Returning existing record.`
-          );
-          return existingRedemption;
-        }
-      }
-
       // Create token redemption request
       const redemption = await this.prisma.vendorTokenRedemption.create({
         data: {
@@ -225,13 +208,7 @@ export class VendorTokenRedemptionService {
       }
 
       if (redemptionStatus) {
-        if (redemptionStatus === 'REQUESTED') {
-          where.redemptionStatus = {
-            in: ['STELLAR_VERIFIED', 'REQUESTED'],
-          };
-        } else {
-          where.redemptionStatus = redemptionStatus;
-        }
+        where.redemptionStatus = redemptionStatus;
       }
 
       if (name) {
