@@ -1483,45 +1483,49 @@ export class PayoutsService {
         );
       }
 
-      const result = log.beneficiaryRedeem.map((redeemLog) => {
-        const extras = parseJsonField(redeemLog.Beneficiary?.extras);
-        const info = parseJsonField(redeemLog.info);
+      const result = log.beneficiaryRedeem
+        .filter(
+          (a) => a.transactionType === PayoutTransactionType.FIAT_TRANSFER
+        )
+        .map((redeemLog) => {
+          const extras = parseJsonField(redeemLog.Beneficiary?.extras);
+          const info = parseJsonField(redeemLog.info);
 
-        const payoutType = redeemLog.payout?.type;
-        const payoutMode = redeemLog.payout?.mode;
+          const payoutType = redeemLog.payout?.type;
+          const payoutMode = redeemLog.payout?.mode;
 
-        const base = {
-          'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
-          'Phone number': extras?.phone || '',
-          'Transaction Wallet ID': redeemLog.txHash || '',
-          'Transaction Hash': info?.transactionHash || '',
-          'Payout Status': redeemLog.payout?.status || '',
-          'Transaction Type': redeemLog.transactionType || '',
-          'Created At': redeemLog.createdAt
-            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Updated At': redeemLog.updatedAt
-            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Actual Budget':
-            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
-          'Amount Disbursed':
-            redeemLog.payout?.status === 'FAILED'
-              ? 0
-              : (redeemLog.Beneficiary?.benTokens || 0) * ONE_TOKEN_VALUE,
-        };
-
-        if (payoutType === 'FSP') {
-          return {
-            ...base,
-            'Bank a/c name': extras?.bank_ac_name || '',
-            'Bank a/c number': extras?.bank_ac_number || '',
-            'Bank Name': extras?.bank_name || '',
+          const base = {
+            'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
+            'Phone number': extras?.phone || '',
+            'Transaction Wallet ID': redeemLog.txHash || '',
+            'Transaction Hash': info?.transactionHash || '',
+            'Payout Status': redeemLog.payout?.status || '',
+            'Transaction Type': redeemLog.transactionType || '',
+            'Created At': redeemLog.createdAt
+              ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
+              : '',
+            'Updated At': redeemLog.updatedAt
+              ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
+              : '',
+            'Actual Budget':
+              log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+            'Amount Disbursed':
+              redeemLog.payout?.status === 'FAILED'
+                ? 0
+                : (redeemLog.Beneficiary?.benTokens || 0) * ONE_TOKEN_VALUE,
           };
-        } else {
-          return base;
-        }
-      });
+
+          if (payoutType === 'FSP') {
+            return {
+              ...base,
+              'Bank a/c name': extras?.bank_ac_name || '',
+              'Bank a/c number': extras?.bank_ac_number || '',
+              'Bank Name': extras?.bank_name || '',
+            };
+          } else {
+            return base;
+          }
+        });
 
       return result;
     } catch (error) {
