@@ -5,10 +5,16 @@ import { StellarService } from './stellar.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import {
+  DisbursementServices,
+  ReceiveService,
+  TransactionService,
+} from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import { AppService } from '../app/app.service';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 describe('StellarModule', () => {
   let module: TestingModule;
@@ -22,11 +28,14 @@ describe('StellarModule', () => {
         BASEURL: 'http://localhost:3000',
         ADMINBASEURL: 'http://localhost:3001',
         ASSETCODE: 'RAHAT',
-        ASSETCREATOR: 'GDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
-        ASSETCREATORSECRET: 'SAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
+        ASSETCREATOR:
+          'GDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
+        ASSETCREATORSECRET:
+          'SAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
         HORIZONURL: 'https://horizon-testnet.stellar.org',
         NETWORK: 'TESTNET',
-        FAUCETSECRETKEY: 'SAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
+        FAUCETSECRETKEY:
+          'SAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXZ',
         FUNDINGAMOUNT: '10',
       },
     }),
@@ -61,9 +70,13 @@ describe('StellarModule', () => {
     getDisbursement: jest.fn(),
   };
 
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue('mock-project-id'),
+  };
   beforeEach(async () => {
     module = await Test.createTestingModule({
       imports: [
+        EventEmitterModule.forRoot(),
         ClientsModule.register([
           {
             name: CORE_MODULE,
@@ -108,6 +121,7 @@ describe('StellarModule', () => {
           provide: DisbursementServices,
           useValue: mockDisbursementService,
         },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
   });

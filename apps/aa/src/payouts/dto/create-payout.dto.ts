@@ -1,4 +1,10 @@
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { PayoutType, PayoutMode } from '@prisma/client';
 
 export class CreatePayoutDto {
@@ -25,7 +31,6 @@ export class CreatePayoutDto {
   @IsOptional()
   payoutProcessorId?: string;
 
-  @IsObject()
   @IsOptional()
   user?: any;
-} 
+}
