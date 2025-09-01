@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
 import { OfframpService } from './offramp.service';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 
 describe('PayoutsModule', () => {
   let controller: PayoutsController;
@@ -21,8 +20,6 @@ describe('PayoutsModule', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [EventEmitterModule.forRoot()],
-
       controllers: [PayoutsController],
       providers: [
         {
@@ -59,4 +56,4 @@ describe('PayoutsModule', () => {
   it('should have OfframpService', () => {
     expect(offrampService).toBeDefined();
   });
-});
+}); 

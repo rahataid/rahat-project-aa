@@ -418,47 +418,19 @@ export class BeneficiaryService {
         );
       }
 
-      const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
-        (d: any) => {
-          return {
-            uuid: d?.Beneficiary?.uuid,
-            walletAddress: d?.Beneficiary?.walletAddress,
-          };
-        }
+      // for (const member of group?.groupedBeneficiaries) {
+      //   const benf = await this.prisma.beneficiary.findUnique({
+      //     where: {
+      //       uuid: member?.beneficiaryId,
+      //     },
+      //   });
+      //   if (benf.benTokens > 0)
+      //     throw new RpcException('Token already assigned to beneficiary.');
+      // }
+
+      const benfIds = group?.groupedBeneficiaries?.map(
+        (d: any) => d?.beneficiaryId
       );
-
-      const tokenAssignedBenfWallet = [];
-
-      for (const benf of benfIdsAndWalletAddress) {
-        const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany(
-          {
-            where: {
-              tokensReserved: {
-                isNot: null,
-              },
-              beneficiaries: {
-                some: {
-                  beneficiaryId: { equals: benf.uuid },
-                },
-              },
-            },
-          }
-        );
-        if (tokenAssignedGroup.length > 0) {
-          tokenAssignedBenfWallet.push(benf.walletAddress);
-        }
-      }
-
-      if (tokenAssignedBenfWallet.length > 0) {
-        // Handle the case where tokens are already assigned to some beneficiaries
-        return {
-          status: 'error',
-          message:
-            'Tokens have already been assigned to the following beneficiaries wallet addresses',
-          wallets: tokenAssignedBenfWallet,
-          groupName: benfGroup.name,
-        };
-      }
 
       // await this.prisma.beneficiary.updateMany({
       //   where: {
@@ -485,11 +457,7 @@ export class BeneficiaryService {
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
 
-      return {
-        status: 'success',
-        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
-        group,
-      };
+      return group;
     });
   }
 
@@ -547,9 +515,6 @@ export class BeneficiaryService {
   async getOneTokenReservationByGroupId(groupId: string) {
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
-      include: {
-        beneficiaryGroup: true,
-      },
     });
 
     return benfGroupToken;

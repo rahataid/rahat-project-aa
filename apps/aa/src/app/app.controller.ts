@@ -6,7 +6,7 @@ import { JOBS } from '../constants';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly appService: AppService) { }
 
   @Get()
   getData() {
@@ -20,17 +20,17 @@ export class AppController {
 
   @MessagePattern({ cmd: JOBS.SETTINGS.LIST, uuid: process.env.PROJECT_ID })
   listSettings() {
-    return this.appService.listSettings();
+    return this.appService.listSettings()
   }
 
   @MessagePattern({ cmd: JOBS.SETTINGS.GET, uuid: process.env.PROJECT_ID })
   getSettings(dto: any) {
-    return this.appService.getSettings(dto);
+    return this.appService.getSettings(dto)
   }
 
   @MessagePattern({ cmd: JOBS.APP.RESET_ALL, uuid: process.env.PROJECT_ID })
   resetAll() {
-    return this.appService.resetAll();
+    return this.appService.resetAll()
   }
 
   //Setup Settings

@@ -26,8 +26,6 @@ jest.mock('@rumsan/prisma', () => {
 import { PrismaService } from '@rumsan/prisma';
 import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 import { TokenRedemptionStatus } from './dto/vendorTokenRedemption.dto';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ConfigService } from '@nestjs/config';
 
 describe('VendorTokenRedemptionService', () => {
   let service: VendorTokenRedemptionService;
@@ -51,29 +49,12 @@ describe('VendorTokenRedemptionService', () => {
     add: jest.fn(),
   };
 
-  const mockEventEmitter = {
-    emit: jest.fn(),
-  };
-  const mockConfigService = {
-    get: jest.fn((key) => {
-      if (key === 'PROJECT_ID') return 'mock-project-id';
-      return null;
-    }),
-  };
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VendorTokenRedemptionService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: getQueueToken(BQUEUE.VENDOR), useValue: mockQueue },
-        {
-          provide: EventEmitter2,
-          useValue: mockEventEmitter,
-        },
-        {
-          provide: ConfigService,
-          useValue: mockConfigService,
-        },
       ],
     }).compile();
 
@@ -175,10 +156,7 @@ describe('VendorTokenRedemptionService', () => {
       };
       prisma.vendorTokenRedemption.create.mockResolvedValue(created);
 
-      const res = await service.create({
-        vendorUuid: 'v-2',
-        tokenAmount: 50,
-      } as any);
+      const res = await service.create({ vendorUuid: 'v-2', tokenAmount: 50 } as any);
       expect(res).toEqual(created);
       expect(prisma.vendorTokenRedemption.create).toHaveBeenCalledWith({
         data: {
@@ -212,9 +190,7 @@ describe('VendorTokenRedemptionService', () => {
 
     it('should throw if redemption not found', async () => {
       prisma.vendorTokenRedemption.findUnique.mockResolvedValue(null);
-      await expect(
-        service.findOne({ uuid: 'r-x' } as any)
-      ).rejects.toHaveProperty(
+      await expect(service.findOne({ uuid: 'r-x' } as any)).rejects.toHaveProperty(
         'message',
         'Token redemption with UUID r-x not found'
       );
@@ -224,9 +200,10 @@ describe('VendorTokenRedemptionService', () => {
       prisma.vendorTokenRedemption.findUnique.mockRejectedValue(
         new Error('read error')
       );
-      await expect(
-        service.findOne({ uuid: 'r-1' } as any)
-      ).rejects.toHaveProperty('message', 'read error');
+      await expect(service.findOne({ uuid: 'r-1' } as any)).rejects.toHaveProperty(
+        'message',
+        'read error'
+      );
     });
   });
 
@@ -270,14 +247,8 @@ describe('VendorTokenRedemptionService', () => {
     it('should throw if redemption does not exist', async () => {
       prisma.vendorTokenRedemption.findUnique.mockResolvedValue(null);
       await expect(
-        service.update({
-          uuid: 'r-x',
-          redemptionStatus: TokenRedemptionStatus.APPROVED,
-        } as any)
-      ).rejects.toHaveProperty(
-        'message',
-        'Token redemption with UUID r-x not found'
-      );
+        service.update({ uuid: 'r-x', redemptionStatus: TokenRedemptionStatus.APPROVED } as any)
+      ).rejects.toHaveProperty('message', 'Token redemption with UUID r-x not found');
       expect(prisma.vendorTokenRedemption.update).not.toHaveBeenCalled();
     });
 
@@ -288,10 +259,7 @@ describe('VendorTokenRedemptionService', () => {
       });
 
       await expect(
-        service.update({
-          uuid: 'r-1',
-          redemptionStatus: TokenRedemptionStatus.REJECTED,
-        } as any)
+        service.update({ uuid: 'r-1', redemptionStatus: TokenRedemptionStatus.REJECTED } as any)
       ).rejects.toHaveProperty(
         'message',
         'Token redemption r-1 is not in REQUESTED or STELLAR_VERIFIED status'
@@ -306,10 +274,7 @@ describe('VendorTokenRedemptionService', () => {
       });
 
       await expect(
-        service.update({
-          uuid: 'r-1',
-          redemptionStatus: TokenRedemptionStatus.REQUESTED,
-        } as any)
+        service.update({ uuid: 'r-1', redemptionStatus: TokenRedemptionStatus.REQUESTED } as any)
       ).rejects.toHaveProperty(
         'message',
         'Invalid status update. Only APPROVED, REJECTED, STELLAR_VERIFIED, or STELLAR_FAILED status is allowed'
@@ -327,10 +292,7 @@ describe('VendorTokenRedemptionService', () => {
       );
 
       await expect(
-        service.update({
-          uuid: 'r-1',
-          redemptionStatus: TokenRedemptionStatus.APPROVED,
-        } as any)
+        service.update({ uuid: 'r-1', redemptionStatus: TokenRedemptionStatus.APPROVED } as any)
       ).rejects.toHaveProperty('message', 'update failed');
     });
 
@@ -339,11 +301,7 @@ describe('VendorTokenRedemptionService', () => {
         uuid: 'r-2',
         redemptionStatus: TokenRedemptionStatus.STELLAR_VERIFIED,
       });
-      const updated = {
-        uuid: 'r-2',
-        redemptionStatus: TokenRedemptionStatus.STELLAR_FAILED,
-        vendor: {},
-      };
+      const updated = { uuid: 'r-2', redemptionStatus: TokenRedemptionStatus.STELLAR_FAILED, vendor: {} };
       prisma.vendorTokenRedemption.update.mockResolvedValue(updated);
 
       const res = await service.update({
@@ -406,12 +364,7 @@ describe('VendorTokenRedemptionService', () => {
         include: { vendor: true },
         orderBy: { createdAt: 'desc' },
       });
-      expect(res).toEqual({
-        data: results,
-        total: 0,
-        page: undefined,
-        perPage: undefined,
-      });
+      expect(res).toEqual({ data: results, total: 0, page: undefined, perPage: undefined });
     });
 
     it('should handle errors in list', async () => {
@@ -444,9 +397,7 @@ describe('VendorTokenRedemptionService', () => {
     it('should return vendor redemptions ordered by createdAt desc', async () => {
       const items = [{ uuid: 'r-1' }, { uuid: 'r-2' }];
       prisma.vendorTokenRedemption.findMany.mockResolvedValue(items);
-      const res = await service.getVendorRedemptions({
-        vendorUuid: 'v-1',
-      } as any);
+      const res = await service.getVendorRedemptions({ vendorUuid: 'v-1' } as any);
       expect(res).toBe(items);
       expect(prisma.vendorTokenRedemption.findMany).toHaveBeenCalledWith({
         where: { vendorUuid: 'v-1' },

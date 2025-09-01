@@ -13,9 +13,6 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     BullModule.registerQueue({
       name: BQUEUE.SCHEDULE,
     }),
-    BullModule.registerQueue({
-      name: BQUEUE.NOTIFICATION,
-    }),
     ClientsModule.register([
       {
         name: TRIGGGERS_MODULE,

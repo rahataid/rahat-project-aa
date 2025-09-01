@@ -24,7 +24,6 @@ import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
-import { NotificationProcessor } from './notification.processor';
 
 @Module({
   imports: [
@@ -68,7 +67,6 @@ import { NotificationProcessor } from './notification.processor';
     StatsProcessor,
     StellarProcessor,
     CheckTrustlineProcessor,
-    NotificationProcessor,
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
     {

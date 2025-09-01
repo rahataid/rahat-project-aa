@@ -23,7 +23,7 @@ import {
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, EVENTS } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
@@ -43,8 +43,6 @@ import { format } from 'date-fns';
 import { AppService } from '../app/app.service';
 import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -60,10 +58,8 @@ export class PayoutsService {
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
     private stellarService: StellarService,
-    private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
-    private configService: ConfigService,
     private appService: AppService,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
@@ -154,11 +150,6 @@ export class PayoutsService {
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
     const { groupId, user, ...createPayoutDto } = payload;
-    const projectName = await this.appService.getSettings({
-      name: 'PROJECTINFO',
-    });
-    const projectId = this.configService.get('PROJECT_ID');
-
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -167,13 +158,6 @@ export class PayoutsService {
       const beneficiaryGroup =
         await this.prisma.beneficiaryGroupTokens.findFirst({
           where: { uuid: groupId },
-          include: {
-            beneficiaryGroup: {
-              include: {
-                beneficiaries: true,
-              },
-            },
-          },
         });
 
       if (!beneficiaryGroup) {
@@ -250,22 +234,6 @@ export class PayoutsService {
       }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
-      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-        payload: {
-          title: `Payout Created`,
-          description: `Payout has been created by ${user.name} in ${
-            projectName.value['project_name'] || projectId
-          } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
-            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
-          } beneficiaries with Rs ${
-            (beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE) /
-            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
-          } each`,
-          group: 'Payout',
-          projectId: projectId,
-          notify: true,
-        },
-      });
       return payout;
     } catch (error) {
       this.logger.error(
@@ -444,7 +412,7 @@ export class PayoutsService {
    * This is used to find one payout by UUID
    *
    * @param uuid - The UUID of the payout
-   * @returns { Payouts & { beneficiaryGroupToken?: { numberOfTokens?: number; beneficiaryGroup?: { beneficiaries?: any[]; name?:string }; }; } } - The payout
+   * @returns { Payouts & { beneficiaryGroupToken?: { numberOfTokens?: number; beneficiaryGroup?: { beneficiaries?: any[]; }; }; } } - The payout
    */
   async findOne(uuid: string): Promise<
     Payouts & {
@@ -453,7 +421,6 @@ export class PayoutsService {
         info?: any;
         beneficiaryGroup?: {
           beneficiaries?: any[];
-          name?: string;
         };
       };
       beneficiaryRedeem?: BeneficiaryRedeem[];
@@ -489,7 +456,6 @@ export class PayoutsService {
                       },
                     },
                   },
-
                   _count: {
                     select: {
                       beneficiaries: true,
@@ -770,13 +736,9 @@ export class PayoutsService {
     return d;
   }
 
-  async triggerPayout(uuid: string, user?: any): Promise<any> {
+  async triggerPayout(uuid: string): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
-    const projectId = this.configService.get('PROJECT_ID');
-    const projectName = await this.appService.getSettings({
-      name: 'PROJECTINFO',
-    });
     if (payoutDetails.isPayoutTriggered) {
       throw new RpcException(
         `Payout with UUID '${uuid}' has already been triggered`
@@ -809,19 +771,7 @@ export class PayoutsService {
     await this.stellarService.addBulkToTokenTransferQueue(
       stellerOfframpQueuePayload
     );
-    this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-      payload: {
-        title: `Payout Triggered`,
-        description: `Payout ${
-          payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name
-        } has been triggered by ${user?.name} in ${
-          projectName.value['project_name'] || projectId
-        }`,
-        group: 'Payout',
-        projectId: projectId,
-        notify: true,
-      },
-    });
+
     return 'Payout Initiated Successfully';
   }
 
