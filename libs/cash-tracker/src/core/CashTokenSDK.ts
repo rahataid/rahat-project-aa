@@ -1,24 +1,17 @@
 import { ethers } from 'ethers';
 import {
   SDKConfig,
-  Entity,
-  TokenBalance,
-  TokenAllowance,
-  TransactionResult,
-  ValidationResult,
   SDKErrorCode,
+  TokenAllowance,
+  TokenBalance,
   TokenFlowData,
-  FlowHistory,
-  FlowHistoryOptions,
-  TransactionFlowHistory,
+  TransactionResult,
 } from '../types';
 import { ConfigManager } from './ConfigManager';
 import { SDKError } from './SDKError';
-import { ValidationUtils } from '../utils/ValidationUtils';
 // Manager imports
 import { EntityManager } from '../entities/EntityManager';
 import { OperationsManager } from '../operations/OperationsManager';
-import { EventManager } from '../tracking/EventManager';
 import { FlowTrackingManager } from '../tracking/FlowTrackingManager';
 
 /**
@@ -39,14 +32,12 @@ export class CashTokenSDK {
   public readonly configManager: ConfigManager;
   public readonly entities: EntityManager;
   public readonly operations: OperationsManager;
-  public readonly events: EventManager;
   public readonly flowTracking: FlowTrackingManager;
 
-  constructor(config?: SDKConfig) {
+  constructor(public readonly subGraphUrl: string, config?: SDKConfig) {
     this.configManager = new ConfigManager();
     this.entities = new EntityManager();
     this.operations = new OperationsManager();
-    this.events = new EventManager();
     this.flowTracking = new FlowTrackingManager();
 
     if (config) {
@@ -121,23 +112,16 @@ export class CashTokenSDK {
       await this.operations.initialize(
         this.provider,
         this.cashTokenContract,
-        this.config!,
-        this
+        this.config!
       );
       await this.flowTracking.initialize(
         this.provider,
         this.cashTokenContract,
-        this.config!
+        this.config!,
+        this.subGraphUrl
       );
 
       this.isInitialized = true;
-
-      // Emit initialization event
-      this.events.emit({
-        id: this.generateEventId(),
-        type: 'sdk_initialized',
-        timestamp: Date.now(),
-      });
     } catch (error) {
       throw SDKError.fromError(error as Error, SDKErrorCode.INVALID_CONFIG);
     }
@@ -152,112 +136,10 @@ export class CashTokenSDK {
   }
 
   /**
-   * Start flow tracking with smart addresses array
-   * This is the main method for flow tracking when no private key or connect is used
-   */
-  async startFlowTracking(
-    smartAddresses: string[],
-    options?: {
-      interval?: number;
-      onFlowUpdate?: (flowData: TokenFlowData) => void;
-    }
-  ): Promise<void> {
-    if (!this.isReady()) {
-      throw SDKError.configError('SDK not initialized');
-    }
-
-    await this.flowTracking.startFlowTracking(smartAddresses, options);
-  }
-
-  /**
-   * Stop flow tracking
-   */
-  async stopFlowTracking(): Promise<void> {
-    await this.flowTracking.stopFlowTracking();
-  }
-
-  /**
    * Get current flow data
    */
   async getFlowData(): Promise<TokenFlowData> {
     return await this.flowTracking.getCurrentFlowData();
-  }
-
-  /**
-   * Display flow status
-   */
-  async displayFlowStatus(): Promise<void> {
-    await this.flowTracking.displayFlowStatus();
-  }
-
-  /**
-   * Check if flow tracking is active
-   */
-  isFlowTracking(): boolean {
-    return this.flowTracking.isFlowTracking();
-  }
-
-  /**
-   * Get tracked addresses
-   */
-  getTrackedAddresses(): string[] {
-    return this.flowTracking.getTrackedAddresses();
-  }
-
-  /**
-   * Get complete flow history
-   */
-  getFlowHistory(): FlowHistory[] {
-    return this.flowTracking.getFlowHistory();
-  }
-
-  /**
-   * Get active flows
-   */
-  getActiveFlows(): FlowHistory[] {
-    return this.flowTracking.getActiveFlows();
-  }
-
-  /**
-   * Get flow history by ID
-   */
-  getFlowHistoryById(flowId: string): FlowHistory | undefined {
-    return this.flowTracking.getFlowHistoryById(flowId);
-  }
-
-  /**
-   * Get flow history for a specific path (A->B->C)
-   */
-  getFlowHistoryByPath(path: string[]): FlowHistory[] {
-    return this.flowTracking.getFlowHistoryByPath(path);
-  }
-
-  /**
-   * Get flow history for a specific address
-   */
-  getFlowHistoryByAddress(address: string): FlowHistory[] {
-    return this.flowTracking.getFlowHistoryByAddress(address);
-  }
-
-  /**
-   * Display complete flow history
-   */
-  displayFlowHistory(): void {
-    this.flowTracking.displayFlowHistory();
-  }
-
-  /**
-   * Display active flows
-   */
-  displayActiveFlows(): void {
-    this.flowTracking.displayActiveFlows();
-  }
-
-  /**
-   * Set flow history options
-   */
-  setFlowHistoryOptions(options: FlowHistoryOptions): void {
-    this.flowTracking.setFlowHistoryOptions(options);
   }
 
   /**
@@ -288,26 +170,24 @@ export class CashTokenSDK {
   /**
    * Get comprehensive transaction flow history with steps, summary, and blockchain info
    * Perfect for frontend mapping and visualization
+   * Uses GraphQL for efficient data retrieval
    */
   async getTransactionFlowHistory(
     entities?: string[] | Array<{ smartAddress: string; alias: string }>
   ): Promise<{
     entityOutcomes: Array<{
       alias: string;
-      pending: Array<{
+      allowances: Array<{
         to: string;
         amount: string;
+        timestamp: number;
+      }>;
+      pending: Array<{
+        from: string;
+        amount: string;
+        timestamp: number;
       }>;
       balance: string;
-      sent: string;
-      received: string;
-      flows: Array<{
-        from: string;
-        to: string;
-        amount: string;
-        transactionHash: string;
-        type: 'sent' | 'received';
-      }>;
     }>;
     allFlows: any[];
   }> {
@@ -812,9 +692,6 @@ export class CashTokenSDK {
 
     // Stop tracking sessions
     // await this.tracking.stopAllSessions(); // This line is removed
-
-    // Clear event subscriptions
-    this.events.clearSubscriptions();
   }
 
   // Legacy methods for backward compatibility
