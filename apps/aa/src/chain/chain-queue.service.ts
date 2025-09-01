@@ -102,6 +102,17 @@ export class ChainQueueService {
     return chainService.sendAssetToVendor(data);
   }
 
+  async getWalletBalance(
+    data: { address: string },
+    chainType?: ChainType
+  ): Promise<any> {
+    this.logger.log(`Getting wallet balance for ${data.address}`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.getWalletBalance(data);
+  }
+
   async getDisbursementStats(chainType?: ChainType): Promise<any> {
     this.logger.log(`Getting disbursement stats`);
     const chainService = await this.chainServiceRegistry.getChainService(

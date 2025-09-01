@@ -40,6 +40,8 @@ interface EVMStatusUpdateJob {
   beneficiaries: string[];
   amounts: string[];
   identifier: string;
+  batchNumber: number;
+  totalBatches: number;
 }
 
 @Processor(BQUEUE.EVM)
@@ -277,7 +279,14 @@ export class EVMProcessor {
       );
 
       await this.ensureInitialized();
-      const { groupUuid, txHash } = job.data;
+      const {
+        groupUuid,
+        txHash,
+        beneficiaries,
+        amounts,
+        batchNumber,
+        totalBatches,
+      } = job.data;
 
       const group =
         await this.beneficiaryService.getOneTokenReservationByGroupId(
@@ -343,6 +352,18 @@ export class EVMProcessor {
             EVMProcessor.name
           );
 
+          // Create DisbursementLogs records for each beneficiary in this batch
+          if (beneficiaries && amounts && beneficiaries.length > 0) {
+            await this.createDisbursementLogsForBatch(
+              groupUuid,
+              txHash,
+              beneficiaries,
+              amounts,
+              batchNumber,
+              totalBatches
+            );
+          }
+
           await this.beneficiaryService.updateGroupToken({
             groupUuid,
             status: 'DISBURSED',
@@ -397,6 +418,85 @@ export class EVMProcessor {
     } catch (error) {
       this.logger.error(
         `Error in EVM disbursement status update: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Creates DisbursementLogs records for each beneficiary in a successful batch
+   * @param groupUuid - The UUID of the beneficiary group
+   * @param txHash - The transaction hash of the successful batch
+   * @param beneficiaries - Array of beneficiary wallet addresses
+   * @param amounts - Array of token amounts for each beneficiary
+   * @param batchNumber - The current batch number
+   * @param totalBatches - Total number of batches for this disbursement
+   */
+  private async createDisbursementLogsForBatch(
+    groupUuid: string,
+    txHash: string,
+    beneficiaries: string[],
+    amounts: string[],
+    batchNumber: number,
+    totalBatches: number
+  ) {
+    try {
+      this.logger.log(
+        `Creating DisbursementLogs for batch ${batchNumber}/${totalBatches} with ${beneficiaries.length} beneficiaries`,
+        EVMProcessor.name
+      );
+
+      // Get the beneficiary group token record
+      const groupToken =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
+
+      if (!groupToken) {
+        this.logger.error(
+          `Group token not found for group ${groupUuid}`,
+          EVMProcessor.name
+        );
+        return;
+      }
+
+      // Create DisbursementLogs records for each beneficiary
+      const disbursementLogs = [];
+
+      for (let i = 0; i < beneficiaries.length; i++) {
+        const beneficiaryWalletAddress = beneficiaries[i];
+        const amount = amounts[i];
+
+        // Create individual disbursement log record
+        const disbursementLog =
+          await this.prismaService.disbursementLogs.create({
+            data: {
+              txnHash: txHash,
+              beneficiaryGroupTokenId: groupToken.uuid,
+              beneficiaryWalletAddress: beneficiaryWalletAddress,
+              // Additional metadata can be stored in a separate field if needed
+            },
+          });
+
+        disbursementLogs.push(disbursementLog);
+
+        this.logger.log(
+          `Created DisbursementLog for beneficiary ${beneficiaryWalletAddress} with amount ${amount}`,
+          EVMProcessor.name
+        );
+      }
+
+      this.logger.log(
+        `Successfully created ${disbursementLogs.length} DisbursementLogs records for batch ${batchNumber}`,
+        EVMProcessor.name
+      );
+
+      return disbursementLogs;
+    } catch (error) {
+      this.logger.error(
+        `Error creating DisbursementLogs for batch ${batchNumber}: ${error.message}`,
         error.stack,
         EVMProcessor.name
       );
@@ -859,6 +959,49 @@ export class EVMProcessor {
       throw new RpcException(
         `Failed to transfer beneficiary tokens to vendor: ${error.message}`
       );
+    }
+  }
+
+  /**
+   * Get wallet balance for a given address using the AA contract
+   * @param walletAddress - The wallet address to check balance for
+   * @returns The token balance for the given address
+   */
+  async getWalletBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string }> {
+    try {
+      this.logger.log(
+        `Getting wallet balance for address: ${walletAddress}`,
+        EVMProcessor.name
+      );
+      await this.ensureInitialized();
+
+      const aaContract = await this.createContractInstanceSign(
+        'AAPROJECT',
+        AAProjectABI,
+        this.signer
+      );
+
+      // Get token balance using benTokens.staticCall
+      const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
+
+      this.logger.log(
+        `Token balance for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMProcessor.name
+      );
+
+      return {
+        balance: tokenBalance.toString(),
+        address: walletAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting wallet balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(`Failed to get wallet balance: ${error.message}`);
     }
   }
 

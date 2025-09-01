@@ -490,9 +490,38 @@ export class EvmChainService implements IChainService {
         txHash: result.txHash,
       };
     } catch (error) {
-      throw new RpcException(
-        error ? error : 'Transferring asset to vendor failed'
+      this.logger.error(
+        `Error in sendAssetToVendor: ${error.message}`,
+        error.stack,
+        EvmChainService.name
       );
+      throw error;
+    }
+  }
+
+  async getWalletBalance(data: { address: string }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting wallet balance for address: ${data.address}`,
+        EvmChainService.name
+      );
+
+      // Delegate to EVM processor for getting wallet balance
+      const balance = await this.evmProcessor.getWalletBalance(data.address);
+
+      this.logger.log(
+        `Successfully retrieved balance for ${data.address}: ${balance.balance}`,
+        EvmChainService.name
+      );
+
+      return balance;
+    } catch (error) {
+      this.logger.error(
+        `Error getting wallet balance for ${data.address}: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
     }
   }
 
