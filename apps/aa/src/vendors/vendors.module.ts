@@ -5,14 +5,16 @@ import { VendorsService } from './vendors.service';
 import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
 import { VendorsController } from './vendors.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { BQUEUE, CORE_MODULE } from '../constants';
+import { CORE_MODULE, BQUEUE } from '../constants';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
+import { StellarModule } from '../stellar/stellar.module';
 import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedemption.processor';
 
 @Module({
   imports: [
     PrismaModule,
+    StellarModule,
     BullModule.registerQueue({
       name: BQUEUE.VENDOR,
     }),
@@ -27,6 +29,9 @@ import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedempt
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.VENDOR_OFFLINE,
+    }),
   ],
   providers: [
     VendorsService,

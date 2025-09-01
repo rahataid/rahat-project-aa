@@ -18,6 +18,7 @@ export class CvaOfflineBeneficiaryService {
 
   async create(dto: CreateOfflineBeneficiaryDto) {
     return this.rsprisma.offlineBeneficiary.create({
+      //@ts-ignore
       data: {
         ...dto,
       },

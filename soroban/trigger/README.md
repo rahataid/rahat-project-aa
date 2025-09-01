@@ -35,7 +35,7 @@ stellar contract build
 Create a new testnet account and fund it with test tokens:
 
 ```bash
-stellar keys generate --global sushants --network testnet --fund
+stellar keys generate --global sushantsTestnet --network testnet --fund
 ```
 
 ### Step 3: Deploy the Contract
@@ -45,7 +45,7 @@ Deploy the compiled contract to the testnet:
 ```bash
 stellar contract deploy \
   --wasm target/wasm32-unknown-unknown/release/soroban_contract.wasm \
-  --source sushants \
+  --source sushantsTestnet \
   --network testnet \
   --alias deployed_contract
 ```
