@@ -723,6 +723,79 @@ export class EVMProcessor {
     }
   }
 
+  /**
+   * Get the project contract balance from RahatToken contract
+   * @param projectAddress - The project contract address to check
+   * @returns Promise<string> - The project token balance as a string
+   */
+  async getProjectTokenBalance(projectAddress: string): Promise<string> {
+    try {
+      await this.ensureInitialized();
+
+      // Get contract settings to find RahatToken address
+      const contract = await this.getFromSettings('CONTRACT');
+      const rahatTokenAddress = contract.AAPROJECT.TOKEN_ADDRESS;
+
+      // Create RahatToken contract instance using the token address
+      const rahatTokenContract = new ethers.Contract(
+        rahatTokenAddress,
+        RahatTokenABI,
+        this.provider
+      );
+
+      // Call the balanceOf function to get the project's token balance
+      const tokenBalance = await rahatTokenContract.balanceOf(projectAddress);
+
+      this.logger.log(
+        `Project ${projectAddress} token balance: ${tokenBalance.toString()}`,
+        EVMProcessor.name
+      );
+
+      return tokenBalance.toString();
+    } catch (error) {
+      this.logger.error(
+        `Error getting project token balance for ${projectAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get project token balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Check if project has sufficient tokens for disbursement
+   * @param projectAddress - The project contract address to check
+   * @param requiredAmount - The amount of tokens required
+   * @returns Promise<boolean> - True if project has sufficient tokens, false otherwise
+   */
+  async checkProjectHasSufficientTokens(
+    projectAddress: string,
+    requiredAmount: string
+  ): Promise<boolean> {
+    try {
+      const currentBalance = await this.getProjectTokenBalance(projectAddress);
+      const hasSufficient = BigInt(currentBalance) >= BigInt(requiredAmount);
+
+      this.logger.log(
+        `Project ${projectAddress} has ${currentBalance} tokens, required: ${requiredAmount}, sufficient: ${hasSufficient}`,
+        EVMProcessor.name
+      );
+
+      return hasSufficient;
+    } catch (error) {
+      this.logger.error(
+        `Error checking project sufficient tokens for ${projectAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to check project sufficient tokens: ${error.message}`
+      );
+    }
+  }
+
   private convertABI(oldABI: any): any {
     const convertKeysToLowerCase = (obj: any): any => {
       if (Array.isArray(obj)) {

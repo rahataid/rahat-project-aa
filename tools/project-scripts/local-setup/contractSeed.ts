@@ -118,6 +118,7 @@ class ContractSeed extends ContractLib {
         'AAProject',
         await RahatToken.contract.getAddress(),
         forwarderAddress,
+        RahatAccessManagerAddress,
         await TriggerManager.contract.getAddress(),
       ],
       deployerKey
@@ -166,30 +167,96 @@ class ContractSeed extends ContractLib {
     )
 
     // !!!! todo: Remove after test
-    // console.log('Adding donor as token owner, remove after test');
-    // await this.callContractMethod(
-    //   'RahatDonor',
-    //   'addTokenOwner',
-    //   [await RahatToken.contract.getAddress(), donorContractAddress],
-    //   donorContractAddress,
-    //   deployerAccount
-    // );
+    console.log('Adding donor as token owner, remove after test');
 
-    // console.log('Minting initial tokens to project');
+    // First, add the donor as an owner directly to the RahatToken contract
+    await this.callContractMethod(
+      'RahatToken',
+      'addOwner',
+      [donorContractAddress],
+      await RahatToken.contract.getAddress(),
+      deployerAccount
+    );
+
+    // Then, also add through the donor contract for consistency
+    await this.callContractMethod(
+      'RahatDonor',
+      'addTokenOwner',
+      [await RahatToken.contract.getAddress(), donorContractAddress],
+      donorContractAddress,
+      deployerAccount
+    );
+
+    console.log('Minting initial tokens to project');
     // Mint 1,000,000 tokens (with 1 decimal, this is 1,000,000 * 10^1 = 10,000,000)
-    // const initialTokenAmount = BigInt(1000000) * BigInt(10); // 1 million tokens with 1 decimal
-    // await this.callContractMethod(
-    //   'RahatDonor',
-    //   'mintTokens',
-    //   [
-    //     await RahatToken.contract.getAddress(),
-    //     AAProjectContract.contract.target,
-    //     initialTokenAmount,
-    //   ],
-    //   donorContractAddress,
-    //   deployerAccount
-    // );
-    // console.log(`Minted ${initialTokenAmount} tokens to project`);
+    const initialTokenAmount = BigInt(100000000) * BigInt(10); // 1 million tokens with 1 decimal
+    await this.callContractMethod(
+      'RahatDonor',
+      'mintTokens',
+      [
+        await RahatToken.contract.getAddress(),
+        AAProjectContract.contract.target,
+        initialTokenAmount,
+      ],
+      donorContractAddress,
+      deployerAccount
+    );
+
+    console.log(`Minted ${initialTokenAmount} tokens to project`);
+
+    // Test assignTokenToBeneficiary functionality
+    console.log('Testing assignTokenToBeneficiary functionality...');
+
+    // Generate a random beneficiary address for testing
+    const randomWallet = this.getWalletFromPrivateKey(
+      '0x' + randomBytes(32).toString('hex')
+    );
+    const testBeneficiaryAddress = randomWallet.address.toString();
+    const testTokenAmount = BigInt(1000) * BigInt(10); // 1000 tokens with 1 decimal
+
+    console.log(`Test beneficiary address: ${testBeneficiaryAddress}`);
+    console.log(`Test token amount: ${testTokenAmount.toString()}`);
+
+    // Call assignTokenToBeneficiary method on AAProject contract
+    console.log('Calling assignTokenToBeneficiary...');
+    await this.callContractMethod(
+      'AAProject',
+      'assignTokenToBeneficiary',
+      [testBeneficiaryAddress, testTokenAmount],
+      AAProjectContract.contract.target.toString(),
+      deployerAccount
+    );
+
+    console.log('Token assignment completed. Verifying assignment...');
+
+    // Wait a bit for the transaction to be processed
+    await this.sleep(5000);
+
+    // Verify the assignment by checking benTokens mapping
+    console.log('Checking benTokens mapping...');
+    const benTokensBalance = await this.callContractMethod(
+      'AAProject',
+      'benTokens',
+      [testBeneficiaryAddress],
+      AAProjectContract.contract.target.toString(),
+      deployerAccount
+    );
+
+    console.log(
+      `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalance.toString()} tokens in benTokens mapping`
+    );
+
+    // Verify both balances match
+    if (benTokensBalance.toString() === testTokenAmount.toString()) {
+      console.log('✅ SUCCESS: benTokens mapping shows correct amount');
+    } else {
+      console.log('❌ ERROR: benTokens mapping amount mismatch');
+      console.log(
+        `Expected: ${testTokenAmount.toString()}, Got: ${benTokensBalance.toString()}`
+      );
+    }
+
+    console.log('Token assignment test completed!');
   }
 
   public async addContractSettings() {
