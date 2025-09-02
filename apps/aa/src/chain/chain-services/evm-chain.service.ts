@@ -383,7 +383,26 @@ export class EvmChainService implements IChainService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<any> {
-    return this.sendOtpByPhone(sendOtpDto);
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
+    );
+
+    if (!payoutType) {
+      this.logger.error('Payout not initiated');
+      throw new RpcException('Payout not initiated');
+    }
+
+    if (payoutType.type != 'VENDOR') {
+      this.logger.error('Payout type is not VENDOR');
+      throw new RpcException('Payout type is not VENDOR');
+    }
+
+    if (payoutType.mode != 'ONLINE') {
+      this.logger.error('Payout mode is not ONLINE');
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(sendOtpDto, payoutType.uuid);
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto): Promise<any> {
@@ -842,23 +861,49 @@ export class EvmChainService implements IChainService {
     }
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const beneficiaryRahatAmount = sendOtpDto.amount;
-
-    const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
-
-    if (Number(amount) > Number(beneficiaryRahatAmount)) {
-      throw new RpcException('Amount is greater than rahat balance');
-    }
-
-    if (Number(amount) <= 0) {
-      throw new RpcException('Amount must be greater than 0');
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto, payoutId: string) {
+    // Verify vendor exists
+    const vendor = await this.prisma.vendor.findUnique({
+      where: {
+        uuid: sendOtpDto.vendorUuid,
+      },
+    });
+    if (!vendor) {
+      throw new RpcException('Vendor not found');
     }
 
     // Get beneficiary wallet address first
     const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
     if (!keys) {
       throw new RpcException('Beneficiary address not found');
+    }
+
+    let beneficiaryTokenBalance: number;
+
+    const balanceData = await this.evmProcessor.getWalletBalance(keys.address);
+    beneficiaryTokenBalance = Number(balanceData.balance);
+
+    if (!beneficiaryTokenBalance) {
+      throw new RpcException('Beneficiary token balance not found');
+    }
+
+    this.logger.log(
+      `Retrieved beneficiary token balance from blockchain: ${beneficiaryTokenBalance}`,
+      EvmChainService.name
+    );
+
+    // Use the amount from DTO or the blockchain balance
+    const amount = sendOtpDto?.amount || beneficiaryTokenBalance;
+
+    // Validate amount
+    if (Number(amount) > beneficiaryTokenBalance) {
+      throw new RpcException(
+        `Requested amount ${amount} is greater than available token balance ${beneficiaryTokenBalance}`
+      );
+    }
+
+    if (Number(amount) <= 0) {
+      throw new RpcException('Amount must be greater than 0');
     }
 
     // Check if beneficiary has tokens in the contract before sending OTP
@@ -910,6 +955,7 @@ export class EvmChainService implements IChainService {
           status: 'PENDING',
           isCompleted: false,
           txHash: null,
+          payoutId: payoutId,
         },
       });
     } else {
@@ -923,11 +969,67 @@ export class EvmChainService implements IChainService {
           isCompleted: false,
           txHash: null,
           vendorUid: sendOtpDto.vendorUuid,
+          payoutId: payoutId,
         },
       });
     }
 
     return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
+
+  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+    try {
+      const beneficiary = await lastValueFrom(
+        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+      );
+
+      if (!beneficiary) {
+        this.logger.error('Beneficiary not found');
+        throw new RpcException('Beneficiary not found');
+      }
+
+      // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
+      const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
+        (g) => g.groupPurpose !== 'COMMUNICATION'
+      );
+
+      if (!payoutEligibleGroups.length) {
+        this.logger.error('No payout-eligible group found for beneficiary');
+        throw new RpcException(
+          'No payout-eligible group found for beneficiary'
+        );
+      }
+
+      // Use the first payout-eligible group for the lookup
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
+        where: {
+          uuid: payoutEligibleGroups[0].beneficiaryGroupId,
+        },
+        include: {
+          tokensReserved: {
+            include: {
+              payout: true,
+            },
+          },
+        },
+      });
+
+      if (!beneficiaryGroups) {
+        this.logger.error('Beneficiary group not found');
+        throw new RpcException('Beneficiary group not found');
+      }
+
+      if (!beneficiaryGroups.tokensReserved) {
+        this.logger.error('Tokens not reserved for the group');
+        throw new RpcException('Tokens not reserved for the group');
+      }
+
+      return beneficiaryGroups.tokensReserved.payout;
+    } catch (error) {
+      throw new RpcException(
+        `Failed to retrieve payout type: ${error.message}`
+      );
+    }
   }
 
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
