@@ -285,6 +285,31 @@ const ABI = [
       {
         indexed: true,
         internalType: 'address',
+        name: 'beneficiary',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'vendor',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'TokenTransferred',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: 'address',
         name: 'vendorAddress',
         type: 'address',
       },
@@ -648,6 +673,29 @@ const ABI = [
     type: 'function',
   },
   {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '_benAddress',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: '_vendorAddress',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: '_amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'transferTokenToVendor',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [],
     name: 'trustedForwarder',
     outputs: [
@@ -661,7 +709,6 @@ const ABI = [
     type: 'function',
   },
 ];
-
 @Processor(BQUEUE.CONTRACT)
 export class ContractProcessor {
   private readonly logger = new Logger(ContractProcessor.name);

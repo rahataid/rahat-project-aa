@@ -74,6 +74,8 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
             rahatTokenAddress = rahatTokenContract.getAddress()
 
             await accessManagerContract.connect(admin).grantRole(0, rahatDonorContract.target, 0);
+            await accessManagerContract.connect(admin).grantRole(0, deployer, 0);
+
             // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
             rahatDonorContract.connect(admin).registerProject(await aaProjectContract.getAddress(), true);
 
@@ -139,7 +141,7 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
         })
 
         it('should be able to transfer the beneficiaries token to vendor ', async function(){
-            await aaProjectContract.connect(admin).transferTokenToVendor(ben1.address,ven1.address,10);
+            await aaProjectContract.connect(deployer).transferTokenToVendor(ben1.address,ven1.address,10);
             expect(await rahatTokenContract.balanceOf(ven1.address),10);
             expect(await aaProjectContract.benTokens(ben1.address)).to.equal(90);
         })

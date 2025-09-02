@@ -98,7 +98,7 @@ contract AAProject is
   function assignTokenToBeneficiary(
     address _address,
     uint _amount
-  ) public {
+  ) public restricted {
     require(
       IERC20(defaultToken).balanceOf(address(this)) >=
         totalClaimsAssigned() + _amount,
@@ -120,14 +120,14 @@ contract AAProject is
   ///@notice function to remove beneficiaries
   ///@param _address address of the beneficiary to be removed
   ///@dev can only be called by project admin when project is open
-  function addBeneficiary(address _address) public {
+  function addBeneficiary(address _address) public restricted {
     _addBeneficiary(_address);
   }
 
   ///@notice function to remove beneficiaries
   ///@param _address address of the beneficiary to be removed
   ///@dev can only be called by project admin when project is open
-  function removeBeneficiary(address _address) public {
+  function removeBeneficiary(address _address) public restricted {
     _removeBeneficiary(_address);
   }
 
