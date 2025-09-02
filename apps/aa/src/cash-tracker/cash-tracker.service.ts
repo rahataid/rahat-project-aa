@@ -117,7 +117,7 @@ export class CashTrackerService {
       // Create SDK instance for each entity
       for (const entity of entities) {
         const subGraphUrl = (
-          await this.settingsService.getPublic('SUBGRAPH_URL')
+          await this.settingsService.getPublic('CASHTRACKER_SUBGRAPH_URL')
         ).value as { URL: string };
         const sdk = new CashTokenSDK(subGraphUrl.URL, {
           ...this.sdkConfig!,
@@ -308,8 +308,9 @@ export class CashTrackerService {
         smartAccount: entity.smartAccount,
         alias: entity.alias,
       }));
-      const subGraphUrl = (await this.settingsService.getPublic('SUBGRAPH_URL'))
-        .value as { URL: string };
+      const subGraphUrl = (
+        await this.settingsService.getPublic('CASHTRACKER_SUBGRAPH_URL')
+      ).value as { URL: string };
 
       const transactionsSdk = new CashTokenSDK(subGraphUrl.URL, {
         network: {
