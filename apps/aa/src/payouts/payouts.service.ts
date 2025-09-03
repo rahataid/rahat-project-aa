@@ -48,7 +48,7 @@ import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
-const ONE_TOKEN_VALUE = 1;
+export const ONE_TOKEN_VALUE = 1;
 
 @Injectable()
 export class PayoutsService {
