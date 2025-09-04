@@ -25,6 +25,7 @@ import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import { RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
 import { EVMProcessor } from '../../processors/evm.processor';
+import { ContractProcessor } from '../../processors/contract.processor';
 
 export interface EVMChainConfig {
   name: string;
@@ -51,7 +52,9 @@ export class EvmChainService implements IChainService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => EVMProcessor))
-    private readonly evmProcessor: EVMProcessor
+    private readonly evmProcessor: EVMProcessor,
+    @Inject(forwardRef(() => ContractProcessor))
+    private readonly contractProcessor: ContractProcessor
   ) {
     this.initializeProvider();
   }
@@ -380,7 +383,26 @@ export class EvmChainService implements IChainService {
   }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<any> {
-    return this.sendOtpByPhone(sendOtpDto);
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      sendOtpDto.phoneNumber
+    );
+
+    if (!payoutType) {
+      this.logger.error('Payout not initiated');
+      throw new RpcException('Payout not initiated');
+    }
+
+    if (payoutType.type != 'VENDOR') {
+      this.logger.error('Payout type is not VENDOR');
+      throw new RpcException('Payout type is not VENDOR');
+    }
+
+    if (payoutType.mode != 'ONLINE') {
+      this.logger.error('Payout mode is not ONLINE');
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(sendOtpDto, payoutType.uuid);
   }
 
   async sendAssetToVendor(verifyOtpDto: SendAssetDto): Promise<any> {
@@ -439,8 +461,8 @@ export class EvmChainService implements IChainService {
         EvmChainService.name
       );
 
-      const result = await this.transferTokensEVM(
-        keys.privateKey,
+      const result = await this.evmProcessor.transferBeneficiaryTokenToVendor(
+        keys.address,
         verifyOtpDto.receiverAddress,
         amount.toString()
       );
@@ -487,9 +509,38 @@ export class EvmChainService implements IChainService {
         txHash: result.txHash,
       };
     } catch (error) {
-      throw new RpcException(
-        error ? error : 'Transferring asset to vendor failed'
+      this.logger.error(
+        `Error in sendAssetToVendor: ${error.message}`,
+        error.stack,
+        EvmChainService.name
       );
+      throw error;
+    }
+  }
+
+  async getWalletBalance(data: { address: string }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting wallet balance for address: ${data.address}`,
+        EvmChainService.name
+      );
+
+      // Delegate to EVM processor for getting wallet balance
+      const balance = await this.evmProcessor.getWalletBalance(data.address);
+
+      this.logger.log(
+        `Successfully retrieved balance for ${data.address}: ${balance.balance}`,
+        EvmChainService.name
+      );
+
+      return balance;
+    } catch (error) {
+      this.logger.error(
+        `Error getting wallet balance for ${data.address}: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
     }
   }
 
@@ -766,70 +817,93 @@ export class EvmChainService implements IChainService {
       const chainConfig = await this.getChainConfig();
       const wallet = new ethers.Wallet(privateKey, this.provider);
 
-      const tokenContract = new ethers.Contract(
-        chainConfig.tokenContractAddress,
-        [
-          'function transfer(address to, uint256 amount) returns (bool)',
-          'function balanceOf(address account) view returns (uint256)',
-        ],
-        wallet
+      // Get beneficiary wallet address from private key
+      const beneficiaryAddress = wallet.address;
+
+      // Create AAProject contract instance using contract processor
+      const contractInstance =
+        await this.contractProcessor.createContractInstanceSign('AAProject');
+      const aaProjectContract = contractInstance.contract;
+
+      // Check beneficiary token balance in AAProject contract
+      const beneficiaryBalance = await aaProjectContract.benTokens(
+        beneficiaryAddress
       );
+      const transferAmount = ethers.parseUnits('10', 18);
 
-      // Check balance before transfer
-      const balance = await tokenContract.balanceOf(wallet.address);
-      const transferAmount = ethers.parseUnits(amount, 18);
-
-      if (balance < transferAmount) {
-        throw new Error(
-          `Insufficient balance. Required: ${amount}, Available: ${ethers.formatUnits(
-            balance,
-            18
-          )}`
-        );
-      }
-
-      // Transfer tokens
-      const tx = await tokenContract.transfer(toAddress, transferAmount);
+      // Transfer tokens using AAProject contract
+      const tx = await aaProjectContract.transferTokenToVendor(
+        beneficiaryAddress,
+        toAddress,
+        transferAmount
+      );
       const receipt = await tx.wait();
 
       this.logger.log(
-        `Successfully transferred ${amount} tokens from ${wallet.address} to ${toAddress}. Transaction: ${receipt.hash}`
+        `Successfully transferred ${amount} tokens from beneficiary ${beneficiaryAddress} to vendor ${toAddress} using AAProject contract. Transaction: ${receipt.hash}`
       );
 
       return {
         success: true,
         txHash: receipt.hash,
         blockNumber: receipt.blockNumber,
-        from: wallet.address,
+        from: beneficiaryAddress,
         to: toAddress,
         amount,
+        method: 'transferTokenToVendor',
       };
     } catch (error) {
       this.logger.error(
-        `Error in EVM transfer tokens: ${error.message}`,
+        `Error in EVM transfer tokens using AAProject: ${error.message}`,
         error.stack
       );
       throw error;
     }
   }
 
-  private async sendOtpByPhone(sendOtpDto: SendOtpDto) {
-    const beneficiaryRahatAmount = sendOtpDto.amount;
-
-    const amount = sendOtpDto?.amount || beneficiaryRahatAmount;
-
-    if (Number(amount) > Number(beneficiaryRahatAmount)) {
-      throw new RpcException('Amount is greater than rahat balance');
-    }
-
-    if (Number(amount) <= 0) {
-      throw new RpcException('Amount must be greater than 0');
+  private async sendOtpByPhone(sendOtpDto: SendOtpDto, payoutId: string) {
+    // Verify vendor exists
+    const vendor = await this.prisma.vendor.findUnique({
+      where: {
+        uuid: sendOtpDto.vendorUuid,
+      },
+    });
+    if (!vendor) {
+      throw new RpcException('Vendor not found');
     }
 
     // Get beneficiary wallet address first
     const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
     if (!keys) {
       throw new RpcException('Beneficiary address not found');
+    }
+
+    let beneficiaryTokenBalance: number;
+
+    const balanceData = await this.evmProcessor.getWalletBalance(keys.address);
+    beneficiaryTokenBalance = Number(balanceData.balance);
+
+    if (!beneficiaryTokenBalance) {
+      throw new RpcException('Beneficiary token balance not found');
+    }
+
+    this.logger.log(
+      `Retrieved beneficiary token balance from blockchain: ${beneficiaryTokenBalance}`,
+      EvmChainService.name
+    );
+
+    // Use the amount from DTO or the blockchain balance
+    const amount = sendOtpDto?.amount || beneficiaryTokenBalance;
+
+    // Validate amount
+    if (Number(amount) > beneficiaryTokenBalance) {
+      throw new RpcException(
+        `Requested amount ${amount} is greater than available token balance ${beneficiaryTokenBalance}`
+      );
+    }
+
+    if (Number(amount) <= 0) {
+      throw new RpcException('Amount must be greater than 0');
     }
 
     // Check if beneficiary has tokens in the contract before sending OTP
@@ -881,6 +955,7 @@ export class EvmChainService implements IChainService {
           status: 'PENDING',
           isCompleted: false,
           txHash: null,
+          payoutId: payoutId,
         },
       });
     } else {
@@ -894,11 +969,67 @@ export class EvmChainService implements IChainService {
           isCompleted: false,
           txHash: null,
           vendorUid: sendOtpDto.vendorUuid,
+          payoutId: payoutId,
         },
       });
     }
 
     return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+  }
+
+  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+    try {
+      const beneficiary = await lastValueFrom(
+        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+      );
+
+      if (!beneficiary) {
+        this.logger.error('Beneficiary not found');
+        throw new RpcException('Beneficiary not found');
+      }
+
+      // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
+      const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
+        (g) => g.groupPurpose !== 'COMMUNICATION'
+      );
+
+      if (!payoutEligibleGroups.length) {
+        this.logger.error('No payout-eligible group found for beneficiary');
+        throw new RpcException(
+          'No payout-eligible group found for beneficiary'
+        );
+      }
+
+      // Use the first payout-eligible group for the lookup
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
+        where: {
+          uuid: payoutEligibleGroups[0].beneficiaryGroupId,
+        },
+        include: {
+          tokensReserved: {
+            include: {
+              payout: true,
+            },
+          },
+        },
+      });
+
+      if (!beneficiaryGroups) {
+        this.logger.error('Beneficiary group not found');
+        throw new RpcException('Beneficiary group not found');
+      }
+
+      if (!beneficiaryGroups.tokensReserved) {
+        this.logger.error('Tokens not reserved for the group');
+        throw new RpcException('Tokens not reserved for the group');
+      }
+
+      return beneficiaryGroups.tokensReserved.payout;
+    } catch (error) {
+      throw new RpcException(
+        `Failed to retrieve payout type: ${error.message}`
+      );
+    }
   }
 
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {

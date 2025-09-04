@@ -13,6 +13,7 @@ import { StellarProcessor } from './stellar.processor';
 import { EVMProcessor } from './evm.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { VendorOfflinePayoutProcessor } from './vendor-offline-payout.processor';
+import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
@@ -61,6 +62,9 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     BullModule.registerQueue({
       name: BQUEUE.VENDOR_OFFLINE,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.BATCH_TRANSFER,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -74,6 +78,7 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     CheckTrustlineProcessor,
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
+    BatchTokenTransferProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
@@ -92,6 +97,6 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
       inject: [SettingsService],
     },
   ],
-  exports: [EVMProcessor],
+  exports: [EVMProcessor, ContractProcessor],
 })
 export class ProcessorsModule {}

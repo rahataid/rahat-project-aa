@@ -4,6 +4,7 @@ import { ChainQueueService } from './chain-queue.service';
 @Injectable()
 export class ChainService {
   constructor(private chainQueueService: ChainQueueService) {}
+
   disburse(disburseDto: any) {
     return this.chainQueueService.disburse(disburseDto);
   }
@@ -14,5 +15,9 @@ export class ChainService {
 
   sendAssetToVendor(sendAssetDto: any) {
     return this.chainQueueService.sendAssetToVendor(sendAssetDto);
+  }
+
+  getWalletBalance(data: { address: string }) {
+    return this.chainQueueService.getWalletBalance(data);
   }
 }

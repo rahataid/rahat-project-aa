@@ -627,6 +627,45 @@ export class StellarChainService implements Partial<IChainService> {
     return this.stellarService.getWalletStats(walletData);
   }
 
+  async getWalletBalance(data: { address: string }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting wallet balance for address: ${data.address}`,
+        StellarChainService.name
+      );
+
+      // For Stellar, we can use the existing getWalletStats method
+      // which provides comprehensive wallet information including balances
+      const walletStats = await this.stellarService.getWalletStats({
+        address: data.address,
+      });
+
+      // Extract the RAHAT token balance from the balances
+      const rahatBalance = walletStats.balances?.find(
+        (balance: any) => balance.asset_code === 'RAHAT'
+      );
+
+      const balance = rahatBalance?.balance || '0';
+
+      this.logger.log(
+        `Successfully retrieved Stellar balance for ${data.address}: ${balance}`,
+        StellarChainService.name
+      );
+
+      return {
+        balance: balance,
+        address: data.address,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting Stellar wallet balance for ${data.address}: ${error.message}`,
+        error.stack,
+        StellarChainService.name
+      );
+      throw error;
+    }
+  }
+
   async verifyOtp(data: VerifyOtpDto): Promise<any> {
     const verificationData = {
       phoneNumber: data.phoneNumber,

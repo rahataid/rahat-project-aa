@@ -156,6 +156,15 @@ class ContractSeed extends ContractLib {
       deployerAccount
     );
 
+    console.log('Adding deployer address as admin in AA Project ');
+    await this.callContractMethod(
+      'RahatAccessManager',
+      'grantRole',
+      [0, deployerAccount, 0],
+      RahatAccessManagerAddress,
+      deployerAccount
+    );
+
     // !!!! todo: Remove after test
     console.log('Adding donor as token owner, remove after test');
 
@@ -247,6 +256,106 @@ class ContractSeed extends ContractLib {
     }
 
     console.log('Token assignment test completed!');
+
+    // Test transferTokenToVendor functionality
+    console.log('Testing transferTokenToVendor functionality...');
+
+    // Generate a random vendor address for testing
+    const randomVendorWallet = this.getWalletFromPrivateKey(
+      '0x' + randomBytes(32).toString('hex')
+    );
+    const testVendorAddress = randomVendorWallet.address.toString();
+    const transferAmount = BigInt(5) * BigInt(10); // 500 tokens with 1 decimal
+
+    console.log(`Test vendor address: ${testVendorAddress}`);
+    console.log(`Transfer amount: ${transferAmount.toString()}`);
+
+    // Check project token balance before transfer
+    console.log('Checking project token balance before transfer...');
+    const projectTokenBalanceBefore = await this.callContractMethod(
+      'RahatToken',
+      'balanceOf',
+      [AAProjectContract.contract.target],
+      await RahatToken.contract.getAddress(),
+      deployerAccount
+    );
+
+    console.log(
+      `Project ${
+        AAProjectContract.contract.target
+      } has ${projectTokenBalanceBefore.toString()} tokens before transfer`
+    );
+
+    // Call transferTokenToVendor method on AAProject contract
+    console.log('Calling transferTokenToVendor...');
+    await this.callContractMethod(
+      'AAProject',
+      'transferTokenToVendor',
+      [testBeneficiaryAddress, testVendorAddress, transferAmount],
+      AAProjectContract.contract.target.toString(),
+      deployerAccount
+    );
+
+    console.log('Token transfer completed. Verifying transfer...');
+
+    // Wait a bit for the transaction to be processed
+    await this.sleep(5000);
+
+    // Verify the transfer by checking benTokens mapping (should be reduced)
+    console.log('Checking benTokens mapping after transfer...');
+    const benTokensBalanceAfterTransfer = await this.callContractMethod(
+      'AAProject',
+      'benTokens',
+      [testBeneficiaryAddress],
+      AAProjectContract.contract.target.toString(),
+      deployerAccount
+    );
+
+    const expectedBalanceAfterTransfer = testTokenAmount - transferAmount;
+    console.log(
+      `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalanceAfterTransfer.toString()} tokens in benTokens mapping after transfer`
+    );
+
+    // Verify the balance was reduced correctly
+    if (
+      benTokensBalanceAfterTransfer.toString() ===
+      expectedBalanceAfterTransfer.toString()
+    ) {
+      console.log(
+        '✅ SUCCESS: benTokens mapping shows correct amount after transfer'
+      );
+    } else {
+      console.log('❌ ERROR: benTokens mapping amount mismatch after transfer');
+      console.log(
+        `Expected: ${expectedBalanceAfterTransfer.toString()}, Got: ${benTokensBalanceAfterTransfer.toString()}`
+      );
+    }
+
+    // Check vendor token balance (should have received the tokens)
+    console.log('Checking vendor token balance...');
+    const vendorTokenBalance = await this.callContractMethod(
+      'RahatToken',
+      'balanceOf',
+      [testVendorAddress],
+      await RahatToken.contract.getAddress(),
+      deployerAccount
+    );
+
+    console.log(
+      `Vendor ${testVendorAddress} has ${vendorTokenBalance.toString()} tokens`
+    );
+
+    // Verify vendor received the tokens
+    if (vendorTokenBalance.toString() === transferAmount.toString()) {
+      console.log('✅ SUCCESS: Vendor received the correct amount of tokens');
+    } else {
+      console.log('❌ ERROR: Vendor token balance mismatch');
+      console.log(
+        `Expected: ${transferAmount.toString()}, Got: ${vendorTokenBalance.toString()}`
+      );
+    }
+
+    console.log('Token transfer test completed!');
   }
 
   public async addContractSettings() {

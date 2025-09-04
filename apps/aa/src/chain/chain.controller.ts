@@ -30,8 +30,16 @@ export class ChainController {
     return this.chainService.sendAssetToVendor(data);
   }
 
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.getWalletBalance',
+    uuid: process.env.PROJECT_ID,
+  })
+  getWalletBalance(data: { address: string }) {
+    return this.chainService.getWalletBalance(data);
+  }
+
   // @MessagePattern({
-  //   cmd: 'aa.jobs.chain.getDisbursementStats',
+  //   cmd: 'rahat.jobs.chain.getDisbursementStats',
   //   uuid: process.env.PROJECT_ID,
   // })
   // getDisbursementStats() {

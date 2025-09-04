@@ -16,6 +16,7 @@ export interface IChainService {
   // Account operations
   fundAccount(data: FundAccountDto): Promise<any>;
   checkBalance(address: string): Promise<any>;
+  getWalletBalance(data: { address: string }): Promise<any>;
 
   // Authentication operations
   sendOtp(data: SendOtpDto): Promise<any>;

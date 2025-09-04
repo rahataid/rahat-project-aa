@@ -5,6 +5,15 @@
 -- multiple migrations, each migration adding only one value to
 -- the enum.
 
+-- Add enum values with error handling
+DO $$ BEGIN
+    ALTER TYPE "TokenRedemptionStatus" ADD VALUE 'STELLAR_VERIFIED';
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TYPE "TokenRedemptionStatus" ADD VALUE 'STELLAR_VERIFIED';
-ALTER TYPE "TokenRedemptionStatus" ADD VALUE 'STELLAR_FAILED';
+DO $$ BEGIN
+    ALTER TYPE "TokenRedemptionStatus" ADD VALUE 'STELLAR_FAILED';
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
