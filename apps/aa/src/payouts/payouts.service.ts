@@ -219,7 +219,11 @@ export class PayoutsService {
 
       const payout = await this.prisma.payouts.create({
         data: {
-          ...createPayoutDto,
+          type: createPayoutDto.type,
+          mode: createPayoutDto.mode,
+          status: createPayoutDto.status,
+          extras: createPayoutDto.extras,
+          payoutProcessorId: createPayoutDto.payoutProcessorId,
           beneficiaryGroupToken: {
             connect: { uuid: groupId },
           },
