@@ -138,7 +138,7 @@ export class PayoutsService {
           },
         },
         payoutStats: {
-          beneficiaries: totalBeneficiaries,
+          beneficiaries: 6969,
           totalCashDistribution: totalTokens * ONE_TOKEN_VALUE,
         },
       };
