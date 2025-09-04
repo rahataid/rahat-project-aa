@@ -291,6 +291,9 @@ export const JOBS = {
     SYNC_OFFLINE_DATA: 'aa.jobs.vendor.sync_offline_data',
     SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
+  BATCH_TRANSFER: {
+    PROCESS_BATCH: 'aa.jobs.batch_transfer.process_batch',
+  },
   GRIEVANCES: {
     CREATE: 'aa.jobs.grievances.create',
     LIST: 'aa.jobs.grievances.list',
@@ -330,6 +333,7 @@ export const BQUEUE = {
   // EVM:"EVM"
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
+  BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

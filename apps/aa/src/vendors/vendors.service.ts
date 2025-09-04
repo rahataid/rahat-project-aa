@@ -24,6 +24,7 @@ import {
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
+import { BatchTransferDto } from '../processors/types';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -36,7 +37,9 @@ export class VendorsService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly receiveService: ReceiveService,
     @InjectQueue(BQUEUE.VENDOR_OFFLINE)
-    private readonly vendorOfflinePayoutQueue: Queue
+    private readonly vendorOfflinePayoutQueue: Queue,
+    @InjectQueue(BQUEUE.BATCH_TRANSFER)
+    private readonly batchTransferQueue: Queue
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
@@ -839,6 +842,54 @@ export class VendorsService {
     } catch (error) {
       this.logger.error(`Error syncing vendor offline data: ${error.message}`);
       throw new RpcException(error.message);
+    }
+  }
+
+  async processBatchTransfer(data: BatchTransferDto) {
+    this.logger.log(
+      `Processing batch transfer with ${
+        data.transfers.length
+      } transfers. Batch ID: ${data.batchId || 'N/A'}`,
+      VendorsService.name
+    );
+
+    try {
+      const job = await this.batchTransferQueue.add(
+        JOBS.BATCH_TRANSFER.PROCESS_BATCH,
+        data,
+        {
+          attempts: 3,
+          delay: 1000,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+        }
+      );
+
+      this.logger.log(
+        `Batch transfer job added to queue with ID: ${job.id}`,
+        VendorsService.name
+      );
+
+      return {
+        success: true,
+        jobId: job.id,
+        message: 'Batch transfer added successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to process batch transfer: ${error.message}`,
+        error.stack,
+        VendorsService.name
+      );
+
+      return {
+        success: false,
+        error: error.message,
+        message: 'Failed to process batch transfer',
+      };
     }
   }
 }

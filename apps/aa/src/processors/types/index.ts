@@ -1,4 +1,4 @@
-import { IDisbursementResultDto } from "../../stellar/dto/disburse.dto";
+import { IDisbursementResultDto } from '../../stellar/dto/disburse.dto';
 
 export interface IDisbursementStatusJob extends IDisbursementResultDto {
   groupUuid: string;
@@ -23,3 +23,5 @@ export interface FSPPayoutDetails {
 export interface FSPOfframpDetails extends FSPPayoutDetails {
   transactionHash: string;
 }
+
+export * from './batch-transfer.dto';
