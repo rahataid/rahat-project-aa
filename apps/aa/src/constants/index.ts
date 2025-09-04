@@ -44,6 +44,9 @@ export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
   },
+  NOTIFICATION: {
+    CREATE: 'rahat.jobs.notification.create',
+  },
   PROJECT: {
     SETUP: 'rahat.jobs.project.setup',
     CREATE: 'rahat.jobs.project.create',
@@ -253,6 +256,9 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  NOTIFICATION: {
+    CREATE: 'events.notification.create',
+  },
 };
 
 export const BQUEUE = {
@@ -264,6 +270,7 @@ export const BQUEUE = {
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
+  NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
