@@ -10,9 +10,7 @@ export { SDKError, ErrorUtils } from './core/SDKError';
 // Manager exports
 export { EntityManager } from './entities/EntityManager';
 export { OperationsManager } from './operations/OperationsManager';
-export { TrackingManager } from './tracking/TrackingManager';
 export { FlowTrackingManager } from './tracking/FlowTrackingManager';
-export { EventManager } from './tracking/EventManager';
 
 // Utility exports
 export { ValidationUtils } from './utils/ValidationUtils';
