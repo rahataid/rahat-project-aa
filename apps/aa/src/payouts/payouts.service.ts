@@ -26,13 +26,13 @@ import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE, EVENTS } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
-import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
+import {
+  FSPOfframpDetails,
+  FSPPayoutDetails,
+  FSPManualPayoutDetails,
+} from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import {
-  GetPayoutDetailsDto,
-  PayoutDetailsResponse,
-} from './dto/get-payout-details.dto';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -241,6 +241,31 @@ export class PayoutsService {
           },
         },
       });
+
+      if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
+        this.logger.log(
+          `Processing manual bank transfer payout for UUID: ${payout.uuid}`
+        );
+
+        const BeneficiaryPayoutDetails =
+          await this.fetchBeneficiaryPayoutDetails(payout.uuid);
+
+        const manualPayoutDetails: FSPManualPayoutDetails[] =
+          BeneficiaryPayoutDetails.map((beneficiary) => ({
+            amount: beneficiary.amount,
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            beneficiaryBankDetails: beneficiary.bankDetails,
+            payoutUUID: payout.uuid,
+            payoutProcessorId: createPayoutDto.payoutProcessorId,
+            beneficiaryPhoneNumber: beneficiary.phoneNumber,
+          }));
+
+        await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
+
+        this.logger.log(
+          `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
+        );
+      }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
@@ -776,6 +801,13 @@ export class PayoutsService {
       );
     }
 
+    // Check if this is a manual bank transfer payout - these cannot be triggered
+    if (payoutDetails.payoutProcessorId === 'manual-bank-transfer') {
+      throw new RpcException(
+        `Manual bank transfer payouts cannot be triggered. They are processed automatically upon creation.`
+      );
+    }
+
     const payoutExtras = payoutDetails.extras as {
       paymentProviderType: string;
       paymentProviderName: string;
@@ -784,6 +816,8 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
       await this.offrampService.getOfframpWalletAddress();
 
@@ -1453,6 +1487,43 @@ export class PayoutsService {
     return getFormattedTimeDiff(diffInMs);
   }
 
+  async verifyManualPayout(payoutUUID: string, data?: any) {
+    if (!payoutUUID) {
+      throw new RpcException('Payout UUID is required');
+    }
+
+    this.logger.log(`Verifying manual payout with UUID: '${payoutUUID}'`);
+
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUUID },
+    });
+
+    if (!payout) {
+      throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+    }
+
+    let rows = Object.values(data) as any[];
+    const benfs = await this.fetchBeneficiaryPayoutDetails(payoutUUID);
+
+    // match benfs with rows
+    rows = rows.map(row => {
+      const benf = benfs.find(benf => benf.bankDetails.accountNumber === row['Bank Account Number']);
+      return {
+        ...row,
+        beneficary: benf || null,
+        payoutId: payoutUUID,
+      };
+    });
+
+    // filter rows where beneficary is null
+    const filteredRows = rows.filter(row => row.beneficary !== null);
+
+    // send to offramp queue
+    await this.offrampService.addToVerifyManualPayoutQueue(filteredRows);
+
+    return filteredRows;
+  }
+
   async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {
     this.logger.log(
       `Getting payout log for beneficiary redeem with UUID: ${uuid}`
@@ -1488,7 +1559,6 @@ export class PayoutsService {
         const info = parseJsonField(redeemLog.info);
 
         const payoutType = redeemLog.payout?.type;
-        const payoutMode = redeemLog.payout?.mode;
 
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
@@ -1505,10 +1575,13 @@ export class PayoutsService {
             : '',
           'Actual Budget':
             log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
-          'Amount Disbursed':
-            redeemLog.payout?.status === 'FAILED'
-              ? 0
-              : (redeemLog.Beneficiary?.benTokens || 0) * ONE_TOKEN_VALUE,
+          'Amount Disbursed': [
+            'COMPLETED',
+            'FIAT_TRANSACTION_COMPLETED',
+            'TOKEN_TRANSACTION_COMPLETED',
+          ].includes(redeemLog?.status)
+            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            : 0,
         };
 
         if (payoutType === 'FSP') {

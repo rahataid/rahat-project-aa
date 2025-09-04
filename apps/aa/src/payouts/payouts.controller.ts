@@ -99,4 +99,12 @@ export class PayoutsController {
   downloadPayoutLogs(@Payload() payload: { payoutUUID: string }) {
     return this.payoutsService.downloadPayoutLogs(payload.payoutUUID);
   }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.VERIFY_MANUAL_PAYOUT,
+    uuid: process.env.PROJECT_ID,
+  })
+  verifyManualPayout(@Payload() payload: any) {
+    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data);
+  }
 }
