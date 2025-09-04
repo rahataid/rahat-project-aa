@@ -64,6 +64,8 @@ class ContractSeed extends ContractLib {
       })
     )?.value as string;
 
+    // const deployerKey = process.env.DEPLOYER_PRIVATE_KEY as string;
+
     console.log('------DEPLOYER KEY-----');
     console.log(deployerKey);
 
@@ -126,6 +128,17 @@ class ContractSeed extends ContractLib {
     this.contracts['AAProject'] = {
       address: AAProjectContract.contract.target,
       startBlock: AAProjectContract.blockNumber,
+    };
+
+    console.log("----------Deploying CashToken Contract-------------------'");
+    const CashToken = await this.deployContract(
+      'CashToken',
+      ['CashToken', 'CASH', 1, 100000, DonorContract.contract.target],
+      deployerKey
+    );
+    this.contracts['CashToken'] = {
+      address: CashToken.contract.target,
+      startBlock: CashToken.blockNumber,
     };
 
     console.log('Writing deployed address to file');
