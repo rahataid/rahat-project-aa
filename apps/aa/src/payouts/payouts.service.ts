@@ -23,16 +23,16 @@ import {
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
-import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
+import {
+  FSPOfframpDetails,
+  FSPPayoutDetails,
+  FSPManualPayoutDetails,
+} from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import {
-  GetPayoutDetailsDto,
-  PayoutDetailsResponse,
-} from './dto/get-payout-details.dto';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -43,6 +43,8 @@ import { format } from 'date-fns';
 import { AppService } from '../app/app.service';
 import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -58,8 +60,10 @@ export class PayoutsService {
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
     private stellarService: StellarService,
+    private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.STELLAR)
     private readonly stellarQueue: Queue,
+    private configService: ConfigService,
     private appService: AppService,
     private readonly beneficiaryService: BeneficiaryService
   ) {}
@@ -149,7 +153,12 @@ export class PayoutsService {
   }
 
   async create(payload: CreatePayoutDto): Promise<Payouts> {
-    const { groupId, ...createPayoutDto } = payload;
+    const { groupId, user, ...createPayoutDto } = payload;
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+    const projectId = this.configService.get('PROJECT_ID');
+
     try {
       this.logger.log(
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
@@ -158,6 +167,13 @@ export class PayoutsService {
       const beneficiaryGroup =
         await this.prisma.beneficiaryGroupTokens.findFirst({
           where: { uuid: groupId },
+          include: {
+            beneficiaryGroup: {
+              include: {
+                beneficiaries: true,
+              },
+            },
+          },
         });
 
       if (!beneficiaryGroup) {
@@ -230,6 +246,31 @@ export class PayoutsService {
         },
       });
 
+      if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
+        this.logger.log(
+          `Processing manual bank transfer payout for UUID: ${payout.uuid}`
+        );
+
+        const BeneficiaryPayoutDetails =
+          await this.fetchBeneficiaryPayoutDetails(payout.uuid);
+
+        const manualPayoutDetails: FSPManualPayoutDetails[] =
+          BeneficiaryPayoutDetails.map((beneficiary) => ({
+            amount: beneficiary.amount,
+            beneficiaryWalletAddress: beneficiary.walletAddress,
+            beneficiaryBankDetails: beneficiary.bankDetails,
+            payoutUUID: payout.uuid,
+            payoutProcessorId: createPayoutDto.payoutProcessorId,
+            beneficiaryPhoneNumber: beneficiary.phoneNumber,
+          }));
+
+        await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
+
+        this.logger.log(
+          `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
+        );
+      }
+
       if (createPayoutDto.mode === 'OFFLINE') {
         await this.vendorsService.processVendorOfflinePayout({
           beneficiaryGroupUuid: beneficiaryGroup.groupId,
@@ -238,6 +279,22 @@ export class PayoutsService {
       }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Payout Created`,
+          description: `Payout has been created by ${user.name} in ${
+            projectName.value['project_name'] || projectId
+          } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
+            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
+          } beneficiaries with Rs ${
+            (beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE) /
+            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
+          } each`,
+          group: 'Payout',
+          projectId: projectId,
+          notify: true,
+        },
+      });
       return payout;
     } catch (error) {
       this.logger.error(
@@ -416,7 +473,7 @@ export class PayoutsService {
    * This is used to find one payout by UUID
    *
    * @param uuid - The UUID of the payout
-   * @returns { Payouts & { beneficiaryGroupToken?: { numberOfTokens?: number; beneficiaryGroup?: { beneficiaries?: any[]; }; }; } } - The payout
+   * @returns { Payouts & { beneficiaryGroupToken?: { numberOfTokens?: number; beneficiaryGroup?: { beneficiaries?: any[]; name?:string }; }; } } - The payout
    */
   async findOne(uuid: string): Promise<
     Payouts & {
@@ -425,6 +482,7 @@ export class PayoutsService {
         info?: any;
         beneficiaryGroup?: {
           beneficiaries?: any[];
+          name?: string;
         };
       };
       beneficiaryRedeem?: BeneficiaryRedeem[];
@@ -460,6 +518,7 @@ export class PayoutsService {
                       },
                     },
                   },
+
                   _count: {
                     select: {
                       beneficiaries: true,
@@ -740,12 +799,23 @@ export class PayoutsService {
     return d;
   }
 
-  async triggerPayout(uuid: string): Promise<any> {
+  async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
+    const projectId = this.configService.get('PROJECT_ID');
+    const projectName = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
     if (payoutDetails.isPayoutTriggered) {
       throw new RpcException(
         `Payout with UUID '${uuid}' has already been triggered`
+      );
+    }
+
+    // Check if this is a manual bank transfer payout - these cannot be triggered
+    if (payoutDetails.payoutProcessorId === 'manual-bank-transfer') {
+      throw new RpcException(
+        `Manual bank transfer payouts cannot be triggered. They are processed automatically upon creation.`
       );
     }
 
@@ -757,6 +827,8 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
       await this.offrampService.getOfframpWalletAddress();
 
@@ -775,7 +847,19 @@ export class PayoutsService {
     await this.stellarService.addBulkToTokenTransferQueue(
       stellerOfframpQueuePayload
     );
-
+    this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+      payload: {
+        title: `Payout Triggered`,
+        description: `Payout ${
+          payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name
+        } has been triggered by ${user?.name} in ${
+          projectName.value['project_name'] || projectId
+        }`,
+        group: 'Payout',
+        projectId: projectId,
+        notify: true,
+      },
+    });
     return 'Payout Initiated Successfully';
   }
 
@@ -1414,6 +1498,43 @@ export class PayoutsService {
     return getFormattedTimeDiff(diffInMs);
   }
 
+  async verifyManualPayout(payoutUUID: string, data?: any) {
+    if (!payoutUUID) {
+      throw new RpcException('Payout UUID is required');
+    }
+
+    this.logger.log(`Verifying manual payout with UUID: '${payoutUUID}'`);
+
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUUID },
+    });
+
+    if (!payout) {
+      throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+    }
+
+    let rows = Object.values(data) as any[];
+    const benfs = await this.fetchBeneficiaryPayoutDetails(payoutUUID);
+
+    // match benfs with rows
+    rows = rows.map(row => {
+      const benf = benfs.find(benf => benf.bankDetails.accountNumber === row['Bank Account Number']);
+      return {
+        ...row,
+        beneficary: benf || null,
+        payoutId: payoutUUID,
+      };
+    });
+
+    // filter rows where beneficary is null
+    const filteredRows = rows.filter(row => row.beneficary !== null);
+
+    // send to offramp queue
+    await this.offrampService.addToVerifyManualPayoutQueue(filteredRows);
+
+    return filteredRows;
+  }
+
   async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {
     this.logger.log(
       `Getting payout log for beneficiary redeem with UUID: ${uuid}`
@@ -1449,7 +1570,6 @@ export class PayoutsService {
         const info = parseJsonField(redeemLog.info);
 
         const payoutType = redeemLog.payout?.type;
-        const payoutMode = redeemLog.payout?.mode;
 
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
@@ -1466,10 +1586,13 @@ export class PayoutsService {
             : '',
           'Actual Budget':
             log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
-          'Amount Disbursed':
-            redeemLog.payout?.status === 'FAILED'
-              ? 0
-              : (redeemLog.Beneficiary?.benTokens || 0) * ONE_TOKEN_VALUE,
+          'Amount Disbursed': [
+            'COMPLETED',
+            'FIAT_TRANSACTION_COMPLETED',
+            'TOKEN_TRANSACTION_COMPLETED',
+          ].includes(redeemLog?.status)
+            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            : 0,
         };
 
         if (payoutType === 'FSP') {

@@ -7,7 +7,6 @@ import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { CashTrackerModule } from '../cash-tracker/cash-tracker.module';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { DataSourceModule } from '../datasource/datasource.module';
 import { ListenersModule } from '../listeners/listeners.module';
@@ -27,7 +26,6 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
-import { GrievancesModule } from '../grievances/grievances.module';
 
 @Module({
   imports: [
@@ -100,8 +98,6 @@ import { GrievancesModule } from '../grievances/grievances.module';
     VendorsModule,
     PayoutsModule,
     ChainModule,
-    GrievancesModule,
-    CashTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

@@ -33,7 +33,7 @@ import { SettingsService } from '@rumsan/settings';
       name: BQUEUE.STELLAR,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.EVM,
+      name: BQUEUE.CONTRACT,
     }),
     StellarModule,
     ProcessorsModule,
@@ -42,9 +42,9 @@ import { SettingsService } from '@rumsan/settings';
   providers: [
     ChainService,
     ChainQueueService,
+    ChainServiceRegistry,
     StellarChainService,
     EvmChainService,
-    ChainServiceRegistry,
     PrismaService,
     {
       provide: ReceiveService,

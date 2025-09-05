@@ -20,18 +20,12 @@ import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
-import {
-  DisbursementServices,
-  ReceiveService,
-  TransactionService,
-} from '@rahataid/stellar-sdk';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
-import { PayoutType } from '@prisma/client';
 
 @Injectable()
-export class StellarChainService implements Partial<IChainService> {
+export class StellarChainService implements IChainService {
   private readonly logger = new Logger(StellarChainService.name);
-  name = 'stellar';
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR) private stellarQueue: Queue,
@@ -40,9 +34,7 @@ export class StellarChainService implements Partial<IChainService> {
     private settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private receiveService: ReceiveService,
-    private settingService: SettingsService,
-    private readonly disbursementService: DisbursementServices,
-    private readonly transactionService: TransactionService
+    private settingService: SettingsService
   ) {}
 
   getChainType(): ChainType {
@@ -719,33 +711,5 @@ export class StellarChainService implements Partial<IChainService> {
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
       updateData
     );
-  }
-
-  private async getTotalDisbursedTokensAcrossAllGroups(): Promise<number> {
-    try {
-      const result = await this.prisma.beneficiaryGroupTokens.aggregate({
-        where: {
-          AND: [{ status: 'DISBURSED' }, { isDisbursed: true }],
-        },
-        _sum: {
-          numberOfTokens: true,
-        },
-      });
-
-      const totalDisbursedTokens = result._sum.numberOfTokens || 0;
-
-      this.logger.log(
-        `Total disbursed tokens across all groups: ${totalDisbursedTokens}`
-      );
-      return totalDisbursedTokens;
-    } catch (error) {
-      this.logger.error(
-        'Error getting total disbursed tokens across all groups:',
-        error.message
-      );
-      throw new RpcException(
-        `Failed to get total disbursed tokens: ${error.message}`
-      );
-    }
   }
 }

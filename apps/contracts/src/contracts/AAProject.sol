@@ -9,6 +9,7 @@ import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
 import '../interfaces/ITriggerManager.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
+import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
 /// @title AAProject - Implementation of IAAProject interface
 /// @notice This contract implements the IAAProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
@@ -16,6 +17,8 @@ import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 contract AAProject is
   AbstractProject,
   IAAProject,
+  ERC2771Context,
+  AccessManaged
   ERC2771Context,
   AccessManaged
 {
@@ -55,15 +58,18 @@ contract AAProject is
   ///@param _defaultToken address of the default token(ERC20)
   ///@param _forwarder address of the forwarder contract
   ///@param _accessManager Access Manager contract address
+  ///@param _accessManager Access Manager contract address
   constructor(
     string memory _name,
     address _defaultToken,
     address _forwarder,
     address _accessManager,
+    address _accessManager,
     address _triggerManager
   )
     AbstractProject(_name)
     ERC2771Context(_forwarder)
+    AccessManaged(_accessManager)
     AccessManaged(_accessManager)
   {
     defaultToken = _defaultToken;
@@ -98,7 +104,7 @@ contract AAProject is
   function assignTokenToBeneficiary(
     address _address,
     uint _amount
-  ) public {
+  ) public restricted {
     require(
       IERC20(defaultToken).balanceOf(address(this)) >=
         totalClaimsAssigned() + _amount,
@@ -174,6 +180,8 @@ function transferTokenToVendor(
   
   // #endregion
 
+
+  // endregion
   /// @dev overriding the method to ERC2771Context
   function _msgSender()
     internal

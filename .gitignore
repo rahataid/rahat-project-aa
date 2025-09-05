@@ -60,10 +60,6 @@ project-setup-summary.json
 
 api-test.log
 
-
-
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
 mainnet-stellar-seed.md
 
 .cursor/rules/nx-rules.mdc
