@@ -169,25 +169,22 @@ export class VendorTokenRedemptionService {
         );
       }
 
+      let updatedRedemption;
       // Update the redemption status
-      const updatedRedemption = await this.prisma.vendorTokenRedemption.update({
-        where: { uuid: dto.uuid },
-        data: {
-          redemptionStatus: dto.redemptionStatus,
-          approvedBy: dto.approvedBy,
-          approvedAt: new Date(),
-          transactionHash: dto.transactionHash,
-        },
-        include: {
-          vendor: true,
-        },
-      });
+      if (dto.redemptionStatus === 'APPROVED') {
+        updatedRedemption = await this.prisma.vendorTokenRedemption.update({
+          where: { uuid: dto.uuid },
+          data: {
+            redemptionStatus: 'APPROVED',
+            approvedBy: dto.approvedBy,
+            approvedAt: new Date(),
+            transactionHash: dto.transactionHash,
+          },
+          include: {
+            vendor: true,
+          },
+        });
 
-      this.logger.log(
-        `Updated token redemption ${dto.uuid} to status ${dto.redemptionStatus}`
-      );
-
-      if (updatedRedemption.redemptionStatus === 'APPROVED') {
         this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
           payload: {
             title: `Vendor Settled with Fiat`,
@@ -197,7 +194,23 @@ export class VendorTokenRedemptionService {
             notify: true,
           },
         });
+      } else {
+        updatedRedemption =
+          await this.prisma.vendorTokenRedemption.update({
+            where: { uuid: dto.uuid },
+            data: {
+              redemptionStatus: dto.redemptionStatus,
+              transactionHash: dto.transactionHash,
+            },
+            include: {
+              vendor: true,
+            },
+          });
       }
+
+      this.logger.log(
+        `Updated token redemption ${dto.uuid} to status ${dto.redemptionStatus}`
+      );
 
       return updatedRedemption;
     } catch (error) {

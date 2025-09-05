@@ -489,7 +489,7 @@ export class StellarService {
               hour: '2-digit',
               minute: '2-digit',
             }).format(
-              new Date(updatedRedemption?.updateAt)
+              new Date(updatedRedemption?.updatedAt)
             )}. Transaction completed`,
             group: 'Vendor Management',
             projectId: projectId,
