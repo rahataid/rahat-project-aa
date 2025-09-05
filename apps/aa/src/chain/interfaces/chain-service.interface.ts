@@ -17,6 +17,8 @@ export interface IChainService {
   fundAccount(data: FundAccountDto): Promise<any>;
   checkBalance(address: string): Promise<any>;
   getWalletBalance(data: { address: string }): Promise<any>;
+  getRahatTokenBalance(data: { address: string }): Promise<any>;
+  getDisbursementStats(): Promise<any[]>;
 
   // Authentication operations
   sendOtp(data: SendOtpDto): Promise<any>;
@@ -31,7 +33,7 @@ export interface IChainService {
   getChainType(): ChainType;
 
   // Stats
-  getDisbursementStats?(): Promise<any>;
+  getDisbursementStats(): Promise<any[]>;
 }
 
 export type ChainType = 'stellar' | 'evm';

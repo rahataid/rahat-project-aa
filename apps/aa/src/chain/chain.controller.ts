@@ -38,11 +38,19 @@ export class ChainController {
     return this.chainService.getWalletBalance(data);
   }
 
-  // @MessagePattern({
-  //   cmd: 'rahat.jobs.chain.getDisbursementStats',
-  //   uuid: process.env.PROJECT_ID,
-  // })
-  // getDisbursementStats() {
-  //   return this.chainService.getDisbursementStats();
-  // }
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.getRahatTokenBalance',
+    uuid: process.env.PROJECT_ID,
+  })
+  getRahatTokenBalance(data: { address: string }) {
+    return this.chainService.getRahatTokenBalance(data);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.getDisbursementStats',
+    uuid: process.env.PROJECT_ID,
+  })
+  getDisbursementStats() {
+    return this.chainService.getDisbursementStats();
+  }
 }

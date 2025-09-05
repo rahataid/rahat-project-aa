@@ -113,8 +113,19 @@ export class ChainQueueService {
     return chainService.getWalletBalance(data);
   }
 
-  async getDisbursementStats(chainType?: ChainType): Promise<any> {
-    this.logger.log(`Getting disbursement stats`);
+  async getRahatTokenBalance(
+    data: { address: string },
+    chainType?: ChainType
+  ): Promise<any> {
+    this.logger.log(`Getting RahatToken balance for ${data.address}`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.getRahatTokenBalance(data);
+  }
+
+  async getDisbursementStats(chainType?: ChainType): Promise<any[]> {
+    this.logger.log('Getting disbursement stats');
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
