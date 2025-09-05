@@ -132,6 +132,8 @@ export const JOBS = {
     LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
     GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
     INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp`,
+    INSTANT_MANUAL_PAYOUT: `aa.jobs.offramp.instantManualPayout`,
+    VERIFY_MANUAL_PAYOUT: `aa.jobs.offramp.verifyManualPayout`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
@@ -149,6 +151,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',

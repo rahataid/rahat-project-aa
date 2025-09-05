@@ -3,7 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { async, lastValueFrom } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -37,7 +37,6 @@ export class BeneficiaryService {
     protected prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
-    @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
@@ -672,6 +671,21 @@ export class BeneficiaryService {
       return beneficiaryRedeem;
     } catch (error) {
       this.logger.error(`Error creating beneficiary redeem: ${error}`);
+      throw error;
+    }
+  }
+
+  async createBeneficiaryRedeemBulk(payload: Prisma.BeneficiaryRedeemCreateManyInput[]) {
+    try {
+      const logs = await this.prisma.beneficiaryRedeem.createMany({
+        data: payload,
+      });
+
+      this.logger.log(`Created ${logs.count} beneficiary redeem logs`);
+
+      return logs;
+    } catch (error) {
+      this.logger.error(`Error creating beneficiary redeem bulk: ${error}`);
       throw error;
     }
   }
