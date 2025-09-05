@@ -11,18 +11,15 @@ import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
-import { VendorOfflinePayoutProcessor } from './vendor-offline-payout.processor';
+import { VendorOfflinePayoutProcessor } from './vendor-cva-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
-import { HttpModule } from '@nestjs/axios';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
-import { ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 import { CheckTrustlineProcessor } from './checkTrutline.processor';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { SettingsService } from '@rumsan/settings';
-import { OfframpService } from '../payouts/offramp.service';
-import { AppModule } from '../app/app.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
 
@@ -56,7 +53,7 @@ import { NotificationProcessor } from './notification.processor';
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.VENDOR_OFFLINE,
+      name: BQUEUE.VENDOR_CVA,
     }),
   ],
   providers: [

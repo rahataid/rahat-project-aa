@@ -30,7 +30,7 @@ import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedempt
       },
     ]),
     BullModule.registerQueue({
-      name: BQUEUE.VENDOR_OFFLINE,
+      name: BQUEUE.VENDOR_CVA,
     }),
   ],
   providers: [

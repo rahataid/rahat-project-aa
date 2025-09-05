@@ -66,7 +66,7 @@ import { ChainModule } from '../chain/chain.module';
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.VENDOR_OFFLINE,
+      name: BQUEUE.VENDOR_CVA,
     }),
     BullModule.registerQueue({
       name: BQUEUE.COMMUNICATION,

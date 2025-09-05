@@ -242,6 +242,7 @@ export const JOBS = {
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
     OFFLINE_PAYOUT: 'aa.jobs.vendor.offline_payout',
+    ONLINE_PAYOUT: 'aa.jobs.vendor.online_payout',
     SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
     PROCESS_OFFLINE_TOKEN_TRANSFER:
       'aa.jobs.vendor.process_offline_token_transfer',
@@ -278,7 +279,7 @@ export const BQUEUE = {
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
-  VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
+  VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
 };
