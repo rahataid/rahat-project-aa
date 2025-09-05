@@ -20,4 +20,12 @@ export class ChainService {
   getWalletBalance(data: { address: string }) {
     return this.chainQueueService.getWalletBalance(data);
   }
+
+  getRahatTokenBalance(data: { address: string }) {
+    return this.chainQueueService.getRahatTokenBalance(data);
+  }
+
+  getDisbursementStats() {
+    return this.chainQueueService.getDisbursementStats();
+  }
 }

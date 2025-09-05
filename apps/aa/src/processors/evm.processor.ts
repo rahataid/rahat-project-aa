@@ -15,7 +15,6 @@ import { lastValueFrom } from 'rxjs';
 // Contract ABIs - importing as require to avoid JSON module resolution issues
 const AAProjectABI = require('../contracts/abis/AAProject.json');
 const TriggerManagerABI = require('../contracts/abis/TriggerManager.json');
-const RahatTokenABI = require('../contracts/abis/RahatToken.json');
 
 interface EVMTransactionResult {
   txHash: string;
@@ -722,14 +721,28 @@ export class EVMProcessor {
 
   private async createContractInstanceSign(
     contractName: any,
-    abi: any,
-    signer: ethers.Signer
+    abi?: any,
+    signer?: ethers.Signer
   ) {
     const contract = await this.getFromSettings('CONTRACT');
+    const contractSigner = signer || this.signer;
 
-    const formatedAbi = this.convertABI(contract.AAPROJECT.ABI);
+    let contractAddress: string;
+    let contractABI: any;
 
-    return new ethers.Contract(contract.AAPROJECT.ADDRESS, formatedAbi, signer);
+    if (contractName === 'AAPROJECT') {
+      contractAddress = contract.AAPROJECT.ADDRESS;
+      contractABI = this.convertABI(contract.AAPROJECT.ABI);
+    } else if (contractName === 'RAHATTOKEN') {
+      contractAddress = contract.RAHATTOKEN.ADDRESS;
+      contractABI = this.convertABI(contract.RAHATTOKEN.ABI);
+      console.log('RAHATTOKEN address:', contractAddress);
+      console.log('RAHATTOKEN ABI length:', contractABI?.length);
+    } else {
+      throw new Error(`Unsupported contract name: ${contractName}`);
+    }
+
+    return new ethers.Contract(contractAddress, contractABI, contractSigner);
   }
 
   private async createContractInstance(contractName: any, abi: any) {
@@ -832,14 +845,18 @@ export class EVMProcessor {
     try {
       await this.ensureInitialized();
 
-      // Get contract settings to find RahatToken address
+      // Get contract settings to find RahatToken address and ABI
       const contract = await this.getFromSettings('CONTRACT');
-      const rahatTokenAddress = contract.AAPROJECT.TOKEN_ADDRESS;
+      const rahatTokenAddress = contract.RAHATTOKEN.ADDRESS;
+      const rahatTokenABI = this.convertABI(contract.RAHATTOKEN.ABI);
 
-      // Create RahatToken contract instance using the token address
+      console.log('rahatTokenAddress', rahatTokenAddress);
+      console.log('rahatTokenABI', rahatTokenABI);
+
+      // Create RahatToken contract instance using the token address and ABI from settings
       const rahatTokenContract = new ethers.Contract(
         rahatTokenAddress,
-        RahatTokenABI,
+        rahatTokenABI,
         this.provider
       );
 
@@ -1002,6 +1019,61 @@ export class EVMProcessor {
         EVMProcessor.name
       );
       throw new RpcException(`Failed to get wallet balance: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get RahatToken ERC20 balance for a given wallet address
+   * @param walletAddress - The wallet address to check RahatToken balance for
+   * @returns Promise<{ balance: string; address: string }> - The RahatToken balance and address
+   */
+  async getRahatTokenBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string }> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${walletAddress}`,
+        EVMProcessor.name
+      );
+      await this.ensureInitialized();
+
+      // Debug: Check contract settings structure
+      const contract = await this.getFromSettings('CONTRACT');
+      console.log(
+        'Contract settings structure:',
+        JSON.stringify(contract, null, 2)
+      );
+
+      // Create RahatToken contract instance using the existing method
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
+      );
+
+      // Call the balanceOf function to get the wallet's RahatToken balance
+      const tokenBalance = await rahatTokenContract.balanceOf.staticCall(
+        walletAddress
+      );
+
+      console.log('tokenBalance', tokenBalance);
+
+      this.logger.log(
+        `RahatToken balance for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMProcessor.name
+      );
+
+      return {
+        balance: tokenBalance.toString(),
+        address: walletAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get RahatToken balance: ${error.message}`
+      );
     }
   }
 

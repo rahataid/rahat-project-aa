@@ -336,46 +336,191 @@ export class EvmChainService implements IChainService {
     };
   }
 
-  async getDisbursementStats() {
-    const subgraphUrl = await this.settingsService.getPublic('SUBGRAPH_URL');
-    const chainConfig = await this.getChainConfig();
+  async getDisbursementStats(): Promise<any[]> {
+    try {
+      this.logger.log(
+        'Getting disbursement stats for EVM chain',
+        EvmChainService.name
+      );
 
-    const response = await querySubgraph(
-      subgraphUrl.value as string,
-      getBeneficiaryAdded({ first: 10, skip: 0 })
-    );
+      let oneTokenPrice = 1;
+      let tokenName = 'RAHAT';
 
-    return {
-      tokenStats: [
-        {
-          name: 'Remaining Balance',
-          amount: response.benTokensAssigneds.length.toLocaleString(),
+      try {
+        const tokenPriceSetting = await this.settingsService.getPublic(
+          'ONE_TOKEN_PRICE'
+        );
+        oneTokenPrice = Number(tokenPriceSetting?.value) || 1;
+      } catch (error) {
+        this.logger.warn(
+          'ONE_TOKEN_PRICE setting not found, using default value: 1',
+          EvmChainService.name
+        );
+      }
+
+      try {
+        const tokenNameSetting = await this.settingsService.getPublic(
+          'ASSETCODE'
+        );
+        tokenName = String(tokenNameSetting?.value) || 'RAHAT';
+      } catch (error) {
+        this.logger.warn(
+          'ASSETCODE setting not found, using default value: RAHAT',
+          EvmChainService.name
+        );
+      }
+
+      const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+        include: {
+          beneficiaryGroup: {
+            include: {
+              _count: {
+                select: {
+                  beneficiaries: true,
+                },
+              },
+            },
+          },
         },
-        { name: 'Token Price', amount: 'Rs 10' },
-      ],
-      transactionStats: response.benTokensAssigneds.map((item) => ({
-        title: `Token Assignment - ${item.beneficiary.slice(
-          0,
-          8
-        )}...${item.beneficiary.slice(-6)}`,
-        subtitle: item.beneficiary,
-        date: new Date(item.blockTimestamp * 1000),
-        amount: Number(item.amount).toFixed(0),
-        amtColor: 'green',
-        hash: item.transactionHash,
-      })),
-      chainInfo: {
-        name: chainConfig.name,
-        chainId: chainConfig.chainId,
-        rpcUrl: chainConfig.rpcUrl,
-        explorerUrl: chainConfig.explorerUrl,
-        currencyName: chainConfig.currencyName,
-        currencySymbol: chainConfig.currencySymbol,
-        currencyDecimals: chainConfig.currencyDecimals,
-        projectContractAddress: chainConfig.projectContractAddress,
-        tokenContractAddress: chainConfig.tokenContractAddress,
-      },
-    };
+      });
+
+      const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
+        if (token.isDisbursed) {
+          acc += token.numberOfTokens;
+        }
+        return acc;
+      }, 0);
+
+      const totalTokens = benfTokens.reduce(
+        (acc, token) => acc + token.numberOfTokens,
+        0
+      );
+
+      const totalBeneficiaries = benfTokens
+        .filter((token) => token.isDisbursed)
+        .reduce(
+          (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+          0
+        );
+
+      const disbursementsInfo = benfTokens
+        .filter(
+          (token) =>
+            token.isDisbursed && (token.info as any)?.disbursementTimeTaken
+        )
+        .map((token) => (token.info as any)?.disbursementTimeTaken);
+
+      const averageDisbursementTime =
+        disbursementsInfo.length > 0
+          ? disbursementsInfo.reduce((acc, time) => acc + time, 0) /
+            disbursementsInfo.length
+          : 0;
+
+      const activityActivationTime = await this.getActivityActivationTime();
+      let averageDuration = 0;
+
+      if (activityActivationTime) {
+        const disbursedTokensWithInfo = benfTokens.filter(
+          (b) => b.isDisbursed && (b.info as any)?.disbursement
+        );
+
+        if (disbursedTokensWithInfo.length > 0) {
+          averageDuration =
+            disbursedTokensWithInfo.reduce((acc, token) => {
+              const info = JSON.parse(JSON.stringify(token.info)) as {
+                disbursement: any;
+              };
+              // getting disbursement completion time
+              const {
+                disbursement: { updated_at },
+              } = info;
+
+              // diff between disbursement completion time and activity activation time
+              const timeTaken =
+                new Date(updated_at).getTime() -
+                new Date(activityActivationTime).getTime();
+
+              return acc + timeTaken;
+            }, 0) / disbursedTokensWithInfo.length;
+        }
+      }
+
+      return [
+        {
+          name: 'Token Disbursed',
+          value: totalDisbursedTokens,
+        },
+        {
+          name: 'Budget Assigned',
+          value: totalTokens * Number(oneTokenPrice),
+        },
+        {
+          name: 'Token',
+          value: tokenName,
+        },
+        { name: 'Token Price', value: oneTokenPrice },
+        { name: 'Total Beneficiaries', value: totalBeneficiaries },
+        {
+          name: 'Average Disbursement time',
+          value: this.getFormattedTimeDiff(averageDisbursementTime),
+        },
+        {
+          name: 'Average Duration',
+          value:
+            averageDuration !== 0
+              ? this.getFormattedTimeDiff(averageDuration)
+              : 'N/A',
+        },
+      ];
+    } catch (error) {
+      this.logger.error(
+        `Error getting disbursement stats: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get activity activation time from project settings
+   * @returns Promise<string | null> - Activity activation time or null
+   */
+  private async getActivityActivationTime(): Promise<string | null> {
+    try {
+      const projectInfo = await this.settingsService.getPublic('PROJECTINFO');
+      return (projectInfo?.value as any)?.activityActivationTime || null;
+    } catch (error) {
+      this.logger.warn(
+        'PROJECTINFO setting not found, activity activation time will be null',
+        EvmChainService.name
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Format time difference in a human-readable format
+   * @param timeInMs - Time in milliseconds
+   * @returns string - Formatted time difference
+   */
+  private getFormattedTimeDiff(timeInMs: number): string {
+    if (!timeInMs || timeInMs === 0) return 'N/A';
+
+    const seconds = Math.floor(timeInMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   async getDisbursementStatus(id: string): Promise<any> {
@@ -537,6 +682,34 @@ export class EvmChainService implements IChainService {
     } catch (error) {
       this.logger.error(
         `Error getting wallet balance for ${data.address}: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async getRahatTokenBalance(data: { address: string }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${data.address}`,
+        EvmChainService.name
+      );
+
+      // Delegate to EVM processor for getting RahatToken balance
+      const balance = await this.evmProcessor.getRahatTokenBalance(
+        data.address
+      );
+
+      this.logger.log(
+        `Successfully retrieved RahatToken balance for ${data.address}: ${balance.balance}`,
+        EvmChainService.name
+      );
+
+      return balance;
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken balance for ${data.address}: ${error.message}`,
         error.stack,
         EvmChainService.name
       );

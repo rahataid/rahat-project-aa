@@ -226,50 +226,30 @@ export class StellarChainService implements Partial<IChainService> {
     }
   }
 
-  async getDisbursementStats() {
-    const disbursementBalance = await this.getRahatBalance(
-      await this.disbursementService.getDistributionAddress(
-        await this.getFromSettings('TENANTNAME')
-      )
-    );
+  async getDisbursementStats(): Promise<any[]> {
+    try {
+      this.logger.log(
+        'Getting disbursement stats for Stellar chain',
+        StellarChainService.name
+      );
 
-    const vendors = await this.prisma.vendor.findMany({
-      select: { walletAddress: true },
-    });
+      // Delegate to stellar service for disbursement stats
+      const stats = await this.stellarService.getDisbursementStats();
 
-    let totalVendorBalance = 0;
+      this.logger.log(
+        'Successfully retrieved disbursement stats for Stellar chain',
+        StellarChainService.name
+      );
 
-    await Promise.all(
-      vendors.map(async (vendor) => {
-        totalVendorBalance += await this.getRahatBalance(vendor.walletAddress);
-      })
-    );
-
-    const totalDisbursedTokens =
-      await this.getTotalDisbursedTokensAcrossAllGroups();
-
-    return {
-      tokenStats: [
-        {
-          name: 'Disbursed Balance',
-          amount: totalDisbursedTokens.toLocaleString(),
-        },
-        {
-          name: 'Total claimed',
-          amount: totalVendorBalance.toLocaleString(),
-        },
-        {
-          name: 'Remaining Balance',
-          amount: (totalDisbursedTokens - totalVendorBalance).toLocaleString(),
-        },
-        { name: 'Token Price', amount: 'Rs 10' },
-      ],
-      transactionStats: await this.getRecentTransaction(
-        await this.disbursementService.getDistributionAddress(
-          await this.getFromSettings('TENANTNAME')
-        )
-      ),
-    };
+      return stats;
+    } catch (error) {
+      this.logger.error(
+        `Error getting disbursement stats for Stellar chain: ${error.message}`,
+        error.stack,
+        StellarChainService.name
+      );
+      throw error;
+    }
   }
 
   private async getRecentTransaction(address: string) {
@@ -659,6 +639,45 @@ export class StellarChainService implements Partial<IChainService> {
     } catch (error) {
       this.logger.error(
         `Error getting Stellar wallet balance for ${data.address}: ${error.message}`,
+        error.stack,
+        StellarChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async getRahatTokenBalance(data: { address: string }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${data.address}`,
+        StellarChainService.name
+      );
+
+      // For Stellar, RahatToken is the RAHAT asset
+      // Use the same logic as getWalletBalance since RAHAT is the token
+      const walletStats = await this.stellarService.getWalletStats({
+        address: data.address,
+      });
+
+      // Extract the RAHAT token balance from the balances
+      const rahatBalance = walletStats.balances?.find(
+        (balance: any) => balance.asset_code === 'RAHAT'
+      );
+
+      const balance = rahatBalance?.balance || '0';
+
+      this.logger.log(
+        `Successfully retrieved RahatToken balance for ${data.address}: ${balance}`,
+        StellarChainService.name
+      );
+
+      return {
+        balance: balance,
+        address: data.address,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken balance for ${data.address}: ${error.message}`,
         error.stack,
         StellarChainService.name
       );
