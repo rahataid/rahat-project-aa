@@ -83,6 +83,8 @@ describe('PayoutsService', () => {
   const mockVendorsService = {
     findOne: jest.fn(),
     getVendorBeneficiaries: jest.fn(),
+    processVendorOnlinePayout: jest.fn(),
+    processVendorOfflinePayout: jest.fn(),
   };
 
   const mockOfframpService = {
@@ -91,6 +93,7 @@ describe('PayoutsService', () => {
     addToOfframpQueue: jest.fn(),
     instantOfframp: jest.fn(),
     getOfframpWalletAddress: jest.fn(),
+    addToManualPayoutQueue: jest.fn(),
   };
 
   const mockStellarService = {
@@ -268,6 +271,7 @@ describe('PayoutsService', () => {
     it('should create FSP payout successfully', async () => {
       const mockBeneficiaryGroup = {
         uuid: 'group-uuid-123',
+        groupId: 'group-uuid-123',
         numberOfTokens: 1000,
         beneficiaryGroup: {
           name: 'Test Group',
@@ -287,6 +291,10 @@ describe('PayoutsService', () => {
       );
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
       mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
+      mockVendorsService.processVendorOnlinePayout.mockResolvedValue({
+        success: true,
+        message: 'Vendor online payout job added to queue',
+      });
 
       const result = await service.create(mockCreatePayoutDto);
 
@@ -302,6 +310,10 @@ describe('PayoutsService', () => {
             },
           },
         },
+      });
+      expect(mockVendorsService.processVendorOnlinePayout).toHaveBeenCalledWith({
+        beneficiaryGroupUuid: 'group-uuid-123',
+        amount: '1000',
       });
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         EVENTS.NOTIFICATION.CREATE,
@@ -366,6 +378,7 @@ describe('PayoutsService', () => {
 
       const mockBeneficiaryGroup = {
         uuid: 'group-uuid-123',
+        groupId: 'group-uuid-123',
         numberOfTokens: 1000,
         beneficiaryGroup: {
           name: 'Test Group',
@@ -387,6 +400,10 @@ describe('PayoutsService', () => {
       mockPrismaService.payouts.findFirst.mockResolvedValue(null);
       mockVendorsService.findOne.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
+      mockVendorsService.processVendorOfflinePayout.mockResolvedValue({
+        success: true,
+        message: 'Vendor offline payout job added to queue',
+      });
 
       const result = await service.create(vendorPayoutDto);
 
@@ -394,6 +411,10 @@ describe('PayoutsService', () => {
       expect(mockVendorsService.findOne).toHaveBeenCalledWith(
         '123e4567-e89b-12d3-a456-426614174000'
       );
+      expect(mockVendorsService.processVendorOfflinePayout).toHaveBeenCalledWith({
+        beneficiaryGroupUuid: 'group-uuid-123',
+        amount: '1000',
+      });
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         EVENTS.NOTIFICATION.CREATE,
         expect.objectContaining({
