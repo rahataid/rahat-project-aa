@@ -3,7 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { async, lastValueFrom } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -37,7 +37,6 @@ export class BeneficiaryService {
     protected prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
-    @InjectQueue(BQUEUE.STELLAR) private readonly stellarQueue: Queue,
     private eventEmitter: EventEmitter2
   ) {
     this.rsprisma = prisma.rsclient;
@@ -418,19 +417,47 @@ export class BeneficiaryService {
         );
       }
 
-      // for (const member of group?.groupedBeneficiaries) {
-      //   const benf = await this.prisma.beneficiary.findUnique({
-      //     where: {
-      //       uuid: member?.beneficiaryId,
-      //     },
-      //   });
-      //   if (benf.benTokens > 0)
-      //     throw new RpcException('Token already assigned to beneficiary.');
-      // }
-
-      const benfIds = group?.groupedBeneficiaries?.map(
-        (d: any) => d?.beneficiaryId
+      const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
+        (d: any) => {
+          return {
+            uuid: d?.Beneficiary?.uuid,
+            walletAddress: d?.Beneficiary?.walletAddress,
+          };
+        }
       );
+
+      const tokenAssignedBenfWallet = [];
+
+      for (const benf of benfIdsAndWalletAddress) {
+        const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany(
+          {
+            where: {
+              tokensReserved: {
+                isNot: null,
+              },
+              beneficiaries: {
+                some: {
+                  beneficiaryId: { equals: benf.uuid },
+                },
+              },
+            },
+          }
+        );
+        if (tokenAssignedGroup.length > 0) {
+          tokenAssignedBenfWallet.push(benf.walletAddress);
+        }
+      }
+
+      if (tokenAssignedBenfWallet.length > 0) {
+        // Handle the case where tokens are already assigned to some beneficiaries
+        return {
+          status: 'error',
+          message:
+            'Tokens have already been assigned to the following beneficiaries wallet addresses',
+          wallets: tokenAssignedBenfWallet,
+          groupName: benfGroup.name,
+        };
+      }
 
       // await this.prisma.beneficiary.updateMany({
       //   where: {
@@ -457,7 +484,11 @@ export class BeneficiaryService {
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
 
-      return group;
+      return {
+        status: 'success',
+        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
+        group,
+      };
     });
   }
 
@@ -515,6 +546,9 @@ export class BeneficiaryService {
   async getOneTokenReservationByGroupId(groupId: string) {
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
+      include: {
+        beneficiaryGroup: true,
+      },
     });
 
     return benfGroupToken;
@@ -641,6 +675,21 @@ export class BeneficiaryService {
     }
   }
 
+  async createBeneficiaryRedeemBulk(payload: Prisma.BeneficiaryRedeemCreateManyInput[]) {
+    try {
+      const logs = await this.prisma.beneficiaryRedeem.createMany({
+        data: payload,
+      });
+
+      this.logger.log(`Created ${logs.count} beneficiary redeem logs`);
+
+      return logs;
+    } catch (error) {
+      this.logger.error(`Error creating beneficiary redeem bulk: ${error}`);
+      throw error;
+    }
+  }
+
   async getBeneficiaryRedeem(uuid: string) {
     try {
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.findUnique({
@@ -704,6 +753,7 @@ export class BeneficiaryService {
       status: string;
       txHash: string | null;
       createdAt: Date;
+      updatedAt: Date;
       payoutType?: string;
       mode?: string;
       vendorName?: string;
@@ -753,6 +803,7 @@ export class BeneficiaryService {
             },
           },
           createdAt: true,
+          updatedAt: true,
           Vendor: {
             select: {
               name: true,
@@ -773,6 +824,7 @@ export class BeneficiaryService {
         status: redeem.status,
         txHash: redeem.txHash,
         createdAt: redeem.createdAt,
+        updatedAt: redeem.updatedAt,
         payoutType: redeem?.payout?.type,
         mode: redeem?.payout?.mode,
         vendorName: redeem?.Vendor?.name,
@@ -823,8 +875,11 @@ export class BeneficiaryService {
       const benfIds = beneficiaryGroup.beneficiaries.map(
         (benf) => benf.beneficiaryId
       );
-      const tokensPerBeneficiary =
-        beneficiaryGroup.tokensReserved.numberOfTokens;
+
+      const tokensPerBeneficiary = Math.floor(
+        beneficiaryGroup.tokensReserved.numberOfTokens /
+          beneficiaryGroup.beneficiaries.length
+      );
 
       await this.prisma.beneficiary.updateMany({
         where: {

@@ -1174,7 +1174,7 @@ describe('BeneficiaryService', () => {
   });
 
   describe('reserveTokenToGroup', () => {
-    it('should reserve tokens to group successfully', async () => {
+    it('should reserve tokens to group successfully when no wallets have tokens assigned', async () => {
       const payload = {
         beneficiaryGroupId: 'group-123',
         numberOfTokens: 100,
@@ -1185,36 +1185,54 @@ describe('BeneficiaryService', () => {
 
       const mockGroup = {
         groupedBeneficiaries: [
-          { beneficiaryId: 'benf-1' },
-          { beneficiaryId: 'benf-2' },
+          {
+            Beneficiary: {
+              uuid: 'benf-1',
+              walletAddress: 'WALLET-1',
+            },
+          },
+          {
+            Beneficiary: {
+              uuid: 'benf-2',
+              walletAddress: 'WALLET-2',
+            },
+          },
         ],
       };
 
       const mockBenfGroup = {
         uuid: 'group-123',
+        name: 'Test Group',
         groupPurpose: GroupPurpose.BANK_TRANSFER,
       };
 
+      // Mock DB calls
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
         null
-      );
+      ); // No token reserved yet
       mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
         mockBenfGroup
       );
-      mockPrismaService.$transaction.mockImplementation((callback) =>
+
+      // No beneficiaries already assigned to tokens
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+
+      // Transaction mock
+      mockPrismaService.$transaction.mockImplementation(async (callback) =>
         callback()
       );
-      mockPrismaService.beneficiary.updateMany.mockResolvedValue({ count: 2 });
+
+      // Mock getOneGroup method
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
+
       mockPrismaService.beneficiaryGroupTokens.create.mockResolvedValue({
         id: 1,
         title: 'Test Token Reservation',
       });
 
-      // Mock getOneGroup method
-      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
-
       const result = await service.reserveTokenToGroup(payload);
 
+      // Assertions
       expect(
         mockPrismaService.beneficiaryGroupTokens.findUnique
       ).toHaveBeenCalledWith({
@@ -1227,7 +1245,27 @@ describe('BeneficiaryService', () => {
         where: { uuid: 'group-123' },
       });
 
+      expect(
+        mockPrismaService.beneficiaryGroups.findMany
+      ).toHaveBeenCalledTimes(2); // For both beneficiaries
+      expect(
+        mockPrismaService.beneficiaryGroupTokens.create
+      ).toHaveBeenCalledWith({
+        data: {
+          title: 'Test Token Reservation',
+          groupId: 'group-123',
+          numberOfTokens: 1000,
+          createdBy: 'Admin User',
+        },
+      });
+
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.TOKEN_RESERVED);
+
+      expect(result).toEqual({
+        status: 'success',
+        message: `Successfully reserved 1000 tokens for group Test Group.`,
+        group: mockGroup,
+      });
     });
 
     it('should throw error if token already reserved', async () => {
@@ -1293,6 +1331,53 @@ describe('BeneficiaryService', () => {
           'Invalid group purpose COMMUNICATION. Only BANK_TRANSFER and MOBILE_MONEY are allowed.'
         )
       );
+    });
+
+    it('should return error when some beneficiaries already have tokens assigned', async () => {
+      const payload = {
+        beneficiaryGroupId: 'group-123',
+        numberOfTokens: 100,
+        totalTokensReserved: 1000,
+        title: 'Test Token Reservation',
+        user: { name: 'Admin User' },
+      };
+
+      const mockGroup = {
+        groupedBeneficiaries: [
+          {
+            Beneficiary: {
+              uuid: 'benf-1',
+              walletAddress: 'WALLET-1',
+            },
+          },
+        ],
+      };
+
+      const mockBenfGroup = {
+        uuid: 'group-123',
+        name: 'Test Group',
+        groupPurpose: GroupPurpose.BANK_TRANSFER,
+      };
+
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+        null
+      );
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockBenfGroup
+      );
+      mockPrismaService.$transaction.mockImplementation(async (callback) =>
+        callback()
+      );
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
+
+      // Simulate beneficiary already in a group with tokens reserved
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([{}]);
+
+      const result = await service.reserveTokenToGroup(payload);
+
+      expect(result.status).toBe('error');
+      expect(result.wallets).toEqual(['WALLET-1']);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -1376,6 +1461,7 @@ describe('BeneficiaryService', () => {
         id: 1,
         groupId: 'group-123',
         title: 'Test Reservation',
+        beneficiaryGroup: { id: 10, name: 'Test Group' },
       };
 
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
@@ -1389,6 +1475,7 @@ describe('BeneficiaryService', () => {
         mockPrismaService.beneficiaryGroupTokens.findUnique
       ).toHaveBeenCalledWith({
         where: { groupId },
+        include: { beneficiaryGroup: true },
       });
     });
   });

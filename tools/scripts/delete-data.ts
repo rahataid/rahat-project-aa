@@ -82,7 +82,7 @@ async function initializePrismaClients(envPath: string) {
 async function clearCoreBeneficiaries(txManager: RawDistributedTransactionManager) {
   console.log('--------------------------------');
   console.log('Deleting Core Beneficiaries\n');
-  
+
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_beneficiaries_gorup_projects;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_beneficiaries_projects;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_grouped_beneficiaries;`);
@@ -92,7 +92,11 @@ async function clearCoreBeneficiaries(txManager: RawDistributedTransactionManage
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_beneficiary_group;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_group;`);
   await txManager.executeRaw(0, Prisma.sql`DELETE FROM tbl_temp_beneficiaries;`);
-  
+
+  const groupNotToDelete = ['source', 'map', 'vendor']
+
+  await txManager.executeRaw(0,   Prisma.sql`DELETE FROM tbl_stats WHERE "group" NOT IN (${Prisma.join(groupNotToDelete)})`)
+
   console.log('Core Beneficiaries deleted successfully.');
   console.log('--------------------------------\n');
 }
@@ -110,6 +114,9 @@ async function clearAABeneficiaries(txManager: RawDistributedTransactionManager)
   await txManager.executeRaw(1, Prisma.sql`DELETE FROM tbl_beneficiary_redeem;`);
   await txManager.executeRaw(1, Prisma.sql`DELETE FROM tbl_disbursement;`);
   await txManager.executeRaw(1, Prisma.sql`DELETE FROM tbl_beneficiaries;`);
+  const statsGroups = ['beneficiary', 'wards', 'beneficiary_gps_location', 'beneficiary_channel']
+
+  await txManager.executeRaw(1, Prisma.sql`DELETE FROM tbl_stats WHERE "group" IN (${Prisma.join(statsGroups)})`)
 
   console.log('AA Beneficiaries and related data cleared successfully.');
   console.log('--------------------------------\n');
@@ -134,6 +141,7 @@ async function clearTriggerStatements(txManager: RawDistributedTransactionManage
   console.log('Deleting Trigger Statements\n');
 
   await txManager.executeRaw(2, Prisma.sql`DELETE FROM tbl_triggers;`);
+  await txManager.executeRaw(2, Prisma.sql`DELETE FROM tbl_trigger_history;`);
 
   console.log('Trigger statements cleared successfully.');
   console.log('--------------------------------\n');
@@ -144,14 +152,15 @@ async function clearTriggerActivities(txManager: RawDistributedTransactionManage
   console.log('Deleting Trigger Activities\n');
 
   await txManager.executeRaw(2, Prisma.sql`DELETE FROM tbl_activities;`);
+  await txManager.executeRaw(2, Prisma.sql`DELETE FROM tbl_stats;`);
 
   console.log('Trigger activities cleared successfully.');
   console.log('--------------------------------\n');
 }
 
-type ClearAction = 
-  | 'beneficiaries' 
-  | 'users' 
+type ClearAction =
+  | 'beneficiaries'
+  | 'users'
   | 'trigger-statements'
   | 'trigger-activities'
   | 'trigger-all';
@@ -198,21 +207,21 @@ async function main() {
             name: 'Clear Beneficiaries (includes Disbursements)',
             value: 'beneficiaries',
           },
-          { 
-            name: 'Clear Users', 
-            value: 'users' 
+          {
+            name: 'Clear Users',
+            value: 'users'
           },
-          { 
-            name: 'Clear Trigger Statements Only', 
-            value: 'trigger-statements' 
+          {
+            name: 'Clear Trigger Statements Only',
+            value: 'trigger-statements'
           },
-          { 
-            name: 'Clear Trigger Activities Only', 
-            value: 'trigger-activities' 
+          {
+            name: 'Clear Trigger Activities Only',
+            value: 'trigger-activities'
           },
-          { 
-            name: 'Clear All Trigger Data', 
-            value: 'trigger-all' 
+          {
+            name: 'Clear All Trigger Data',
+            value: 'trigger-all'
           },
         ],
       },
