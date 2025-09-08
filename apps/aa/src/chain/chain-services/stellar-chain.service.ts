@@ -218,51 +218,6 @@ export class StellarChainService implements IChainService {
     }
   }
 
-  async getDisbursementStats(): Promise<any[]> {
-    try {
-      this.logger.log(
-        'Getting disbursement stats for Stellar chain',
-        StellarChainService.name
-      );
-
-      // Delegate to stellar service for disbursement stats
-      const stats = await this.stellarService.getDisbursementStats();
-
-      this.logger.log(
-        'Successfully retrieved disbursement stats for Stellar chain',
-        StellarChainService.name
-      );
-
-      return stats;
-    } catch (error) {
-      this.logger.error(
-        `Error getting disbursement stats for Stellar chain: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
-  }
-
-  private async getRecentTransaction(address: string) {
-    const transactions = await this.transactionService.getTransaction(
-      address,
-      10,
-      'desc'
-    );
-
-    return transactions.map((txn) => {
-      return {
-        title: txn.asset,
-        subtitle: txn.source,
-        date: txn.created_at,
-        amount: Number(txn.amount).toFixed(0),
-        amtColor: txn.amtColor,
-        hash: txn.hash,
-      };
-    });
-  }
-
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },
@@ -597,84 +552,6 @@ export class StellarChainService implements IChainService {
   async checkBalance(address: string): Promise<any> {
     const walletData = { address: address, walletAddress: address };
     return this.stellarService.getWalletStats(walletData);
-  }
-
-  async getWalletBalance(data: { address: string }): Promise<any> {
-    try {
-      this.logger.log(
-        `Getting wallet balance for address: ${data.address}`,
-        StellarChainService.name
-      );
-
-      // For Stellar, we can use the existing getWalletStats method
-      // which provides comprehensive wallet information including balances
-      const walletStats = await this.stellarService.getWalletStats({
-        address: data.address,
-      });
-
-      // Extract the RAHAT token balance from the balances
-      const rahatBalance = walletStats.balances?.find(
-        (balance: any) => balance.asset_code === 'RAHAT'
-      );
-
-      const balance = rahatBalance?.balance || '0';
-
-      this.logger.log(
-        `Successfully retrieved Stellar balance for ${data.address}: ${balance}`,
-        StellarChainService.name
-      );
-
-      return {
-        balance: balance,
-        address: data.address,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting Stellar wallet balance for ${data.address}: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
-  }
-
-  async getRahatTokenBalance(data: { address: string }): Promise<any> {
-    try {
-      this.logger.log(
-        `Getting RahatToken balance for address: ${data.address}`,
-        StellarChainService.name
-      );
-
-      // For Stellar, RahatToken is the RAHAT asset
-      // Use the same logic as getWalletBalance since RAHAT is the token
-      const walletStats = await this.stellarService.getWalletStats({
-        address: data.address,
-      });
-
-      // Extract the RAHAT token balance from the balances
-      const rahatBalance = walletStats.balances?.find(
-        (balance: any) => balance.asset_code === 'RAHAT'
-      );
-
-      const balance = rahatBalance?.balance || '0';
-
-      this.logger.log(
-        `Successfully retrieved RahatToken balance for ${data.address}: ${balance}`,
-        StellarChainService.name
-      );
-
-      return {
-        balance: balance,
-        address: data.address,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting RahatToken balance for ${data.address}: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
   }
 
   async verifyOtp(data: VerifyOtpDto): Promise<any> {

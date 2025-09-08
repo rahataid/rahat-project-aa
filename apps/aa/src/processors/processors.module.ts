@@ -26,6 +26,7 @@ import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
+import { EVMProcessor } from './evm.processor';
 
 @Module({
   imports: [

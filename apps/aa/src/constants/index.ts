@@ -202,7 +202,37 @@ export const JOBS = {
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
+    // Token Management
+    ASSIGN_TOKENS: 'aa.jobs.contract.assignTokens',
+    TRANSFER_TOKENS: 'aa.jobs.contract.transferTokens',
+    MINT_TOKENS: 'aa.jobs.contract.mintTokens',
+    BURN_TOKENS: 'aa.jobs.contract.burnTokens',
+
+    // Disbursement Operations
+    DISBURSE_BATCH: `aa.jobs.contract.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.contract.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+
+    // Account Management
+    FUND_ACCOUNT: 'aa.jobs.contract.fundAccount',
+    CHECK_BALANCE: 'aa.jobs.contract.checkBalance',
+
+    // Trigger Management
+    ADD_TRIGGER: 'aa.jobs.contract.addTrigger',
+    UPDATE_TRIGGER_PARAMS: 'aa.jobs.contract.updateTriggerParams',
+    TRIGGER_STATUS: 'aa.jobs.contract.triggerStatus',
+
+    // Project Management
+    CREATE_PROJECT: 'aa.jobs.contract.createProject',
+    ADD_BENEFICIARY: 'aa.jobs.contract.addBeneficiary',
+    REMOVE_BENEFICIARY: 'aa.jobs.contract.removeBeneficiary',
+
+    // Budget Management
     INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget',
+    DECREASE_BUDGET: 'aa.jobs.contract.decreaseBudget',
+
+    // Transaction Monitoring
+    WAIT_FOR_CONFIRMATION: 'aa.jobs.contract.waitForConfirmation',
+    RETRY_TRANSACTION: 'aa.jobs.contract.retryTransaction',
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
@@ -259,6 +289,19 @@ export const JOBS = {
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
   },
+  EVM: {
+    ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
+    DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+    FUND_ACCOUNT: `aa.jobs.evm.fundAccount_${process.env.PROJECT_ID}`,
+    CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
+    ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
+    UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+  },
+  CASH_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
+  },
 };
 
 export const EVENTS = {
@@ -294,6 +337,7 @@ export const BQUEUE = {
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
+  NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

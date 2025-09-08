@@ -1,29 +1,27 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, JOBS } from '../../constants';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { PrismaService } from '@rumsan/prisma';
+import { SettingsService } from '@rumsan/settings';
+import bcrypt from 'bcryptjs';
+import { Queue } from 'bull';
+import { ethers } from 'ethers';
+import { lastValueFrom } from 'rxjs';
+import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
+import { ContractProcessor } from '../../processors/contract.processor';
+import { EVMProcessor } from '../../processors/evm.processor';
+import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
-  IChainService,
-  ChainType,
+  AddTriggerDto,
   AssignTokensDto,
+  ChainType,
   DisburseDto,
   FundAccountDto,
+  IChainService,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
-  AddTriggerDto,
-  UpdateTriggerDto,
 } from '../interfaces/chain-service.interface';
-import { ethers } from 'ethers';
-import { ClientProxy } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
-import { CORE_MODULE } from '../../constants';
-import { PrismaService } from '@rumsan/prisma';
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
-import { RpcException } from '@nestjs/microservices';
-import bcrypt from 'bcryptjs';
-import { EVMProcessor } from '../../processors/evm.processor';
-import { ContractProcessor } from '../../processors/contract.processor';
 
 export interface EVMChainConfig {
   name: string;
@@ -42,7 +40,8 @@ export interface EVMChainConfig {
 @Injectable()
 export class EvmChainService implements IChainService {
   private readonly logger = new Logger(EvmChainService.name);
-
+  private provider: ethers.Provider;
+  name = 'evm';
   constructor(
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
@@ -60,33 +59,231 @@ export class EvmChainService implements IChainService {
     return 'evm';
   }
 
-  validateAddress(address: string): boolean {
-    return ethers.isAddress(address);
+  async initialize(): Promise<boolean> {
+    try {
+      await this.initializeProvider();
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to initialize EVM service:', error);
+      return false;
+    }
   }
 
-  async assignTokens(data: AssignTokensDto): Promise<any> {
-    // Transform common DTO to EVM contract format
-    const evmData = {
-      size: 1,
-      start: 0,
-      end: 1,
-      beneficiaryAddress: data.beneficiaryAddress,
-      amount: data.amount,
-      ...data.metadata,
-    };
+  async disburseBatch(
+    beneficiaries: string[],
+    amounts: string[],
+    groupUuid: string
+  ): Promise<any> {
+    try {
+      const chainConfig = await this.getChainConfig();
 
-    return this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, evmData);
+      const job = await this.evmQueue.add(
+        JOBS.CONTRACT.DISBURSE_BATCH,
+        {
+          beneficiaries,
+          amounts,
+          groupUuid,
+          projectContract: chainConfig.projectContractAddress,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+        }
+      );
+
+      this.logger.log(
+        `Queued EVM disbursement job ${job.id} for group ${groupUuid}`,
+        EvmChainService.name
+      );
+
+      return {
+        jobId: job.id,
+        status: 'QUEUED',
+        groupUuid,
+        beneficiariesCount: beneficiaries.length,
+        totalAmount: amounts.reduce(
+          (sum, amount) => sum + parseFloat(amount),
+          0
+        ),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error queuing EVM disbursement: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async addTrigger(data: AddTriggerDto): Promise<any> {
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
+  }
+
+  async updateTriggerParams(triggerUpdate: any): Promise<any> {
+    // EVM triggers are not implemented yet - throw error for now
+    throw new Error('EVM triggers not implemented yet');
+  }
+
+  async addBeneficiary(beneficiaryAddress: string): Promise<any> {
+    try {
+      const chainConfig = await this.getChainConfig();
+
+      const job = await this.evmQueue.add(
+        JOBS.CONTRACT.ADD_BENEFICIARY,
+        {
+          projectContract: chainConfig.projectContractAddress,
+          beneficiaryAddress,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+        }
+      );
+
+      this.logger.log(
+        `Queued EVM add beneficiary job ${job.id} for ${beneficiaryAddress}`,
+        EvmChainService.name
+      );
+
+      return {
+        jobId: job.id,
+        status: 'QUEUED',
+        beneficiaryAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error queuing EVM add beneficiary: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async checkBalance(
+    address: string,
+    options?: { tokenAddress?: string; projectContract?: string }
+  ): Promise<any> {
+    try {
+      const chainConfig = await this.getChainConfig();
+
+      const job = await this.evmQueue.add(JOBS.CONTRACT.CHECK_BALANCE, {
+        address,
+        tokenAddress: options?.tokenAddress || chainConfig.tokenContractAddress,
+        projectContract:
+          options?.projectContract || chainConfig.projectContractAddress,
+      });
+
+      this.logger.log(
+        `Queued EVM balance check job ${job.id} for ${address}`,
+        EvmChainService.name
+      );
+
+      return job.finished();
+    } catch (error) {
+      this.logger.error(
+        `Error checking EVM balance: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async getTransactionStatus(txHash: string): Promise<any> {
+    try {
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+
+      const receipt = await this.provider.getTransactionReceipt(txHash);
+
+      if (!receipt) {
+        return {
+          txHash,
+          status: 'PENDING',
+          blockNumber: null,
+          gasUsed: null,
+        };
+      }
+
+      return {
+        txHash,
+        status: receipt.status === 1 ? 'CONFIRMED' : 'FAILED',
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        logs: receipt.logs,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting transaction status: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  async getChainStats(): Promise<any> {
+    try {
+      if (!this.provider) {
+        await this.initializeProvider();
+      }
+
+      const chainConfig = await this.getChainConfig();
+
+      // Get latest block number
+      const blockNumber = await this.provider.getBlockNumber();
+
+      // Get network info
+      const network = await this.provider.getNetwork();
+
+      return {
+        chainId: network.chainId.toString(),
+        blockNumber,
+        name: chainConfig.name,
+        currency: {
+          name: chainConfig.currencyName,
+          symbol: chainConfig.currencySymbol,
+          decimals: chainConfig.currencyDecimals,
+        },
+        explorerUrl: chainConfig.explorerUrl,
+        contractAddresses: {
+          project: chainConfig.projectContractAddress,
+          token: chainConfig.tokenContractAddress,
+          triggerManager: chainConfig.triggerManagerAddress,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting chain stats: ${error.message}`,
+        error.stack,
+        EvmChainService.name
+      );
+      throw error;
+    }
+  }
+
+  // Required interface methods
+  async assignTokens(data: AssignTokensDto): Promise<any> {
+    const chainConfig = await this.getChainConfig();
+    return this.evmQueue.add(JOBS.CONTRACT.ASSIGN_TOKENS, {
+      beneficiaryAddress: data.beneficiaryAddress,
+      amount: data.amount.toString(),
+      projectContract: chainConfig.projectContractAddress,
+    });
   }
 
   async transferTokens(data: TransferTokensDto): Promise<any> {
-    // For EVM, direct token transfers are typically handled through token assignment
-    const assignData = {
-      beneficiaryAddress: data.toAddress,
-      amount: data.amount,
-      tokenType: data.tokenType,
-    };
-
-    return this.assignTokens(assignData);
+    throw new Error('Transfer tokens not implemented for EVM');
   }
 
   async disburse(data: DisburseDto): Promise<any> {
