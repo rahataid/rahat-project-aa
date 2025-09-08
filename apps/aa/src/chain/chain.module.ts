@@ -35,6 +35,9 @@ import { SettingsService } from '@rumsan/settings';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     StellarModule,
     ProcessorsModule,
   ],

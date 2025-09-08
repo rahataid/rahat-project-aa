@@ -63,6 +63,9 @@ import { EVMProcessor } from './evm.processor';
     BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -77,6 +80,7 @@ import { EVMProcessor } from './evm.processor';
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
     BatchTokenTransferProcessor,
+    EVMProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {

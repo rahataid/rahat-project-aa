@@ -80,6 +80,9 @@ import { ChainModule } from '../chain/chain.module';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
