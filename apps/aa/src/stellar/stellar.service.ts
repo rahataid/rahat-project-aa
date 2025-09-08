@@ -32,7 +32,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { SettingsService } from '@rumsan/settings';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { Queue } from 'bull';
 import {
   AddTriggerDto,
@@ -44,6 +44,8 @@ import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
 import { AppService } from '../app/app.service';
 import { getFormattedTimeDiff } from '../utils/date';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 interface BatchInfo {
   batchIndex: number;
@@ -79,7 +81,9 @@ export class StellarService {
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
-    private readonly appService: AppService
+    private readonly appService: AppService,
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -342,7 +346,12 @@ export class StellarService {
   }
 
   // todo: Make this dynamic for evm
-  async sendAssetToVendor(verifyOtpDto: SendAssetDto) {
+  async sendAssetToVendor(
+    verifyOtpDto: SendAssetDto,
+    skipOtpVerification: boolean = false,
+    skipBeneficiaryRedeemCreation: boolean = false
+  ) {
+    const projectId = this.configService.get('PROJECT_ID');
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -362,11 +371,14 @@ export class StellarService {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      // Skip OTP verification for offline flows
+      if (!skipOtpVerification) {
+        await this.verifyOTP(
+          verifyOtpDto.otp,
+          verifyOtpDto.phoneNumber,
+          amount as number
+        );
+      }
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -390,111 +402,152 @@ export class StellarService {
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
 
-      // Find and update the existing BeneficiaryRedeem record
-      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
-        where: {
-          beneficiaryWalletAddress: keys.publicKey,
-          vendorUid: vendor.uuid,
-          status: 'PENDING',
-          isCompleted: false,
-          txHash: null,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
+      let updatedRedemption;
 
-      if (!existingRedeem) {
-        this.logger.warn(
-          `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
-        );
-        // Create a new record since the transfer was successful
-        await this.prisma.beneficiaryRedeem.create({
-          data: {
+      // Skip beneficiary redeem record creation if requested (for offline flows)
+      if (!skipBeneficiaryRedeemCreation) {
+        // Find and update the existing BeneficiaryRedeem record
+        const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
             beneficiaryWalletAddress: keys.publicKey,
             vendorUid: vendor.uuid,
-            amount: amount as number,
-            transactionType: 'VENDOR_REIMBURSEMENT',
-            txHash: result.tx.hash,
-            isCompleted: true,
-            status: 'COMPLETED',
-            info: {
-              message: 'Beneficiary Redemption successful',
-              transactionHash: result.tx.hash,
-              offrampWalletAddress: vendor.walletAddress,
-              beneficiaryWalletAddress: keys.publicKey,
-            },
+            status: 'PENDING',
+            isCompleted: false,
+            txHash: null,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          include: {
+            Vendor: true,
           },
         });
-      } else {
-        // Update the existing BeneficiaryRedeem record with transaction details
-        await this.prisma.beneficiaryRedeem.update({
-          where: {
-            uuid: existingRedeem.uuid,
-          },
-          data: {
-            vendorUid: vendor.uuid,
-            txHash: result.tx.hash,
-            isCompleted: true,
-            status: 'COMPLETED',
-            info: {
-              message: 'Beneficiary Redemption successful',
-              transactionHash: result.tx.hash,
-              offrampWalletAddress: vendor.walletAddress,
+
+        if (!existingRedeem) {
+          this.logger.warn(
+            `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+          );
+          // Create a new record since the transfer was successful
+          updatedRedemption = await this.prisma.beneficiaryRedeem.create({
+            data: {
               beneficiaryWalletAddress: keys.publicKey,
+              vendorUid: vendor.uuid,
+              amount: Number(amount) as number,
+              transactionType: 'VENDOR_REIMBURSEMENT',
+              txHash: result.tx.hash,
+              isCompleted: true,
+              status: 'COMPLETED',
+              info: {
+                message: 'Beneficiary Redemption successful',
+                transactionHash: result.tx.hash,
+                offrampWalletAddress: vendor.walletAddress,
+                beneficiaryWalletAddress: keys.publicKey,
+              },
             },
+            include: {
+              Vendor: true,
+            },
+          });
+        } else {
+          // Update the existing BeneficiaryRedeem record with transaction details
+          updatedRedemption = await this.prisma.beneficiaryRedeem.update({
+            where: {
+              uuid: existingRedeem.uuid,
+            },
+            data: {
+              vendorUid: vendor.uuid,
+              txHash: result.tx.hash,
+              isCompleted: true,
+              status: 'COMPLETED',
+              info: {
+                message: 'Beneficiary Redemption successful',
+                transactionHash: result.tx.hash,
+                offrampWalletAddress: vendor.walletAddress,
+                beneficiaryWalletAddress: keys.publicKey,
+              },
+            },
+            include: {
+              Vendor: true,
+            },
+          });
+        }
+      }
+
+      // Emit notification only if beneficiary redeem record was created/updated
+      if (!skipBeneficiaryRedeemCreation && updatedRedemption) {
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Vendor Redemption Completed`,
+            description: `Vendor ${
+              updatedRedemption?.Vendor?.name
+            } redeemed for beneficiary ${
+              updatedRedemption?.beneficiaryWalletAddress
+            } on ${new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(
+              new Date(updatedRedemption?.updatedAt)
+            )}. Transaction completed`,
+            group: 'Vendor Management',
+            projectId: projectId,
+            notify: true,
           },
         });
       }
-
       return {
         txHash: result.tx.hash,
       };
     } catch (error) {
       // Update BeneficiaryRedeem record with error information if possible
-      try {
-        const keys = (await this.getSecretByPhone(
-          verifyOtpDto.phoneNumber
-        )) as any;
+      if (!skipBeneficiaryRedeemCreation) {
+        try {
+          const keys = (await this.getSecretByPhone(
+            verifyOtpDto.phoneNumber
+          )) as any;
 
-        if (keys) {
-          const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
-            where: {
-              beneficiaryWalletAddress: keys.publicKey,
-              status: 'PENDING',
-              isCompleted: false,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          });
-
-          if (existingRedeem) {
-            await this.prisma.beneficiaryRedeem.update({
-              where: {
-                uuid: existingRedeem.uuid,
-              },
-              data: {
-                status: 'FAILED',
-                isCompleted: false,
-                info: {
-                  message: `Beneficiary Redemption failed: ${
-                    error.message || 'Unknown error'
-                  }`,
-                  transactionHash: '',
-                  offrampWalletAddress: verifyOtpDto.receiverAddress,
+          if (keys) {
+            const existingRedeem =
+              await this.prisma.beneficiaryRedeem.findFirst({
+                where: {
                   beneficiaryWalletAddress: keys.publicKey,
-                  error: error.message || 'Unknown error',
+                  status: 'PENDING',
+                  isCompleted: false,
                 },
-              },
-            });
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              });
+
+            if (existingRedeem) {
+              await this.prisma.beneficiaryRedeem.update({
+                where: {
+                  uuid: existingRedeem.uuid,
+                },
+                data: {
+                  status: 'FAILED',
+                  isCompleted: false,
+                  info: {
+                    message: `Beneficiary Redemption failed: ${
+                      error.message || 'Unknown error'
+                    }`,
+                    transactionHash: '',
+                    offrampWalletAddress: verifyOtpDto.receiverAddress,
+                    beneficiaryWalletAddress: keys.publicKey,
+                    error: error.message || 'Unknown error',
+                  },
+                },
+              });
+            }
           }
+        } catch (updateError) {
+          this.logger.error(
+            'Failed to update BeneficiaryRedeem record with error info:',
+            updateError
+          );
         }
-      } catch (updateError) {
-        this.logger.error(
-          'Failed to update BeneficiaryRedeem record with error info:',
-          updateError
-        );
       }
 
       throw new RpcException(
@@ -826,11 +879,11 @@ export class StellarService {
     );
 
     const totalBeneficiaries = benfTokens
-    .filter((token) => token.isDisbursed)
-    .reduce(
-      (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
-      0
-    );
+      .filter((token) => token.isDisbursed)
+      .reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
 
     const disbursementsInfo = benfTokens
       .filter(
@@ -838,7 +891,6 @@ export class StellarService {
           token.isDisbursed && (token.info as any)?.disbursementTimeTaken
       )
       .map((token) => (token.info as any)?.disbursementTimeTaken);
-
 
     const averageDisbursementTime =
       disbursementsInfo.reduce((acc, time) => acc + time, 0) /
@@ -871,7 +923,6 @@ export class StellarService {
           .length;
 
       averageDuration = averageDuration;
-
     }
 
     return [
@@ -889,8 +940,15 @@ export class StellarService {
       },
       { name: 'Token Price', value: oneTokenPrice },
       { name: 'Total Beneficiaries', value: totalBeneficiaries },
-      { name: 'Average Disbursement time', value: getFormattedTimeDiff(averageDisbursementTime) },
-      { name: 'Average Duration', value: averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A' },
+      {
+        name: 'Average Disbursement time',
+        value: getFormattedTimeDiff(averageDisbursementTime),
+      },
+      {
+        name: 'Average Duration',
+        value:
+          averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+      },
     ];
   }
 
@@ -1116,7 +1174,7 @@ export class StellarService {
     return Object.values(csvData);
   }
 
-  private async getBenTotal(phoneNumber: string) {
+  public async getBenTotal(phoneNumber: string) {
     try {
       const keys = await this.getSecretByPhone(phoneNumber);
       this.logger.log('Keys: ', keys);
@@ -1142,7 +1200,9 @@ export class StellarService {
         `Couldn't find secret for phone ${phoneNumber}`,
         error.message
       );
-      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+      throw new RpcException(
+        `Cannot get secret of beneficiary with phone number: ${phoneNumber}`
+      );
     }
   }
 
@@ -1164,7 +1224,7 @@ export class StellarService {
         error.message
       );
       throw new RpcException(
-        `Beneficiary with wallet ${walletAddress} not found`
+        `Cannot get secret of beneficiary with wallet address: ${walletAddress}`
       );
     }
   }

@@ -153,8 +153,7 @@ contract AAProject is
     _assignClaims(_beneficiary, defaultToken, _tokenAssigned, _msgSender());
   }
 
-  // #endregion
-
+  // endregion
   /// @dev overriding the method to ERC2771Context
   function _msgSender()
     internal
