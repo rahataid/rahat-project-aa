@@ -48,7 +48,7 @@ import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
-const ONE_TOKEN_VALUE = 1;
+export const ONE_TOKEN_VALUE = 1;
 
 @Injectable()
 export class PayoutsService {
@@ -1112,78 +1112,12 @@ export class PayoutsService {
       }
 
       if (payout.type === 'FSP') {
-        const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
-          where: {
-            payoutId: payoutUUID,
-            ...(transactionType && { transactionType }),
-            ...(transactionStatus && { status: transactionStatus }),
-            ...(search && {
-              OR: [
-                {
-                  beneficiaryWalletAddress: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  txHash: { contains: search, mode: 'insensitive' },
-                },
-                {
-                  info: {
-                    path: ['error'],
-                    string_contains: search,
-                  },
-                },
-                {
-                  Vendor: {
-                    walletAddress: { contains: search, mode: 'insensitive' },
-                  },
-                },
-                {
-                  Beneficiary: {
-                    phone: { contains: search, mode: 'insensitive' },
-                  },
-                },
-              ],
-            }),
-          },
-          include: {
-            Beneficiary: true,
-            Vendor: true,
-            payout: true,
-          },
+        const filteredRedeems = await this.getFilteredFspRedeems({
+          payoutUUID,
+          transactionType,
+          transactionStatus,
+          search,
         });
-
-        // Group by beneficiary wallet address
-        const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
-          const walletAddress = redeem.beneficiaryWalletAddress;
-          if (!acc[walletAddress]) {
-            acc[walletAddress] = {
-              TOKEN_TRANSFER: null,
-              FIAT_TRANSFER: null,
-            };
-          }
-          acc[walletAddress][redeem.transactionType] = redeem;
-          return acc;
-        }, {});
-
-        // - If FIAT_TRANSFER exists, include it and exclude TOKEN_TRANSFER
-        // - If FIAT_TRANSFER doesn't exist, include TOKEN_TRANSFER
-        const filteredRedeems = [];
-        for (const walletAddress in redeemsByWallet) {
-          const walletRedeems = redeemsByWallet[walletAddress];
-          if (walletRedeems.FIAT_TRANSFER) {
-            filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
-          } else if (walletRedeems.TOKEN_TRANSFER) {
-            if (
-              walletRedeems.TOKEN_TRANSFER.status !==
-              'TOKEN_TRANSACTION_COMPLETED'
-            ) {
-              filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
-            }
-          }
-        }
-
         const total = filteredRedeems.length;
         const pageNumber = page || 1;
         const itemsPerPage = perPage || 10;
@@ -1561,7 +1495,15 @@ export class PayoutsService {
         );
       }
 
-      const result = log.beneficiaryRedeem.map((redeemLog) => {
+      // 👇 if payout type is FSP, use your filtering function
+      let redeemLogs = log.beneficiaryRedeem;
+      if (log.type === 'FSP') {
+        redeemLogs = await this.getFilteredFspRedeems({
+          payoutUUID: uuid,
+        });
+      }
+
+      const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
 
@@ -1611,5 +1553,84 @@ export class PayoutsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  private async getFilteredFspRedeems(params: {
+    payoutUUID: string;
+    transactionType?: PayoutTransactionType;
+    transactionStatus?: PayoutTransactionStatus;
+    search?: string;
+  }) {
+    const { payoutUUID, transactionType, transactionStatus, search } = params;
+
+    const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
+      where: {
+        payoutId: payoutUUID,
+        ...(transactionType && { transactionType }),
+        ...(transactionStatus && { status: transactionStatus }),
+        ...(search && {
+          OR: [
+            {
+              beneficiaryWalletAddress: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            { txHash: { contains: search, mode: 'insensitive' } },
+            {
+              info: {
+                path: ['error'],
+                string_contains: search,
+              },
+            },
+            {
+              Vendor: {
+                walletAddress: { contains: search, mode: 'insensitive' },
+              },
+            },
+            {
+              Beneficiary: {
+                phone: { contains: search, mode: 'insensitive' },
+              },
+            },
+          ],
+        }),
+      },
+      include: {
+        Beneficiary: true,
+        Vendor: true,
+        payout: true,
+      },
+    });
+
+    // Group by beneficiary wallet address
+    const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
+      const walletAddress = redeem.beneficiaryWalletAddress;
+      if (!acc[walletAddress]) {
+        acc[walletAddress] = {
+          TOKEN_TRANSFER: null,
+          FIAT_TRANSFER: null,
+        };
+      }
+      acc[walletAddress][redeem.transactionType] = redeem;
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Apply filtering logic
+    const filteredRedeems = [];
+    for (const walletAddress in redeemsByWallet) {
+      const walletRedeems = redeemsByWallet[walletAddress];
+      if (walletRedeems.FIAT_TRANSFER) {
+        filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
+      } else if (walletRedeems.TOKEN_TRANSFER) {
+        if (
+          walletRedeems.TOKEN_TRANSFER.status !== 'TOKEN_TRANSACTION_COMPLETED'
+        ) {
+          filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
+        }
+      }
+    }
+
+    return filteredRedeems;
   }
 }
