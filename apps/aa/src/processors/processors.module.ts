@@ -11,6 +11,7 @@ import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
+import { VendorOfflinePayoutProcessor } from './vendor-offline-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
@@ -23,6 +24,7 @@ import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { NotificationProcessor } from './notification.processor';
 
 @Module({
   imports: [
@@ -53,6 +55,9 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.VENDOR_OFFLINE,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -63,7 +68,9 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     StatsProcessor,
     StellarProcessor,
     CheckTrustlineProcessor,
+    NotificationProcessor,
     OfframpProcessor,
+    VendorOfflinePayoutProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {

@@ -3,7 +3,7 @@ import { RpcException } from '@nestjs/microservices';
 import { PrismaService, paginator, PaginatorTypes } from '@rumsan/prisma';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { BQUEUE, JOBS } from '../constants';
+import { BQUEUE, EVENTS, JOBS } from '../constants';
 import {
   CreateVendorTokenRedemptionDto,
   UpdateVendorTokenRedemptionDto,
@@ -14,6 +14,8 @@ import {
   VendorTokenRedemptionStatsResponseDto,
   TokenRedemptionStatus,
 } from './dto/vendorTokenRedemption.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -24,10 +26,14 @@ export class VendorTokenRedemptionService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.VENDOR)
-    private readonly vendorQueue: Queue
+    private readonly vendorQueue: Queue,
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
+    const projectId = this.configService.get('PROJECT_ID');
+
     try {
       // Verify vendor exists
       const vendor = await this.prisma.vendor.findUnique({
@@ -36,6 +42,23 @@ export class VendorTokenRedemptionService {
 
       if (!vendor) {
         throw new RpcException(`Vendor with UUID ${dto.vendorUuid} not found`);
+      }
+
+      // Check if a redemption request already exists with the same transaction hash
+      if (dto?.transactionHash) {
+        const existingRedemption =
+          await this.prisma.vendorTokenRedemption.findFirst({
+            where: {
+              transactionHash: dto.transactionHash,
+            },
+          });
+
+        if (existingRedemption) {
+          this.logger.log(
+            `Token redemption request already exists with transaction hash ${dto.transactionHash}. Returning existing record.`
+          );
+          return existingRedemption;
+        }
       }
 
       // Create token redemption request
@@ -72,6 +95,15 @@ export class VendorTokenRedemptionService {
         `Added verification job for token redemption ${redemption.uuid}`
       );
 
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Vendor Requested for Settlement`,
+          description: `Vendor ${redemption?.vendor?.name} has requested to redeem  Rs ${redemption?.tokenAmount}`,
+          group: 'Vendor Management',
+          projectId: projectId,
+          notify: true,
+        },
+      });
       return redemption;
     } catch (error) {
       this.logger.error(`Error creating token redemption: ${error.message}`);
@@ -102,6 +134,7 @@ export class VendorTokenRedemptionService {
   }
 
   async update(dto: UpdateVendorTokenRedemptionDto) {
+    const projectId = this.configService.get('PROJECT_ID');
     try {
       const redemption = await this.prisma.vendorTokenRedemption.findUnique({
         where: { uuid: dto.uuid },
@@ -136,19 +169,44 @@ export class VendorTokenRedemptionService {
         );
       }
 
+      let updatedRedemption;
       // Update the redemption status
-      const updatedRedemption = await this.prisma.vendorTokenRedemption.update({
-        where: { uuid: dto.uuid },
-        data: {
-          redemptionStatus: dto.redemptionStatus,
-          approvedBy: dto.approvedBy,
-          approvedAt: new Date(),
-          transactionHash: dto.transactionHash,
-        },
-        include: {
-          vendor: true,
-        },
-      });
+      if (dto.redemptionStatus === 'APPROVED') {
+        updatedRedemption = await this.prisma.vendorTokenRedemption.update({
+          where: { uuid: dto.uuid },
+          data: {
+            redemptionStatus: 'APPROVED',
+            approvedBy: dto.approvedBy,
+            approvedAt: new Date(),
+            transactionHash: dto.transactionHash,
+          },
+          include: {
+            vendor: true,
+          },
+        });
+
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Vendor Settled with Fiat`,
+            description: `Vendor ${updatedRedemption?.vendor?.name} has been redeemed Rs ${updatedRedemption?.tokenAmount} by ${dto?.user?.name}`,
+            group: 'Vendor Management',
+            projectId: projectId,
+            notify: true,
+          },
+        });
+      } else {
+        updatedRedemption =
+          await this.prisma.vendorTokenRedemption.update({
+            where: { uuid: dto.uuid },
+            data: {
+              redemptionStatus: dto.redemptionStatus,
+              transactionHash: dto.transactionHash,
+            },
+            include: {
+              vendor: true,
+            },
+          });
+      }
 
       this.logger.log(
         `Updated token redemption ${dto.uuid} to status ${dto.redemptionStatus}`
@@ -180,7 +238,13 @@ export class VendorTokenRedemptionService {
       }
 
       if (redemptionStatus) {
-        where.redemptionStatus = redemptionStatus;
+        if (redemptionStatus === 'REQUESTED') {
+          where.redemptionStatus = {
+            in: ['STELLAR_VERIFIED', 'REQUESTED'],
+          };
+        } else {
+          where.redemptionStatus = redemptionStatus;
+        }
       }
 
       if (name) {

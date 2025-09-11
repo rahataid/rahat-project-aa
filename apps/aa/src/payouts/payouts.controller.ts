@@ -48,8 +48,8 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  triggerPayout(@Payload() payload: { uuid: string }) {
-    return this.payoutsService.triggerPayout(payload.uuid);
+  triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
+    return this.payoutsService.triggerPayout(payload.uuid, payload.user);
   }
 
   @MessagePattern({
@@ -98,5 +98,13 @@ export class PayoutsController {
   })
   downloadPayoutLogs(@Payload() payload: { payoutUUID: string }) {
     return this.payoutsService.downloadPayoutLogs(payload.payoutUUID);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.VERIFY_MANUAL_PAYOUT,
+    uuid: process.env.PROJECT_ID,
+  })
+  verifyManualPayout(@Payload() payload: any) {
+    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data);
   }
 }
