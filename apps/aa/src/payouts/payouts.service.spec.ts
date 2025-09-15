@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PayoutsService } from './payouts.service';
-import { PrismaService } from '@rumsan/prisma';
+import { ONE_TOKEN_VALUE, PayoutsService } from './payouts.service';
+import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { VendorsService } from '../vendors/vendors.service';
 import { OfframpService } from './offramp.service';
 import { StellarService } from '../stellar/stellar.service';
@@ -133,6 +133,9 @@ describe('PayoutsService', () => {
       return null;
     }),
   };
+
+  // const ONE_TOKEN_VALUE = 1;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -717,6 +720,219 @@ describe('PayoutsService', () => {
 
       expect(result).toEqual(mockProviders);
       expect(mockOfframpService.getPaymentProvider).toHaveBeenCalled();
+    });
+  });
+
+  describe('getPayoutLogs', () => {
+    const mockGetPayoutLogsDto: GetPayoutLogsDto = {
+      payoutUUID: 'payout-uuid-123',
+      transactionType: 'TOKEN_TRANSFER',
+      transactionStatus: 'PENDING',
+      page: 1,
+      perPage: 10,
+      sort: 'createdAt',
+      order: 'desc',
+      search: '0x123',
+    };
+
+    it('should throw RpcException if payout not found', async () => {
+      mockPrismaService.payouts.findFirst.mockResolvedValue(null);
+
+      await expect(service.getPayoutLogs(mockGetPayoutLogsDto)).rejects.toThrow(
+        `Payout with UUID '${mockGetPayoutLogsDto.payoutUUID}' not found`
+      );
+    });
+    it('should return filtered FSP redeems when payout type is FSP', async () => {
+      const mockPayout = { uuid: 'payout-uuid-123', type: 'FSP' };
+      mockPrismaService.payouts.findFirst.mockResolvedValue(mockPayout);
+
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([
+        {
+          id: 1,
+          beneficiaryWalletAddress: '0xabc',
+          transactionType: 'TOKEN_TRANSFER',
+          status: 'PENDING',
+        },
+        {
+          id: 2,
+          beneficiaryWalletAddress: '0xabc',
+          transactionType: 'FIAT_TRANSFER',
+          status: 'COMPLETED',
+        },
+      ]);
+
+      const result = await service.getPayoutLogs({
+        payoutUUID: 'payout-uuid-123',
+        page: 1,
+        perPage: 1,
+        sort: 'createdAt',
+        order: 'asc',
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.meta.total).toBe(1);
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalled();
+    });
+
+    it('should throw RpcException for unsupported payout type', async () => {
+      const mockPayout = { uuid: 'payout-uuid-123', type: 'UNKNOWN' };
+      mockPrismaService.payouts.findFirst.mockResolvedValue(mockPayout);
+
+      await expect(service.getPayoutLogs(mockGetPayoutLogsDto)).rejects.toThrow(
+        `Unsupported payout type: ${mockPayout.type}`
+      );
+    });
+
+    it('should handle errors gracefully', async () => {
+      const error = new Error('Database error');
+      mockPrismaService.payouts.findFirst.mockRejectedValue(error);
+
+      await expect(service.getPayoutLogs(mockGetPayoutLogsDto)).rejects.toThrow(
+        'Database error'
+      );
+    });
+  });
+
+  describe('downloadPayoutLogs', () => {
+    const payoutUUID = 'payout-uuid-123';
+
+    it('should throw RpcException if payout not found', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue(null);
+
+      await expect(service.downloadPayoutLogs(payoutUUID)).rejects.toThrow(
+        `Beneficiary redeem log with UUID '${payoutUUID}' not found`
+      );
+    });
+
+    it('should return formatted FSP payout logs', async () => {
+      const mockPayout = {
+        uuid: payoutUUID,
+        type: 'FSP',
+        beneficiaryGroupToken: { numberOfTokens: 100 },
+      };
+
+      const mockRedeems = [
+        {
+          beneficiaryWalletAddress: '0xabc',
+          transactionType: 'TOKEN_TRANSFER',
+          status: 'PENDING',
+          Beneficiary: {
+            extras: JSON.stringify({
+              phone: '123456',
+              bank_ac_name: 'John Doe',
+              bank_ac_number: '1111',
+              bank_name: 'Bank A',
+            }),
+            benTokens: 10,
+          },
+          payout: { type: 'FSP', status: 'COMPLETED' },
+          Vendor: null,
+          info: JSON.stringify({ transactionHash: 'txhash1' }),
+          createdAt: new Date('2025-01-01T00:00:00Z'),
+          updatedAt: new Date('2025-01-01T01:00:00Z'),
+        },
+        {
+          beneficiaryWalletAddress: '0xabc',
+          transactionType: 'FIAT_TRANSFER',
+          status: 'COMPLETED',
+          Beneficiary: {
+            extras: JSON.stringify({
+              phone: '123456',
+              bank_ac_name: 'John Doe',
+              bank_ac_number: '1111',
+              bank_name: 'Bank A',
+            }),
+            benTokens: 10,
+          },
+          payout: { type: 'FSP', status: 'COMPLETED' },
+          Vendor: null,
+          info: JSON.stringify({ transactionHash: 'txhash2' }),
+          createdAt: new Date('2025-01-01T00:00:00Z'),
+          updatedAt: new Date('2025-01-01T01:00:00Z'),
+        },
+      ];
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedeems
+      );
+
+      const result = await service.downloadPayoutLogs(payoutUUID);
+
+      expect(result).toHaveLength(1);
+      const log = result[0];
+      expect(log['Beneficiary Wallet Address']).toBe('0xabc');
+      expect(log['Phone number']).toBe('123456');
+      expect(log['Bank a/c name']).toBe('John Doe');
+      expect(log['Bank a/c number']).toBe('1111');
+      expect(log['Bank Name']).toBe('Bank A');
+      expect(log['Amount Disbursed']).toBe(
+        mockRedeems[1].payout.status === 'FAILED'
+          ? 0
+          : (mockRedeems[1].Beneficiary.benTokens || 0) * ONE_TOKEN_VALUE
+      );
+    });
+
+    it('should return formatted Vendorpayout logs', async () => {
+      const mockPayout = {
+        uuid: payoutUUID,
+        type: 'VENDOR',
+        beneficiaryGroupToken: { numberOfTokens: 100 },
+        beneficiaryRedeem: [
+          // add this
+          {
+            beneficiaryWalletAddress: '0xabc',
+            transactionType: 'TOKEN_TRANSFER',
+            status: 'COMPLETED',
+            Beneficiary: {
+              extras: JSON.stringify({ phone: '123456' }),
+              benTokens: 10,
+            },
+            payout: { type: 'VENDOR', status: 'COMPLETED' },
+            Vendor: null,
+            info: JSON.stringify({ transactionHash: 'txhash1' }),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      const mockRedeems = [
+        {
+          beneficiaryWalletAddress: '0xabc',
+          transactionType: 'TOKEN_TRANSFER',
+          status: 'COMPLETED',
+          Beneficiary: {
+            extras: JSON.stringify({ phone: '123456' }),
+            benTokens: 10,
+          },
+          payout: { type: 'VENDOR', status: 'COMPLETED' },
+          Vendor: null,
+          info: JSON.stringify({ transactionHash: 'txhash1' }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockRedeems
+      );
+
+      const result = await service.downloadPayoutLogs(payoutUUID);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]['Bank a/c name']).toBeUndefined(); // Non-FSP should not have bank fields
+      expect(result[0]['Phone number']).toBe('123456');
+    });
+
+    it('should handle errors gracefully', async () => {
+      const error = new Error('Database error');
+      mockPrismaService.payouts.findUnique.mockRejectedValue(error);
+
+      await expect(service.downloadPayoutLogs(payoutUUID)).rejects.toThrow(
+        'Database error'
+      );
     });
   });
 });
