@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { ChainService } from './chain.service';
 import { MessagePattern } from '@nestjs/microservices';
 
@@ -7,7 +7,7 @@ export class ChainController {
   constructor(private readonly chainService: ChainService) {}
 
   @MessagePattern({
-    cmd: 'jobs.chain.disburse',
+    cmd: 'aa.chain.disburse',
     uuid: process.env.PROJECT_ID,
   })
   disburse(data: any) {
@@ -15,7 +15,7 @@ export class ChainController {
   }
 
   @MessagePattern({
-    cmd: 'jobs.chain.sendOtp',
+    cmd: 'aa.chain.sendOtp',
     uuid: process.env.PROJECT_ID,
   })
   sendOtp(data: any) {
@@ -23,7 +23,7 @@ export class ChainController {
   }
 
   @MessagePattern({
-    cmd: 'jobs.chain.sendAsset',
+    cmd: 'aa.chain.sendAsset',
     uuid: process.env.PROJECT_ID,
   })
   sendAssetToVendor(data: any) {
