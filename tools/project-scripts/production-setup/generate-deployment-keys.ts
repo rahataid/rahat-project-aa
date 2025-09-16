@@ -59,7 +59,7 @@ export function generateDeploymentKeys(network: string = 'development', count: n
  * @param filename - Optional filename (default: generated based on network and timestamp)
  */
 export function saveDeploymentKeys(keys: DeploymentKeys, filename?: string): string {
-  const deploymentsDir = `${__dirname}/deployments`;
+  const deploymentsDir = `${__dirname}/.data`;
   
   // Create deployments directory if it doesn't exist
   if (!existsSync(deploymentsDir)) {

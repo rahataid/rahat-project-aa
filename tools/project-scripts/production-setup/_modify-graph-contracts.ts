@@ -8,7 +8,7 @@ const modifyNetworksFile = async (
     networkName: string = 'mainnet',
 ) => {
     const graphNetworksPath = `${__dirname}/../../../apps/graph/networks.json`;
-    const deploymentFilePath = `${__dirname}/deployments/${projectUUID}.json`;
+    const deploymentFilePath = `${__dirname}/.data/deployments/${projectUUID}.json`;
     try {
         const contractData = await fs.readFile(deploymentFilePath, 'utf8');
         const newAddresses = JSON.parse(contractData).CONTRACTS;

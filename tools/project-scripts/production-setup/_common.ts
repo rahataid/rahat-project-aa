@@ -52,7 +52,7 @@ export class commonLib {
   //append to deployment file
 
   public async writeToDeploymentFile(fileName: string, newData: any) {
-    const dirPath = `${__dirname}/deployments`;
+    const dirPath = `${__dirname}/.data/deployments`;
     const filePath = `${dirPath}/${fileName}.json`;
 
     // Ensure the directory exists
@@ -63,7 +63,7 @@ export class commonLib {
     //append to deployment file
 
     public async writeToDeploymentFile(fileName: string, newData: any) {
-        const dirPath = `${__dirname}/deployments`;
+        const dirPath = `${__dirname}/.data/deployments`;
         const filePath = `${dirPath}/${fileName}.json`;
 
         // Ensure the directory exists
