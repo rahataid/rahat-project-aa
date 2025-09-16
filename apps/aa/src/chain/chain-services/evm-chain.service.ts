@@ -1,31 +1,27 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, JOBS } from '../../constants';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { PrismaService } from '@rumsan/prisma';
+import { SettingsService } from '@rumsan/settings';
+import bcrypt from 'bcryptjs';
+import { Queue } from 'bull';
+import { ethers } from 'ethers';
+import { lastValueFrom } from 'rxjs';
+import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
+import { ContractProcessor } from '../../processors/contract.processor';
+import { EVMProcessor } from '../../processors/evm.processor';
+import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
-  ChainType,
-  IChainService,
   AddTriggerDto,
-  DisburseDto,
   AssignTokensDto,
-  TransferTokensDto,
+  ChainType,
+  DisburseDto,
   FundAccountDto,
+  IChainService,
   SendOtpDto,
+  TransferTokensDto,
   VerifyOtpDto,
 } from '../interfaces/chain-service.interface';
-import { SettingsService } from '@rumsan/settings';
-import { ethers } from 'ethers';
-import { ClientProxy } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
-import { CORE_MODULE } from '../../constants';
-import { PrismaService } from '@rumsan/prisma';
-import { querySubgraph } from '../../utils/subgraph';
-import { getBeneficiaryAdded } from '@rahataid/subgraph';
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
-import { RpcException } from '@nestjs/microservices';
-import bcrypt from 'bcryptjs';
-import { EVMProcessor } from '../../processors/evm.processor';
-import { ContractProcessor } from '../../processors/contract.processor';
 
 export interface EVMChainConfig {
   name: string;

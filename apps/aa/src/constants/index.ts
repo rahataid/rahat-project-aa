@@ -38,17 +38,14 @@ export const CONTROLLERS = {
     UPDATE: NAMESPACE + '.payouts.update',
     REMOVE: NAMESPACE + '.payouts.remove',
   },
-  CASH_TRACKER: {
-    CREATE: NAMESPACE + '.cash-tracker.create',
-    LIST: NAMESPACE + '.cash-tracker.list',
-    GET: NAMESPACE + '.cash-tracker.get',
-    UPDATE: NAMESPACE + '.cash-tracker.update',
-  },
 };
 
 export const JOBS = {
   APP: {
     RESET_ALL: 'rahat.jobs.beneficiary.create',
+  },
+  NOTIFICATION: {
+    CREATE: 'rahat.jobs.notification.create',
   },
   PROJECT: {
     SETUP: 'rahat.jobs.project.setup',
@@ -79,10 +76,6 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
-  },
-  CASH_TRACKER: {
-    EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
-    GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -133,21 +126,14 @@ export const JOBS = {
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
   },
-  EVM: {
-    ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
-    DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
-    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
-    FUND_ACCOUNT: `aa.jobs.evm.fundAccount_${process.env.PROJECT_ID}`,
-    CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
-    ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
-    UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
-  },
   OFFRAMP: {
     CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
     EXECUTE_OFFRAMP: 'aa.jobs.offramp.executeOfframp',
     LIST_OFFRAMP: 'aa.jobs.offramp.listOfframp',
     GET_OFFRAMP: 'aa.jobs.offramp.getOfframp',
     INSTANT_OFFRAMP: `aa.jobs.offramp.instantOfframp`,
+    INSTANT_MANUAL_PAYOUT: `aa.jobs.offramp.instantManualPayout`,
+    VERIFY_MANUAL_PAYOUT: `aa.jobs.offramp.verifyManualPayout`,
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
@@ -165,6 +151,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   ACTIVITIES: {
     GET_ONE: 'aa.jobs.activities.getOne',
@@ -302,6 +289,19 @@ export const JOBS = {
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
   },
+  EVM: {
+    ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
+    DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+    FUND_ACCOUNT: `aa.jobs.evm.fundAccount_${process.env.PROJECT_ID}`,
+    CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
+    ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
+    UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+  },
+  CASH_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
+  },
 };
 
 export const EVENTS = {
@@ -319,6 +319,9 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  NOTIFICATION: {
+    CREATE: 'events.notification.create',
+  },
 };
 
 export const BQUEUE = {
@@ -334,6 +337,7 @@ export const BQUEUE = {
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
+  NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

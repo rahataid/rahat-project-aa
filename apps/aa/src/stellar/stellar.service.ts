@@ -32,7 +32,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { SettingsService } from '@rumsan/settings';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { Queue } from 'bull';
 import {
   AddTriggerDto,
@@ -44,6 +44,8 @@ import { TransferToOfframpDto } from './dto/transfer-to-offramp.dto';
 import { FSPPayoutDetails } from '../processors/types';
 import { AppService } from '../app/app.service';
 import { getFormattedTimeDiff } from '../utils/date';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 
 interface BatchInfo {
   batchIndex: number;
@@ -79,7 +81,9 @@ export class StellarService {
     private readonly disbursementService: DisbursementServices,
     private readonly receiveService: ReceiveService,
     private readonly transactionService: TransactionService,
-    private readonly appService: AppService
+    private readonly appService: AppService,
+    private readonly eventEmitter: EventEmitter2,
+    private configService: ConfigService
   ) {}
 
   async addDisbursementJobs(disburseDto: DisburseDto) {
@@ -347,6 +351,7 @@ export class StellarService {
     skipOtpVerification: boolean = false,
     skipBeneficiaryRedeemCreation: boolean = false
   ) {
+    const projectId = this.configService.get('PROJECT_ID');
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
@@ -383,12 +388,6 @@ export class StellarService {
         throw new RpcException('Beneficiary address not found');
       }
 
-      console.log(
-        keys.privateKey,
-        verifyOtpDto.receiverAddress,
-        amount.toString()
-      );
-
       const result = await this.receiveService.sendAsset(
         keys.privateKey,
         verifyOtpDto.receiverAddress,
@@ -402,6 +401,8 @@ export class StellarService {
       }
 
       this.logger.log(`Transfer successful: ${result.tx.hash}`);
+
+      let updatedRedemption;
 
       // Skip beneficiary redeem record creation if requested (for offline flows)
       if (!skipBeneficiaryRedeemCreation) {
@@ -417,15 +418,17 @@ export class StellarService {
           orderBy: {
             createdAt: 'desc',
           },
+          include: {
+            Vendor: true,
+          },
         });
 
         if (!existingRedeem) {
           this.logger.warn(
-            `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and 
-            vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
+            `No pending BeneficiaryRedeem record found for beneficiary ${keys.publicKey} and vendor ${vendor.uuid}. Asset transfer was successful but no record to update.`
           );
           // Create a new record since the transfer was successful
-          await this.prisma.beneficiaryRedeem.create({
+          updatedRedemption = await this.prisma.beneficiaryRedeem.create({
             data: {
               beneficiaryWalletAddress: keys.publicKey,
               vendorUid: vendor.uuid,
@@ -441,10 +444,13 @@ export class StellarService {
                 beneficiaryWalletAddress: keys.publicKey,
               },
             },
+            include: {
+              Vendor: true,
+            },
           });
         } else {
           // Update the existing BeneficiaryRedeem record with transaction details
-          await this.prisma.beneficiaryRedeem.update({
+          updatedRedemption = await this.prisma.beneficiaryRedeem.update({
             where: {
               uuid: existingRedeem.uuid,
             },
@@ -460,10 +466,37 @@ export class StellarService {
                 beneficiaryWalletAddress: keys.publicKey,
               },
             },
+            include: {
+              Vendor: true,
+            },
           });
         }
       }
 
+      // Emit notification only if beneficiary redeem record was created/updated
+      if (!skipBeneficiaryRedeemCreation && updatedRedemption) {
+        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+          payload: {
+            title: `Vendor Redemption Completed`,
+            description: `Vendor ${
+              updatedRedemption?.Vendor?.name
+            } redeemed for beneficiary ${
+              updatedRedemption?.beneficiaryWalletAddress
+            } on ${new Intl.DateTimeFormat('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(
+              new Date(updatedRedemption?.updatedAt)
+            )}. Transaction completed`,
+            group: 'Vendor Management',
+            projectId: projectId,
+            notify: true,
+          },
+        });
+      }
       return {
         txHash: result.tx.hash,
       };
@@ -1408,34 +1441,6 @@ export class StellarService {
     } catch (error) {
       throw new RpcException(
         `Failed to retrieve payout type: ${error.message}`
-      );
-    }
-  }
-
-  private async getTotalDisbursedTokensAcrossAllGroups(): Promise<number> {
-    try {
-      const result = await this.prisma.beneficiaryGroupTokens.aggregate({
-        where: {
-          AND: [{ status: 'DISBURSED' }, { isDisbursed: true }],
-        },
-        _sum: {
-          numberOfTokens: true,
-        },
-      });
-
-      const totalDisbursedTokens = result._sum.numberOfTokens || 0;
-
-      this.logger.log(
-        `Total disbursed tokens across all groups: ${totalDisbursedTokens}`
-      );
-      return totalDisbursedTokens;
-    } catch (error) {
-      this.logger.error(
-        'Error getting total disbursed tokens across all groups:',
-        error.message
-      );
-      throw new RpcException(
-        `Failed to get total disbursed tokens: ${error.message}`
       );
     }
   }

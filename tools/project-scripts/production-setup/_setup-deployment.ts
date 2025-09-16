@@ -5,16 +5,17 @@ import { DeployedContract } from '../types/blockchain';
 import { Wallet } from 'ethers';
 dotenv.config({ path: `${__dirname}/.env.prod` });
 
+
 //RAHAT_ADMIN_PRIVATE_KEY
 //BLOCKCHAIN
 //SUBGRAPH_URL
 
 const rahatTokenDetails = {
-  name: 'RHT Coin',
-  symbol: 'RHT',
-  description: 'RHT Coin',
-  decimals: 0,
-  initialSupply: '100000',
+    name: 'RHT Coin',
+    symbol: 'RHT',
+    description: 'RHT Coin',
+    decimals: 0,
+    initialSupply: '100000',
 };
 
 class DeploymentSetup extends commonLib {
@@ -161,7 +162,7 @@ class DeploymentSetup extends commonLib {
       console.error('[ERROR] setupRahatAAContracts:', error);
       throw error;
     }
-  }
+    public async setupRahatAAContracts() {
 
   public async setupBlockchainNetowrk() {
     console.log('writing chain settings to file');
@@ -209,29 +210,19 @@ class DeploymentSetup extends commonLib {
     console.log(`Added Admins ${addresses} to AccessManager`);
   }
 
-  public async addDonor(addresses: any, deployerKey: string) {
-    const adminValues = addresses.map((address: any) => [0, address, 0]);
-    const multicallData = await this.generateMultiCallData(
-      'RahatAccessManager',
-      'grantRole',
-      adminValues
-    );
-    const contracts = await this.getContracts(
-      'RahatAccessManager',
-      this.rahatAccessManagerAddress,
-      deployerKey
-    );
-    const res = await contracts.multicall(multicallData);
-    await this.sleep(2000);
-    console.log(`Added Donor ${addresses} to  Project`);
-  }
 }
 
 async function main() {
-  const deploymentSetup = new DeploymentSetup();
-  await deploymentSetup.setupRahatAAContracts();
-  await deploymentSetup.setupBlockchainNetowrk();
-  await deploymentSetup.setupAdminKeys();
+    const deploymentSetup = new DeploymentSetup();
+    await deploymentSetup.setupRahatAAContracts();
+    await deploymentSetup.setupBlockchainNetowrk();
+    await deploymentSetup.setupAdminKeys();
+
+    //Make Contract call to make admins
+    //addAdminToAA
+    //addDonorAsAdmin
+    await deploymentSetup.addAdminToAA([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
+    await deploymentSetup.addDonor([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
 
   //Make Contract call to make admins
   //addAdminToAA
@@ -247,6 +238,6 @@ async function main() {
   );
 }
 main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+    console.error(error);
+    process.exit(1);
 });

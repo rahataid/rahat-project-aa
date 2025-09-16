@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import {
-  ChainType,
   IChainService,
+  ChainType,
 } from '../interfaces/chain-service.interface';
 import { StellarChainService } from '../chain-services/stellar-chain.service';
 import { EvmChainService } from '../chain-services/evm-chain.service';
@@ -17,15 +17,20 @@ export class ChainServiceRegistry {
     private stellarChainService: StellarChainService,
     private evmChainService: EvmChainService
   ) {
-    // Register services directly in constructor
+    this.registerServices();
+  }
+
+  private registerServices(): void {
     this.chainServices.set('stellar', this.stellarChainService);
     this.chainServices.set('evm', this.evmChainService);
+
+    this.logger.log('Registered chain services: stellar, evm');
   }
 
   async getChainService(chainType?: ChainType): Promise<IChainService> {
     const detectedChain = chainType || (await this.detectChainFromSettings());
-    const service = this.chainServices.get(detectedChain);
 
+    const service = this.chainServices.get(detectedChain);
     if (!service) {
       throw new Error(`Chain service not found for type: ${detectedChain}`);
     }
@@ -35,24 +40,32 @@ export class ChainServiceRegistry {
 
   async detectChainFromSettings(): Promise<ChainType> {
     try {
-      // Try CHAIN_SETTINGS first, then fall back to CHAIN_SETTINGS
-      let chainSettings = await this.settingsService.getPublic(
+      const chainSettings = await this.settingsService.getPublic(
         'CHAIN_SETTINGS'
       );
 
-      if (!chainSettings?.value) {
-        // Fallback to CHAIN_SETTINGS for EVM
-        throw new Error('CHAIN_SETTINGS not found');
+      if (
+        !chainSettings?.value ||
+        typeof chainSettings.value !== 'object' ||
+        !('type' in chainSettings.value)
+      ) {
+        this.logger.warn('Chain settings not found, defaulting to stellar');
+        return 'stellar';
       }
 
-      if (
-        typeof chainSettings.value === 'object' &&
-        chainSettings.value !== null &&
-        'type' in chainSettings.value
-      ) {
-        return (chainSettings.value as { type: string }).type as ChainType;
+      const chainType = (
+        chainSettings.value as any
+      ).type.toLowerCase() as ChainType;
+
+      if (!this.isValidChainType(chainType)) {
+        this.logger.warn(
+          `Invalid chain type: ${chainType}, defaulting to stellar`
+        );
+        return 'stellar';
       }
-      throw new Error('Invalid chain settings format');
+
+      this.logger.log(`Detected chain type: ${chainType}`);
+      return chainType;
     } catch (error) {
       this.logger.error('Error detecting chain from settings:', error);
       return 'stellar'; // Default fallback

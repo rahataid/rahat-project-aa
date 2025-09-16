@@ -10,7 +10,6 @@ import { CommunicationProcessor } from './communication.processor';
 import { StatsProcessor } from './stats.processor';
 import { ActivitiesModule } from '../activities/activites.module';
 import { StellarProcessor } from './stellar.processor';
-import { EVMProcessor } from './evm.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { VendorOfflinePayoutProcessor } from './vendor-offline-payout.processor';
 import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
@@ -26,6 +25,8 @@ import { SettingsService } from '@rumsan/settings';
 import { OfframpService } from '../payouts/offramp.service';
 import { AppModule } from '../app/app.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { NotificationProcessor } from './notification.processor';
+import { EVMProcessor } from './evm.processor';
 
 @Module({
   imports: [
@@ -51,9 +52,6 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
       name: BQUEUE.STELLAR,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.EVM,
-    }),
-    BullModule.registerQueue({
       name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
     }),
     BullModule.registerQueue({
@@ -65,6 +63,9 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
   ],
   providers: [
     ScheduleProcessor,
@@ -74,11 +75,12 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
     CommunicationProcessor,
     StatsProcessor,
     StellarProcessor,
-    EVMProcessor,
     CheckTrustlineProcessor,
+    NotificationProcessor,
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
     BatchTokenTransferProcessor,
+    EVMProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {

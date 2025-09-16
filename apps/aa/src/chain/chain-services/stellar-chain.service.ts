@@ -20,18 +20,12 @@ import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
-import {
-  DisbursementServices,
-  ReceiveService,
-  TransactionService,
-} from '@rahataid/stellar-sdk';
+import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
-import { PayoutType } from '@prisma/client';
 
 @Injectable()
-export class StellarChainService implements Partial<IChainService> {
+export class StellarChainService implements IChainService {
   private readonly logger = new Logger(StellarChainService.name);
-  name = 'stellar';
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR) private stellarQueue: Queue,
@@ -40,9 +34,7 @@ export class StellarChainService implements Partial<IChainService> {
     private settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private receiveService: ReceiveService,
-    private settingService: SettingsService,
-    private readonly disbursementService: DisbursementServices,
-    private readonly transactionService: TransactionService
+    private settingService: SettingsService
   ) {}
 
   getChainType(): ChainType {
@@ -224,51 +216,6 @@ export class StellarChainService implements Partial<IChainService> {
         error ? error : 'Transferring asset to vendor failed'
       );
     }
-  }
-
-  async getDisbursementStats(): Promise<any[]> {
-    try {
-      this.logger.log(
-        'Getting disbursement stats for Stellar chain',
-        StellarChainService.name
-      );
-
-      // Delegate to stellar service for disbursement stats
-      const stats = await this.stellarService.getDisbursementStats();
-
-      this.logger.log(
-        'Successfully retrieved disbursement stats for Stellar chain',
-        StellarChainService.name
-      );
-
-      return stats;
-    } catch (error) {
-      this.logger.error(
-        `Error getting disbursement stats for Stellar chain: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
-  }
-
-  private async getRecentTransaction(address: string) {
-    const transactions = await this.transactionService.getTransaction(
-      address,
-      10,
-      'desc'
-    );
-
-    return transactions.map((txn) => {
-      return {
-        title: txn.asset,
-        subtitle: txn.source,
-        date: txn.created_at,
-        amount: Number(txn.amount).toFixed(0),
-        amtColor: txn.amtColor,
-        hash: txn.hash,
-      };
-    });
   }
 
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
@@ -607,84 +554,6 @@ export class StellarChainService implements Partial<IChainService> {
     return this.stellarService.getWalletStats(walletData);
   }
 
-  async getWalletBalance(data: { address: string }): Promise<any> {
-    try {
-      this.logger.log(
-        `Getting wallet balance for address: ${data.address}`,
-        StellarChainService.name
-      );
-
-      // For Stellar, we can use the existing getWalletStats method
-      // which provides comprehensive wallet information including balances
-      const walletStats = await this.stellarService.getWalletStats({
-        address: data.address,
-      });
-
-      // Extract the RAHAT token balance from the balances
-      const rahatBalance = walletStats.balances?.find(
-        (balance: any) => balance.asset_code === 'RAHAT'
-      );
-
-      const balance = rahatBalance?.balance || '0';
-
-      this.logger.log(
-        `Successfully retrieved Stellar balance for ${data.address}: ${balance}`,
-        StellarChainService.name
-      );
-
-      return {
-        balance: balance,
-        address: data.address,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting Stellar wallet balance for ${data.address}: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
-  }
-
-  async getRahatTokenBalance(data: { address: string }): Promise<any> {
-    try {
-      this.logger.log(
-        `Getting RahatToken balance for address: ${data.address}`,
-        StellarChainService.name
-      );
-
-      // For Stellar, RahatToken is the RAHAT asset
-      // Use the same logic as getWalletBalance since RAHAT is the token
-      const walletStats = await this.stellarService.getWalletStats({
-        address: data.address,
-      });
-
-      // Extract the RAHAT token balance from the balances
-      const rahatBalance = walletStats.balances?.find(
-        (balance: any) => balance.asset_code === 'RAHAT'
-      );
-
-      const balance = rahatBalance?.balance || '0';
-
-      this.logger.log(
-        `Successfully retrieved RahatToken balance for ${data.address}: ${balance}`,
-        StellarChainService.name
-      );
-
-      return {
-        balance: balance,
-        address: data.address,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting RahatToken balance for ${data.address}: ${error.message}`,
-        error.stack,
-        StellarChainService.name
-      );
-      throw error;
-    }
-  }
-
   async verifyOtp(data: VerifyOtpDto): Promise<any> {
     const verificationData = {
       phoneNumber: data.phoneNumber,
@@ -719,33 +588,5 @@ export class StellarChainService implements Partial<IChainService> {
       JOBS.STELLAR.UPDATE_ONCHAIN_TRIGGER_PARAMS_QUEUE,
       updateData
     );
-  }
-
-  private async getTotalDisbursedTokensAcrossAllGroups(): Promise<number> {
-    try {
-      const result = await this.prisma.beneficiaryGroupTokens.aggregate({
-        where: {
-          AND: [{ status: 'DISBURSED' }, { isDisbursed: true }],
-        },
-        _sum: {
-          numberOfTokens: true,
-        },
-      });
-
-      const totalDisbursedTokens = result._sum.numberOfTokens || 0;
-
-      this.logger.log(
-        `Total disbursed tokens across all groups: ${totalDisbursedTokens}`
-      );
-      return totalDisbursedTokens;
-    } catch (error) {
-      this.logger.error(
-        'Error getting total disbursed tokens across all groups:',
-        error.message
-      );
-      throw new RpcException(
-        `Failed to get total disbursed tokens: ${error.message}`
-      );
-    }
   }
 }

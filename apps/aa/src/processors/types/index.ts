@@ -20,6 +20,8 @@ export interface FSPPayoutDetails {
   amount: number;
 }
 
+export interface FSPManualPayoutDetails extends Omit<FSPPayoutDetails, 'offrampType' | 'offrampWalletAddress'> {}
+
 export interface FSPOfframpDetails extends FSPPayoutDetails {
   transactionHash: string;
 }

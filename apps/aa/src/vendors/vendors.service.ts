@@ -73,6 +73,12 @@ export class VendorsService {
     try {
       const vendor = await this.prisma.vendor.findUnique({
         where: { uuid: vendorWallet.uuid },
+        select: {
+          uuid: true,
+          walletAddress: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
 
       if (!vendor) {
@@ -103,6 +109,8 @@ export class VendorsService {
         ),
         balances: vendorBalance,
         transactions: await this.getRecentTransactionDb(vendorWallet),
+        createdAt: vendor.createdAt,
+        updatedAt: vendor.updatedAt,
       };
     } catch (error) {
       this.logger.error(error.message);
@@ -388,7 +396,14 @@ export class VendorsService {
       // Extract unique beneficiaries (remove duplicates based on UUID)
       const uniqueBeneficiaries = beneficiaryRedeems
         .map((redeem) => ({
-          ...redeem.Beneficiary,
+          uuid: redeem.Beneficiary.uuid,
+          walletAddress: redeem.Beneficiary.walletAddress,
+          phone: redeem.Beneficiary.phone,
+          gender: redeem.Beneficiary.gender,
+          isVerified: redeem.Beneficiary.isVerified,
+          createdAt: redeem.Beneficiary.createdAt,
+          // Use the individual redeem amount instead of total benTokens
+          benTokens: redeem.amount,
           txHash: redeem.txHash,
           status: redeem.status,
           info: redeem.info,
@@ -693,22 +708,23 @@ export class VendorsService {
         `Found ${beneficiaries.length} offline beneficiaries for vendor ${payload.vendorUuid}`
       );
 
-      // Check if all records are in PENDING state and update to TOKEN_TRANSACTION_INITIATED
+      // Check if records are in PENDING state and update to TOKEN_TRANSACTION_INITIATED
       if (redeems.length > 0) {
-        const anyAlreadyInitiated = redeems.some(
-          (redeem) => redeem.status === 'TOKEN_TRANSACTION_INITIATED'
+        // Filter only PENDING records that can be updated
+        const pendingRedeems = redeems.filter(
+          (redeem) => redeem.status === 'PENDING'
         );
 
-        if (!anyAlreadyInitiated) {
+        if (pendingRedeems.length > 0) {
           this.logger.log(
-            `Updating ${redeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+            `Updating ${pendingRedeems.length} PENDING beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
           );
 
-          // Update all redeem records to TOKEN_TRANSACTION_INITIATED
+          // Update only PENDING redeem records to TOKEN_TRANSACTION_INITIATED
           await this.prisma.beneficiaryRedeem.updateMany({
             where: {
               uuid: {
-                in: redeems.map((redeem) => redeem.uuid),
+                in: pendingRedeems.map((redeem) => redeem.uuid),
               },
             },
             data: {
@@ -717,11 +733,11 @@ export class VendorsService {
           });
 
           this.logger.log(
-            `Successfully updated ${redeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+            `Successfully updated ${pendingRedeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
           );
         } else {
           this.logger.log(
-            `Skipping status update: ${redeems.length} records found, anyAlreadyInitiated: ${anyAlreadyInitiated}`
+            `No PENDING records found to update. Total records: ${redeems.length}`
           );
         }
       }

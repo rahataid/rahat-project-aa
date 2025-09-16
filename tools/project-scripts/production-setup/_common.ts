@@ -7,8 +7,8 @@ import { ContractArtifacts } from '../types/contract';
 dotenv.config({ path: `${__dirname}/.env.prod` });
 
 export class commonLib {
-  provider: ethers.JsonRpcProvider;
-  projectUUID: string;
+    provider: ethers.JsonRpcProvider;
+    projectUUID: string;
 
   constructor() {
     console.log('Network:', process.env.NETWORK_PROVIDER);
@@ -60,48 +60,60 @@ export class commonLib {
       mkdirSync(dirPath);
     }
 
-    let fileData = {};
-    if (existsSync(filePath)) {
-      // Read and parse the existing file if it exists
-      const existingData = readFileSync(filePath, { encoding: 'utf8' });
-      if (existingData) fileData = JSON.parse(existingData);
+    //append to deployment file
+
+    public async writeToDeploymentFile(fileName: string, newData: any) {
+        const dirPath = `${__dirname}/deployments`;
+        const filePath = `${dirPath}/${fileName}.json`;
+
+        // Ensure the directory exists
+        if (!existsSync(dirPath)) {
+            mkdirSync(dirPath);
+        }
+
+        let fileData = {};
+        if (existsSync(filePath)) {
+            // Read and parse the existing file if it exists
+            const existingData = readFileSync(filePath, { encoding: 'utf8' });
+            if (existingData) fileData = JSON.parse(existingData);
+        }
+        fileData = { ...fileData, ...newData };
+        writeFileSync(filePath, JSON.stringify(fileData, null, 2));
     }
-    fileData = { ...fileData, ...newData };
-    writeFileSync(filePath, JSON.stringify(fileData, null, 2));
-  }
 
-  public async getInterface(contractName: string) {
-    const abi = (await this.getContractArtifacts(contractName)).abi;
-    const iface = new ethers.Interface(abi);
-    return iface;
-  }
-
-  public async generateMultiCallData(
-    contractName: string,
-    functionName: string,
-    callData: any
-  ) {
-    const iface = await this.getInterface(contractName);
-    const encodedData: any = [];
-    if (callData) {
-      for (const callD of callData) {
-        const encodedD = iface.encodeFunctionData(functionName, [...callD]);
-        encodedData.push(encodedD);
-      }
+    public async getInterface(contractName: string) {
+        const abi = (await this.getContractArtifacts(contractName)).abi;
+        const iface = new ethers.Interface(abi);
+        return iface;
     }
-    return encodedData;
-  }
 
-  public async getContracts(
-    contractName: string,
-    contractAddress: string,
-    privateKey: string
-  ) {
-    const abi = (await this.getContractArtifacts(contractName)).abi;
 
-    const wallet = new ethers.Wallet(privateKey, this.provider);
+    public async generateMultiCallData(contractName: string, functionName: string, callData: any) {
+        const iface = await this.getInterface(contractName);
+        const encodedData: any = [];
+        if (callData) {
+            for (const callD of callData) {
+                const encodedD = iface.encodeFunctionData(functionName, [...callD]);
+                encodedData.push(encodedD);
+            }
+        }
+        return encodedData;
+    }
 
-    const contract = new ethers.Contract(contractAddress, abi, wallet);
-    return contract;
-  }
+
+    public async getContracts(contractName: string, contractAddress: string, privateKey: string) {
+        const abi = (await this.getContractArtifacts(contractName)).abi;
+
+        const wallet = new ethers.Wallet(privateKey, this.provider);
+
+
+        const contract = new ethers.Contract(
+            contractAddress,
+            abi,
+            wallet
+        )
+        return contract;
+
+    }
+
 }
