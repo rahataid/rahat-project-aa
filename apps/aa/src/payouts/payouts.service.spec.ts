@@ -890,7 +890,7 @@ describe('PayoutsService', () => {
       expect(log['Amount Disbursed']).toBe(
         mockRedeems[1].payout.status === 'FAILED'
           ? 0
-          : (mockRedeems[1].Beneficiary.benTokens || 0) * ONE_TOKEN_VALUE
+          : (mockPayout.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
       );
     });
 

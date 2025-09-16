@@ -14,6 +14,7 @@ export const seedForecastTabConfig = async () => {
         { label: 'GLOFAS', value: 'glofas' },
         { label: 'Daily Monitoring', value: 'dailyMonitoring' },
         { label: 'Gauge Reading', value: 'gaugeReading', hasDatePicker: true },
+
         { label: 'Google Flood Hub', value: 'gfh' },
         { label: 'ExternalLinks', value: 'externalLinks' },
       ],
