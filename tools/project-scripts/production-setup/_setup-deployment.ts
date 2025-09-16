@@ -20,6 +20,8 @@ const rahatTokenDetails = {
 class DeploymentSetup extends commonLib {
   contracts: Record<string, DeployedContract>;
   deployerAccount: Wallet;
+  adminAddress: string;
+  adminPrivateKey: string = '';
   rahatAccessManagerAddress: string = '';
   forwarderAddress: string = '';
 
@@ -27,10 +29,13 @@ class DeploymentSetup extends commonLib {
     super();
     this.contracts = {};
     this.deployerAccount = this.getDeployerWallet();
+    this.adminAddress = process.env.ADMIN_ADDRESS as string;
+    this.adminPrivateKey = process.env.RAHAT_ADMIN_PRIVATE_KEY as string;
   }
 
   public async setupRahatAAContracts() {
     try {
+      console.log('PROJECT UUID', this.projectUUID);
       const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
       const { data } = await axios.get(url);
       const contracts = data?.data?.value;
@@ -63,11 +68,11 @@ class DeploymentSetup extends commonLib {
 
       console.log('--- Deploying RahatDonor ---');
       console.log('[ARGS] RahatDonor:', [
-        this.deployerAccount.address,
+        this.adminAddress,
         this.rahatAccessManagerAddress,
       ]);
       const RahatDonor = await this.deployContract('RahatDonor', [
-        this.deployerAccount.address,
+        this.adminAddress,
         this.rahatAccessManagerAddress,
       ]);
       this.contracts['RahatDonor'] = {
@@ -116,6 +121,7 @@ class DeploymentSetup extends commonLib {
         'AAProject',
         RahatToken.contract.target,
         this.forwarderAddress,
+        this.rahatAccessManagerAddress,
         TriggerManager.contract.target,
       ];
       console.log('[ARGS] AAProject:', aaProjectArgs);
@@ -179,13 +185,14 @@ class DeploymentSetup extends commonLib {
   }
   public async setupAdminKeys() {
     await this.writeToDeploymentFile(this.projectUUID, {
-      ADMIN: { ADDRESS: this.deployerAccount.address },
-      RAHAT_ADMIN_PRIVATE_KEY: this.deployerAccount.privateKey,
+      ADMIN: { ADDRESS: this.adminAddress },
+      RAHAT_ADMIN_PRIVATE_KEY: this.adminPrivateKey,
       DEPLOYER_PRIVATE_KEY: this.deployerAccount.privateKey,
     });
   }
 
   public async addAdminToAA(addresses: any, deployerKey: string) {
+    console.log('Adding Admins to AccessManager:', addresses,deployerKey);
     const adminValues = addresses.map((address: any) => [0, address, 0]);
     const multicallData = await this.generateMultiCallData(
       'RahatAccessManager',
@@ -194,7 +201,7 @@ class DeploymentSetup extends commonLib {
     );
     const contracts = await this.getContracts(
       'RahatAccessManager',
-      this.rahatAccessManagerAddress,
+      this.rahatAccessManagerAddress, // 0xafcDBda3c600A2017789035708FBA2A329dc5938
       deployerKey
     );
     const res = await contracts.multicall(multicallData);
@@ -229,12 +236,13 @@ async function main() {
   //Make Contract call to make admins
   //addAdminToAA
   //addDonorAsAdmin
+  console.log('Deployer Address:', deploymentSetup.deployerAccount.address);
   await deploymentSetup.addAdminToAA(
-    [deploymentSetup.deployerAccount.address],
+    [deploymentSetup.adminAddress],
     deploymentSetup.deployerAccount.privateKey
   );
   await deploymentSetup.addDonor(
-    [deploymentSetup.deployerAccount.address],
+    [deploymentSetup.adminAddress],
     deploymentSetup.deployerAccount.privateKey
   );
 }
