@@ -1,14 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import {
-  BeneficiaryRedeem,
-  Payouts,
-  PayoutTransactionStatus,
-  PayoutTransactionType,
-  PayoutType,
-  Prisma,
-} from '@prisma/client';
+import { BeneficiaryRedeem, Payouts, PayoutType, Prisma } from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -19,17 +12,23 @@ import {
   DownloadPayoutLogsType,
   IPaymentProvider,
   PayoutStats,
+  ManualPayoutRowData,
+  EnrichedManualPayoutRow,
+  ManualPayoutVerificationResult,
+  EntityConfig,
+  PayoutWithBeneficiaryDetails,
 } from './dto/types';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, EVENTS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import {
   FSPOfframpDetails,
   FSPPayoutDetails,
   FSPManualPayoutDetails,
+  BatchTransferDto,
 } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
@@ -45,6 +44,7 @@ import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '@rumsan/settings';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -65,7 +65,10 @@ export class PayoutsService {
     private readonly stellarQueue: Queue,
     private configService: ConfigService,
     private appService: AppService,
-    private readonly beneficiaryService: BeneficiaryService
+    private readonly beneficiaryService: BeneficiaryService,
+    private settingService: SettingsService,
+    @InjectQueue(BQUEUE.BATCH_TRANSFER)
+    private readonly batchTransferQueue: Queue
   ) {}
 
   /**
@@ -760,6 +763,87 @@ export class PayoutsService {
       `Successfully fetched ${BeneficiaryPayoutDetails.length} wallet addresses for payout with UUID: '${uuid}'`
     );
     return BeneficiaryPayoutDetails;
+  }
+
+  /**
+   * Fetches beneficiaries with incomplete redeems for a specific payout
+   * and formats them in the same structure as fetchBeneficiaryPayoutDetails
+   */
+  private async fetchBeneficiariesWithIncompleteRedeems(
+    payoutUUID: string,
+    payout: PayoutWithBeneficiaryDetails
+  ): Promise<BeneficiaryPayoutDetails[]> {
+    this.logger.log(
+      `Fetching beneficiaries with incomplete redeems for payout UUID: '${payoutUUID}'`
+    );
+
+    // Fetch beneficiaries who have incomplete redeems for this payout
+    const beneficiariesWithIncompleteRedeems = await this.prisma.beneficiary.findMany({
+      where: {
+        BeneficiaryRedeem: {
+          some: {
+            payoutId: payoutUUID,
+            isCompleted: false,
+          },
+        },
+      },
+      include: {
+        BeneficiaryRedeem: {
+          where: {
+            payoutId: payoutUUID,
+            isCompleted: false,
+          },
+        },
+      },
+    });
+
+    if (beneficiariesWithIncompleteRedeems.length === 0) {
+      this.logger.warn(
+        `No beneficiaries with incomplete redeems found for payout UUID: '${payoutUUID}'`
+      );
+      return [];
+    }
+
+    // Calculate token amount per beneficiary
+    const totalBeneficiariesInGroup = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+    const numberOfTokensToTransfer = totalBeneficiariesInGroup > 0 
+      ? payout.beneficiaryGroupToken.numberOfTokens / totalBeneficiariesInGroup
+      : 0;
+
+    // Format beneficiaries to match BeneficiaryPayoutDetails structure
+    const formattedBeneficiaries: BeneficiaryPayoutDetails[] = beneficiariesWithIncompleteRedeems
+      .map((beneficiary) => {
+        if (!beneficiary.walletAddress) {
+          return null;
+        }
+
+        return {
+          amount: numberOfTokensToTransfer,
+          walletAddress: beneficiary.walletAddress,
+          phoneNumber: beneficiary.phone || structuredClone<any>(beneficiary.extras)?.phone || '',
+          bankDetails: {
+            accountName: structuredClone<any>(beneficiary.extras)?.bank_ac_name || '',
+            accountNumber: structuredClone<any>(beneficiary.extras)?.bank_ac_number || '',
+            bankName: structuredClone<any>(beneficiary.extras)?.bank_name || '',
+          },
+        };
+      })
+      .filter((beneficiary): beneficiary is BeneficiaryPayoutDetails => beneficiary !== null);
+
+    // Check if any wallet addresses were filtered out
+    if (formattedBeneficiaries.length !== beneficiariesWithIncompleteRedeems.length) {
+      this.logger.warn(
+        `Some beneficiaries have null or undefined wallet addresses for payout UUID: '${payoutUUID}'. ` +
+        `Expected: ${beneficiariesWithIncompleteRedeems.length}, Got: ${formattedBeneficiaries.length}`
+      );
+    }
+
+    this.logger.log(
+      `Successfully fetched and formatted ${formattedBeneficiaries.length} beneficiaries with incomplete redeems ` +
+      `for payout UUID: '${payoutUUID}'`
+    );
+
+    return formattedBeneficiaries;
   }
 
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
@@ -1498,41 +1582,348 @@ export class PayoutsService {
     return getFormattedTimeDiff(diffInMs);
   }
 
-  async verifyManualPayout(payoutUUID: string, data?: any) {
+  /**
+   * Verifies manual payout by matching bank account data with beneficiaries
+   * and initiating token transfers for matched records
+   * @param payoutUUID - The UUID of the payout to verify
+   * @param data - Manual payout data containing bank account information
+   * @returns Verification result with matched and unmatched records
+   */
+  async verifyManualPayout(
+    payoutUUID: string,
+    data?: Record<string, ManualPayoutRowData>
+  ): Promise<ManualPayoutVerificationResult> {
+    this.validatePayoutUUID(payoutUUID);
+
+    this.logger.log(
+      `Starting manual payout verification for payout UUID: '${payoutUUID}'`
+    );
+
+    const payout = await this.fetchPayoutWithBeneficiaries(payoutUUID);
+    const payoutRows = this.parseManualPayoutData(data);
+    const beneficiaries = await this.fetchBeneficiariesWithIncompleteRedeems(
+      payoutUUID,
+      payout
+    );
+
+    console.log('beneficiaries', beneficiaries);
+
+    const verificationResult = this.matchBeneficiariesWithPayoutRows(
+      payoutRows,
+      beneficiaries,
+      payoutUUID
+    );
+
+    this.logVerificationStats(verificationResult, payoutRows.length);
+    this.validateMatchedBeneficiaries(verificationResult);
+
+    const fieldOfficerAddress = await this.getFieldOfficerWalletAddress();
+    const tokenAmount = this.calculateTokenAmountPerBeneficiary(payout);
+
+    await this.processTokenTransfers(
+      verificationResult.matched,
+      fieldOfficerAddress,
+      tokenAmount
+    );
+
+    this.logger.log(
+      `Manual payout verification completed successfully for UUID: '${payoutUUID}'. ` +
+        `Processed ${verificationResult.matched.length} matched records.`
+    );
+
+    return verificationResult;
+  }
+
+  /**
+   * Validates the payout UUID parameter
+   */
+  private validatePayoutUUID(payoutUUID: string): void {
     if (!payoutUUID) {
-      throw new RpcException('Payout UUID is required');
+      throw new RpcException(
+        'Payout verification failed: Payout UUID is required but was not provided'
+      );
     }
 
-    this.logger.log(`Verifying manual payout with UUID: '${payoutUUID}'`);
+    if (!isUUID(payoutUUID)) {
+      throw new RpcException(
+        `Payout verification failed: Invalid UUID format provided: '${payoutUUID}'`
+      );
+    }
+  }
 
+  /**
+   * Fetches payout with beneficiary details
+   */
+  private async fetchPayoutWithBeneficiaries(
+    payoutUUID: string
+  ): Promise<PayoutWithBeneficiaryDetails> {
     const payout = await this.prisma.payouts.findUnique({
       where: { uuid: payoutUUID },
+      include: {
+        beneficiaryGroupToken: {
+          include: {
+            beneficiaryGroup: {
+              include: {
+                beneficiaries: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!payout) {
-      throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+      throw new RpcException(
+        `Payout verification failed: Payout with UUID '${payoutUUID}' not found in database`
+      );
     }
 
-    let rows = Object.values(data) as any[];
-    const benfs = await this.fetchBeneficiaryPayoutDetails(payoutUUID);
+    if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
+      throw new RpcException(
+        `Payout verification failed: No beneficiaries found for payout '${payoutUUID}'`
+      );
+    }
 
-    // match benfs with rows
-    rows = rows.map(row => {
-      const benf = benfs.find(benf => benf.bankDetails.accountNumber === row['Bank Account Number']);
+    return payout as PayoutWithBeneficiaryDetails;
+  }
+
+  /**
+   * Parses and validates manual payout data
+   */
+  private parseManualPayoutData(
+    data?: Record<string, ManualPayoutRowData>
+  ): ManualPayoutRowData[] {
+    if (!data || typeof data !== 'object') {
+      throw new RpcException(
+        'Payout verification failed: Invalid or missing payout data provided'
+      );
+    }
+
+    const rows = Object.values(data);
+
+    if (rows.length === 0) {
+      throw new RpcException(
+        'Payout verification failed: No payout records found in provided data'
+      );
+    }
+
+    // Validate required fields in each row
+    rows.forEach((row, index) => {
+      if (!row['Bank Account Number']) {
+        throw new RpcException(
+          `Payout verification failed: Missing bank account number in row ${
+            index + 1
+          }`
+        );
+      }
+      if (!row['Bank Account Holder Name ']) {
+        throw new RpcException(
+          `Payout verification failed: Missing bank account holder name in row ${
+            index + 1
+          }`
+        );
+      }
+    });
+
+    this.logger.log(`Parsed ${rows.length} payout records from provided data`);
+    return rows;
+  }
+
+  /**
+   * Matches beneficiaries with payout rows based on bank account numbers
+   */
+  private matchBeneficiariesWithPayoutRows(
+    payoutRows: ManualPayoutRowData[],
+    beneficiaries: BeneficiaryPayoutDetails[],
+    payoutUUID: string
+  ): ManualPayoutVerificationResult {
+    const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
+      const matchedBeneficiary = beneficiaries.find(
+        (beneficiary) =>
+          beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+      );
+
       return {
         ...row,
-        beneficary: benf || null,
+        beneficiary: matchedBeneficiary || null,
         payoutId: payoutUUID,
       };
     });
 
-    // filter rows where beneficary is null
-    const filteredRows = rows.filter(row => row.beneficary !== null);
+    const result = enrichedRows.reduce<ManualPayoutVerificationResult>(
+      (acc, row) => {
+        if (row.beneficiary) {
+          acc.matched.push(row);
+        } else {
+          acc.unmatched.push(row);
+        }
+        return acc;
+      },
+      { matched: [], unmatched: [] }
+    );
 
-    // send to offramp queue
-    await this.offrampService.addToVerifyManualPayoutQueue(filteredRows);
+    return result;
+  }
 
-    return filteredRows;
+  /**
+   * Logs verification statistics
+   */
+  private logVerificationStats(
+    result: ManualPayoutVerificationResult,
+    totalRows: number
+  ): void {
+    const matchPercentage = ((result.matched.length / totalRows) * 100).toFixed(
+      1
+    );
+
+    this.logger.log(
+      `Payout verification statistics: ` +
+        `Total records: ${totalRows}, ` +
+        `Matched: ${result.matched.length} (${matchPercentage}%), ` +
+        `Unmatched: ${result.unmatched.length}`
+    );
+
+    if (result.unmatched.length > 0) {
+      this.logger.warn(
+        `Found ${result.unmatched.length} unmatched records. ` +
+          `These beneficiaries may not be registered or have incorrect bank account information.`
+      );
+    }
+  }
+
+  /**
+   * Validates that we have matched beneficiaries to process
+   */
+  private validateMatchedBeneficiaries(
+    result: ManualPayoutVerificationResult
+  ): void {
+    if (result.matched.length === 0) {
+      throw new RpcException(
+        'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
+          'Please verify that the bank account numbers in your file match the registered beneficiaries.'
+      );
+    }
+  }
+
+  /**
+   * Retrieves field officer wallet address from settings
+   */
+  private async getFieldOfficerWalletAddress(): Promise<string> {
+    const entitiesSettings = await this.settingService.getPublic('ENTITIES');
+
+    if (!entitiesSettings?.value) {
+      throw new RpcException(
+        'Payout verification failed: Entity configuration not found in system settings'
+      );
+    }
+
+    const entities = entitiesSettings.value as unknown as EntityConfig[];
+
+    if (!Array.isArray(entities)) {
+      throw new RpcException(
+        'Payout verification failed: Invalid entity configuration format in system settings'
+      );
+    }
+
+    const fieldOfficer = entities.find((entity) => entity.isFieldOffice);
+
+    if (!fieldOfficer?.address) {
+      throw new RpcException(
+        'Payout verification failed: Field officer wallet address not configured in system settings'
+      );
+    }
+
+    this.logger.log(
+      `Using field officer wallet address: ${fieldOfficer.address}`
+    );
+    return fieldOfficer.address;
+  }
+
+  /**
+   * Calculates token amount per beneficiary
+   */
+  private calculateTokenAmountPerBeneficiary(
+    payout: PayoutWithBeneficiaryDetails
+  ): string {
+    const totalTokens = payout.beneficiaryGroupToken.numberOfTokens;
+    const beneficiaryCount =
+      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+
+    if (beneficiaryCount === 0) {
+      throw new RpcException(
+        'Payout verification failed: Cannot calculate token amount - no beneficiaries found'
+      );
+    }
+
+    const tokenAmountPerBeneficiary = totalTokens / beneficiaryCount;
+    this.logger.log(
+      `Calculated token amount per beneficiary: ${tokenAmountPerBeneficiary} ` +
+        `(${totalTokens} total tokens / ${beneficiaryCount} beneficiaries)`
+    );
+
+    return tokenAmountPerBeneficiary.toString();
+  }
+
+  /**
+   * Processes token transfers for matched beneficiaries
+   */
+  private async processTokenTransfers(
+    matchedRows: EnrichedManualPayoutRow[],
+    fieldOfficerAddress: string,
+    tokenAmount: string
+  ): Promise<void> {
+    const transfers = matchedRows.map((row) => ({
+      beneficiaryWalletAddress: row.beneficiary!.walletAddress,
+      vendorWalletAddress: fieldOfficerAddress,
+      amount: tokenAmount,
+    }));
+
+    const batchTransferPayload: BatchTransferDto = {
+      transfers,
+      processType: 'MANUAL_PAYOUT',
+    };
+
+    const job = await this.batchTransferQueue.add(
+      JOBS.BATCH_TRANSFER.PROCESS_BATCH,
+      batchTransferPayload,
+      {
+        attempts: 3,
+        delay: 1000,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+      }
+    );
+
+    this.logger.log(
+      `Successfully queued batch transfer job with ID: ${job.id} ` +
+        `for ${transfers.length} token transfers`
+    );
+  }
+
+  /**
+   * Adds matched records to offramp verification queue
+   */
+  private async addToOfframpVerificationQueue(
+    matchedRows: EnrichedManualPayoutRow[]
+  ): Promise<void> {
+    try {
+      await this.offrampService.addToVerifyManualPayoutQueue(matchedRows);
+      this.logger.log(
+        `Successfully added ${matchedRows.length} records to offramp verification queue`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to add records to offramp verification queue: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(
+        'Payout verification completed but failed to queue offramp verification. ' +
+          'Manual intervention may be required.'
+      );
+    }
   }
 
   async downloadPayoutLogs(uuid: string): Promise<DownloadPayoutLogsType[]> {

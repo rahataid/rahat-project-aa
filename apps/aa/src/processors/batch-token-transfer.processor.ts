@@ -28,7 +28,7 @@ export class BatchTokenTransferProcessor {
   async processBatchTransfer(
     job: Job<BatchTransferDto>
   ): Promise<BatchTransferResult> {
-    const { transfers, batchId } = job.data;
+    const { transfers, batchId, processType } = job.data;
 
     this.logger.log(
       `Processing batch transfer with ${
@@ -52,8 +52,13 @@ export class BatchTokenTransferProcessor {
         );
 
         try {
-          const batchResult = await this.processBatch(batch, i + 1);
-          results.push(batchResult);
+          if(processType === 'MANUAL_PAYOUT') {
+            const batchResult = await this.processManualPayoutBatch(batch, i + 1);
+            results.push(batchResult);
+          } else {
+            const batchResult = await this.processBatch(batch, i + 1);
+            results.push(batchResult);
+          }
         } catch (error) {
           this.logger.error(
             `Failed to process batch ${i + 1}: ${error.message}`,
@@ -103,6 +108,81 @@ export class BatchTokenTransferProcessor {
       batches.push(items.slice(i, i + batchSize));
     }
     return batches;
+  }
+
+  private async processManualPayoutBatch(transfers: SingleTransfer[], batchNumber: number) {
+    try {
+      const { contract: aaContract } = await this.createContractInstanceSign(
+        'AAPROJECT'
+      );
+
+      const multicallTxnPayload: any[][] = [];
+
+      for (const transfer of transfers) {
+        const hasTokens = await this.checkBeneficiaryHasTokens(
+          transfer.beneficiaryWalletAddress
+        );
+
+        if (!hasTokens) {
+          this.logger.warn(
+            `Beneficiary ${transfer.beneficiaryWalletAddress} has no tokens, skipping transfer`,
+            BatchTokenTransferProcessor.name
+          );
+          continue;
+        }
+
+        multicallTxnPayload.push([
+          transfer.beneficiaryWalletAddress,
+          transfer.vendorWalletAddress,
+          transfer.amount,
+        ]);
+      }
+
+      if (multicallTxnPayload.length === 0) {
+        this.logger.warn(
+          `No valid transfers in batch ${batchNumber}`,
+          BatchTokenTransferProcessor.name
+        );
+        return {
+          batchNumber,
+          success: true,
+          message: 'No valid transfers in batch',
+          transfers: transfers.length,
+          processedTransfers: 0,
+        };
+      }
+
+      // Execute multicall
+      const txn = await this.multiSend(
+        aaContract,
+        'transferTokenToVendor', // <---- need to change this to transferTokenToFieldOfficer
+        multicallTxnPayload
+      );
+
+      this.logger.log(
+        `Batch ${batchNumber} executed successfully. Transaction hash: ${txn.hash}`,
+        BatchTokenTransferProcessor.name
+      );
+
+      await this.updateBeneficiaryFieldOfficerRedeemRecords(transfers, txn.hash);
+
+      return {
+        batchNumber,
+        success: true,
+        transactionHash: txn.hash,
+        blockNumber: txn.blockNumber,
+        transfers: transfers.length,
+        processedTransfers: multicallTxnPayload.length,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error processing batch ${batchNumber}: ${error.message}`,
+        error.stack,
+        BatchTokenTransferProcessor.name
+      );
+      throw error;
+    }
+
   }
 
   private async processBatch(transfers: SingleTransfer[], batchNumber: number) {
@@ -177,7 +257,7 @@ export class BatchTokenTransferProcessor {
       );
 
       // Update beneficiary redeem records
-      await this.updateBeneficiaryRedeemRecords(transfers, txn.hash);
+      await this.updateBeneficiaryVendorRedeemRecords(transfers, txn.hash);
 
       return {
         batchNumber,
@@ -215,7 +295,102 @@ export class BatchTokenTransferProcessor {
     }
   }
 
-  private async updateBeneficiaryRedeemRecords(
+  private async updateBeneficiaryFieldOfficerRedeemRecords(
+    transfers: SingleTransfer[],
+    txHash: string
+  ) {
+     for (const transfer of transfers) {
+        const existingRedeem =
+          await this.prismaService.beneficiaryRedeem.findFirst({
+            where: {
+              beneficiaryWalletAddress: transfer.beneficiaryWalletAddress,
+              status: 'FIAT_TRANSACTION_INITIATED',
+              isCompleted: false,
+              txHash: null,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+      try {
+        // Find existing redeem record
+        if (existingRedeem) {
+          // Update existing record
+          await this.prismaService.beneficiaryRedeem.update({
+            where: {
+              uuid: existingRedeem.uuid,
+            },
+            data: {
+              txHash,
+              isCompleted: true,
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              amount: parseInt(transfer.amount),
+              info: {
+                ...(typeof existingRedeem.info === 'object' &&
+                existingRedeem.info !== null
+                  ? existingRedeem.info
+                  : {}),
+                offrampWalletAddress: transfer.vendorWalletAddress,
+                message: 'Fiat transfer to field officer completed successfully',
+                transactionHash: txHash,
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+        } else {
+          // Create new record
+          await this.prismaService.beneficiaryRedeem.create({
+            data: {
+              beneficiaryWalletAddress: transfer.beneficiaryWalletAddress,
+              amount: parseInt(transfer.amount),
+              transactionType: 'FIAT_TRANSFER',
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              isCompleted: true,
+              txHash,
+              info: {
+                offrampWalletAddress: transfer.vendorWalletAddress,
+                message: 'Fiat transfer to field officer completed successfully',
+                transactionHash: txHash,
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          BatchTokenTransferProcessor.name,
+          `Failed to update redeem record for ${transfer.beneficiaryWalletAddress}: ${error.message}`
+        );
+        if(existingRedeem) {
+          await this.prismaService.beneficiaryRedeem.update({
+            where: {
+              uuid: existingRedeem.uuid,
+            },
+            data: {
+              status: 'FIAT_TRANSACTION_FAILED',
+              isCompleted: false,
+              info: {
+                ...(typeof existingRedeem.info === 'object' &&
+                existingRedeem.info !== null
+                  ? existingRedeem.info
+                  : {}),
+                error: error.message,
+                offrampWalletAddress: transfer.vendorWalletAddress,
+                message: 'Fiat transfer to field officer failed because of error: ' + error.message,
+                transactionHash: null,
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+              txHash: null,
+            },
+          })
+        }
+      }
+    }
+     
+  }
+
+  private async updateBeneficiaryVendorRedeemRecords(
     transfers: SingleTransfer[],
     txHash: string
   ) {

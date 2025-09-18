@@ -4,6 +4,7 @@ export interface BatchTransferDto {
     vendorWalletAddress: string;
     amount: string;
   }>;
+  processType?: 'MANUAL_PAYOUT' | 'BATCH_TRANSFER';
   batchId?: string;
 }
 
