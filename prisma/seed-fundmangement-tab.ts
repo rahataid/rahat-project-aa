@@ -11,10 +11,30 @@ export const seedFundManagementTabConfig = async () => {
     name: 'FUNDMANAGEMENT_TAB_CONFIG',
     value: {
       tabs: [
-        { label: 'Tokens Overview', value: 'tokenOverview' },
-        { label: 'Fund Management List', value: 'fundManagementList' },
-        { label: 'In Kind', value: 'inKind' },
-        { label: 'Counselling', value: 'counselling' },
+        {
+          label: 'Cash Tracker',
+          value: 'cashTracker',
+        },
+        {
+          label: 'Tokens Overview',
+          value: 'tokenOverview',
+        },
+        {
+          label: 'Fund Management List',
+          value: 'fundManagementList',
+        },
+        {
+          label: 'In Kind Tracker',
+          value: 'inKindTracker',
+        },
+        {
+          label: 'Counselling',
+          value: 'counselling',
+        },
+        {
+          label: 'InKind',
+          value: 'inKind',
+        },
       ],
     },
     dataType: SettingDataType.OBJECT,
