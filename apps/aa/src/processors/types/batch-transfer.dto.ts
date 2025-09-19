@@ -4,8 +4,19 @@ export interface BatchTransferDto {
     vendorWalletAddress: string;
     amount: string;
   }>;
-  processType?: 'MANUAL_PAYOUT' | 'BATCH_TRANSFER';
   batchId?: string;
+}
+
+export interface ManualPayoutBatchTransferDto {
+  transfers: Array<{
+    beneficiaryWalletAddress: string;
+    vendorWalletAddress: string;
+    amount: string;
+    date: string;
+    approvalDate: string;
+  }>;
+  batchId?: string;
+
 }
 
 export interface BatchTransferResult {
@@ -30,4 +41,6 @@ export interface SingleTransfer {
   beneficiaryWalletAddress: string;
   vendorWalletAddress: string;
   amount: string;
+  date?: string;
+  approvalDate?: string;
 }

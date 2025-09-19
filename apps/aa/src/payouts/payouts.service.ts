@@ -1876,6 +1876,8 @@ export class PayoutsService {
       beneficiaryWalletAddress: row.beneficiary!.walletAddress,
       vendorWalletAddress: fieldOfficerAddress,
       amount: tokenAmount,
+      date: row['Date'],
+      approvalDate: row['Approval Date'],
     }));
 
     const batchTransferPayload: BatchTransferDto = {

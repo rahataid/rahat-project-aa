@@ -133,6 +133,7 @@ export interface ManualPayoutRowData {
   'Bank Account Holder Name ': string;
   'Approval Date': string;
   'Transaction Status': string;
+  'Date': string;
 }
 
 export interface EnrichedManualPayoutRow extends ManualPayoutRowData {

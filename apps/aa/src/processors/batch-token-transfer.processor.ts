@@ -6,7 +6,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
-import { BatchTransferDto, BatchTransferResult, SingleTransfer } from './types';
+import { BatchTransferDto, BatchTransferResult, ManualPayoutBatchTransferDto, SingleTransfer } from './types';
 import { lowerCaseObjectKeys } from '../utils/utility';
 
 const BATCH_SIZE = 10;
@@ -23,12 +23,11 @@ export class BatchTokenTransferProcessor {
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue
   ) {}
-
   @Process({ name: JOBS.BATCH_TRANSFER.PROCESS_BATCH, concurrency: 1 })
   async processBatchTransfer(
     job: Job<BatchTransferDto>
   ): Promise<BatchTransferResult> {
-    const { transfers, batchId, processType } = job.data;
+    const { transfers, batchId } = job.data;
 
     this.logger.log(
       `Processing batch transfer with ${
@@ -52,13 +51,87 @@ export class BatchTokenTransferProcessor {
         );
 
         try {
-          if(processType === 'MANUAL_PAYOUT') {
-            const batchResult = await this.processManualPayoutBatch(batch, i + 1);
+          const batchResult = await this.processBatch(batch, i + 1);
+          results.push(batchResult);
+        } catch (error) {
+          this.logger.error(
+            `Failed to process batch ${i + 1}: ${error.message}`,
+            error.stack,
+            BatchTokenTransferProcessor.name
+          );
+
+          // Continue with next batch even if one fails
+          results.push({
+            batchNumber: i + 1,
+            success: false,
+            error: error.message,
+            transfers: batch.length,
+          });
+        }
+      }
+
+      const successCount = results.filter((r) => r.success).length;
+      const totalTransfers = transfers.length;
+
+      this.logger.log(
+        `Batch transfer completed. ${successCount}/${batches.length} batches successful, ${totalTransfers} total transfers`,
+        BatchTokenTransferProcessor.name
+      );
+
+      return {
+        success: true,
+        batchId,
+        totalBatches: batches.length,
+        successfulBatches: successCount,
+        totalTransfers,
+        results,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to process batch transfer: ${error.message}`,
+        error.stack,
+        BatchTokenTransferProcessor.name
+      );
+      throw new RpcException(`Batch transfer failed: ${error.message}`);
+    }
+  }
+
+  @Process({
+    name: JOBS.BATCH_TRANSFER.PROCESS_MANUAL_PAYOUT_BATCH,
+    concurrency: 1,
+  })
+  async processManualPayoutBatchTransfer(
+    job: Job<ManualPayoutBatchTransferDto>
+  ): Promise<BatchTransferResult> {
+    const { transfers, batchId  } = job.data;
+
+    this.logger.log(
+      `Processing batch transfer with ${
+        transfers.length
+      } transfers. Batch ID: ${batchId || 'N/A'}`,
+      BatchTokenTransferProcessor.name
+    );
+
+    try {
+      // Process transfers in batches of 10
+      const batches = this.createBatches(transfers, BATCH_SIZE);
+      const results = [];
+
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        this.logger.log(
+          `Processing batch ${i + 1}/${batches.length} with ${
+            batch.length
+          } transfers`,
+          BatchTokenTransferProcessor.name
+        );
+
+        try {
+            const batchResult = await this.processManualPayoutBatch(
+              batch,
+              i + 1
+            );
             results.push(batchResult);
-          } else {
-            const batchResult = await this.processBatch(batch, i + 1);
-            results.push(batchResult);
-          }
         } catch (error) {
           this.logger.error(
             `Failed to process batch ${i + 1}: ${error.message}`,
@@ -110,7 +183,10 @@ export class BatchTokenTransferProcessor {
     return batches;
   }
 
-  private async processManualPayoutBatch(transfers: SingleTransfer[], batchNumber: number) {
+  private async processManualPayoutBatch(
+    transfers: SingleTransfer[],
+    batchNumber: number
+  ) {
     try {
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
@@ -164,7 +240,10 @@ export class BatchTokenTransferProcessor {
         BatchTokenTransferProcessor.name
       );
 
-      await this.updateBeneficiaryFieldOfficerRedeemRecords(transfers, txn.hash);
+      await this.updateBeneficiaryFieldOfficerRedeemRecords(
+        transfers,
+        txn.hash
+      );
 
       return {
         batchNumber,
@@ -182,7 +261,6 @@ export class BatchTokenTransferProcessor {
       );
       throw error;
     }
-
   }
 
   private async processBatch(transfers: SingleTransfer[], batchNumber: number) {
@@ -299,19 +377,19 @@ export class BatchTokenTransferProcessor {
     transfers: SingleTransfer[],
     txHash: string
   ) {
-     for (const transfer of transfers) {
-        const existingRedeem =
-          await this.prismaService.beneficiaryRedeem.findFirst({
-            where: {
-              beneficiaryWalletAddress: transfer.beneficiaryWalletAddress,
-              status: 'FIAT_TRANSACTION_INITIATED',
-              isCompleted: false,
-              txHash: null,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          });
+    for (const transfer of transfers) {
+      const existingRedeem =
+        await this.prismaService.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress: transfer.beneficiaryWalletAddress,
+            status: 'FIAT_TRANSACTION_INITIATED',
+            isCompleted: false,
+            txHash: null,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        });
 
       try {
         // Find existing redeem record
@@ -332,7 +410,10 @@ export class BatchTokenTransferProcessor {
                   ? existingRedeem.info
                   : {}),
                 offrampWalletAddress: transfer.vendorWalletAddress,
-                message: 'Fiat transfer to field officer completed successfully',
+                date: transfer.date,
+                approvalDate: transfer.approvalDate,
+                message:
+                  'Fiat transfer to field officer completed successfully',
                 transactionHash: txHash,
                 mode: 'MANUAL_BANK_TRANSFER',
               },
@@ -350,7 +431,10 @@ export class BatchTokenTransferProcessor {
               txHash,
               info: {
                 offrampWalletAddress: transfer.vendorWalletAddress,
-                message: 'Fiat transfer to field officer completed successfully',
+                date: transfer.date,
+                approvalDate: transfer.approvalDate,
+                message:
+                  'Fiat transfer to field officer completed successfully',
                 transactionHash: txHash,
                 mode: 'MANUAL_BANK_TRANSFER',
               },
@@ -362,7 +446,7 @@ export class BatchTokenTransferProcessor {
           BatchTokenTransferProcessor.name,
           `Failed to update redeem record for ${transfer.beneficiaryWalletAddress}: ${error.message}`
         );
-        if(existingRedeem) {
+        if (existingRedeem) {
           await this.prismaService.beneficiaryRedeem.update({
             where: {
               uuid: existingRedeem.uuid,
@@ -377,17 +461,20 @@ export class BatchTokenTransferProcessor {
                   : {}),
                 error: error.message,
                 offrampWalletAddress: transfer.vendorWalletAddress,
-                message: 'Fiat transfer to field officer failed because of error: ' + error.message,
+                date: transfer.date,
+                approvalDate: transfer.approvalDate,
+                message:
+                  'Fiat transfer to field officer failed because of error: ' +
+                  error.message,
                 transactionHash: null,
                 mode: 'MANUAL_BANK_TRANSFER',
               },
               txHash: null,
             },
-          })
+          });
         }
       }
     }
-     
   }
 
   private async updateBeneficiaryVendorRedeemRecords(
