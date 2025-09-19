@@ -7,7 +7,7 @@ export class ChainController {
   constructor(private readonly chainService: ChainService) {}
 
   @MessagePattern({
-    cmd: 'aa.chain.disburse',
+    cmd: 'aa.jobs.chain.disburse',
     uuid: process.env.PROJECT_ID,
   })
   disburse(data: any) {
@@ -15,7 +15,7 @@ export class ChainController {
   }
 
   @MessagePattern({
-    cmd: 'aa.chain.sendOtp',
+    cmd: 'aa.jobs.chain.sendOtp',
     uuid: process.env.PROJECT_ID,
   })
   sendOtp(data: any) {
@@ -23,7 +23,7 @@ export class ChainController {
   }
 
   @MessagePattern({
-    cmd: 'aa.chain.sendAsset',
+    cmd: 'aa.jobs.chain.sendAsset',
     uuid: process.env.PROJECT_ID,
   })
   sendAssetToVendor(data: any) {
