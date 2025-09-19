@@ -377,6 +377,9 @@ export class BatchTokenTransferProcessor {
     transfers: SingleTransfer[],
     txHash: string
   ) {
+    this.logger.log(
+      `Creating manual bank transfer logs for benfs: ${transfers.map(t => t.beneficiaryWalletAddress)}`
+    )
     for (const transfer of transfers) {
       const existingRedeem =
         await this.prismaService.beneficiaryRedeem.findFirst({

@@ -28,7 +28,7 @@ import {
   FSPOfframpDetails,
   FSPPayoutDetails,
   FSPManualPayoutDetails,
-  BatchTransferDto,
+  ManualPayoutBatchTransferDto,
 } from '../processors/types';
 import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
@@ -782,6 +782,7 @@ export class PayoutsService {
       where: {
         BeneficiaryRedeem: {
           some: {
+            transactionType: 'FIAT_TRANSFER',
             payoutId: payoutUUID,
             isCompleted: false,
           },
@@ -790,6 +791,7 @@ export class PayoutsService {
       include: {
         BeneficiaryRedeem: {
           where: {
+            transactionType: 'FIAT_TRANSFER',
             payoutId: payoutUUID,
             isCompleted: false,
           },
@@ -1606,7 +1608,9 @@ export class PayoutsService {
       payout
     );
 
-    console.log('beneficiaries', beneficiaries);
+    this.logger.log(
+      `Fetched ${beneficiaries.length} beneficiaries with incomplete redeems for payout UUID: '${payoutUUID}'`
+    );``
 
     const verificationResult = this.matchBeneficiariesWithPayoutRows(
       payoutRows,
@@ -1880,13 +1884,12 @@ export class PayoutsService {
       approvalDate: row['Approval Date'],
     }));
 
-    const batchTransferPayload: BatchTransferDto = {
+    const batchTransferPayload: ManualPayoutBatchTransferDto = {
       transfers,
-      processType: 'MANUAL_PAYOUT',
     };
 
     const job = await this.batchTransferQueue.add(
-      JOBS.BATCH_TRANSFER.PROCESS_BATCH,
+      JOBS.BATCH_TRANSFER.PROCESS_MANUAL_PAYOUT_BATCH,
       batchTransferPayload,
       {
         attempts: 3,
