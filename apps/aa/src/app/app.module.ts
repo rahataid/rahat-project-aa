@@ -27,6 +27,8 @@ import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { CashTrackerModule } from '../cash-tracker';
+import { GrievancePriority } from '@prisma/client';
+import { GrievancesModule } from '../grievances/grievances.module';
 
 @Module({
   imports: [
@@ -103,6 +105,7 @@ import { CashTrackerModule } from '../cash-tracker';
     PayoutsModule,
     ChainModule,
     CashTrackerModule,
+    GrievancesModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
