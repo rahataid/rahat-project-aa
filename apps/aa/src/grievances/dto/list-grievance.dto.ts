@@ -7,7 +7,11 @@ import {
   IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { GrievancePriority, GrievanceStatus } from '@prisma/client';
+import {
+  GrievancePriority,
+  GrievanceStatus,
+  GrievanceType,
+} from '@prisma/client';
 
 export class ListGrievanceDto {
   @IsOptional()
@@ -38,6 +42,10 @@ export class ListGrievanceDto {
   @IsOptional()
   @IsEnum(GrievanceStatus)
   status: GrievanceStatus;
+
+  @IsOptional()
+  @IsEnum(GrievanceType)
+  type: GrievanceType;
 
   @IsOptional()
   @IsEnum(GrievancePriority)

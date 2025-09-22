@@ -77,6 +77,10 @@ export class GrievancesService {
       where.status = payload.status;
     }
 
+    if (payload.type) {
+      where.type = payload.type;
+    }
+
     if (payload.priority) {
       where.priority = payload.priority;
     }
