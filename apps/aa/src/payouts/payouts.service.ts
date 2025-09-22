@@ -1703,7 +1703,7 @@ export class PayoutsService {
       );
     }
 
-    const rows = Object.values(data);
+    let rows = Object.values(data);
 
     if (rows.length === 0) {
       throw new RpcException(
@@ -1730,6 +1730,11 @@ export class PayoutsService {
     });
 
     this.logger.log(`Parsed ${rows.length} payout records from provided data`);
+
+    rows = rows.filter((row) => row['Transaction Status'].toLowerCase() === 'completed');
+
+    this.logger.log(`Filtered ${rows.length} payout records from provided data`);
+
     return rows;
   }
 
