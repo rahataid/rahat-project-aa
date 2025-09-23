@@ -52,6 +52,7 @@ contract AAProject is
   /// @notice tracks the number of tokens assigned to a beneficiary
   /// @dev key-value pair of token address and registered status
   mapping(address => uint) public benTokens;
+  mapping(address => uint) public benCashTokens;
 
   ///@notice constructor
   ///@param _name name of the project
@@ -177,6 +178,25 @@ function transferTokenToVendor(
     emit TokenTransferred(_benAddress, _vendorAddress, _amount);
   }
 
+  function transferTokenToVendorWithCashToken(
+    address _benAddress,
+    address _vendorAddress,
+    address _cashTokenAddress,
+    uint _amount
+  ) public {
+    require(
+      benTokens[_benAddress] >= _amount,
+      'not enough balace'
+    );
+    benTokens[_benAddress] -= _amount;
+    require(
+      IERC20(defaultToken).transfer(_vendorAddress, _amount),
+      'transfer failed'
+      IERC20(_cashTokenAddress).transferFrom(_vendorAddress, _benAddress, _amount),
+    );
+    benCashTokens[_benAddress] += _amount;
+    emit TokenTransferred(_benAddress, _vendorAddress, _amount);
+  } 
   
   // #endregion
 
