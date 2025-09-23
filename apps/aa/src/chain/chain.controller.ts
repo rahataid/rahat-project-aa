@@ -29,4 +29,13 @@ export class ChainController {
   sendAssetToVendor(data: any) {
     return this.chainService.sendAssetToVendor(data);
   }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.getDisbursementStats',
+    uuid: process.env.PROJECT_ID,
+  })
+  getDisbursmentStats() {
+    console.log('chain');
+    return this.chainService.getdisbursmentStats();
+  }
 }

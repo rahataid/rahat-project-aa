@@ -98,6 +98,10 @@ export class EvmChainService implements IChainService {
     return { address, balance: 'NOT_IMPLEMENTED' };
   }
 
+  async getDisbursementStats(): Promise<any> {
+    this.logger.warn('Disbursement stats not implemented for EVM chains');
+    return { stats: 'NOT_IMPLEMENTED' };
+  }
   async sendOtp(data: SendOtpDto): Promise<any> {
     // EVM chains typically don't have built-in OTP mechanisms
     // This would be handled by external services
