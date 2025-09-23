@@ -194,11 +194,26 @@ export class BatchTokenTransferProcessor {
         'AAPROJECT'
       );
 
-      //TODO: Check for the cash token approval from vendor(WARD Smart account) to AA contract
-
       const multicallTxnPayload: any[][] = [];
 
+      //TODO: Check for the cash token approval from vendor(WARD Smart account) to AA contract
+      //TODO: test this code
+
+      //  const hasApproval = await this.checkCashTokenApproval(
+      //     transfers[0].vendorWalletAddress,// assuming all transfers in batch are from same vendor
+      //     aaContract.target.toString(), 
+      //     transfers.reduce((sum, t) => sum + BigInt(t.amount), BigInt(0)).toString()
+      //   );
+      //   if (!hasApproval) {
+      //     this.logger.error(
+      //       `Vendor ${transfers[0].vendorWalletAddress} has not approved enough cash tokens to AA contract ${aaContract.target.toString()}, skipping transfer`,
+      //       BatchTokenTransferProcessor.name
+      //     );
+      //     throw new RpcException('Vendor has not approved enough cash tokens to AA contract');
+      //   }
+
       for (const transfer of transfers) {
+
         const hasTokens = await this.checkBeneficiaryHasTokens(
           transfer.beneficiaryWalletAddress
         );
@@ -377,6 +392,40 @@ export class BatchTokenTransferProcessor {
       return false;
     }
   }
+
+  private async checkCashTokenApproval(
+    owner: string,
+    spender: string,
+    amount: string
+  ): Promise<boolean> {
+    try {
+      this.logger.log(`Checking cash token approval for ${owner} to ${spender} for amount ${amount}`);
+      const CASH_TOKEN_ADDRESS = await this.getFromSettings('CASH_TOKEN_CONTRACT');
+      const cashTokenContract = new ethers.Contract(
+        CASH_TOKEN_ADDRESS,
+        [
+          // Minimal ERC20 ABI for allowance
+          'function allowance(address owner, address spender) view returns (uint256)',
+        ],
+        new ethers.JsonRpcProvider(
+          (await this.getFromSettings('CHAIN_SETTINGS')).rpcUrl
+        )
+      );
+
+      const allowance = await cashTokenContract.allowance.staticCall(
+        owner,
+        spender
+      );
+
+      return BigInt(allowance) >= BigInt(amount);
+    } catch (error) {
+      this.logger.error(
+        `Error checking cash token approval for ${owner}: ${error.message}`,
+        BatchTokenTransferProcessor.name
+      );
+      return false;
+    }
+  } 
 
   private async updateBeneficiaryFieldOfficerRedeemRecords(
     transfers: SingleTransfer[],
