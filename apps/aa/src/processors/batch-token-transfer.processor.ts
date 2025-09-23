@@ -188,9 +188,13 @@ export class BatchTokenTransferProcessor {
     batchNumber: number
   ) {
     try {
+      const CASH_TOKEN_ADDRESS = await this.getFromSettings('CASH_TOKEN_CONTRACT');
+
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
       );
+
+      //TODO: Check for the cash token approval from vendor(WARD Smart account) to AA contract
 
       const multicallTxnPayload: any[][] = [];
 
@@ -210,6 +214,7 @@ export class BatchTokenTransferProcessor {
         multicallTxnPayload.push([
           transfer.beneficiaryWalletAddress,
           transfer.vendorWalletAddress,
+          CASH_TOKEN_ADDRESS,
           transfer.amount,
         ]);
       }
@@ -231,7 +236,7 @@ export class BatchTokenTransferProcessor {
       // Execute multicall
       const txn = await this.multiSend(
         aaContract,
-        'transferTokenToVendor', // <---- need to change this to transferTokenToFieldOfficer
+        'transferTokenToVendorForCashToken', 
         multicallTxnPayload
       );
 
