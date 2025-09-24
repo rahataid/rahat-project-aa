@@ -7,6 +7,18 @@ export interface BatchTransferDto {
   batchId?: string;
 }
 
+export interface ManualPayoutBatchTransferDto {
+  transfers: Array<{
+    beneficiaryWalletAddress: string;
+    vendorWalletAddress: string;
+    amount: string;
+    date: string;
+    approvalDate: string;
+  }>;
+  batchId?: string;
+
+}
+
 export interface BatchTransferResult {
   success: boolean;
   batchId?: string;
@@ -29,4 +41,6 @@ export interface SingleTransfer {
   beneficiaryWalletAddress: string;
   vendorWalletAddress: string;
   amount: string;
+  date?: string;
+  approvalDate?: string;
 }

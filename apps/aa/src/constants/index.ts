@@ -280,6 +280,7 @@ export const JOBS = {
   },
   BATCH_TRANSFER: {
     PROCESS_BATCH: 'aa.jobs.batch_transfer.process_batch',
+    PROCESS_MANUAL_PAYOUT_BATCH: 'aa.jobs.batch_transfer.process_manual_payout_batch',
   },
   GRIEVANCES: {
     CREATE: 'aa.jobs.grievances.create',

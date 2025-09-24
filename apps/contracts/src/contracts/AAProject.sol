@@ -19,8 +19,6 @@ contract AAProject is
   IAAProject,
   ERC2771Context,
   AccessManaged
-  ERC2771Context,
-  AccessManaged
 {
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -32,6 +30,7 @@ contract AAProject is
 
   event BenTokensAssigned(address indexed beneficiary, uint indexed amount);
   event TokenTransferred(address indexed beneficiary, address indexed vendor,uint indexed amount);
+  event CashTokenTransferred(address indexed vendor, address indexed beneficiary,uint indexed amount);
 
   /// @dev Interface ID for IAAProject
   bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
@@ -52,6 +51,7 @@ contract AAProject is
   /// @notice tracks the number of tokens assigned to a beneficiary
   /// @dev key-value pair of token address and registered status
   mapping(address => uint) public benTokens;
+  mapping(address => uint) public benCashTokens;
 
   ///@notice constructor
   ///@param _name name of the project
@@ -64,12 +64,10 @@ contract AAProject is
     address _defaultToken,
     address _forwarder,
     address _accessManager,
-    address _accessManager,
     address _triggerManager
   )
     AbstractProject(_name)
     ERC2771Context(_forwarder)
-    AccessManaged(_accessManager)
     AccessManaged(_accessManager)
   {
     defaultToken = _defaultToken;
@@ -177,6 +175,24 @@ function transferTokenToVendor(
     emit TokenTransferred(_benAddress, _vendorAddress, _amount);
   }
 
+  function transferTokenToVendorForCashToken(
+    address _benAddress,
+    address _vendorAddress,
+    address _cashTokenAddress,
+    uint _amount
+  ) public {
+    require(
+      benTokens[_benAddress] >= _amount,
+      'not enough balace'
+    );
+    benTokens[_benAddress] -= _amount;
+    require( IERC20(defaultToken).transfer(_vendorAddress, _amount),'value token transfer failed' );
+    require( IERC20(_cashTokenAddress).transferFrom(_vendorAddress, _benAddress, _amount),'cash token transfer failed' );
+
+    benCashTokens[_benAddress] += _amount;
+    emit TokenTransferred(_benAddress, _vendorAddress, _amount);
+    emit CashTokenTransferred(_vendorAddress, _benAddress, _amount);
+  } 
   
   // #endregion
 
