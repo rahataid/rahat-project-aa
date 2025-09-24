@@ -196,10 +196,6 @@ export class BatchTokenTransferProcessor {
 
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT',
-        CASH_TOKEN_ADDRESS,
-        [
-          'function transferFrom(address from, address to, uint256 amount) returns (bool)',
-        ]
       );
 
       const multicallTxnPayload: any[][] = [];
@@ -681,6 +677,9 @@ export class BatchTokenTransferProcessor {
     try {
       // Get contract settings
       const contract = await this.getFromSettings('CONTRACT');
+
+      console.log("contract ->>> ", contract);
+
       const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
       const deployerPrivateKey = await this.getFromSettings(
         'DEPLOYER_PRIVATE_KEY'

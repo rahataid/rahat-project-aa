@@ -1843,9 +1843,9 @@ export class PayoutsService {
     }
 
     this.logger.log(
-      `Using field officer wallet address: ${fieldOfficer.address}`
+      `Using field officer wallet address (Smart contract account): ${fieldOfficer.smartAccount}`
     );
-    return fieldOfficer.address;
+    return fieldOfficer.smartAccount;
   }
 
   /**
