@@ -508,6 +508,41 @@ export class FlowTrackingManager {
   }
 
   /**
+   * Get transfers from GraphQL
+   */
+  async getAddressTransfersFromGraphQL(
+    addresses: string | string[]
+  ): Promise<any[]> {
+    const addrArray = Array.isArray(addresses) ? addresses : [addresses];
+
+    const query = `
+      query GetTransfers($addresses: [String!]) {
+        transfers(
+          where: {
+            from_in: $addresses
+          }
+          orderBy: blockTimestamp
+          orderDirection: desc
+          first: 1000
+        ) {
+          id
+          from
+          to
+          transactionHash
+          blockNumber
+          value
+          blockTimestamp
+        }
+      }
+    `;
+
+    const result = await this.executeGraphQLQuery(query, {
+      addresses: addrArray,
+    });
+    return result.transfers || [];
+  }
+
+  /**
    * Get approvals from GraphQL
    */
   private async getApprovalsFromGraphQL(addresses: string[]): Promise<any[]> {
@@ -593,6 +628,7 @@ export class FlowTrackingManager {
     balance: string;
     received: string;
     sent: string;
+    date: string | null;
   }> {
     const outcomes: Array<{
       alias: string;
@@ -617,16 +653,15 @@ export class FlowTrackingManager {
       balance: string;
       received: string;
       sent: string;
+      date: string | null;
     }> = [];
 
     addresses.forEach((address) => {
       const alias = entityMap.get(address) || address;
 
       // Calculate received, sent, and balance from transfers
-      const { received, sent, balance } = this.calculateTransferSummary(
-        address,
-        transfers
-      );
+      const { received, sent, balance, latestReceivedDate } =
+        this.calculateTransferSummary(address, transfers);
 
       // Get allowances provided by this entity (where this entity is the owner)
       const entityAllowances = approvals
@@ -715,6 +750,7 @@ export class FlowTrackingManager {
         balance,
         received,
         sent,
+        date: latestReceivedDate,
       });
     });
 
@@ -731,13 +767,21 @@ export class FlowTrackingManager {
     received: string;
     sent: string;
     balance: string;
+    latestReceivedDate: string | null;
   } {
     try {
       let totalReceived = 0n;
       let totalSent = 0n;
+      let latestReceivedTimestamp: number | null = null;
 
       transfers.forEach((transfer) => {
-        if (!transfer || !transfer.from || !transfer.to || !transfer.value) {
+        if (
+          !transfer ||
+          !transfer.from ||
+          !transfer.to ||
+          !transfer.value ||
+          !transfer.blockTimestamp
+        ) {
           return; // Skip invalid transfers
         }
 
@@ -746,6 +790,18 @@ export class FlowTrackingManager {
 
           if (transfer.to.toLowerCase() === address.toLowerCase()) {
             totalReceived += value;
+
+            // Track the latest received timestamp
+            const timestamp = parseInt(transfer.blockTimestamp, 10);
+            const transferTimestamp = new Date(timestamp * 1000).getTime();
+            console.log({ transferTimestamp, latestReceivedTimestamp });
+
+            if (
+              latestReceivedTimestamp === null ||
+              transferTimestamp > latestReceivedTimestamp
+            ) {
+              latestReceivedTimestamp = transferTimestamp;
+            }
           }
           if (transfer.from.toLowerCase() === address.toLowerCase()) {
             totalSent += value;
@@ -759,6 +815,9 @@ export class FlowTrackingManager {
         received: ethers.formatEther(totalReceived),
         sent: ethers.formatEther(totalSent),
         balance: ethers.formatEther(balance >= 0n ? balance : 0n),
+        latestReceivedDate: latestReceivedTimestamp
+          ? new Date(latestReceivedTimestamp).toISOString()
+          : null,
       };
     } catch (error) {
       console.error(
@@ -769,6 +828,7 @@ export class FlowTrackingManager {
         received: '0',
         sent: '0',
         balance: '0',
+        latestReceivedDate: null,
       };
     }
   }

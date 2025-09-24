@@ -281,12 +281,22 @@ export class CashTokenSDK {
       const decimals = await this.cashTokenContract!.decimals();
       const symbol = await this.cashTokenContract!.symbol();
 
+      //sent balance
+      const transfer = await this.flowTracking.getAddressTransfersFromGraphQL(
+        this.smartAccountAddress
+      );
+      const totalSent = transfer.reduce((acc, e) => {
+        const amount = BigInt(e?.value);
+        return acc + amount;
+      }, BigInt(0));
+
       return {
         entityId: this.smartAccountAddress,
         balance,
         formatted: ethers.formatUnits(balance, decimals),
         decimals,
         symbol,
+        sent: ethers.formatUnits(totalSent, decimals),
       };
     } catch (error) {
       throw SDKError.networkError(
