@@ -6,7 +6,12 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
-import { BatchTransferDto, BatchTransferResult, ManualPayoutBatchTransferDto, SingleTransfer } from './types';
+import {
+  BatchTransferDto,
+  BatchTransferResult,
+  ManualPayoutBatchTransferDto,
+  SingleTransfer,
+} from './types';
 import { lowerCaseObjectKeys } from '../utils/utility';
 
 const BATCH_SIZE = 10;
@@ -103,7 +108,7 @@ export class BatchTokenTransferProcessor {
   async processManualPayoutBatchTransfer(
     job: Job<ManualPayoutBatchTransferDto>
   ): Promise<BatchTransferResult> {
-    const { transfers, batchId  } = job.data;
+    const { transfers, batchId } = job.data;
 
     this.logger.log(
       `Processing batch transfer with ${
@@ -127,11 +132,8 @@ export class BatchTokenTransferProcessor {
         );
 
         try {
-            const batchResult = await this.processManualPayoutBatch(
-              batch,
-              i + 1
-            );
-            results.push(batchResult);
+          const batchResult = await this.processManualPayoutBatch(batch, i + 1);
+          results.push(batchResult);
         } catch (error) {
           this.logger.error(
             `Failed to process batch ${i + 1}: ${error.message}`,
@@ -188,10 +190,16 @@ export class BatchTokenTransferProcessor {
     batchNumber: number
   ) {
     try {
-      const CASH_TOKEN_ADDRESS = await this.getFromSettings('CASH_TOKEN_CONTRACT');
+      const CASH_TOKEN_ADDRESS = await this.getFromSettings(
+        'CASH_TOKEN_CONTRACT'
+      );
 
       const { contract: aaContract } = await this.createContractInstanceSign(
-        'AAPROJECT'
+        'AAPROJECT',
+        CASH_TOKEN_ADDRESS,
+        [
+          'function transferFrom(address from, address to, uint256 amount) returns (bool)',
+        ]
       );
 
       //TODO: Check for the cash token approval from vendor(WARD Smart account) to AA contract
@@ -236,7 +244,7 @@ export class BatchTokenTransferProcessor {
       // Execute multicall
       const txn = await this.multiSend(
         aaContract,
-        'transferTokenToVendorForCashToken', 
+        'transferTokenToVendorForCashToken',
         multicallTxnPayload
       );
 
@@ -383,8 +391,10 @@ export class BatchTokenTransferProcessor {
     txHash: string
   ) {
     this.logger.log(
-      `Creating manual bank transfer logs for benfs: ${transfers.map(t => t.beneficiaryWalletAddress)}`
-    )
+      `Creating manual bank transfer logs for benfs: ${transfers.map(
+        (t) => t.beneficiaryWalletAddress
+      )}`
+    );
     for (const transfer of transfers) {
       const existingRedeem =
         await this.prismaService.beneficiaryRedeem.findFirst({
@@ -614,7 +624,11 @@ export class BatchTokenTransferProcessor {
     }
   }
 
-  private async createContractInstanceSign(contractName: string) {
+  private async createContractInstanceSign(
+    contractName: string,
+    tokenAddress?: string,
+    abi?: any
+  ) {
     try {
       // Get contract settings
       const contract = await this.getFromSettings('CONTRACT');
@@ -623,7 +637,7 @@ export class BatchTokenTransferProcessor {
         'DEPLOYER_PRIVATE_KEY'
       );
 
-      const contractAddress = contract.AAPROJECT.ADDRESS;
+      const contractAddress = tokenAddress || contract.AAPROJECT.ADDRESS;
 
       const rpcUrl = chainConfig.rpcUrl;
 
@@ -640,7 +654,7 @@ export class BatchTokenTransferProcessor {
       const signer = new ethers.Wallet(privateKey, provider);
 
       // Get ABI from contract settings and convert it
-      const ABI = lowerCaseObjectKeys(contract.AAPROJECT.ABI);
+      const ABI = lowerCaseObjectKeys(abi || contract.AAPROJECT.ABI);
 
       const contractInstance = new ethers.Contract(
         contractAddress,
