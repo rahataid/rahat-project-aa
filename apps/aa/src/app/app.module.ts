@@ -27,6 +27,7 @@ import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { CashTrackerModule } from '../cash-tracker';
+import { InkindTrackerModule } from '../inkind-tracker';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { CashTrackerModule } from '../cash-tracker';
     PayoutsModule,
     ChainModule,
     CashTrackerModule,
+    InkindTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
