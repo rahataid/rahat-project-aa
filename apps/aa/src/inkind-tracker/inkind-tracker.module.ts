@@ -121,7 +121,7 @@ export class InkindTrackerModule implements OnModuleInit, OnModuleDestroy {
   private async loadEntitiesFromDatabase() {
     try {
       // Get entities from database
-      const entitiesSetting = await this.settingsService.getPublic('ENTITIES');
+      const entitiesSetting = await this.settingsService.getPublic('INKIND_ENTITIES');
 
       if (!entitiesSetting?.value) {
         console.warn('No entities found in database settings');

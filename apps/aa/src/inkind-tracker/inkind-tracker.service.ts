@@ -299,7 +299,7 @@ export class InkindTrackerService {
    */
   async getTransactions(): Promise<any> {
     try {
-      const entities = await this.settingsService.getPublic('ENTITIES');
+      const entities = await this.settingsService.getPublic('INKIND_ENTITIES');
 
       // Map database entities to EntityConfig format
       const entityConfigs = (entities.value as any[]).map((entity: any) => ({
