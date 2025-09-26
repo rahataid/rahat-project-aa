@@ -36,8 +36,24 @@ export class GrievancesService {
 
   async create(data: CreateGrievanceDto) {
     return this.prisma.$transaction(async (tx) => {
-      const grievance = await tx.grievance.create({ data });
-      console.log('Grievance created successfully', grievance);
+      // Convert CreatedByUserDto to plain object for Prisma
+      const { createdByUser, ...restData } = data;
+      const prismaData = {
+        ...restData,
+        createdByUser: createdByUser
+          ? {
+              id: createdByUser.id,
+              name: createdByUser.name,
+              email: createdByUser.email,
+            }
+          : null,
+      };
+
+      const grievance = await tx.grievance.create({ data: prismaData });
+      console.log(
+        'Grievance created successfully in project, now payload for core:',
+        grievance
+      );
 
       return await handleMicroserviceCall({
         client: this.client.send(
@@ -45,7 +61,7 @@ export class GrievancesService {
           formatCoreCreateGrievancePayload(grievance)
         ),
         onSuccess: async (res) => {
-          console.log('Grievance created successfully', grievance);
+          console.log('Grievance created successfully core', grievance);
           return res;
         },
         onError: async (error) => {
@@ -151,9 +167,22 @@ export class GrievancesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Convert CreatedByUserDto to plain object for Prisma
+      const { createdByUser, ...restUpdateData } = updateDto;
+      const prismaUpdateData = {
+        ...restUpdateData,
+        ...(createdByUser && {
+          createdByUser: {
+            id: createdByUser.id,
+            name: createdByUser.name,
+            email: createdByUser.email,
+          },
+        }),
+      };
+
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: updateDto,
+        data: prismaUpdateData,
       });
       await handleMicroserviceCall({
         client: this.client.send(
@@ -168,7 +197,7 @@ export class GrievancesService {
           console.error('Error updating grievance:', error);
           tx.grievance.update({
             where: { uuid },
-            data: updateDto,
+            data: prismaUpdateData,
           });
           throw new RpcException(error);
         },

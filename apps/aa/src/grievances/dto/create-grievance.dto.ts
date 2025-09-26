@@ -1,10 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  GrievancePriority,
   GrievanceStatus,
   GrievanceType,
-  GrievancePriority,
 } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
+  IsArray,
+  IsEmail,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -13,6 +16,7 @@ import {
   MaxLength,
   MinLength,
   registerDecorator,
+  ValidateNested,
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
@@ -46,6 +50,50 @@ function IsEmailOrPhoneNumber(validationOptions?: ValidationOptions) {
   };
 }
 
+export interface CreatedByUser {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export class CreatedByUserDto {
+  @ApiProperty({
+    description: 'Unique identifier of the user',
+    example: 123,
+  })
+  @IsInt()
+  @IsNotEmpty()
+  id: number;
+
+  @ApiProperty({
+    description: 'Full name of the user',
+    example: 'John Doe',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(2, {
+    message: 'Name must be at least 2 characters long',
+  })
+  @MaxLength(100, {
+    message: 'Name must not be longer than 100 characters',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Email address of the user',
+    example: 'john@example.com',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail(
+    {},
+    {
+      message: 'Email must be a valid email address',
+    }
+  )
+  email: string;
+}
+
 export class CreateGrievanceDto {
   @ApiProperty({
     description: 'Name of the person reporting the grievance',
@@ -54,14 +102,6 @@ export class CreateGrievanceDto {
   @IsString()
   @IsNotEmpty()
   reportedBy: string;
-
-  @ApiProperty({
-    description: 'ID of the user reporting the grievance',
-    example: 123,
-  })
-  @IsInt()
-  @IsNotEmpty()
-  reporterUserId: number;
 
   @ApiProperty({
     description: 'Contact information of the reporter (email or phone number)',
@@ -134,4 +174,23 @@ export class CreateGrievanceDto {
   @IsEnum(GrievancePriority)
   @IsOptional()
   priority?: GrievancePriority;
+
+  @ApiProperty({
+    description: 'Tags of the grievance',
+    example: ['tag1', 'tag2'],
+    required: false,
+  })
+  @IsArray()
+  @IsOptional()
+  tags?: string[];
+
+  @ApiProperty({
+    description: 'Information about the user who created the grievance',
+    type: CreatedByUserDto,
+    required: false,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreatedByUserDto)
+  createdByUser?: CreatedByUserDto;
 }
