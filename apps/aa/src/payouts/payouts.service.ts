@@ -274,6 +274,13 @@ export class PayoutsService {
         });
       }
 
+      if (createPayoutDto.mode === 'ONLINE') {
+        await this.vendorsService.processVendorOnlinePayout({
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
+          amount: String(beneficiaryGroup.numberOfTokens),
+        });
+      }
+
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         payload: {
@@ -1447,8 +1454,10 @@ export class PayoutsService {
     const benfs = await this.fetchBeneficiaryPayoutDetails(payoutUUID);
 
     // match benfs with rows
-    rows = rows.map(row => {
-      const benf = benfs.find(benf => benf.bankDetails.accountNumber === row['Bank Account Number']);
+    rows = rows.map((row) => {
+      const benf = benfs.find(
+        (benf) => benf.bankDetails.accountNumber === row['Bank Account Number']
+      );
       return {
         ...row,
         beneficary: benf || null,
@@ -1457,7 +1466,7 @@ export class PayoutsService {
     });
 
     // filter rows where beneficary is null
-    const filteredRows = rows.filter(row => row.beneficary !== null);
+    const filteredRows = rows.filter((row) => row.beneficary !== null);
 
     // send to offramp queue
     await this.offrampService.addToVerifyManualPayoutQueue(filteredRows);

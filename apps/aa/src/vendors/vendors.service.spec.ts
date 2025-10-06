@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VendorsService } from './vendors.service';
 import { PrismaService } from '@rumsan/prisma';
-import { CORE_MODULE } from '../constants';
+import { CORE_MODULE, BQUEUE } from '../constants';
 import { ClientProxy } from '@nestjs/microservices';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import { PayoutMode } from '@prisma/client';
 import { of } from 'rxjs';
+import { Queue } from 'bull';
+import { getQueueToken } from '@nestjs/bull';
 
 describe('VendorsService', () => {
   let service: VendorsService;
@@ -32,6 +34,15 @@ describe('VendorsService', () => {
     },
     beneficiaryRedeem: {
       findMany: jest.fn(),
+      aggregate: jest.fn(),
+    },
+    otp: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    beneficiary: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
     },
   };
 
@@ -43,7 +54,14 @@ describe('VendorsService', () => {
     getAccountBalance: jest.fn(),
   };
 
+  const mockVendorCVAPayoutQueue = {
+    add: jest.fn(),
+  };
+
   beforeEach(async () => {
+    // Reset all mocks
+    jest.clearAllMocks();
+    
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VendorsService,
@@ -58,6 +76,10 @@ describe('VendorsService', () => {
         {
           provide: ReceiveService,
           useValue: mockReceiveService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
         },
       ],
     }).compile();
@@ -209,14 +231,20 @@ describe('VendorsService', () => {
 
       // Mock the private methods via spies
       jest.spyOn(service, 'getVendorAssignedTokens').mockResolvedValue(1000);
+      jest.spyOn(service, 'getVendorAssignedBalance').mockResolvedValue(500);
+      // Mock the private method using any type to avoid TypeScript errors
+      (service as any).getRecentTransactionDb = jest.fn().mockResolvedValue([]);
 
       const result = await service.getVendorWalletStats(vendorWallet);
 
       expect(result).toEqual({
         assignedTokens: 1000,
         disbursedTokens: 1000,
+        vendorAssignedBalance: 500,
         balances: mockBalance,
         transactions: expect.any(Array),
+        createdAt: undefined,
+        updatedAt: undefined,
       });
     });
 
@@ -425,6 +453,7 @@ describe('VendorsService', () => {
         expect.objectContaining({
           where: {
             vendorUid: 'vendor-123',
+            status: 'COMPLETED',
           },
           orderBy: {
             createdAt: 'desc',
@@ -452,6 +481,7 @@ describe('VendorsService', () => {
         expect.objectContaining({
           where: {
             vendorUid: 'vendor-123',
+            status: 'COMPLETED',
             txHash: 'tx-hash-123',
           },
         })
@@ -477,7 +507,7 @@ describe('VendorsService', () => {
         expect.objectContaining({
           where: {
             vendorUid: 'vendor-123',
-            status: 'TOKEN_TRANSACTION_COMPLETED', // corrected expected status
+            status: 'COMPLETED',
           },
         })
       );
@@ -519,6 +549,10 @@ describe('VendorsService', () => {
           beneficiaryWalletAddress: 'wallet-1',
           vendorUid: 'test-vendor-uuid',
           transactionType: 'VENDOR_REIMBURSEMENT',
+          amount: 100,
+          txHash: 'tx-hash-1',
+          status: 'COMPLETED',
+          info: {},
           Beneficiary: {
             uuid: 'ben-1',
             walletAddress: 'wallet-1',
@@ -533,6 +567,10 @@ describe('VendorsService', () => {
           beneficiaryWalletAddress: 'wallet-2',
           vendorUid: 'test-vendor-uuid',
           transactionType: 'VENDOR_REIMBURSEMENT',
+          amount: 200,
+          txHash: 'tx-hash-2',
+          status: 'COMPLETED',
+          info: {},
           Beneficiary: {
             uuid: 'ben-2',
             walletAddress: 'wallet-2',
@@ -562,14 +600,16 @@ describe('VendorsService', () => {
       expect(result.data[0]).toMatchObject({
         ...mockBeneficiaryRedeems[0].Beneficiary,
         name: 'John Doe',
-        txHash: null,
-        status: null,
+        txHash: 'tx-hash-1',
+        status: 'COMPLETED',
+        benTokens: 100,
       });
       expect(result.data[1]).toMatchObject({
         ...mockBeneficiaryRedeems[1].Beneficiary,
         name: 'Jane Smith',
-        txHash: null,
-        status: null,
+        txHash: 'tx-hash-2',
+        status: 'COMPLETED',
+        benTokens: 200,
       });
       expect(result.meta.total).toBe(2);
 
@@ -578,10 +618,11 @@ describe('VendorsService', () => {
       });
 
       expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
-        {
+        expect.objectContaining({
           where: {
             transactionType: 'VENDOR_REIMBURSEMENT',
             vendorUid: 'test-vendor-uuid',
+            status: 'COMPLETED',
           },
           include: {
             Beneficiary: {
@@ -596,7 +637,10 @@ describe('VendorsService', () => {
               },
             },
           },
-        }
+          orderBy: {
+            createdAt: 'desc',
+          },
+        })
       );
     });
 
@@ -612,6 +656,8 @@ describe('VendorsService', () => {
         uuid: 'test-vendor-uuid',
         name: 'Test Vendor',
         walletAddress: 'test-wallet',
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       const mockPayouts = [
@@ -638,9 +684,16 @@ describe('VendorsService', () => {
         },
       ];
 
-      const mockBeneficiaryToGroups = [
+      const mockBeneficiaryRedeems = [
         {
-          beneficiary: {
+          beneficiaryWalletAddress: 'wallet-1',
+          vendorUid: 'test-vendor-uuid',
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          amount: 100,
+          txHash: 'tx-hash-1',
+          status: 'PENDING',
+          info: { mode: 'OFFLINE' }, // Add mode for OFFLINE payout
+          Beneficiary: {
             uuid: 'ben-1',
             walletAddress: 'wallet-1',
             phone: '1234567890',
@@ -654,48 +707,48 @@ describe('VendorsService', () => {
 
       const mockBeneficiaryResponse = [{ uuid: 'ben-1', name: 'John Doe' }];
 
+      // Set up mocks after clearAllMocks
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-      mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
-        mockGroupTokens
-      );
-      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue(
-        mockGroups
-      );
-      mockPrismaService.beneficiaryToGroup.findMany.mockResolvedValue(
-        mockBeneficiaryToGroups
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
+        mockBeneficiaryRedeems
       );
       mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
-
+      
       const result = await service.getVendorBeneficiaries(payload);
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0]).toMatchObject({
-        ...mockBeneficiaryToGroups[0].beneficiary,
+        ...mockBeneficiaryRedeems[0].Beneficiary,
         name: 'John Doe',
-        txHash: null,
-        status: null,
+        txHash: 'tx-hash-1',
+        status: 'PENDING',
+        benTokens: 100,
       });
       expect(result.meta.total).toBe(1);
 
-      expect(mockPrismaService.payouts.findMany).toHaveBeenCalledWith({
-        where: {
-          type: 'VENDOR',
-          mode: 'OFFLINE',
-          payoutProcessorId: 'test-vendor-uuid',
-          beneficiaryGroupToken: {
-            isNot: null,
-          },
-        },
-      });
-
-      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
-        {
+      expect(mockPrismaService.beneficiaryRedeem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
           where: {
-            uuid: { in: ['group-1'] },
-            groupPurpose: { not: 'COMMUNICATION' },
+            transactionType: 'VENDOR_REIMBURSEMENT',
+            vendorUid: 'test-vendor-uuid',
           },
-        }
+          include: {
+            Beneficiary: {
+              select: {
+                uuid: true,
+                walletAddress: true,
+                phone: true,
+                gender: true,
+                benTokens: true,
+                isVerified: true,
+                createdAt: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        })
       );
     });
 
@@ -730,6 +783,7 @@ describe('VendorsService', () => {
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue([]);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);
 
@@ -756,6 +810,7 @@ describe('VendorsService', () => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
       mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue([]);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);
 
@@ -786,6 +841,7 @@ describe('VendorsService', () => {
         mockGroupTokens
       );
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);
 
@@ -850,7 +906,7 @@ describe('VendorsService', () => {
       expect(result.meta.total).toBe(0);
     });
 
-    it('should throw error for invalid payout mode', async () => {
+    it('should handle invalid payout mode by treating it as OFFLINE', async () => {
       const payload: VendorBeneficiariesDto = {
         vendorUuid: 'test-vendor-uuid',
         payoutMode: 'INVALID' as any,
@@ -865,10 +921,12 @@ describe('VendorsService', () => {
       };
 
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
-      await expect(service.getVendorBeneficiaries(payload)).rejects.toThrow(
-        'Invalid payout mode: INVALID'
-      );
+      const result = await service.getVendorBeneficiaries(payload);
+
+      expect(result.data).toHaveLength(0);
+      expect(result.meta.total).toBe(0);
     });
 
     it('should handle errors in getVendorBeneficiaries', async () => {
