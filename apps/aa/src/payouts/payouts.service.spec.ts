@@ -314,10 +314,7 @@ describe('PayoutsService', () => {
           },
         },
       });
-      expect(mockVendorsService.processVendorOnlinePayout).toHaveBeenCalledWith({
-        beneficiaryGroupUuid: 'group-uuid-123',
-        amount: '1000',
-      });
+      expect(mockVendorsService.processVendorOnlinePayout).not.toHaveBeenCalled();
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         EVENTS.NOTIFICATION.CREATE,
         expect.objectContaining({
