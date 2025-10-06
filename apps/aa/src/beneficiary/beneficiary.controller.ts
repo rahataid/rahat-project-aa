@@ -5,6 +5,7 @@ import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
   CreateBeneficiaryDto,
+  CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
@@ -28,6 +29,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.create(data);
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  createBulk(data: CreateBulkBeneficiaryDto) {
+    return this.beneficiaryService.createBulk(data);
+  }
+
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {
     return this.beneficiaryService.findOne(payload);
@@ -40,6 +49,7 @@ export class BeneficiaryController {
   findOneBeneficiary(payload) {
     return this.beneficiaryService.findOneBeneficiary(payload);
   }
+
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
     uuid: process.env.PROJECT_ID,
@@ -83,7 +93,6 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroups(payload: GetBenfGroupDto) {
-    console.log(payload);
     return this.beneficiaryService.getAllGroups(payload);
   }
 
