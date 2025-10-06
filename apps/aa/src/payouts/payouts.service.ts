@@ -242,43 +242,43 @@ export class PayoutsService {
         },
       });
 
-      if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
-        this.logger.log(
-          `Processing manual bank transfer payout for UUID: ${payout.uuid}`
-        );
+      if (payout.type === 'VENDOR') {
+        if (createPayoutDto.mode === 'OFFLINE') {
+          await this.vendorsService.processVendorOfflinePayout({
+            beneficiaryGroupUuid: beneficiaryGroup.groupId,
+            amount: String(beneficiaryGroup.numberOfTokens),
+          });
+        } else {
+          await this.vendorsService.processVendorOnlinePayout({
+            beneficiaryGroupUuid: beneficiaryGroup.groupId,
+            amount: String(beneficiaryGroup.numberOfTokens),
+          });
+        }
+      } else {
+        if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
+          this.logger.log(
+            `Processing manual bank transfer payout for UUID: ${payout.uuid}`
+          );
 
-        const BeneficiaryPayoutDetails =
-          await this.fetchBeneficiaryPayoutDetails(payout.uuid);
+          const BeneficiaryPayoutDetails =
+            await this.fetchBeneficiaryPayoutDetails(payout.uuid);
 
-        const manualPayoutDetails: FSPManualPayoutDetails[] =
-          BeneficiaryPayoutDetails.map((beneficiary) => ({
-            amount: beneficiary.amount,
-            beneficiaryWalletAddress: beneficiary.walletAddress,
-            beneficiaryBankDetails: beneficiary.bankDetails,
-            payoutUUID: payout.uuid,
-            payoutProcessorId: createPayoutDto.payoutProcessorId,
-            beneficiaryPhoneNumber: beneficiary.phoneNumber,
-          }));
+          const manualPayoutDetails: FSPManualPayoutDetails[] =
+            BeneficiaryPayoutDetails.map((beneficiary) => ({
+              amount: beneficiary.amount,
+              beneficiaryWalletAddress: beneficiary.walletAddress,
+              beneficiaryBankDetails: beneficiary.bankDetails,
+              payoutUUID: payout.uuid,
+              payoutProcessorId: createPayoutDto.payoutProcessorId,
+              beneficiaryPhoneNumber: beneficiary.phoneNumber,
+            }));
 
-        await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
+          await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
 
-        this.logger.log(
-          `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
-        );
-      }
-
-      if (createPayoutDto.mode === 'OFFLINE') {
-        await this.vendorsService.processVendorOfflinePayout({
-          beneficiaryGroupUuid: beneficiaryGroup.groupId,
-          amount: String(beneficiaryGroup.numberOfTokens),
-        });
-      }
-
-      if (createPayoutDto.mode === 'ONLINE') {
-        await this.vendorsService.processVendorOnlinePayout({
-          beneficiaryGroupUuid: beneficiaryGroup.groupId,
-          amount: String(beneficiaryGroup.numberOfTokens),
-        });
+          this.logger.log(
+            `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
+          );
+        }
       }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
