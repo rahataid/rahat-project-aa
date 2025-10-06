@@ -242,6 +242,23 @@ export class PayoutsService {
         },
       });
 
+      if(payout.type === 'VENDOR'){
+      if (createPayoutDto.mode === 'OFFLINE') {
+        await this.vendorsService.processVendorOfflinePayout({
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
+          amount: String(beneficiaryGroup.numberOfTokens),
+        });
+      }
+
+      if (createPayoutDto.mode === 'ONLINE') {
+        await this.vendorsService.processVendorOnlinePayout({
+          beneficiaryGroupUuid: beneficiaryGroup.groupId,
+          amount: String(beneficiaryGroup.numberOfTokens),
+        });
+      }
+      } else {
+
+
       if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
         this.logger.log(
           `Processing manual bank transfer payout for UUID: ${payout.uuid}`
@@ -267,19 +284,8 @@ export class PayoutsService {
         );
       }
 
-      if (createPayoutDto.mode === 'OFFLINE') {
-        await this.vendorsService.processVendorOfflinePayout({
-          beneficiaryGroupUuid: beneficiaryGroup.groupId,
-          amount: String(beneficiaryGroup.numberOfTokens),
-        });
       }
 
-      if (createPayoutDto.mode === 'ONLINE') {
-        await this.vendorsService.processVendorOnlinePayout({
-          beneficiaryGroupUuid: beneficiaryGroup.groupId,
-          amount: String(beneficiaryGroup.numberOfTokens),
-        });
-      }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
