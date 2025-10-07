@@ -43,7 +43,6 @@ export class GrievancesController {
   //   })
   // )
   listAll(@Payload() payload: ListGrievanceDto) {
-    console.log('Grievances Controller listAll');
     return this.grievancesService.listAll(payload);
   }
 
@@ -96,7 +95,6 @@ export class GrievancesController {
     })
   )
   findOne(@Payload() payload: FindGrievanceParamsDto) {
-    console.log('Grievances Controller findOne', payload.uuid);
     return this.grievancesService.findOne(payload.uuid);
   }
 
