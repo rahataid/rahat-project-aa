@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { BeneficiaryRedeem, Payouts, PayoutType, Prisma } from '@prisma/client';
+import { BeneficiaryRedeem, Payouts, PayoutTransactionStatus, PayoutTransactionType, PayoutType, Prisma } from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
