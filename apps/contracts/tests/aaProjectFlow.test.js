@@ -31,28 +31,32 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
     let ben2;
     let notRegisteredBen;
     let ven1;
+    let ven2;
     let aaProjectContract;
     let rahatDonorContract;
     let accessManagerContract;
     let triggerManagerContract;
     let forwarderContract;
-    let rahatTokenContract
+    let rahatTokenContract;
+    let cashTokenContract;
     let requiredTrigger = 2;
     let triggerAddress1;
     let triggerAddress2;
     let triggerAddress3;
     let rahatTokenAddress;
+    let cashTokenAddress;
     const [triggerSource1, triggerSource2, triggerSource3] = triggerSources;
 
 
     before(async function () {
-        const [addr0, addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
+        const [addr0, addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8] = await ethers.getSigners();
         deployer = addr0;
         admin = addr1;
         ben1 = addr2;
         ben2 = addr3;
         ven1= addr6;
-        triggerAddress1 = addr7;
+        ven2= addr7;
+        triggerAddress1 = addr8;    
         triggerAddress2 = addr4;
         triggerAddress3 = addr5;
     });
@@ -65,6 +69,7 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
             rahatDonorContract = await ethers.deployContract('RahatDonor', [admin.address, accessManagerContract.target]);
             forwarderContract = await ethers.deployContract("ERC2771Forwarder", ["Rumsan Forwarder"]);
             rahatTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'RahatToken', 'RHT', await rahatDonorContract.getAddress(), 1]);
+            cashTokenContract = await ethers.deployContract('RahatToken', [await forwarderContract.getAddress(), 'CashToken', 'CST', admin.address, 1]);
             aaProjectContract = await ethers.deployContract('AAProject', ["AAProject",
                 rahatTokenContract.target,
                 forwarderContract.target,
@@ -72,6 +77,9 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
                 triggerManagerContract.target
             ]);
             rahatTokenAddress = rahatTokenContract.getAddress()
+            cashTokenAddress = cashTokenContract.getAddress()
+            console.log("RahatToken deployed at: ", rahatTokenContract.target);
+            console.log("CashToken deployed at: ", cashTokenContract.target);
 
             await accessManagerContract.connect(admin).grantRole(0, rahatDonorContract.target, 0);
             // await aaProjectContract.updateAdmin(await rahatDonorContract.getAddress(), true);
@@ -123,6 +131,11 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
             expect(await rahatTokenContract.balanceOf(aaProjectContract.target)).to.equal(1000000);
         })
 
+        it('should send cash token to the vendor', async function () {
+            await cashTokenContract.connect(admin).mint(ven2.address, 1000);
+            expect(await cashTokenContract.balanceOf(ven2.address)).to.equal(1000);
+        });
+
         it('should trigger the project via source1', async function () {
             await triggerManagerContract.connect(triggerAddress1).trigger(ethers.id(triggerSource1.id));
             expect(await triggerManagerContract.connect(triggerAddress1).getTriggerCount()).to.equal(1);
@@ -142,6 +155,15 @@ describe.only('------ AA ProjectFlow Tests ------', function () {
             await aaProjectContract.connect(admin).transferTokenToVendor(ben1.address,ven1.address,10);
             expect(await rahatTokenContract.balanceOf(ven1.address),10);
             expect(await aaProjectContract.benTokens(ben1.address)).to.equal(90);
+        })
+
+        it('should be able to transfer the beneficiaries token to vendor and get cash token ', async function(){
+            const initialBenTokenBalance = await aaProjectContract.benTokens(ben1.address);
+            await cashTokenContract.connect(ven2).approve(aaProjectContract.target, ethers.MaxUint256);
+            await aaProjectContract.connect(admin).transferTokenToVendorForCashToken(ben1.address,ven2.address, cashTokenAddress,10);
+            expect(await rahatTokenContract.balanceOf(ven2.address)).to.equal(10);
+            expect(await aaProjectContract.benTokens(ben1.address)).to.equal(initialBenTokenBalance-10n);
+            expect(await cashTokenContract.balanceOf(ben1.address)).to.equal(10);
         })
 
     })

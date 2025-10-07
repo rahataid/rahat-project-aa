@@ -584,7 +584,7 @@ describe('StellarService', () => {
         await expect(
           service.getSecretByWallet('wallet-address')
         ).rejects.toThrow(
-          new RpcException('Beneficiary with wallet wallet-address not found')
+          new RpcException(`Cannot get secret of beneficiary with wallet address: wallet-address`)
         );
 
         expect(mockClientProxy.send).toHaveBeenCalledWith(
@@ -679,7 +679,7 @@ describe('StellarService', () => {
           status: 'PENDING',
           isCompleted: false,
           txHash: null,
-          updateAt: new Date().toISOString(),
+          updatedAt: new Date(),
           Vendor: { name: 'Test Vendor' },
         });
         mockPrismaService.beneficiaryRedeem.update.mockResolvedValue({
@@ -687,7 +687,7 @@ describe('StellarService', () => {
           status: 'COMPLETED',
           isCompleted: true,
           txHash: 'tx-hash',
-          updateAt: new Date().toISOString(),
+          updatedAt: new Date(),
           Vendor: { name: 'Test Vendor' },
         });
 
@@ -1325,7 +1325,7 @@ describe('StellarService', () => {
         status: 'PENDING',
         isCompleted: false,
         txHash: null,
-        updateAt: new Date().toISOString(),
+        updatedAt: new Date(),
         Vendor: { name: 'Test Vendor' },
       });
 
@@ -1336,7 +1336,7 @@ describe('StellarService', () => {
         status: 'COMPLETED',
         isCompleted: true,
         txHash: 'transaction-hash',
-        updateAt: new Date().toISOString(),
+        updatedAt: new Date(),
         Vendor: { name: 'Test Vendor' },
       });
 
@@ -1347,7 +1347,7 @@ describe('StellarService', () => {
         status: 'COMPLETED',
         isCompleted: true,
         txHash: 'transaction-hash',
-        updateAt: new Date().toISOString(),
+        updatedAt: new Date(),
         Vendor: { name: 'Test Vendor' },
       });
     });

@@ -123,3 +123,56 @@ export type DownloadPayoutLogsType = {
   'Bank a/c number'?: string;
   'Bank Name'?: string;
 };
+
+// Manual Payout Verification Types
+export interface ManualPayoutRowData {
+  Amount: number;
+  Remark: string;
+  'Bank Name': string;
+  'Bank Account Number': string;
+  'Bank Account Holder Name ': string;
+  'Approval Date': string;
+  'Transaction Status': string;
+  'Date': string;
+}
+
+export interface EnrichedManualPayoutRow extends ManualPayoutRowData {
+  beneficiary: BeneficiaryPayoutDetails | null;
+  payoutId: string;
+}
+
+export interface ManualPayoutVerificationResult {
+  matched: EnrichedManualPayoutRow[];
+  unmatched: EnrichedManualPayoutRow[];
+}
+
+export interface EntityConfig {
+  alias: string;
+  address: string;
+  privateKey: string;
+  smartAccount: string;
+  isFieldOffice?: boolean;
+}
+
+export interface PayoutWithBeneficiaryDetails {
+  uuid: string;
+  beneficiaryGroupToken: {
+    numberOfTokens: number;
+    uuid: string;
+    beneficiaryGroup: {
+      uuid: string;
+      beneficiaries: Array<{
+        beneficiary?: {
+          walletAddress?: string;
+          phone?: string;
+          extras?: {
+            phone?: string;
+            bank_ac_name?: string;
+            bank_ac_number?: string;
+            bank_name?: string;
+          };
+        };
+      }>;
+    };
+  };
+}

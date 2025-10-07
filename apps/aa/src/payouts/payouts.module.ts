@@ -46,6 +46,9 @@ import { StellarModule } from '../stellar/stellar.module';
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.BATCH_TRANSFER,
+    }),
   ],
   controllers: [PayoutsController],
   providers: [PayoutsService, PrismaService, AppService, OfframpService],
