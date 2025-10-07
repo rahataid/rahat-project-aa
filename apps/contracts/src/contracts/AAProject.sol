@@ -18,7 +18,7 @@ contract AAProject is
   AbstractProject,
   IAAProject,
   ERC2771Context,
-  AccessManaged
+  AccessManaged,
   ERC2771Context,
   AccessManaged
 {
@@ -63,7 +63,6 @@ contract AAProject is
     string memory _name,
     address _defaultToken,
     address _forwarder,
-    address _accessManager,
     address _accessManager,
     address _triggerManager
   )
