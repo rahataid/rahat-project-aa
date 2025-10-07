@@ -37,8 +37,6 @@ export class VendorsService {
     private prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly receiveService: ReceiveService,
-    @InjectQueue(BQUEUE.VENDOR_OFFLINE)
-    private readonly vendorOfflinePayoutQueue: Queue,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue,
     @InjectQueue(BQUEUE.VENDOR_CVA)
