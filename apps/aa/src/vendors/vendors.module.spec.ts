@@ -4,9 +4,11 @@ import { VendorsService } from './vendors.service';
 import { PrismaService } from '@rumsan/prisma';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
-import { CORE_MODULE } from '../constants';
+import { CORE_MODULE, BQUEUE } from '../constants';
 import { ClientProxy } from '@nestjs/microservices';
 import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
+import { getQueueToken } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 describe('VendorsModule', () => {
   let module: TestingModule;
@@ -46,6 +48,24 @@ describe('VendorsModule', () => {
 
   const mockSettingsService = {
     getPublic: jest.fn(),
+  };
+
+  const mockVendorOfflineQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockBatchTransferQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockVendorQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
   };
 
   const mockReceiveService = {
@@ -108,6 +128,14 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
         },
       ],
     }).compile();
@@ -216,6 +244,14 @@ describe('VendorsModule', () => {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
         },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
+        },
       ],
     }).compile();
 
@@ -263,6 +299,14 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
         },
       ],
     }).compile();

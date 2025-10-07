@@ -41,6 +41,7 @@ describe('VendorTokenRedemptionService', () => {
     vendorTokenRedemption: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       findMany: jest.fn(),
       aggregate: jest.fn(),
@@ -356,8 +357,6 @@ describe('VendorTokenRedemptionService', () => {
         where: { uuid: 'r-2' },
         data: {
           redemptionStatus: TokenRedemptionStatus.STELLAR_FAILED,
-          approvedBy: undefined,
-          approvedAt: expect.any(Date),
           transactionHash: undefined,
         },
         include: { vendor: true },
@@ -386,7 +385,7 @@ describe('VendorTokenRedemptionService', () => {
       expect(prisma.vendorTokenRedemption.findMany).toHaveBeenCalledWith({
         where: {
           vendorUuid: 'v-1',
-          redemptionStatus: TokenRedemptionStatus.REQUESTED,
+          redemptionStatus: { in: ['STELLAR_VERIFIED', 'REQUESTED'] },
           vendor: { name: { contains: 'Shop', mode: 'insensitive' } },
         },
         include: { vendor: true },

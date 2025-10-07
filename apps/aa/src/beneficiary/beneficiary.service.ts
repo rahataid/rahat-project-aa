@@ -9,6 +9,7 @@ import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
+  CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -70,6 +71,23 @@ export class BeneficiaryService {
     const rdata = await this.rsprisma.beneficiary.create({
       data: rest,
     });
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    return rdata;
+  }
+
+  async createBulk(dto: CreateBulkBeneficiaryDto) {
+    const { beneficiaries } = dto;
+
+    // Process each beneficiary to remove isVerified field
+    const processedBeneficiaries = beneficiaries.map(
+      ({ isVerified, ...rest }) => rest
+    );
+
+    const rdata = await this.rsprisma.beneficiary.createMany({
+      data: processedBeneficiaries,
+      skipDuplicates: true,
+    });
+
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
   }
@@ -675,7 +693,9 @@ export class BeneficiaryService {
     }
   }
 
-  async createBeneficiaryRedeemBulk(payload: Prisma.BeneficiaryRedeemCreateManyInput[]) {
+  async createBeneficiaryRedeemBulk(
+    payload: Prisma.BeneficiaryRedeemCreateManyInput[]
+  ) {
     try {
       const logs = await this.prisma.beneficiaryRedeem.createMany({
         data: payload,

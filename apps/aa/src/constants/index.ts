@@ -57,6 +57,7 @@ export const JOBS = {
   },
   BENEFICIARY: {
     CREATE: 'rahat.jobs.beneficiary.create',
+    ADD_BULK_TO_PROJECT: 'rahat.jobs.beneficiary.create_bulk',
     LIST: 'rahat.jobs.beneficiary.list',
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
@@ -280,6 +281,7 @@ export const JOBS = {
   },
   BATCH_TRANSFER: {
     PROCESS_BATCH: 'aa.jobs.batch_transfer.process_batch',
+    PROCESS_MANUAL_PAYOUT_BATCH: 'aa.jobs.batch_transfer.process_manual_payout_batch',
   },
   GRIEVANCES: {
     CREATE: 'aa.jobs.grievances.create',
@@ -302,6 +304,10 @@ export const JOBS = {
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
     GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
+  },
+  INKIND_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.inkind-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.inkind-tracker.getTransactions',
   },
 };
 
