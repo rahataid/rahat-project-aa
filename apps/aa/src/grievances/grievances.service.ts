@@ -9,6 +9,7 @@ import { CORE_MODULE } from '../constants';
 import { CreateGrievanceDto } from './dto/create-grievance.dto';
 import { UpdateGrievanceStatusDto } from './dto/update-grievance-status.dto';
 import { UpdateGrievanceDto } from './dto/update-grievance.dto';
+import { GrievanceStatsResponse } from './dto/grievance-stats.dto';
 import {
   formatCoreCreateGrievancePayload,
   formatCoreUpdateGrievancePayload,
@@ -234,5 +235,102 @@ export class GrievancesService {
       });
       return grievance;
     });
+  }
+
+  async getOverviewStats(): Promise<GrievanceStatsResponse> {
+    const where = {
+      deletedAt: null,
+    };
+
+    // Get total count
+    const totalGrievances = await this.prisma.grievance.count({ where });
+
+    // Get counts by type
+    const typeStats = await this.prisma.grievance.groupBy({
+      by: ['type'],
+      where,
+      _count: {
+        type: true,
+      },
+    });
+
+    // Get counts by status
+    const statusStats = await this.prisma.grievance.groupBy({
+      by: ['status'],
+      where,
+      _count: {
+        status: true,
+      },
+    });
+
+    // Format type stats
+    const grievanceType = {
+      TECHNICAL:
+        typeStats.find((stat) => stat.type === 'TECHNICAL')?._count.type || 0,
+      NON_TECHNICAL:
+        typeStats.find((stat) => stat.type === 'NON_TECHNICAL')?._count.type ||
+        0,
+      OTHER: typeStats.find((stat) => stat.type === 'OTHER')?._count.type || 0,
+    };
+
+    // Format status stats
+    const grievanceStatus = {
+      NEW:
+        statusStats.find((stat) => stat.status === 'NEW')?._count.status || 0,
+      UNDER_REVIEW:
+        statusStats.find((stat) => stat.status === 'UNDER_REVIEW')?._count
+          .status || 0,
+      RESOLVED:
+        statusStats.find((stat) => stat.status === 'RESOLVED')?._count.status ||
+        0,
+      CLOSED:
+        statusStats.find((stat) => stat.status === 'CLOSED')?._count.status ||
+        0,
+    };
+
+    // Calculate average resolve time for resolved/closed grievances
+    const resolvedGrievances = await this.prisma.grievance.findMany({
+      where: {
+        ...where,
+        status: {
+          in: ['RESOLVED', 'CLOSED'],
+        },
+      },
+      select: {
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    let averageResolveTime = 0;
+
+    if (resolvedGrievances.length > 0) {
+      const totalResolveTimeMs = resolvedGrievances.reduce(
+        (total, grievance) => {
+          const resolveTime =
+            grievance.updatedAt.getTime() - grievance.createdAt.getTime();
+          return total + resolveTime;
+        },
+        0
+      );
+
+      averageResolveTime = Math.round(
+        totalResolveTimeMs / resolvedGrievances.length
+      );
+    }
+
+    console.log('Grievance stats:', {
+      totalGrievances,
+      grievanceType,
+      grievanceStatus,
+      averageResolveTime,
+    });
+
+    return {
+      totalGrievances,
+      grievanceType,
+      grievanceStatus,
+      averageResolveTime,
+    };
   }
 }

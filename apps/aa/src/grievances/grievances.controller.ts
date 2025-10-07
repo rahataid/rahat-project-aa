@@ -116,4 +116,12 @@ export class GrievancesController {
   remove(@Payload() payload: RemoveGrievanceDto) {
     return this.grievancesService.remove(payload.uuid);
   }
+
+  @MessagePattern({
+    cmd: JOBS.GRIEVANCES.GET_OVERVIEW_STATS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getOverviewStats() {
+    return this.grievancesService.getOverviewStats();
+  }
 }
