@@ -20,6 +20,21 @@ export class ChainQueueService {
 
   constructor(private chainServiceRegistry: ChainServiceRegistry) {}
 
+  async disbursementStats(chainType?: ChainType): Promise<any> {
+    this.logger.log(`disbursment Stats`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+
+    if (!chainService.addTrigger) {
+      throw new Error(
+        `Trigger functionality not supported for ${chainService.getChainType()} chain`
+      );
+    }
+
+    return chainService.getDisbursementStats();
+  }
+
   async assignTokens(
     data: AssignTokensDto,
     chainType?: ChainType

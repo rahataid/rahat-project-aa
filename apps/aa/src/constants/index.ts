@@ -272,6 +272,7 @@ export const JOBS = {
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
     OFFLINE_PAYOUT: 'aa.jobs.vendor.offline_payout',
+    ONLINE_PAYOUT: 'aa.jobs.vendor.online_payout',
     SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
     PROCESS_OFFLINE_TOKEN_TRANSFER:
       'aa.jobs.vendor.process_offline_token_transfer',
@@ -335,6 +336,7 @@ export const BQUEUE = {
   EVM: `EVM_${process.env.PROJECT_ID}`,
   // EVM:"EVM"
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
+  VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,

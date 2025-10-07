@@ -57,6 +57,8 @@ export class VendorOfflinePayoutDto {
   amount: string;
 }
 
+export class VendorOnlinePayoutDto extends VendorOfflinePayoutDto {}
+
 export class SendGroupOtpDto {
   @IsString()
   @IsNotEmpty()

@@ -20,6 +20,7 @@ import {
 import {
   VendorOfflinePayoutDto,
   TestVendorOfflinePayoutDto,
+  VendorOnlinePayoutDto,
 } from './dto/vendor-offline-payout.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -39,7 +40,9 @@ export class VendorsService {
     @InjectQueue(BQUEUE.VENDOR_OFFLINE)
     private readonly vendorOfflinePayoutQueue: Queue,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
-    private readonly batchTransferQueue: Queue
+    private readonly batchTransferQueue: Queue,
+    @InjectQueue(BQUEUE.VENDOR_CVA)
+    private readonly vendorCVAPayoutQueue: Queue
   ) {}
 
   async listWithProjectData(query: PaginationBaseDto) {
@@ -468,13 +471,40 @@ export class VendorsService {
     }
   }
 
+  async processVendorOnlinePayout(payload: VendorOnlinePayoutDto) {
+    try {
+      this.logger.log(
+        `Processing online payout for beneficiary group ${payload.beneficiaryGroupUuid}`
+      );
+      // Add job to queue for processing
+      await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.ONLINE_PAYOUT, {
+        beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+        amount: payload.amount,
+      });
+
+      this.logger.log(
+        `Job added to queue for beneficiary group ${payload.beneficiaryGroupUuid} online payout`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor online payout job added to queue',
+        beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
+      };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
+
+
   async processVendorOfflinePayout(payload: VendorOfflinePayoutDto) {
     try {
       this.logger.log(
         `Processing offline payout for beneficiary group ${payload.beneficiaryGroupUuid}`
       );
       // Add job to queue for processing
-      await this.vendorOfflinePayoutQueue.add(JOBS.VENDOR.OFFLINE_PAYOUT, {
+      await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.OFFLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
       });
@@ -507,7 +537,7 @@ export class VendorsService {
         ...(payload.testAmount && { amount: payload.testAmount }),
       };
 
-      await this.vendorOfflinePayoutQueue.add(
+      await this.vendorCVAPayoutQueue.add(
         JOBS.VENDOR.OFFLINE_PAYOUT,
         jobData
       );
@@ -809,7 +839,7 @@ export class VendorsService {
           }
 
           // Do NOT validate OTP here. Only queue for token transfer
-          await this.vendorOfflinePayoutQueue.add(
+          await this.vendorCVAPayoutQueue.add(
             JOBS.VENDOR.PROCESS_OFFLINE_TOKEN_TRANSFER,
             {
               vendorUuid: payload.vendorUuid,
