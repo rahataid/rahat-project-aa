@@ -213,6 +213,7 @@ export interface TokenBalance {
   formatted: string;
   decimals: number;
   symbol: string;
+  sent?: string;
 }
 
 export interface TokenAllowance {

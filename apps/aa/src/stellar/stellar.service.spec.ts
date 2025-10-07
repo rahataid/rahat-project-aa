@@ -584,7 +584,7 @@ describe('StellarService', () => {
         await expect(
           service.getSecretByWallet('wallet-address')
         ).rejects.toThrow(
-          new RpcException('Cannot get secret of beneficiary with wallet address: wallet-address')
+          new RpcException(`Cannot get secret of beneficiary with wallet address: wallet-address`)
         );
 
         expect(mockClientProxy.send).toHaveBeenCalledWith(

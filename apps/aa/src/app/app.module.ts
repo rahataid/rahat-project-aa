@@ -26,6 +26,8 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
+import { CashTrackerModule } from '../cash-tracker';
+import { InkindTrackerModule } from '../inkind-tracker';
 
 @Module({
   imports: [
@@ -80,6 +82,9 @@ import { ChainModule } from '../chain/chain.module';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
@@ -98,6 +103,8 @@ import { ChainModule } from '../chain/chain.module';
     VendorsModule,
     PayoutsModule,
     ChainModule,
+    CashTrackerModule,
+    InkindTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

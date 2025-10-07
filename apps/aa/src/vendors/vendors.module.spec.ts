@@ -50,6 +50,24 @@ describe('VendorsModule', () => {
     getPublic: jest.fn(),
   };
 
+  const mockVendorOfflineQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockBatchTransferQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockVendorQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
   const mockReceiveService = {
     getAccountBalance: jest.fn(),
   };
@@ -114,6 +132,14 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
         },
         {
           provide: getQueueToken(BQUEUE.VENDOR_CVA),
@@ -227,6 +253,14 @@ describe('VendorsModule', () => {
           useValue: mockVendorTokenRedemptionService,
         },
         {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
+        },
+        {
           provide: getQueueToken(BQUEUE.VENDOR_CVA),
           useValue: mockVendorCVAPayoutQueue,
         },
@@ -277,6 +311,14 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
         },
         {
           provide: getQueueToken(BQUEUE.VENDOR_CVA),
