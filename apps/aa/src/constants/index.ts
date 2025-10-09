@@ -77,6 +77,7 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
+    GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
   },
   RIVER_STATIONS: {
     GET_DHM: 'aa.jobs.riverStations.getDhm',
@@ -281,7 +282,8 @@ export const JOBS = {
   },
   BATCH_TRANSFER: {
     PROCESS_BATCH: 'aa.jobs.batch_transfer.process_batch',
-    PROCESS_MANUAL_PAYOUT_BATCH: 'aa.jobs.batch_transfer.process_manual_payout_batch',
+    PROCESS_MANUAL_PAYOUT_BATCH:
+      'aa.jobs.batch_transfer.process_manual_payout_batch',
   },
   GRIEVANCES: {
     CREATE: 'aa.jobs.grievances.create',

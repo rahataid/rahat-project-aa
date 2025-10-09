@@ -794,7 +794,6 @@ export class FlowTrackingManager {
             // Track the latest received timestamp
             const timestamp = parseInt(transfer.blockTimestamp, 10);
             const transferTimestamp = new Date(timestamp * 1000).getTime();
-            console.log({ transferTimestamp, latestReceivedTimestamp });
 
             if (
               latestReceivedTimestamp === null ||

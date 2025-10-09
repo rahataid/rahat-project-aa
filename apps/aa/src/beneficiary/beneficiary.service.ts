@@ -17,6 +17,8 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, Prisma } from '@prisma/client';
+import axios from 'axios';
+import { SettingsService } from '@rumsan/settings';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -36,6 +38,7 @@ export class BeneficiaryService {
   private readonly logger = new Logger(BeneficiaryService.name);
   constructor(
     protected prisma: PrismaService,
+    private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     private eventEmitter: EventEmitter2
@@ -924,6 +927,58 @@ export class BeneficiaryService {
       throw new RpcException(
         `Failed to update beneficiary tokens for group ${groupUuid}: ${error.message}`
       );
+    }
+  }
+
+  async getBalance() {
+    try {
+      // Fetch all active beneficiaries with wallet addresses
+      const beneficiaries = await this.prisma.beneficiary.findMany({
+        where: { deletedAt: null },
+        select: { walletAddress: true },
+      });
+
+      const wallets = beneficiaries.map((b) => b.walletAddress);
+
+      // Get token contract address and Alchemy API URL
+      const cashTokenSetting = await this.settingsService.getPublic(
+        'CASH_TOKEN_CONTRACT'
+      );
+      const tokenAddress = cashTokenSetting.value;
+
+      const alchemyApiUrl = (await this.settingsService.getPublic('API_URL'))
+        .value as { URL: string };
+
+      // Initialize total balance
+      let totalBalance = 0n;
+
+      // Fetch balances for each wallet
+      await Promise.all(
+        wallets.map(async (wallet) => {
+          const response = await axios.post(alchemyApiUrl.URL, {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'alchemy_getTokenBalances',
+            params: [wallet, [tokenAddress]],
+          });
+
+          const tokenBalances = response.data?.result?.tokenBalances || [];
+          for (const balance of tokenBalances) {
+            if (balance.tokenBalance) {
+              const rawBalance = BigInt(balance.tokenBalance);
+              totalBalance += rawBalance;
+            }
+          }
+        })
+      );
+
+      return totalBalance.toString();
+    } catch (error) {
+      console.error(
+        'Error fetching balances:',
+        error.response?.data || error.message
+      );
+      throw new Error('Failed to fetch balances');
     }
   }
 }

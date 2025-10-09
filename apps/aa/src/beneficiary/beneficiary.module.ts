@@ -8,10 +8,12 @@ import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
+import { SettingsModule } from '@rumsan/settings';
 
 @Module({
   imports: [
     StellarModule,
+    SettingsModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
