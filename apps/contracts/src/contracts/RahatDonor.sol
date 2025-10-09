@@ -70,11 +70,11 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
     address _cashToken,
     address _cashTokenReciever,
     uint256 _amount
-  ) public restricted returns   (bool) {
+  ) public returns (bool) {
     RahatToken token = RahatToken(_projectToken);
     token.mint(_projectAddress, _amount);
     CashToken(_cashToken).mint(_cashTokenReciever,_amount);
-    IAAProject(_projectAddress).increaseTokenBudget(_projectToken, _amount);
+   // IAAProject(_projectAddress).increaseTokenBudget(_projectToken, _amount);
     emit TokenMintedAndApproved(_projectToken, _projectAddress,_cashToken,_cashTokenReciever, _amount);
 
     return true;
