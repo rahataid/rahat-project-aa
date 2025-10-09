@@ -3,6 +3,7 @@ pragma solidity 0.8.23;
 
 import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
 import './RahatToken.sol';
+import './CashToken.sol';
 import '@rahataid/contracts/src/rahat-app/libraries/AbstractTokenActions.sol';
 import '../interfaces/IAAProject.sol';
 import '../interfaces/IRahatDonor.sol';
@@ -16,8 +17,10 @@ import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
   event TokenCreated(address indexed tokenAddress);
   event TokenMintedAndApproved(
-    address indexed tokenAddress,
-    address indexed approveAddress,
+    address indexed projectTokenAddress,
+    address indexed projectTokenapproveAddress,
+    address indexed cashTokenAddress,
+    address  cashTokenReciever,
     uint256 amount
   );
 
@@ -62,25 +65,31 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
   }
 
   function mintTokens(
-    address _token,
+    address _projectToken,
     address _projectAddress,
+    address _cashToken,
+    address _cashTokenReciever,
     uint256 _amount
-  ) public returns (bool) {
-    RahatToken token = RahatToken(_token);
+  ) public restricted returns   (bool) {
+    RahatToken token = RahatToken(_projectToken);
     token.mint(_projectAddress, _amount);
-
-    IAAProject(_projectAddress).increaseTokenBudget(_token, _amount);
-    emit TokenMintedAndApproved(_token, _projectAddress, _amount);
+    CashToken(_cashToken).mint(_cashTokenReciever,_amount);
+    IAAProject(_projectAddress).increaseTokenBudget(_projectToken, _amount);
+    emit TokenMintedAndApproved(_projectToken, _projectAddress,_cashToken,_cashTokenReciever, _amount);
 
     return true;
   }
 
-  function addTokenOwner(address _token, address _ownerAddress) public {
+  function addTokenOwner(address _token, address _ownerAddress) public restricted {
     RahatToken(_token).addOwner(_ownerAddress);
   }
 
-  function registerProject(address _projectAddress, bool status) public {
+  function registerProject(address _projectAddress, bool status) public restricted {
     _registeredProject[_projectAddress] = status;
+  }
+
+  function changeCashTokenOwnerShip(address _cashTokenAddress, address _newOwner) public restricted {
+    CashToken(_cashTokenAddress).transferOwnership(_newOwner);
   }
 
   function supportsInterface(

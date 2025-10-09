@@ -11,6 +11,8 @@ import {
 } from '@rahataid/cash-tracker';
 import { ethers } from 'ethers';
 import { SettingsService } from '@rumsan/settings';
+import { MintTokenRequestDto } from './dto/mint-token.dto';
+import { EVMProcessor } from '../processors/evm.processor';
 
 export interface CashTrackerConfig {
   network: {
@@ -73,6 +75,7 @@ export class CashTrackerService {
   private provider: ethers.Provider | null = null;
   private entitySDKs: Map<string, CashTokenSDK> = new Map(); // smartAddress -> SDK
   private transactions: TransactionRecord[] = [];
+  private signer: ethers.Signer;
 
   constructor(private readonly settingsService: SettingsService) {}
 
@@ -412,5 +415,60 @@ export class CashTrackerService {
       this.logger.error('Failed to cleanup Cash Tracker Service:', error);
       throw error;
     }
+  }
+
+  //TODO :make this generic in library
+  async createBudget(mintTokenRequestDto: MintTokenRequestDto) {
+    const { projectAddress, tokenAddress, amount } = mintTokenRequestDto;
+
+    const contract = await this.settingsService.getPublic('CONTRACT');
+    const cashTokenAddress = await this.settingsService.getPublic(
+      'CASH_TOKEN_CONTRACT'
+    );
+    const entity = await this.settingsService.getPublic('ENTITIES');
+    const donorAddress = entity.value[0].address;
+
+    // Ensure provider and signer are initialized (use first entity as signer)
+    if (!this.provider) {
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      const rpcUrl = (chainSettings?.value as any)?.rpcUrl;
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    }
+    if (!this.signer) {
+      const signerPrivateKey = entity.value[0].privateKey;
+      this.signer = new ethers.Wallet(signerPrivateKey, this.provider);
+    }
+    const rahatDonor = (contract.value as any).RAHATDONOR;
+    console.log('rahatDonor', rahatDonor);
+    const rahatDonorContract = new ethers.Contract(
+      rahatDonor.ADDRESS,
+      rahatDonor.ABI,
+      this.signer
+    );
+    console.log('rahatDonorContract', rahatDonorContract);
+    // Check if the signer is an owner of the RahatToken contract
+
+    // Parse the amount (assuming 18 decimals for EVM tokens)
+    const mintAmount = ethers.parseUnits(amount, 18);
+
+    this.logger.log(
+      `Direct minting ${amount} tokens (${mintAmount.toString()}) to project ${projectAddress}`,
+      EVMProcessor.name
+    );
+
+    // Execute mint transaction using RahatDonor
+    const tx = await rahatDonorContract.mintTokens(
+      tokenAddress,
+      projectAddress,
+      cashTokenAddress,
+      donorAddress,
+      mintAmount
+    );
+    console.log({ tx });
+
+    const receipt = await tx.wait();
+    return receipt;
   }
 }

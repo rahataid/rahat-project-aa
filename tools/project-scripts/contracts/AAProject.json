@@ -27,11 +27,6 @@
         },
         {
           "internalType": "address",
-          "name": "_accessManager",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
           "name": "_triggerManager",
           "type": "address"
         }
