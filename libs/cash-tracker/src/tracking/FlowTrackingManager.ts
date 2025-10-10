@@ -710,6 +710,7 @@ export class FlowTrackingManager {
             approval.owner.toLowerCase(),
             approval.spender.toLowerCase(),
             approval.value,
+            approval.blockNumber,
             transfers
           );
 
@@ -840,6 +841,7 @@ export class FlowTrackingManager {
     ownerAddress: string,
     spenderAddress: string,
     approvalAmount: any,
+    blockNumber: number,
     transfers: any[]
   ): boolean {
     try {
@@ -860,7 +862,8 @@ export class FlowTrackingManager {
           transfer.from.toLowerCase() === ownerAddress &&
           transfer.to.toLowerCase() === spenderAddress &&
           this.isValidBigInt(transfer.value) &&
-          BigInt(transfer.value) == approvalValue
+          BigInt(transfer.value) == approvalValue &&
+          transfer.blockNumber > blockNumber
         );
       });
 

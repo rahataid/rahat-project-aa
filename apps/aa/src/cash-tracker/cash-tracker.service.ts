@@ -8,11 +8,16 @@ import {
   EntityConfig,
   TokenFlowData,
   CashTokenAbi,
+  EVMUtils,
+  MintTokenRequest,
+  ContractConfig,
+  EVMProviderConfig,
 } from '@rahataid/cash-tracker';
 import { ethers } from 'ethers';
 import { SettingsService } from '@rumsan/settings';
 import { MintTokenRequestDto } from './dto/mint-token.dto';
 import { EVMProcessor } from '../processors/evm.processor';
+import { RpcException } from '@nestjs/microservices';
 
 export interface CashTrackerConfig {
   network: {
@@ -417,58 +422,84 @@ export class CashTrackerService {
     }
   }
 
-  //TODO :make this generic in library
+  /**
+   * Create budget by minting tokens using the generic EVMUtils
+   * @param mintTokenRequestDto - Mint token request parameters
+   * @returns Promise<any> - Transaction receipt
+   */
   async createBudget(mintTokenRequestDto: MintTokenRequestDto) {
-    const { projectAddress, tokenAddress, amount } = mintTokenRequestDto;
+    const { amount } = mintTokenRequestDto;
 
-    const contract = await this.settingsService.getPublic('CONTRACT');
-    const cashTokenAddress = await this.settingsService.getPublic(
-      'CASH_TOKEN_CONTRACT'
-    );
-    const entity = await this.settingsService.getPublic('ENTITIES');
-    const donorAddress = entity.value[0].address;
-
-    // Ensure provider and signer are initialized (use first entity as signer)
-    if (!this.provider) {
+    try {
+      // Get configuration from settings
+      const contract = await this.settingsService.getPublic('CONTRACT');
+      const cashTokenDetails = await this.settingsService.getPublic(
+        'CASH_TOKEN_CONTRACT'
+      );
+      const cashTokenAddress = cashTokenDetails.value as string;
+      const entity = await this.settingsService.getPublic('ENTITIES');
+      const cashTokenReceiver = entity.value[0].smartAccount;
       const chainSettings = await this.settingsService.getPublic(
         'CHAIN_SETTINGS'
       );
+      const signerPrivateKey = await this.settingsService.getPublic(
+        'RAHAT_ADMIN_PRIVATE_KEY'
+      );
+
       const rpcUrl = (chainSettings?.value as any)?.rpcUrl;
-      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      const rahatDonor = (contract.value as any).RAHATDONOR;
+      const projectAddress = (contract.value as any).AAPROJECT;
+      const tokenAddress = (contract.value as any).RAHATTOKEN;
+
+      // Initialize EVMUtils
+      const evmUtils = new EVMUtils();
+      const providerConfig: EVMProviderConfig = {
+        rpcUrl,
+        privateKey: signerPrivateKey.value as string,
+      };
+      await evmUtils.initialize(providerConfig);
+
+      // Prepare mint request
+      const mintRequest: MintTokenRequest = {
+        tokenAddress: tokenAddress.ADDRESS,
+        projectAddress: projectAddress.ADDRESS,
+        amount,
+        cashTokenAddress,
+        cashTokenReceiver,
+        decimals: 1,
+      };
+
+      // Prepare contract configuration
+      const rahatDonorConfig: ContractConfig = {
+        address: rahatDonor.ADDRESS,
+        abi: rahatDonor.ABI,
+      };
+
+      this.logger.log(
+        `Minting ${amount} tokens to project ${projectAddress}`,
+        EVMProcessor.name
+      );
+
+      // Execute mint using generic EVMUtils
+      const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
+
+      if (!result.success) {
+        throw new RpcException(`Mint operation failed: ${result.error}`);
+      }
+
+      this.logger.log(
+        `Successfully minted tokens. Transaction: ${result.transactionHash}`,
+        EVMProcessor.name
+      );
+
+      return {
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber,
+        gasUsed: result.gasUsed,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create budget: ${error.message}`);
+      throw new RpcException(`Budget creation failed: ${error.message}`);
     }
-    if (!this.signer) {
-      const signerPrivateKey = entity.value[0].privateKey;
-      this.signer = new ethers.Wallet(signerPrivateKey, this.provider);
-    }
-    const rahatDonor = (contract.value as any).RAHATDONOR;
-    console.log('rahatDonor', rahatDonor);
-    const rahatDonorContract = new ethers.Contract(
-      rahatDonor.ADDRESS,
-      rahatDonor.ABI,
-      this.signer
-    );
-    console.log('rahatDonorContract', rahatDonorContract);
-    // Check if the signer is an owner of the RahatToken contract
-
-    // Parse the amount (assuming 18 decimals for EVM tokens)
-    const mintAmount = ethers.parseUnits(amount, 18);
-
-    this.logger.log(
-      `Direct minting ${amount} tokens (${mintAmount.toString()}) to project ${projectAddress}`,
-      EVMProcessor.name
-    );
-
-    // Execute mint transaction using RahatDonor
-    const tx = await rahatDonorContract.mintTokens(
-      tokenAddress,
-      projectAddress,
-      cashTokenAddress,
-      donorAddress,
-      mintAmount
-    );
-    console.log({ tx });
-
-    const receipt = await tx.wait();
-    return receipt;
   }
 }
