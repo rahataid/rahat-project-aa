@@ -479,7 +479,7 @@ export class CashTrackerService {
         `Minting ${amount} tokens to project ${projectAddress}`,
         EVMProcessor.name
       );
-
+      console.log({ mintRequest });
       // Execute mint using generic EVMUtils
       const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
 
