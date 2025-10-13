@@ -943,7 +943,7 @@ export class BeneficiaryService {
         distinct: ['beneficiaryWalletAddress'],
       });
 
-      return redeems.map((r) => r.beneficiaryWalletAddress);
+      const wallets = redeems.map((r) => r.beneficiaryWalletAddress);
 
       // Get token contract address and Alchemy API URL
       const cashTokenSetting = await this.settingsService.getPublic(
