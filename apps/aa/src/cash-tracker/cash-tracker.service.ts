@@ -437,7 +437,10 @@ export class CashTrackerService {
         'CASH_TOKEN_CONTRACT'
       );
       const cashTokenAddress = cashTokenDetails.value as string;
-      const entity = await this.settingsService.getPublic('ENTITIES');
+      let entity = await this.settingsService.getPublic('ENTITIES');
+      if (mintTokenRequestDto.type === 'inkind-tracker') {
+        entity = await this.settingsService.getPublic('INKIND_ENTITIES');
+      }
       const cashTokenReceiver = entity.value[0].smartAccount;
       const chainSettings = await this.settingsService.getPublic(
         'CHAIN_SETTINGS'
@@ -457,6 +460,7 @@ export class CashTrackerService {
         rpcUrl,
         privateKey: signerPrivateKey.value as string,
       };
+
       await evmUtils.initialize(providerConfig);
 
       // Prepare mint request
@@ -479,6 +483,7 @@ export class CashTrackerService {
         `Minting ${amount} tokens to project ${projectAddress}`,
         EVMProcessor.name
       );
+
       console.log({ mintRequest });
       // Execute mint using generic EVMUtils
       const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
