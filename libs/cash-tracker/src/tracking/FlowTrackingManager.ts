@@ -18,6 +18,7 @@ export class FlowTrackingManager {
   private cashTokenContract: ethers.Contract | null = null;
   private config: SDKConfig | null = null;
   private flowConfig: FlowTrackingConfig | null = null;
+  private tokenDecimals: number = 18;
   private previousBalances: Map<string, bigint> = new Map();
   private previousAllowances: Map<string, Map<string, bigint>> = new Map();
   private graphqlEndpoint: string = '';
@@ -37,6 +38,12 @@ export class FlowTrackingManager {
     this.config = config;
     this.flowConfig = config.flowTracking || null;
     this.graphqlEndpoint = subGraphUrl;
+    try {
+      // Cache token decimals for consistent formatting
+      this.tokenDecimals = await this.cashTokenContract.decimals();
+    } catch {
+      this.tokenDecimals = 18;
+    }
   }
 
   /**
@@ -677,12 +684,12 @@ export class FlowTrackingManager {
           return (
             approval.owner.toLowerCase() === address.toLowerCase() &&
             this.isValidBigInt(approval.value) &&
-            parseFloat(ethers.formatEther(approval.value)) > 0
+            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) > 0
           );
         })
         .map((approval) => ({
           to: entityMap.get(approval.spender) || approval.spender,
-          amount: ethers.formatEther(approval.value),
+          amount: ethers.formatUnits(approval.value, this.tokenDecimals),
           timestamp: this.parseTimestamp(approval.blockTimestamp),
           transactionHash: approval.transactionHash,
         }));
@@ -701,7 +708,7 @@ export class FlowTrackingManager {
           return (
             approval.spender.toLowerCase() === address.toLowerCase() &&
             this.isValidBigInt(approval.value) &&
-            parseFloat(ethers.formatEther(approval.value)) > 0
+            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) > 0
           );
         })
         .filter((approval) => {
@@ -719,7 +726,7 @@ export class FlowTrackingManager {
         })
         .map((approval) => ({
           from: entityMap.get(approval.owner) || approval.owner,
-          amount: ethers.formatEther(approval.value),
+          amount: ethers.formatUnits(approval.value, this.tokenDecimals),
           timestamp: this.parseTimestamp(approval.blockTimestamp),
           transactionHash: approval.transactionHash,
         }));
@@ -738,7 +745,7 @@ export class FlowTrackingManager {
         })
         .map((transfer) => ({
           from: entityMap.get(transfer.from) || transfer.from,
-          amount: ethers.formatEther(transfer.value),
+          amount: ethers.formatUnits(transfer.value, this.tokenDecimals),
           timestamp: this.parseTimestamp(transfer.blockTimestamp),
           transactionHash: transfer.transactionHash,
         }));
@@ -812,9 +819,12 @@ export class FlowTrackingManager {
       const balance = totalReceived - totalSent;
 
       return {
-        received: ethers.formatEther(totalReceived),
-        sent: ethers.formatEther(totalSent),
-        balance: ethers.formatEther(balance >= 0n ? balance : 0n),
+        received: ethers.formatUnits(totalReceived, this.tokenDecimals),
+        sent: ethers.formatUnits(totalSent, this.tokenDecimals),
+        balance: ethers.formatUnits(
+          balance >= 0n ? balance : 0n,
+          this.tokenDecimals
+        ),
         latestReceivedDate: latestReceivedTimestamp
           ? new Date(latestReceivedTimestamp).toISOString()
           : null,
