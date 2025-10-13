@@ -18,7 +18,7 @@ export class FlowTrackingManager {
   private cashTokenContract: ethers.Contract | null = null;
   private config: SDKConfig | null = null;
   private flowConfig: FlowTrackingConfig | null = null;
-  private tokenDecimals: number = 18;
+  private tokenDecimals: number = 1;
   private previousBalances: Map<string, bigint> = new Map();
   private previousAllowances: Map<string, Map<string, bigint>> = new Map();
   private graphqlEndpoint: string = '';
@@ -38,12 +38,7 @@ export class FlowTrackingManager {
     this.config = config;
     this.flowConfig = config.flowTracking || null;
     this.graphqlEndpoint = subGraphUrl;
-    try {
-      // Cache token decimals for consistent formatting
-      this.tokenDecimals = await this.cashTokenContract.decimals();
-    } catch {
-      this.tokenDecimals = 18;
-    }
+    this.tokenDecimals = await this.cashTokenContract.decimals();
   }
 
   /**
@@ -684,7 +679,8 @@ export class FlowTrackingManager {
           return (
             approval.owner.toLowerCase() === address.toLowerCase() &&
             this.isValidBigInt(approval.value) &&
-            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) > 0
+            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) >
+              0
           );
         })
         .map((approval) => ({
@@ -708,7 +704,8 @@ export class FlowTrackingManager {
           return (
             approval.spender.toLowerCase() === address.toLowerCase() &&
             this.isValidBigInt(approval.value) &&
-            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) > 0
+            parseFloat(ethers.formatUnits(approval.value, this.tokenDecimals)) >
+              0
           );
         })
         .filter((approval) => {
