@@ -933,12 +933,17 @@ export class BeneficiaryService {
   async getBalance() {
     try {
       // Fetch all active beneficiaries with wallet addresses
-      const beneficiaries = await this.prisma.beneficiary.findMany({
-        where: { deletedAt: null },
-        select: { walletAddress: true },
+      const redeems = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          payoutId: { not: null },
+        },
+        select: {
+          beneficiaryWalletAddress: true,
+        },
+        distinct: ['beneficiaryWalletAddress'],
       });
 
-      const wallets = beneficiaries.map((b) => b.walletAddress);
+      return redeems.map((r) => r.beneficiaryWalletAddress);
 
       // Get token contract address and Alchemy API URL
       const cashTokenSetting = await this.settingsService.getPublic(
