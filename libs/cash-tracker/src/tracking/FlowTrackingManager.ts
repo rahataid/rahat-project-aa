@@ -38,7 +38,7 @@ export class FlowTrackingManager {
     this.config = config;
     this.flowConfig = config.flowTracking || null;
     this.graphqlEndpoint = subGraphUrl;
-    this.tokenDecimals = await this.cashTokenContract.decimals();
+    this.tokenDecimals = (await this.cashTokenContract.decimals()) || 1;
   }
 
   /**
@@ -814,6 +814,7 @@ export class FlowTrackingManager {
       });
 
       const balance = totalReceived - totalSent;
+      console.log({ totalReceived, totalSent, balance }, this.tokenDecimals);
 
       return {
         received: ethers.formatUnits(totalReceived, this.tokenDecimals),
