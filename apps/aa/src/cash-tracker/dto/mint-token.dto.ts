@@ -16,8 +16,8 @@ export class MintTokenRequestDto {
   description?: string; // Optional description for the mint operation
 
   @IsOptional()
-  @IsIn(['evm', 'stellar'])
-  chainType?: 'evm' | 'stellar'; // Optional chain type, defaults to EVM
+  @IsIn(['cash-tracker', 'inkind-tracker'])
+  type?: 'cash-tracker' | 'inkind-tracker';
 }
 
 export class MintTokenResponseDto {
