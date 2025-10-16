@@ -309,7 +309,7 @@ export class InkindTrackerService {
         alias: entity.alias,
       }));
       const subGraphUrl = (
-        await this.settingsService.getPublic('CASHTRACKER_SUBGRAPH_URL')
+        await this.settingsService.getPublic('INKINDTRACKER_SUBGRAPH_URL')
       ).value as { URL: string };
 
       const transactionsSdk = new CashTokenSDK(subGraphUrl.URL, {

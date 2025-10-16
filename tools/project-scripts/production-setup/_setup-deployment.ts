@@ -141,6 +141,16 @@ class DeploymentSetup extends commonLib {
         AAProjectContract.hash
       );
 
+      console.log("----------Deploying CashToken Contract-------------------'");
+    const CashToken = await this.deployContract(
+      'CashToken',
+      ['CashToken', 'CASH', 1, 100000, RahatDonor.contract.target]
+    );
+    this.contracts['CashToken'] = {
+      address: CashToken.contract.target,
+      startBlock: CashToken.blockNumber,
+    };
+
       console.log('[INFO] Writing deployed addresses to file');
       await this.writeToDeploymentFile(this.projectUUID, {
         CONTRACTS: this.contracts,

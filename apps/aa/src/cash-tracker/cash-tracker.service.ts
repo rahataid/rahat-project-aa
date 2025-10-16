@@ -8,9 +8,16 @@ import {
   EntityConfig,
   TokenFlowData,
   CashTokenAbi,
+  EVMUtils,
+  MintTokenRequest,
+  ContractConfig,
+  EVMProviderConfig,
 } from '@rahataid/cash-tracker';
 import { ethers } from 'ethers';
 import { SettingsService } from '@rumsan/settings';
+import { MintTokenRequestDto } from './dto/mint-token.dto';
+import { EVMProcessor } from '../processors/evm.processor';
+import { RpcException } from '@nestjs/microservices';
 
 export interface CashTrackerConfig {
   network: {
@@ -73,6 +80,7 @@ export class CashTrackerService {
   private provider: ethers.Provider | null = null;
   private entitySDKs: Map<string, CashTokenSDK> = new Map(); // smartAddress -> SDK
   private transactions: TransactionRecord[] = [];
+  private signer: ethers.Signer;
 
   constructor(private readonly settingsService: SettingsService) {}
 
@@ -411,6 +419,92 @@ export class CashTrackerService {
     } catch (error) {
       this.logger.error('Failed to cleanup Cash Tracker Service:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Create budget by minting tokens using the generic EVMUtils
+   * @param mintTokenRequestDto - Mint token request parameters
+   * @returns Promise<any> - Transaction receipt
+   */
+  async createBudget(mintTokenRequestDto: MintTokenRequestDto) {
+    const { amount } = mintTokenRequestDto;
+
+    try {
+      // Get configuration from settings
+      const contract = await this.settingsService.getPublic('CONTRACT');
+      const cashTokenDetails = await this.settingsService.getPublic(
+        'CASH_TOKEN_CONTRACT'
+      );
+      const cashTokenAddress = cashTokenDetails.value as string;
+      let entity = await this.settingsService.getPublic('ENTITIES');
+      if (mintTokenRequestDto.type === 'inkind-tracker') {
+        entity = await this.settingsService.getPublic('INKIND_ENTITIES');
+      }
+      const cashTokenReceiver = entity.value[0].smartAccount;
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      const signerPrivateKey = await this.settingsService.getPublic(
+        'RAHAT_ADMIN_PRIVATE_KEY'
+      );
+
+      const rpcUrl = (chainSettings?.value as any)?.rpcUrl;
+      const rahatDonor = (contract.value as any).RAHATDONOR;
+      const projectAddress = (contract.value as any).AAPROJECT;
+      const tokenAddress = (contract.value as any).RAHATTOKEN;
+
+      // Initialize EVMUtils
+      const evmUtils = new EVMUtils();
+      const providerConfig: EVMProviderConfig = {
+        rpcUrl,
+        privateKey: signerPrivateKey.value as string,
+      };
+
+      await evmUtils.initialize(providerConfig);
+
+      // Prepare mint request
+      const mintRequest: MintTokenRequest = {
+        tokenAddress: tokenAddress.ADDRESS,
+        projectAddress: projectAddress.ADDRESS,
+        amount,
+        cashTokenAddress,
+        cashTokenReceiver,
+        decimals: 1,
+      };
+
+      // Prepare contract configuration
+      const rahatDonorConfig: ContractConfig = {
+        address: rahatDonor.ADDRESS,
+        abi: rahatDonor.ABI,
+      };
+
+      this.logger.log(
+        `Minting ${amount} tokens to project ${projectAddress}`,
+        EVMProcessor.name
+      );
+
+      console.log({ mintRequest });
+      // Execute mint using generic EVMUtils
+      const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
+
+      if (!result.success) {
+        throw new RpcException(`Mint operation failed: ${result.error}`);
+      }
+
+      this.logger.log(
+        `Successfully minted tokens. Transaction: ${result.transactionHash}`,
+        EVMProcessor.name
+      );
+
+      return {
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber,
+        gasUsed: result.gasUsed,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create budget: ${error.message}`);
+      throw new RpcException(`Budget creation failed: ${error.message}`);
     }
   }
 }

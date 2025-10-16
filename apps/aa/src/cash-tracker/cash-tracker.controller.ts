@@ -5,6 +5,7 @@ import {
   CashTrackerService,
   ExecuteActionRequest,
 } from './cash-tracker.service';
+import { MintTokenRequestDto } from './dto/mint-token.dto';
 
 @Controller()
 export class CashTrackerController {
@@ -24,5 +25,12 @@ export class CashTrackerController {
   })
   async getTransactions() {
     return this.cashTrackerService.getTransactions();
+  }
+  @MessagePattern({
+    cmd: JOBS.CASH_TRACKER.CREATE_BUDGET,
+    uuid: process.env.PROJECT_ID,
+  })
+  async createBudget(mintTokenRequestDto: MintTokenRequestDto) {
+    return this.cashTrackerService.createBudget(mintTokenRequestDto);
   }
 }
