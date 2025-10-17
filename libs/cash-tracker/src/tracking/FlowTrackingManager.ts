@@ -38,7 +38,7 @@ export class FlowTrackingManager {
     this.config = config;
     this.flowConfig = config.flowTracking || null;
     this.graphqlEndpoint = subGraphUrl;
-    this.tokenDecimals = (await this.cashTokenContract.decimals()) || 1;
+    this.tokenDecimals = 1;
   }
 
   /**
