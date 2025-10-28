@@ -18,10 +18,8 @@ contract AAProject is
   AbstractProject,
   IAAProject,
   ERC2771Context,
-  AccessManaged,
-  ERC2771Context,
   AccessManaged
-{
+  {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   event ClaimAssigned(

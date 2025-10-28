@@ -156,6 +156,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.getReservationStats(payload);
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_BALANCE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBalance(payload) {
+    return this.beneficiaryService.getBalance();
+  }
+
   // ***** groups fund mgmt end ********** //
   @MessagePattern({
     cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN,

@@ -14,6 +14,7 @@ export { FlowTrackingManager } from './tracking/FlowTrackingManager';
 
 // Utility exports
 export { ValidationUtils } from './utils/ValidationUtils';
+export { EVMUtils } from './utils/EVMUtils';
 export * from './utils/constants';
 export * from './utils/helpers';
 
@@ -22,6 +23,7 @@ export { CashTokenAbi, SmartAccountAbi };
 
 // Type exports
 export * from './types';
+export * from './utils/EVMUtils';
 
 // Re-export ethers for convenience
 export { ethers } from 'ethers';

@@ -9,24 +9,17 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { DeployedContract } from '../types/blockchain';
 dotenv.config();
 
-
 const corePrisma = new PrismaClient({
-  datasourceUrl: process.env.CORE_DATABASE_URL as string
+  datasourceUrl: process.env.CORE_DATABASE_URL as string,
 });
 const prisma = new PrismaService();
 const settings = new SettingsService(prisma);
 
-
-const contractName = [
-  'AAProject',
-  'RahatDonor',
-  'RahatToken'
-];
+const contractName = ['AAProject', 'RahatDonor', 'RahatToken'];
 
 class ContractSeed extends ContractLib {
   projectUUID: string;
   contracts: Record<string, DeployedContract>;
-
 
   constructor() {
     super();
@@ -43,11 +36,8 @@ class ContractSeed extends ContractLib {
   }
 
   public async getDevSettings() {
-
     const [devSettings] = await corePrisma.$queryRaw<any[]>(
-      Prisma.sql([
-        `SELECT *  FROM tbl_settings WHERE name='CONTRACTS'`,
-      ])
+      Prisma.sql([`SELECT *  FROM tbl_settings WHERE name='CONTRACTS'`])
     );
     return devSettings;
   }
@@ -56,42 +46,65 @@ class ContractSeed extends ContractLib {
     const contractDetails = await this.getDevSettings();
     console.log('contractDetails', contractDetails);
 
-    const RahatAccessManagerAddress = contractDetails.value.RAHATACCESSMANAGER.ADDRESS;
-    const forwarderAddress = contractDetails.value.ERC2771FORWARDER.ADDRESS;
-    const treasuryAddress = contractDetails.value.RAHATTREASURY.ADDRESS;
+    const RahatAccessManagerAddress =
+      contractDetails.value.RAHATACCESSMANAGER.address;
+    const forwarderAddress = contractDetails.value.ERC2771FORWARDER.address;
+    const treasuryAddress = contractDetails.value.RAHATTREASURY.address;
 
-    const deployerKey = (await prisma.setting.findUnique({
-      where: {
-        name: 'DEPLOYER_PRIVATE_KEY'
-      }
-    }))?.value as string
+    const deployerKey = (
+      await prisma.setting.findUnique({
+        where: {
+          name: 'DEPLOYER_PRIVATE_KEY',
+        },
+      })
+    )?.value as string;
 
-    console.log("------DEPLOYER KEY-----");
+    // const deployerKey = process.env.DEPLOYER_PRIVATE_KEY as string;
+
+    console.log('------DEPLOYER KEY-----');
     console.log(deployerKey);
 
     const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
 
-    console.log(deployerAccount)
+    console.log(deployerAccount);
 
-    console.log("----------Depolying Trigger Contract -------------------")
-    const TriggerManager = await this.deployContract('TriggerManager', [2], deployerKey);
+    console.log('----------Depolying Trigger Contract -------------------');
+    const TriggerManager = await this.deployContract(
+      'TriggerManager',
+      [2],
+      deployerKey
+    );
     this.contracts['TriggerManager'] = {
       address: TriggerManager.contract.target,
-      startBlock: TriggerManager.blockNumber
+      startBlock: TriggerManager.blockNumber,
     };
 
-    console.log("----------Depolying Rahat Donor-------------------")
-    const DonorContract = await this.deployContract('RahatDonor', [deployerAccount, RahatAccessManagerAddress], deployerKey);
+    console.log('----------Depolying Rahat Donor-------------------');
+    const DonorContract = await this.deployContract(
+      'RahatDonor',
+      [deployerAccount, RahatAccessManagerAddress],
+      deployerKey
+    );
     this.contracts['RahatDonor'] = {
       address: DonorContract.contract.target,
-      startBlock: DonorContract.blockNumber
+      startBlock: DonorContract.blockNumber,
     };
 
-    console.log("----------Depolying Rahat Token-------------------")
-    const RahatToken = await this.deployContract('RahatToken', [forwarderAddress, "RahatToken", "RHT", await DonorContract.contract.getAddress(), 1], deployerKey);
+    console.log('----------Depolying Rahat Token-------------------');
+    const RahatToken = await this.deployContract(
+      'RahatToken',
+      [
+        forwarderAddress,
+        'RahatToken',
+        'RHT',
+        await DonorContract.contract.getAddress(),
+        1,
+      ],
+      deployerKey
+    );
     this.contracts['RahatToken'] = {
       address: RahatToken.contract.target,
-      startBlock: RahatToken.blockNumber
+      startBlock: RahatToken.blockNumber,
     };
     console.log('----------Depolying AA Project Contract-------------------');
     const AAProjectContract = await this.deployContract(
@@ -107,17 +120,34 @@ class ContractSeed extends ContractLib {
     );
     this.contracts['AAProject'] = {
       address: AAProjectContract.contract.target,
-      startBlock: AAProjectContract.blockNumber
+      startBlock: AAProjectContract.blockNumber,
     };
 
-    console.log("Writing deployed address to file")
+    console.log("----------Deploying CashToken Contract-------------------'");
+    const CashToken = await this.deployContract(
+      'CashToken',
+      ['CashToken', 'CASH', 1, 100000, DonorContract.contract.target],
+      deployerKey
+    );
+    this.contracts['CashToken'] = {
+      address: CashToken.contract.target,
+      startBlock: CashToken.blockNumber,
+    };
+
+    console.log('Writing deployed address to file');
     this.writeToDeploymentFile(this.projectUUID, this.contracts);
 
-    this.sleep(20000)
+    this.sleep(20000);
 
-    console.log("Adding donor contract as admin in AA Project")
-    console.log([DonorContract.contract.target, true])
-    await this.callContractMethod('RahatAccessManager', 'grantRole', [0, DonorContract.contract.target, 0], RahatAccessManagerAddress, deployerAccount);
+    console.log('Adding donor contract as admin in AA Project');
+    console.log([DonorContract.contract.target, true]);
+    await this.callContractMethod(
+      'RahatAccessManager',
+      'grantRole',
+      [0, DonorContract.contract.target, 0],
+      RahatAccessManagerAddress,
+      deployerAccount
+    );
 
     console.log('Registering Project in Donor');
     const donorContractAddress = this.getDeployedAddress(
@@ -142,205 +172,208 @@ class ContractSeed extends ContractLib {
     );
 
     // !!!! todo: Remove after test
-    console.log('Adding donor as token owner, remove after test');
+    // console.log('Adding donor as token owner, remove after test');
 
-    // First, add the donor as an owner directly to the RahatToken contract
-    await this.callContractMethod(
-      'RahatToken',
-      'addOwner',
-      [donorContractAddress],
-      await RahatToken.contract.getAddress(),
-      deployerAccount
-    );
+    // // First, add the donor as an owner directly to the RahatToken contract
+    // // await this.callContractMethod(
+    // //   'RahatToken',
+    // //   'addOwner',
+    // //   [donorContractAddress],
+    // //   await RahatToken.contract.getAddress(),
+    // //   deployerAccount
+    // // );
 
-    // Then, also add through the donor contract for consistency
-    await this.callContractMethod(
-      'RahatDonor',
-      'addTokenOwner',
-      [await RahatToken.contract.getAddress(), donorContractAddress],
-      donorContractAddress,
-      deployerAccount
-    );
+    // // Then, also add through the donor contract for consistency
+    // await this.callContractMethod(
+    //   'RahatDonor',
+    //   'addTokenOwner',
+    //   [await RahatToken.contract.getAddress(), donorContractAddress],
+    //   donorContractAddress,
+    //   deployerAccount
+    // );
 
-    console.log('Minting initial tokens to project');
-    // Mint 1,000,000 tokens (with 1 decimal, this is 1,000,000 * 10^1 = 10,000,000)
-    const initialTokenAmount = BigInt(100000000) * BigInt(10); // 1 million tokens with 1 decimal
-    await this.callContractMethod(
-      'RahatDonor',
-      'mintTokens',
-      [
-        await RahatToken.contract.getAddress(),
-        AAProjectContract.contract.target,
-        initialTokenAmount,
-      ],
-      donorContractAddress,
-      deployerAccount
-    );
+    // console.log('Minting initial tokens to project');
+    // // Mint 1,000,000 tokens (with 1 decimal, this is 1,000,000 * 10^1 = 10,000,000)
+    // const initialTokenAmount = BigInt(100000000) * BigInt(10); // 1 million tokens with 1 decimal
+    // await this.callContractMethod(
+    //   'RahatDonor',
+    //   'mintTokens',
+    //   [
+    //     await RahatToken.contract.getAddress(),
+    //     AAProjectContract.contract.target,
+    //     initialTokenAmount,
+    //   ],
+    //   donorContractAddress,
+    //   deployerAccount
+    // );
 
-    console.log(`Minted ${initialTokenAmount} tokens to project`);
+    // console.log(`Minted ${initialTokenAmount} tokens to project`);
 
-    // Test assignTokenToBeneficiary functionality
-    console.log('Testing assignTokenToBeneficiary functionality...');
+    // // Test assignTokenToBeneficiary functionality
+    // console.log('Testing assignTokenToBeneficiary functionality...');
 
-    // Generate a random beneficiary address for testing
-    const randomWallet = this.getWalletFromPrivateKey(
-      '0x' + randomBytes(32).toString('hex')
-    );
-    const testBeneficiaryAddress = randomWallet.address.toString();
-    const testTokenAmount = BigInt(1000) * BigInt(10); // 1000 tokens with 1 decimal
+    // // Generate a random beneficiary address for testing
+    // const randomWallet = this.getWalletFromPrivateKey(
+    //   '0x' + randomBytes(32).toString('hex')
+    // );
+    // const testBeneficiaryAddress = randomWallet.address.toString();
+    // const testTokenAmount = BigInt(1000) * BigInt(10); // 1000 tokens with 1 decimal
 
-    console.log(`Test beneficiary address: ${testBeneficiaryAddress}`);
-    console.log(`Test token amount: ${testTokenAmount.toString()}`);
+    // console.log(`Test beneficiary address: ${testBeneficiaryAddress}`);
+    // console.log(`Test token amount: ${testTokenAmount.toString()}`);
 
-    // Call assignTokenToBeneficiary method on AAProject contract
-    console.log('Calling assignTokenToBeneficiary...');
-    await this.callContractMethod(
-      'AAProject',
-      'assignTokenToBeneficiary',
-      [testBeneficiaryAddress, testTokenAmount],
-      AAProjectContract.contract.target.toString(),
-      deployerAccount
-    );
+    // // Call assignTokenToBeneficiary method on AAProject contract
+    // console.log('Calling assignTokenToBeneficiary...');
+    // await this.callContractMethod(
+    //   'AAProject',
+    //   'assignTokenToBeneficiary',
+    //   [testBeneficiaryAddress, testTokenAmount],
+    //   AAProjectContract.contract.target.toString(),
+    //   deployerAccount
+    // );
 
-    console.log('Token assignment completed. Verifying assignment...');
+    // console.log('Token assignment completed. Verifying assignment...');
 
-    // Wait a bit for the transaction to be processed
-    await this.sleep(5000);
+    // // Wait a bit for the transaction to be processed
+    // await this.sleep(5000);
 
-    // Verify the assignment by checking benTokens mapping
-    console.log('Checking benTokens mapping...');
-    const benTokensBalance = await this.callContractMethod(
-      'AAProject',
-      'benTokens',
-      [testBeneficiaryAddress],
-      AAProjectContract.contract.target.toString(),
-      deployerAccount
-    );
+    // // Verify the assignment by checking benTokens mapping
+    // console.log('Checking benTokens mapping...');
+    // const benTokensBalance = await this.callContractMethod(
+    //   'AAProject',
+    //   'benTokens',
+    //   [testBeneficiaryAddress],
+    //   AAProjectContract.contract.target.toString(),
+    //   deployerAccount
+    // );
 
-    console.log(
-      `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalance.toString()} tokens in benTokens mapping`
-    );
+    // console.log(
+    //   `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalance.toString()} tokens in benTokens mapping`
+    // );
 
-    // Verify both balances match
-    if (benTokensBalance.toString() === testTokenAmount.toString()) {
-      console.log('✅ SUCCESS: benTokens mapping shows correct amount');
-    } else {
-      console.log('❌ ERROR: benTokens mapping amount mismatch');
-      console.log(
-        `Expected: ${testTokenAmount.toString()}, Got: ${benTokensBalance.toString()}`
-      );
-    }
+    // // Verify both balances match
+    // if (benTokensBalance.toString() === testTokenAmount.toString()) {
+    //   console.log('✅ SUCCESS: benTokens mapping shows correct amount');
+    // } else {
+    //   console.log('❌ ERROR: benTokens mapping amount mismatch');
+    //   console.log(
+    //     `Expected: ${testTokenAmount.toString()}, Got: ${benTokensBalance.toString()}`
+    //   );
+    // }
 
-    console.log('Token assignment test completed!');
+    // console.log('Token assignment test completed!');
 
-    // Test transferTokenToVendor functionality
-    console.log('Testing transferTokenToVendor functionality...');
+    // // Test transferTokenToVendor functionality
+    // console.log('Testing transferTokenToVendor functionality...');
 
-    // Generate a random vendor address for testing
-    const randomVendorWallet = this.getWalletFromPrivateKey(
-      '0x' + randomBytes(32).toString('hex')
-    );
-    const testVendorAddress = randomVendorWallet.address.toString();
-    const transferAmount = BigInt(5) * BigInt(10); // 500 tokens with 1 decimal
+    // // Generate a random vendor address for testing
+    // const randomVendorWallet = this.getWalletFromPrivateKey(
+    //   '0x' + randomBytes(32).toString('hex')
+    // );
+    // const testVendorAddress = randomVendorWallet.address.toString();
+    // const transferAmount = BigInt(5) * BigInt(10); // 500 tokens with 1 decimal
 
-    console.log(`Test vendor address: ${testVendorAddress}`);
-    console.log(`Transfer amount: ${transferAmount.toString()}`);
+    // console.log(`Test vendor address: ${testVendorAddress}`);
+    // console.log(`Transfer amount: ${transferAmount.toString()}`);
 
-    // Check project token balance before transfer
-    console.log('Checking project token balance before transfer...');
-    const projectTokenBalanceBefore = await this.callContractMethod(
-      'RahatToken',
-      'balanceOf',
-      [AAProjectContract.contract.target],
-      await RahatToken.contract.getAddress(),
-      deployerAccount
-    );
+    // // Check project token balance before transfer
+    // console.log('Checking project token balance before transfer...');
+    // const projectTokenBalanceBefore = await this.callContractMethod(
+    //   'RahatToken',
+    //   'balanceOf',
+    //   [AAProjectContract.contract.target],
+    //   await RahatToken.contract.getAddress(),
+    //   deployerAccount
+    // );
 
-    console.log(
-      `Project ${
-        AAProjectContract.contract.target
-      } has ${projectTokenBalanceBefore.toString()} tokens before transfer`
-    );
+    // console.log(
+    //   `Project ${
+    //     AAProjectContract.contract.target
+    //   } has ${projectTokenBalanceBefore.toString()} tokens before transfer`
+    // );
 
-    // Call transferTokenToVendor method on AAProject contract
-    console.log('Calling transferTokenToVendor...');
-    await this.callContractMethod(
-      'AAProject',
-      'transferTokenToVendor',
-      [testBeneficiaryAddress, testVendorAddress, transferAmount],
-      AAProjectContract.contract.target.toString(),
-      deployerAccount
-    );
+    // // Call transferTokenToVendor method on AAProject contract
+    // console.log('Calling transferTokenToVendor...');
+    // await this.callContractMethod(
+    //   'AAProject',
+    //   'transferTokenToVendor',
+    //   [testBeneficiaryAddress, testVendorAddress, transferAmount],
+    //   AAProjectContract.contract.target.toString(),
+    //   deployerAccount
+    // );
 
-    console.log('Token transfer completed. Verifying transfer...');
+    // console.log('Token transfer completed. Verifying transfer...');
 
-    // Wait a bit for the transaction to be processed
-    await this.sleep(5000);
+    // // Wait a bit for the transaction to be processed
+    // await this.sleep(5000);
 
-    // Verify the transfer by checking benTokens mapping (should be reduced)
-    console.log('Checking benTokens mapping after transfer...');
-    const benTokensBalanceAfterTransfer = await this.callContractMethod(
-      'AAProject',
-      'benTokens',
-      [testBeneficiaryAddress],
-      AAProjectContract.contract.target.toString(),
-      deployerAccount
-    );
+    // // Verify the transfer by checking benTokens mapping (should be reduced)
+    // console.log('Checking benTokens mapping after transfer...');
+    // const benTokensBalanceAfterTransfer = await this.callContractMethod(
+    //   'AAProject',
+    //   'benTokens',
+    //   [testBeneficiaryAddress],
+    //   AAProjectContract.contract.target.toString(),
+    //   deployerAccount
+    // );
 
-    const expectedBalanceAfterTransfer = testTokenAmount - transferAmount;
-    console.log(
-      `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalanceAfterTransfer.toString()} tokens in benTokens mapping after transfer`
-    );
+    // const expectedBalanceAfterTransfer = testTokenAmount - transferAmount;
+    // console.log(
+    //   `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalanceAfterTransfer.toString()} tokens in benTokens mapping after transfer`
+    // );
 
-    // Verify the balance was reduced correctly
-    if (
-      benTokensBalanceAfterTransfer.toString() ===
-      expectedBalanceAfterTransfer.toString()
-    ) {
-      console.log(
-        '✅ SUCCESS: benTokens mapping shows correct amount after transfer'
-      );
-    } else {
-      console.log('❌ ERROR: benTokens mapping amount mismatch after transfer');
-      console.log(
-        `Expected: ${expectedBalanceAfterTransfer.toString()}, Got: ${benTokensBalanceAfterTransfer.toString()}`
-      );
-    }
+    // // Verify the balance was reduced correctly
+    // if (
+    //   benTokensBalanceAfterTransfer.toString() ===
+    //   expectedBalanceAfterTransfer.toString()
+    // ) {
+    //   console.log(
+    //     '✅ SUCCESS: benTokens mapping shows correct amount after transfer'
+    //   );
+    // } else {
+    //   console.log('❌ ERROR: benTokens mapping amount mismatch after transfer');
+    //   console.log(
+    //     `Expected: ${expectedBalanceAfterTransfer.toString()}, Got: ${benTokensBalanceAfterTransfer.toString()}`
+    //   );
+    // }
 
-    // Check vendor token balance (should have received the tokens)
-    console.log('Checking vendor token balance...');
-    const vendorTokenBalance = await this.callContractMethod(
-      'RahatToken',
-      'balanceOf',
-      [testVendorAddress],
-      await RahatToken.contract.getAddress(),
-      deployerAccount
-    );
+    // // Check vendor token balance (should have received the tokens)
+    // console.log('Checking vendor token balance...');
+    // const vendorTokenBalance = await this.callContractMethod(
+    //   'RahatToken',
+    //   'balanceOf',
+    //   [testVendorAddress],
+    //   await RahatToken.contract.getAddress(),
+    //   deployerAccount
+    // );
 
-    console.log(
-      `Vendor ${testVendorAddress} has ${vendorTokenBalance.toString()} tokens`
-    );
+    // console.log(
+    //   `Vendor ${testVendorAddress} has ${vendorTokenBalance.toString()} tokens`
+    // );
 
-    // Verify vendor received the tokens
-    if (vendorTokenBalance.toString() === transferAmount.toString()) {
-      console.log('✅ SUCCESS: Vendor received the correct amount of tokens');
-    } else {
-      console.log('❌ ERROR: Vendor token balance mismatch');
-      console.log(
-        `Expected: ${transferAmount.toString()}, Got: ${vendorTokenBalance.toString()}`
-      );
-    }
+    // // Verify vendor received the tokens
+    // if (vendorTokenBalance.toString() === transferAmount.toString()) {
+    //   console.log('✅ SUCCESS: Vendor received the correct amount of tokens');
+    // } else {
+    //   console.log('❌ ERROR: Vendor token balance mismatch');
+    //   console.log(
+    //     `Expected: ${transferAmount.toString()}, Got: ${vendorTokenBalance.toString()}`
+    //   );
+    // }
 
-    console.log('Token transfer test completed!');
+    // console.log('Token transfer test completed!');
   }
 
   public async addContractSettings() {
-    console.log("Adding contract settings")
-    const contracts = await this.getDeployedContractDetails(this.projectUUID, contractName);
+    console.log('Adding contract settings');
+    const contracts = await this.getDeployedContractDetails(
+      this.projectUUID,
+      contractName
+    );
     const data = {
       name: 'CONTRACT',
       value: contracts,
-      isPrivate: false
+      isPrivate: false,
     };
 
     await settings.create(data);
