@@ -208,6 +208,7 @@ export class InkindTrackerService {
 
       // Get SDK instance for from entity
       const fromSDK = this.entitySDKs.get(from);
+      console.log(this.entitySDKs.entries());
 
       if (!fromSDK) {
         throw new Error(`Entity not found for smart address: ${from}`);
