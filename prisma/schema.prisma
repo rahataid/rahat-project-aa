@@ -648,6 +648,8 @@ model Grievance {
   updatedAt       DateTime        @updatedAt
   deletedAt       DateTime?
   createdByUser       Json
+  resolvedAt      DateTime?
+  closedAt        DateTime?
 
 
   @@map("tbl_grievances")

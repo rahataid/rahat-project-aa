@@ -130,9 +130,23 @@ export class GrievancesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const isStatusChange = 'status' in updateDto;
+      const isNowResolved = isStatusChange && updateDto.status === 'RESOLVED';
+      const isNowClosed = isStatusChange && updateDto.status === 'CLOSED';
+
+      const wasResolved = existingGrievance.status === 'RESOLVED';
+      const wasClosed = existingGrievance.status === 'CLOSED';
+
+      const shouldSetResolvedAt = isNowResolved && !wasResolved;
+      const shouldSetClosedAt = isNowClosed && !wasClosed;
+
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: updateDto,
+        data: {
+          ...updateDto,
+          ...(shouldSetResolvedAt ? { resolvedAt: new Date() } : {}),
+          ...(shouldSetClosedAt ? { closedAt: new Date() } : {}),
+        },
       });
 
       await handleMicroserviceCall({
@@ -288,34 +302,30 @@ export class GrievancesService {
         0,
     };
 
-    // Calculate average resolve time for resolved/closed grievances
-    const resolvedGrievances = await this.prisma.grievance.findMany({
+    // Calculate average resolve time using createdAt -> closedAt for CLOSED grievances only
+    const closedGrievances = await this.prisma.grievance.findMany({
       where: {
         ...where,
-        status: {
-          in: ['RESOLVED', 'CLOSED'],
-        },
+        status: 'CLOSED',
+        closedAt: { not: null },
       },
       select: {
         createdAt: true,
-        updatedAt: true,
+        closedAt: true,
       },
     });
 
     let averageResolveTime = 0;
 
-    if (resolvedGrievances.length > 0) {
-      const totalResolveTimeMs = resolvedGrievances.reduce(
-        (total, grievance) => {
-          const resolveTime =
-            grievance.updatedAt.getTime() - grievance.createdAt.getTime();
-          return total + resolveTime;
-        },
-        0
-      );
+    if (closedGrievances.length > 0) {
+      const totalResolveTimeMs = closedGrievances.reduce((total, grievance) => {
+        const resolveTime =
+          grievance.closedAt.getTime() - grievance.createdAt.getTime();
+        return total + resolveTime;
+      }, 0);
 
       averageResolveTime = Math.round(
-        totalResolveTimeMs / resolvedGrievances.length
+        totalResolveTimeMs / closedGrievances.length
       );
     }
 
