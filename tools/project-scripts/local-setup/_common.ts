@@ -14,13 +14,13 @@ export class ContractLib {
   public deployedContracts: DeployedContractsData;
 
   constructor() {
-    const network = 'http://127.0.0.1:8888';
+   const network = process.env.NETWORK_PROVIDER || ''
     this.networkSettings = {
       rpcUrl: network,
-      chainName: 'localhost',
-      chainId: 8888,
+      chainName: process.env.EVM_CHAIN_NAME || '',
+      chainId: process.env.EVM_CHAIN_ID || 84532,
       blockExplorerUrls: [
-        'http://local-explorer.com/',
+        '',
       ],
     };
     this.provider = new JsonRpcProvider(network);
