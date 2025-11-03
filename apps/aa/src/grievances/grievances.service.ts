@@ -329,13 +329,6 @@ export class GrievancesService {
       );
     }
 
-    console.log('Grievance stats:', {
-      totalGrievances,
-      grievanceType,
-      grievanceStatus,
-      averageResolveTime,
-    });
-
     return {
       totalGrievances,
       grievanceType,
