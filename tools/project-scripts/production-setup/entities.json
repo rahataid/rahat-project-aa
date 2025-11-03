@@ -1,0 +1,21 @@
+{
+  "network": "https://sepolia.base.org",
+  "entryPoint": "0x1e2717BC0dcE0a6632fe1B057e948ec3EF50E38b",
+  "entities": [
+    {
+      "privateKey": "5fbfba72d025d3ab62849a654b5d90f7839af854f7566fc0317251e6becc17ac",
+      "address": "0xC52e90DB78DeB581D6CB8b5aEBda0802bA8F37B5",
+      "smartAccount": "0xE17Fa0F009d2A3EaC3C2994D7933eD759CbCe257"
+    },
+    {
+      "privateKey": "51812b53380becea3bd28994d28151adb36b7ce04fb777826497d9fc5e88574b",
+      "address": "0x7131EDcF4500521cB6B55C0658b2d83589946f44",
+      "smartAccount": "0xB4b85A39C44667eDEc9F0eB5c328954e328E980B"
+    },
+    {
+      "privateKey": "7d3eec01a82e7880cb3506377a94f3fd9f232793a094a6a361a8788b6603c6d4",
+      "address": "0xCc85BeEE78Cc66C03Dc6aa70080d66c85DCB308D",
+      "smartAccount": "0xe5159f997F32D04F9276567bb2ED4CC0CdC9D8E4"
+    }
+  ]
+}
