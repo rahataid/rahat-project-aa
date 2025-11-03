@@ -9,7 +9,7 @@ dataSources:
     network: mainnet
     source:
       abi: AAProject
-      address: "0xA60d0E74A0e20d99564225d7BcefFB5E97eaC6cE"
+      address: '0xA60d0E74A0e20d99564225d7BcefFB5E97eaC6cE'
       startBlock: 1
     mapping:
       kind: ethereum/events
@@ -56,7 +56,7 @@ dataSources:
     network: mainnet
     source:
       abi: RahatToken
-      address: "0x627f4Cf449E3baBdE459a6eC609590bA5C8E7611"
+      address: '0x627f4Cf449E3baBdE459a6eC609590bA5C8E7611'
       startBlock: 1
     mapping:
       kind: ethereum/events
@@ -91,7 +91,7 @@ dataSources:
     network: mainnet
     source:
       abi: RahatDonor
-      address: "0x6e8EAaE432AC681224D95F73c18cBacdd755AE06"
+      address: '0x6e8EAaE432AC681224D95F73c18cBacdd755AE06'
       startBlock: 1
     mapping:
       kind: ethereum/events
@@ -115,3 +115,29 @@ dataSources:
         - event: TokenMintedAndApproved(indexed address,indexed address,uint256)
           handler: handleTokenMintedAndApproved
       file: ./src/rahat-donor.ts
+  - kind: ethereum
+    name: CashToken
+    network: base-sepolia
+    source:
+      address: '0xA646F8152eAe26834B6DF52ea36FD3A913b65b78'
+      abi: CashToken
+      startBlock: 28784886
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Approval
+        - OwnershipTransferred
+        - Transfer
+      abis:
+        - name: CashToken
+          file: ./abis/CashToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./src/cash-token.ts
