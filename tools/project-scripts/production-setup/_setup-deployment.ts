@@ -188,7 +188,45 @@ class ContractSeed extends ContractLib {
       value: contracts,
       isPrivate: false,
     };
+    const data2 = {
+      name: 'CONTRACTS',
+      value: contracts,
+      isPrivate: false,
+    };
 
+    await settings.create(data);
+    await settings.create(data2)
+
+  }
+
+  public async addNetworkProvider(){
+    const network = await this.getNetworkSettings();
+    const data = {
+      name:'BLOCKCHAIN',
+      value:network,
+      isPrivate:false
+    }
+   await settings.create(data);
+
+  }
+
+  public async addChainSettings(){
+    const chainData = {
+      "name":process.env.CHAIN_NAME,
+      "type":process.env.CHAIN_TYPE,
+      "rpcUrl":process.env.CHAIN_RPCURL,
+      "chainId":process.env.CHAIN_ID,
+      "currency":{
+        "name":process.env.CHAIN_CURRENCY_NAME,
+        "symbol":process.env.CHAIN_CURRENCY_SYMBOL
+      },
+      "explorerUrl":process.env.CHAIN_EXPLORER_URL
+    }
+    const data = {
+      name:'CHAIN_SETTINGS',
+      value:chainData,
+      isPrivate:false
+    } 
     await settings.create(data);
   }
 }
@@ -197,6 +235,8 @@ async function main() {
   const contractSeed = new ContractSeed();
   await contractSeed.deployAAContracts();
   await contractSeed.addContractSettings();
+  await contractSeed.addNetworkProvider();
+  await contractSeed.addChainSettings();
 
   process.exit(0);
 }
