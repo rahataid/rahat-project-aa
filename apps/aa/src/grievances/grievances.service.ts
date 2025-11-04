@@ -15,7 +15,7 @@ import {
   formatCoreUpdateGrievancePayload,
 } from './utils/grievances.service.utils';
 import { ListGrievanceDto } from './dto/list-grievance.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, GrievanceStatus, GrievanceType } from '@prisma/client';
 import { handleMicroserviceCall } from '../utils/handleMicroServiceCall';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({
@@ -131,22 +131,41 @@ export class GrievancesService {
 
     return this.prisma.$transaction(async (tx) => {
       const isStatusChange = 'status' in updateDto;
-      const isNowResolved = isStatusChange && updateDto.status === 'RESOLVED';
-      const isNowClosed = isStatusChange && updateDto.status === 'CLOSED';
+      const isNowResolved =
+        isStatusChange && updateDto.status === GrievanceStatus.RESOLVED;
+      const isNowClosed =
+        isStatusChange && updateDto.status === GrievanceStatus.CLOSED;
 
-      const wasResolved = existingGrievance.status === 'RESOLVED';
-      const wasClosed = existingGrievance.status === 'CLOSED';
+      // Build update data with timestamp management
+      const updateData: any = { ...updateDto };
 
-      const shouldSetResolvedAt = isNowResolved && !wasResolved;
-      const shouldSetClosedAt = isNowClosed && !wasClosed;
+      if (isStatusChange) {
+        // Only update timestamps if status is actually changing
+        const statusActuallyChanged =
+          updateDto.status !== existingGrievance.status;
+
+        if (statusActuallyChanged) {
+          if (isNowResolved) {
+            // Transitioning TO RESOLVED: set resolvedAt, clear closedAt
+            updateData.resolvedAt = new Date();
+            updateData.closedAt = null;
+          } else if (isNowClosed) {
+            // Transitioning TO CLOSED: set closedAt, clear resolvedAt
+            updateData.closedAt = new Date();
+            updateData.resolvedAt = null;
+          } else {
+            // Transitioning to something else (NEW, UNDER_REVIEW, etc.): clear both
+            updateData.resolvedAt = null;
+            updateData.closedAt = null;
+          }
+        }
+        // If status didn't change (e.g., already RESOLVED, updating to RESOLVED again),
+        // don't modify timestamps - preserve existing values
+      }
 
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: {
-          ...updateDto,
-          ...(shouldSetResolvedAt ? { resolvedAt: new Date() } : {}),
-          ...(shouldSetClosedAt ? { closedAt: new Date() } : {}),
-        },
+        data: updateData,
       });
 
       await handleMicroserviceCall({
@@ -280,33 +299,37 @@ export class GrievancesService {
     // Format type stats
     const grievanceType = {
       TECHNICAL:
-        typeStats.find((stat) => stat.type === 'TECHNICAL')?._count.type || 0,
+        typeStats.find((stat) => stat.type === GrievanceType.TECHNICAL)?._count
+          .type || 0,
       NON_TECHNICAL:
-        typeStats.find((stat) => stat.type === 'NON_TECHNICAL')?._count.type ||
-        0,
-      OTHER: typeStats.find((stat) => stat.type === 'OTHER')?._count.type || 0,
+        typeStats.find((stat) => stat.type === GrievanceType.NON_TECHNICAL)
+          ?._count.type || 0,
+      OTHER:
+        typeStats.find((stat) => stat.type === GrievanceType.OTHER)?._count
+          .type || 0,
     };
 
     // Format status stats
     const grievanceStatus = {
       NEW:
-        statusStats.find((stat) => stat.status === 'NEW')?._count.status || 0,
-      UNDER_REVIEW:
-        statusStats.find((stat) => stat.status === 'UNDER_REVIEW')?._count
+        statusStats.find((stat) => stat.status === GrievanceStatus.NEW)?._count
           .status || 0,
+      UNDER_REVIEW:
+        statusStats.find((stat) => stat.status === GrievanceStatus.UNDER_REVIEW)
+          ?._count.status || 0,
       RESOLVED:
-        statusStats.find((stat) => stat.status === 'RESOLVED')?._count.status ||
-        0,
+        statusStats.find((stat) => stat.status === GrievanceStatus.RESOLVED)
+          ?._count.status || 0,
       CLOSED:
-        statusStats.find((stat) => stat.status === 'CLOSED')?._count.status ||
-        0,
+        statusStats.find((stat) => stat.status === GrievanceStatus.CLOSED)
+          ?._count.status || 0,
     };
 
     // Calculate average resolve time using createdAt -> closedAt for CLOSED grievances only
     const closedGrievances = await this.prisma.grievance.findMany({
       where: {
         ...where,
-        status: 'CLOSED',
+        status: GrievanceStatus.CLOSED,
         closedAt: { not: null },
       },
       select: {
