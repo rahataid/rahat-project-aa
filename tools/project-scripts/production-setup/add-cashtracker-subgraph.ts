@@ -1,7 +1,9 @@
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import * as dotenv from 'dotenv';
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
 dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config(); // Fallback to default .env
 
 const subgraphUrl = process.env.SUBGRAPH_QUERY_URL as string;
 
@@ -12,7 +14,7 @@ class DeploymentUpdater {
   projectUUID: string;
 
   constructor() {
-    this.projectUUID = process.env.PROJECT_ID as string;
+    this.projectUUID = process.env.PROJECT_UUID as string;
   }
 
   public async addGraphSettings() {

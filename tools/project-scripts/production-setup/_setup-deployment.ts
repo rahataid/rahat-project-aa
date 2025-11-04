@@ -1,14 +1,15 @@
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
-import { randomBytes } from 'crypto';
+import { randomUUID } from 'crypto';
 import * as dotenv from 'dotenv';
-import { uuidV4, Addressable } from 'ethers';
 import { writeFileSync } from 'fs';
 import { ContractLib } from './_common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { DeployedContract } from '../types/blockchain';
 import axios from 'axios';
-dotenv.config();
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
+dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config(); // Fallback to default .env
 
 const corePrisma = new PrismaClient({
   datasourceUrl: process.env.CORE_DATABASE_URL as string,
@@ -24,12 +25,12 @@ class ContractSeed extends ContractLib {
 
   constructor() {
     super();
-    this.projectUUID = process.env.PROJECT_ID as string;
+    this.projectUUID = process.env.PROJECT_UUID as string;
     this.contracts = {};
   }
 
   static getUUID() {
-    return uuidV4(randomBytes(16));
+    return randomUUID();
   }
 
   public sleep(ms: number) {
@@ -47,10 +48,9 @@ class ContractSeed extends ContractLib {
     // const contractDetails = await this.getDevSettings();
     // console.log('contractDetails', contractDetails);
 
-
-     const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
-     const { data } = await axios.get(url);
-     const contractDetails = data?.data
+    const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
+    const { data } = await axios.get(url);
+    const contractDetails = data?.data;
     const RahatAccessManagerAddress =
       contractDetails.value.RAHATACCESSMANAGER.address;
     const forwarderAddress = contractDetails.value.ERC2771FORWARDER.address;
@@ -140,7 +140,13 @@ class ContractSeed extends ContractLib {
     };
 
     console.log('Writing deployed address to file');
-    this.writeToDeploymentFile(this.projectUUID, this.contracts);
+    // Write contracts with CONTRACTS key for consistency with graph scripts
+    const deploymentData = {
+      CONTRACTS: this.contracts,
+      deployedAt: new Date().toISOString(),
+      network: process.env.CHAIN_NAME || 'unknown',
+    };
+    this.writeToDeploymentFile(this.projectUUID, deploymentData);
 
     this.sleep(20000);
 
@@ -195,38 +201,36 @@ class ContractSeed extends ContractLib {
     };
 
     await settings.create(data);
-    await settings.create(data2)
-
+    await settings.create(data2);
   }
 
-  public async addNetworkProvider(){
+  public async addNetworkProvider() {
     const network = await this.getNetworkSettings();
     const data = {
-      name:'BLOCKCHAIN',
-      value:network,
-      isPrivate:false
-    }
-   await settings.create(data);
-
+      name: 'BLOCKCHAIN',
+      value: network,
+      isPrivate: false,
+    };
+    await settings.create(data);
   }
 
-  public async addChainSettings(){
+  public async addChainSettings() {
     const chainData = {
-      "name":process.env.CHAIN_NAME,
-      "type":process.env.CHAIN_TYPE,
-      "rpcUrl":process.env.CHAIN_RPCURL,
-      "chainId":process.env.CHAIN_ID,
-      "currency":{
-        "name":process.env.CHAIN_CURRENCY_NAME,
-        "symbol":process.env.CHAIN_CURRENCY_SYMBOL
+      name: process.env.CHAIN_NAME,
+      type: process.env.CHAIN_TYPE,
+      rpcUrl: process.env.CHAIN_RPCURL,
+      chainId: process.env.CHAIN_ID,
+      currency: {
+        name: process.env.CHAIN_CURRENCY_NAME,
+        symbol: process.env.CHAIN_CURRENCY_SYMBOL,
       },
-      "explorerUrl":process.env.CHAIN_EXPLORER_URL
-    }
+      explorerUrl: process.env.CHAIN_EXPLORER_URL,
+    };
     const data = {
-      name:'CHAIN_SETTINGS',
-      value:chainData,
-      isPrivate:false
-    } 
+      name: 'CHAIN_SETTINGS',
+      value: chainData,
+      isPrivate: false,
+    };
     await settings.create(data);
   }
 }

@@ -1,7 +1,9 @@
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import * as dotenv from 'dotenv';
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
 dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config(); // Fallback to default .env
 
 import entities from './entities.json';
 
