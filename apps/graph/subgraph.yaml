@@ -117,7 +117,7 @@ dataSources:
       file: ./src/rahat-donor.ts
   - kind: ethereum
     name: CashToken
-    network: base-sepolia
+    network: mainnet
     source:
       address: '0xA646F8152eAe26834B6DF52ea36FD3A913b65b78'
       abi: CashToken
