@@ -976,8 +976,24 @@ export class BeneficiaryService {
           }
         })
       );
-
-      return totalBalance.toString();
+      // Get the latest updatedAt from completed redeems
+      const latestCompletedRedeem =
+        await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            payoutId: { not: null }, // Redeems with payouts
+            isCompleted: true,
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          select: {
+            updatedAt: true,
+          },
+        });
+      return {
+        totalBalance: totalBalance.toString(),
+        latestCompletedRedeemAt: latestCompletedRedeem?.updatedAt || null,
+      };
     } catch (error) {
       console.error(
         'Error fetching balances:',
