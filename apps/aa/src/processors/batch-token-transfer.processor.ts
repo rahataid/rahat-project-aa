@@ -197,6 +197,19 @@ export class BatchTokenTransferProcessor {
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
       );
+      const contract = await this.getFromSettings('CONTRACT');
+      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+
+      const rpcUrl = chainConfig.rpcUrl;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        provider
+      );
+      const decimal = await rahatTokenContract.decimals.staticCall();
 
       const multicallTxnPayload: any[][] = [];
 
@@ -228,12 +241,14 @@ export class BatchTokenTransferProcessor {
           );
           continue;
         }
+        console.log('transfer amount ', transfer.amount);
+        console.log('decimal ', decimal);
 
         multicallTxnPayload.push([
           transfer.beneficiaryWalletAddress,
           transfer.vendorWalletAddress,
           CASH_TOKEN_ADDRESS,
-          transfer.amount,
+          ethers.formatUnits(transfer.amount, decimal),
         ]);
       }
 
