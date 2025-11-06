@@ -47,7 +47,9 @@ export class ConfigurePermissionsCommand {
     Logger.info('Configuring contract permissions');
 
     // Check if already completed
-    const isCompleted = await this.stateManager.isStepCompleted('configure-permissions');
+    const isCompleted = await this.stateManager.isStepCompleted(
+      'configure-permissions'
+    );
     if (isCompleted) {
       Logger.warn('Permissions already configured, skipping...');
       return;
@@ -56,7 +58,8 @@ export class ConfigurePermissionsCommand {
     try {
       const coreContracts = await this.fetchCoreContracts();
       const deployerKey = await SecretsManager.getDeployerPrivateKey();
-      const deployerAccount = this.contractLib.getWalletFromPrivateKey(deployerKey);
+      const deployerAccount =
+        this.contractLib.getWalletFromPrivateKey(deployerKey);
 
       const { deployedContracts } = command;
 
@@ -76,7 +79,9 @@ export class ConfigurePermissionsCommand {
         );
         Logger.success('Admin role granted to RahatDonor');
       } catch (error: any) {
-        Logger.warn('Failed to grant role to RahatDonor. This may require manual admin setup.');
+        Logger.warn(
+          'Failed to grant role to RahatDonor. This may require manual admin setup.'
+        );
         Logger.warn('Error:', error.message);
         // Continue - this might need to be done manually by Rahat Core admin
       }
@@ -110,7 +115,9 @@ export class ConfigurePermissionsCommand {
         );
         Logger.success('Admin role granted to deployer');
       } catch (error: any) {
-        Logger.warn('Failed to grant role to deployer. This may require manual admin setup.');
+        Logger.warn(
+          'Failed to grant role to deployer. This may require manual admin setup.'
+        );
         Logger.warn('Error:', error.message);
         // Continue - this might need to be done manually by Rahat Core admin
       }
@@ -136,4 +143,3 @@ export async function configurePermissions(
   const cmd = new ConfigurePermissionsCommand(stateManager);
   return await cmd.execute(command);
 }
-

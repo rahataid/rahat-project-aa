@@ -49,7 +49,6 @@ export class ConfigureGraphNetworksCommand {
       }
 
       const graphNetworksPath = `${__dirname}/../../../apps/graph/networks.json`;
-      const deploymentFilePath = `${__dirname}/../../deployments/${command.projectUUID}.json`;
 
       // Read existing networks.json
       let networks: Record<string, any> = {};

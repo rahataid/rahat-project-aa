@@ -3,9 +3,9 @@
  * Wrapper script to run graph setup commands
  */
 import * as dotenv from 'dotenv';
-import { StateManager } from '../services/_state-manager';
-import { configureGraphNetworks } from '../commands/configure-graph-networks';
-import { deploySubgraph } from '../commands/deploy-subgraph';
+import { StateManager } from './services/_state-manager';
+import { configureGraphNetworks } from './commands/configure-graph-networks';
+import { deploySubgraph } from './commands/deploy-subgraph';
 
 // Load environment variables
 dotenv.config({ path: `${__dirname}/.env.setup` });

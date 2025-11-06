@@ -1,32 +1,34 @@
 {
-  "projectUUID": "a8daba68-1d86-442a-9c33-f62e15541693",
-  "startedAt": "2025-11-04T10:16:25.347Z",
+  "projectUUID": "30d1a534-b02f-4135-87e3-e820aede1dce",
+  "startedAt": "2025-11-06T09:37:12.472Z",
   "completedSteps": [
-    "deploy-contracts"
+    "deploy-contracts",
+    "configure-permissions",
+    "save-deployment-state"
   ],
   "failedSteps": [
-    "configure-permissions"
+    "configure-graph-networks"
   ],
   "deployedContracts": {
     "TriggerManager": {
-      "address": "0xB44cCA2f684b8e923bbDc11F2118C90056EfFC33",
-      "blockNumber": 1
+      "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
+      "blockNumber": 33326846
     },
     "RahatDonor": {
-      "address": "0x7c2ad3e2Df7545B2390893F8B76920D1373B4Ad4",
-      "blockNumber": 33241553
+      "address": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+      "blockNumber": 1
     },
     "RahatToken": {
-      "address": "0x966ec80D0D3b0A69b2714FE8BeDd2A99285a4257",
+      "address": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
       "blockNumber": 1
     },
     "AAProject": {
-      "address": "0x8d9feaeE032231f7B05B9b4C42Fa73214c246CcF",
+      "address": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
       "blockNumber": 1
     },
     "CashToken": {
-      "address": "0x3771CC7a60F121B1dE2aEB49486EAd408d7F8A33",
-      "blockNumber": 33241561
+      "address": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+      "blockNumber": 1
     }
   },
   "status": "failed",
@@ -36,10 +38,10 @@
         "contracts": {
           "TriggerManager": {
             "contractName": "TriggerManager",
-            "address": "0xB44cCA2f684b8e923bbDc11F2118C90056EfFC33",
-            "blockNumber": 1,
+            "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
+            "blockNumber": 33326846,
             "contract": {
-              "target": "0xB44cCA2f684b8e923bbDc11F2118C90056EfFC33",
+              "target": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
               "interface": {
                 "fragments": [
                   {
@@ -388,10 +390,10 @@
           },
           "RahatDonor": {
             "contractName": "RahatDonor",
-            "address": "0x7c2ad3e2Df7545B2390893F8B76920D1373B4Ad4",
-            "blockNumber": 33241553,
+            "address": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+            "blockNumber": 1,
             "contract": {
-              "target": "0x7c2ad3e2Df7545B2390893F8B76920D1373B4Ad4",
+              "target": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
               "interface": {
                 "fragments": [
                   {
@@ -1346,10 +1348,10 @@
           },
           "RahatToken": {
             "contractName": "RahatToken",
-            "address": "0x966ec80D0D3b0A69b2714FE8BeDd2A99285a4257",
+            "address": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
             "blockNumber": 1,
             "contract": {
-              "target": "0x966ec80D0D3b0A69b2714FE8BeDd2A99285a4257",
+              "target": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
               "interface": {
                 "fragments": [
                   {
@@ -2409,10 +2411,10 @@
           },
           "AAProject": {
             "contractName": "AAProject",
-            "address": "0x8d9feaeE032231f7B05B9b4C42Fa73214c246CcF",
+            "address": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
             "blockNumber": 1,
             "contract": {
-              "target": "0x8d9feaeE032231f7B05B9b4C42Fa73214c246CcF",
+              "target": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
               "interface": {
                 "fragments": [
                   {
@@ -3576,10 +3578,10 @@
           },
           "CashToken": {
             "contractName": "CashToken",
-            "address": "0x3771CC7a60F121B1dE2aEB49486EAd408d7F8A33",
-            "blockNumber": 33241561,
+            "address": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+            "blockNumber": 1,
             "contract": {
-              "target": "0x3771CC7a60F121B1dE2aEB49486EAd408d7F8A33",
+              "target": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
               "interface": {
                 "fragments": [
                   {
@@ -4288,10 +4290,10 @@
         }
       }
     },
-    "configure-permissions_error": {
-      "message": "execution reverted (unknown custom error) (action=\"estimateGas\", data=\"0x068ca9d800000000000000000000000095d431de981fc89e0dbd2bf03c5d9606ceff3094\", reason=null, transaction={ \"data\": \"0xd293cf250000000000000000000000008d9feaee032231f7b05b9b4c42fa73214c246ccf0000000000000000000000000000000000000000000000000000000000000001\", \"from\": \"0x95D431de981FC89E0DbD2BF03C5D9606cefF3094\", \"to\": \"0x7c2ad3e2Df7545B2390893F8B76920D1373B4Ad4\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.14.3)",
-      "stack": "Error: execution reverted (unknown custom error) (action=\"estimateGas\", data=\"0x068ca9d800000000000000000000000095d431de981fc89e0dbd2bf03c5d9606ceff3094\", reason=null, transaction={ \"data\": \"0xd293cf250000000000000000000000008d9feaee032231f7b05b9b4c42fa73214c246ccf0000000000000000000000000000000000000000000000000000000000000001\", \"from\": \"0x95D431de981FC89E0DbD2BF03C5D9606cefF3094\", \"to\": \"0x7c2ad3e2Df7545B2390893F8B76920D1373B4Ad4\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.14.3)\n    at makeError (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/node_modules/.pnpm/ethers@6.14.3/node_modules/ethers/src.ts/utils/errors.ts:698:21)\n    at getBuiltinCallException (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/node_modules/.pnpm/ethers@6.14.3/node_modules/ethers/src.ts/abi/abi-coder.ts:118:21)\n    at Function.getBuiltinCallException (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/node_modules/.pnpm/ethers@6.14.3/node_modules/ethers/src.ts/abi/abi-coder.ts:235:16)\n    at JsonRpcProvider.getRpcError (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/node_modules/.pnpm/ethers@6.14.3/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts:1016:32)\n    at /Users/argahv/Projects/rumsan/aa/rahat-project-aa/node_modules/.pnpm/ethers@6.14.3/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts:571:45\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+    "configure-graph-networks_error": {
+      "message": "ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'",
+      "stack": "Error: ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'"
     }
   },
-  "lastCheckpoint": "deploy-contracts"
+  "lastCheckpoint": "save-deployment-state"
 }
