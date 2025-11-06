@@ -40,17 +40,25 @@ export class DeploySubgraphCommand {
       return;
     }
 
-    // Check required environment variables
+    // Check required environment variables - FAIL if missing (subgraph is compulsory)
     const subgraphAuthToken = process.env.SUBGRAPH_AUTH_TOKEN;
     const subgraphNetwork = process.env.SUBGRAPH_NETWORK;
     const subgraphName = process.env.SUBGRAPH_NAME;
 
     if (!subgraphAuthToken || !subgraphNetwork || !subgraphName) {
-      Logger.warn(
-        'Subgraph configuration missing. Skipping subgraph deployment.'
+      const missingVars: string[] = [];
+      if (!subgraphAuthToken) missingVars.push('SUBGRAPH_AUTH_TOKEN');
+      if (!subgraphNetwork) missingVars.push('SUBGRAPH_NETWORK');
+      if (!subgraphName) missingVars.push('SUBGRAPH_NAME');
+
+      const error = new Error(
+        `Subgraph configuration missing. Required environment variables: ${missingVars.join(
+          ', '
+        )}`
       );
-      Logger.warn('Required: SUBGRAPH_AUTH_TOKEN, SUBGRAPH_NETWORK, SUBGRAPH_NAME');
-      return;
+      Logger.error('Subgraph configuration is required but missing', error);
+      await this.stateManager.markStepFailed('deploy-subgraph', error);
+      throw error;
     }
 
     try {
@@ -162,4 +170,3 @@ export async function deploySubgraph(
   const cmd = new DeploySubgraphCommand(stateManager);
   return await cmd.execute(command);
 }
-

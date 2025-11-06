@@ -14,6 +14,14 @@ import {
   saveDeploymentState,
   SaveDeploymentStateCommandInput,
 } from '../commands/save-deployment-state';
+import {
+  configureGraphNetworks,
+  ConfigureGraphNetworksCommandInput,
+} from '../commands/configure-graph-networks';
+import {
+  deploySubgraph,
+  DeploySubgraphCommandInput,
+} from '../commands/deploy-subgraph';
 
 // Load environment variables
 dotenv.config({ path: `${__dirname}/.env.setup` });
@@ -24,6 +32,7 @@ export interface PipelineStep {
   description: string;
   command: () => Promise<void>;
   checkpoint: boolean; // Can resume from here
+  required: boolean; // If false, step can be skipped on error (default: true)
 }
 
 export class DeploymentPipeline {
@@ -46,6 +55,7 @@ export class DeploymentPipeline {
         name: 'deploy-contracts',
         description: 'Deploy all contracts',
         checkpoint: true,
+        required: true, // CRITICAL: Cannot skip
         command: async () => {
           const result = await deployAllContracts(
             this.projectUUID,
@@ -61,6 +71,7 @@ export class DeploymentPipeline {
         name: 'configure-permissions',
         description: 'Configure contract permissions',
         checkpoint: true,
+        required: true, // CRITICAL: Cannot skip (registerProject is essential)
         command: async () => {
           const state = await this.stateManager.load();
           if (!state?.metadata?.['deploy-contracts']) {
@@ -79,6 +90,7 @@ export class DeploymentPipeline {
         name: 'save-deployment-state',
         description: 'Save deployment state to file',
         checkpoint: true,
+        required: true, // CRITICAL: Cannot skip (needed for graph and DB updates)
         command: async () => {
           const state = await this.stateManager.load();
           if (!state?.metadata?.['deploy-contracts']) {
@@ -91,6 +103,30 @@ export class DeploymentPipeline {
             deployedContracts,
           };
           await saveDeploymentState(saveCmd, this.stateManager);
+        },
+      },
+      {
+        name: 'configure-graph-networks',
+        description: 'Configure graph networks.json',
+        checkpoint: true,
+        required: true, // CRITICAL: Required for subgraph deployment
+        command: async () => {
+          const configCmd: ConfigureGraphNetworksCommandInput = {
+            projectUUID: this.projectUUID,
+          };
+          await configureGraphNetworks(configCmd, this.stateManager);
+        },
+      },
+      {
+        name: 'deploy-subgraph',
+        description: 'Deploy subgraph to The Graph',
+        checkpoint: true,
+        required: true, // CRITICAL: Subgraph is compulsory
+        command: async () => {
+          const deployCmd: DeploySubgraphCommandInput = {
+            projectUUID: this.projectUUID,
+          };
+          await deploySubgraph(deployCmd, this.stateManager);
         },
       },
     ];
@@ -152,20 +188,49 @@ export class DeploymentPipeline {
       }
 
       Logger.info(`[${i + 1}/${this.pipeline.length}] ${step.description}`);
+      const isRequired = step.required !== false; // Default to true if not specified
 
       try {
         await step.command();
 
-        // Save checkpoint if configured
+        // Save checkpoint if configured (this ensures step is marked complete and state is saved)
         if (step.checkpoint) {
           await this.stateManager.saveCheckpoint(step.name);
+        } else {
+          // Even if not a checkpoint, ensure step completion is saved
+          const isStepComplete = await this.stateManager.isStepCompleted(
+            step.name
+          );
+          if (!isStepComplete) {
+            // If command didn't mark as complete, do it here
+            await this.stateManager.markStepComplete(step.name);
+          }
         }
 
         Logger.success(`Step '${step.name}' completed`);
       } catch (error: any) {
         Logger.error(`Step '${step.name}' failed`, error);
+        // Ensure failure is saved to state
         await this.stateManager.markStepFailed(step.name, error);
-        throw error;
+
+        if (isRequired) {
+          // Required step failed - stop pipeline
+          Logger.error(
+            `❌ CRITICAL STEP FAILED: '${step.name}' is required and cannot be skipped`
+          );
+          throw error;
+        } else {
+          // Optional step failed - log warning and continue
+          Logger.warn(
+            `⚠️  Optional step '${step.name}' failed but continuing...`
+          );
+          Logger.warn(`Error: ${error.message}`);
+          // Mark as skipped instead of failed
+          await this.stateManager.markStepComplete(step.name, {
+            skipped: true,
+            reason: error.message,
+          });
+        }
       }
     }
 

@@ -50,6 +50,9 @@ class EnvironmentValidator {
       'DEPLOYER_PRIVATE_KEY',
       'RAHAT_CORE_URL',
       'DATABASE_URL',
+      'SUBGRAPH_NETWORK',
+      'SUBGRAPH_NAME',
+      'SUBGRAPH_AUTH_TOKEN',
     ];
 
     const optionalButRecommended = [
@@ -58,9 +61,6 @@ class EnvironmentValidator {
       'CHAIN_CURRENCY_SYMBOL',
       'CHAIN_EXPLORER_URL',
       'CORE_DATABASE_URL',
-      'SUBGRAPH_NETWORK',
-      'SUBGRAPH_NAME',
-      'SUBGRAPH_AUTH_TOKEN',
       'SUBGRAPH_QUERY_URL',
     ];
 

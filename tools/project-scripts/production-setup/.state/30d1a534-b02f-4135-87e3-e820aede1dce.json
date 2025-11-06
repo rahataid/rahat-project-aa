@@ -4,11 +4,11 @@
   "completedSteps": [
     "deploy-contracts",
     "configure-permissions",
-    "save-deployment-state"
+    "save-deployment-state",
+    "configure-graph-networks",
+    "deploy-subgraph"
   ],
-  "failedSteps": [
-    "configure-graph-networks"
-  ],
+  "failedSteps": [],
   "deployedContracts": {
     "TriggerManager": {
       "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
@@ -31,7 +31,7 @@
       "blockNumber": 1
     }
   },
-  "status": "failed",
+  "status": "completed",
   "metadata": {
     "deploy-contracts": {
       "result": {
@@ -4293,6 +4293,14 @@
     "configure-graph-networks_error": {
       "message": "ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'",
       "stack": "Error: ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'"
+    },
+    "deploy-subgraph_error": {
+      "message": "Subgraph configuration missing. Required: SUBGRAPH_AUTH_TOKEN, SUBGRAPH_NETWORK, SUBGRAPH_NAME",
+      "stack": "Error: Subgraph configuration missing. Required: SUBGRAPH_AUTH_TOKEN, SUBGRAPH_NETWORK, SUBGRAPH_NAME\n    at DeploySubgraphCommand.execute (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:49:21)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async deploySubgraph (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:169:10)\n    at async main (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/graph-setup.ts:28:5)"
+    },
+    "deploy-subgraph": {
+      "skipped": true,
+      "reason": "Subgraph configuration missing"
     }
   },
   "lastCheckpoint": "save-deployment-state"

@@ -43,7 +43,8 @@ graph_setup() {
         echo "📝 Using modular graph setup..."
         npx ts-node "$SCRIPT_DIR/graph-setup.ts"
         if [ $? -ne 0 ]; then
-            echo "⚠️  Modular graph setup failed, falling back to legacy script..."
+            echo "❌ Modular graph setup failed."
+            echo "⚠️  Falling back to legacy script..."
             # Fall through to legacy script
         else
             return 0
@@ -119,7 +120,8 @@ echo "=========================================="
 
 validate_environment
 blockchain_setup
-graph_setup
+# Graph setup is now handled within the pipeline (deploy-pipeline.ts)
+# graph_setup() is kept for backward compatibility but not called by default
 update_database
 
 echo ""

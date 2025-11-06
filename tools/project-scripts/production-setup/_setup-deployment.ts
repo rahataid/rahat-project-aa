@@ -48,8 +48,8 @@ class ContractSeed extends ContractLib {
     // const contractDetails = await this.getDevSettings();
     // console.log('contractDetails', contractDetails);
 
-    const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
-    const { data } = await axios.get(url);
+     const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
+     const { data } = await axios.get(url);
     const contractDetails = data?.data;
     const RahatAccessManagerAddress =
       contractDetails.value.RAHATACCESSMANAGER.address;
@@ -211,7 +211,7 @@ class ContractSeed extends ContractLib {
       value: network,
       isPrivate: false,
     };
-    await settings.create(data);
+   await settings.create(data);
   }
 
   public async addChainSettings() {

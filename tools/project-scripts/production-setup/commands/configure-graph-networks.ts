@@ -3,6 +3,7 @@
  * Updates networks.json with deployed contract addresses
  */
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { Logger } from '../services/_logger';
 import { StateManager } from '../services/_state-manager';
 import { DeploymentStore } from '../services/_deployment-store';
@@ -48,7 +49,21 @@ export class ConfigureGraphNetworksCommand {
         throw new Error('Deployment data not found');
       }
 
-      const graphNetworksPath = `${__dirname}/../../../apps/graph/networks.json`;
+      // Path from commands/ directory: commands -> production-setup -> project-scripts -> tools -> rahat-project-aa -> apps/graph
+      const graphNetworksPath = path.join(
+        __dirname,
+        '../../../../apps/graph/networks.json'
+      );
+      const graphNetworksDir = path.dirname(graphNetworksPath);
+
+      // Ensure the directory exists
+      try {
+        await fs.mkdir(graphNetworksDir, { recursive: true });
+      } catch (error: any) {
+        if (error.code !== 'EEXIST') {
+          throw new Error(`Failed to create graph directory: ${error.message}`);
+        }
+      }
 
       // Read existing networks.json
       let networks: Record<string, any> = {};
@@ -56,7 +71,11 @@ export class ConfigureGraphNetworksCommand {
         const networksData = await fs.readFile(graphNetworksPath, 'utf8');
         networks = JSON.parse(networksData);
       } catch (error: any) {
-        Logger.warn('networks.json not found, creating new file');
+        if (error.code === 'ENOENT') {
+          Logger.warn('networks.json not found, creating new file');
+        } else {
+          throw error;
+        }
       }
 
       // Update with new addresses
