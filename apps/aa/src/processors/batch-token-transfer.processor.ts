@@ -195,7 +195,7 @@ export class BatchTokenTransferProcessor {
       );
 
       const { contract: aaContract } = await this.createContractInstanceSign(
-        'AAPROJECT',
+        'AAPROJECT'
       );
 
       const multicallTxnPayload: any[][] = [];
@@ -205,7 +205,7 @@ export class BatchTokenTransferProcessor {
 
       //  const hasApproval = await this.checkCashTokenApproval(
       //     transfers[0].vendorWalletAddress,// assuming all transfers in batch are from same vendor
-      //     aaContract.target.toString(), 
+      //     aaContract.target.toString(),
       //     transfers.reduce((sum, t) => sum + BigInt(t.amount), BigInt(0)).toString()
       //   );
       //   if (!hasApproval) {
@@ -217,7 +217,6 @@ export class BatchTokenTransferProcessor {
       //   }
 
       for (const transfer of transfers) {
-
         const hasTokens = await this.checkBeneficiaryHasTokens(
           transfer.beneficiaryWalletAddress
         );
@@ -293,6 +292,19 @@ export class BatchTokenTransferProcessor {
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
       );
+      const contract = await this.getFromSettings('CONTRACT');
+      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+
+      const rpcUrl = chainConfig.rpcUrl;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        provider
+      );
+      const decimal = await rahatTokenContract.decimals.staticCall();
 
       // Prepare multicall data
       const multicallTxnPayload: any[][] = [];
@@ -328,7 +340,7 @@ export class BatchTokenTransferProcessor {
         multicallTxnPayload.push([
           transfer.beneficiaryWalletAddress,
           transfer.vendorWalletAddress,
-          transfer.amount,
+          ethers.formatUnits(transfer.amount, decimal),
         ]);
       }
 
@@ -403,8 +415,12 @@ export class BatchTokenTransferProcessor {
     amount: string
   ): Promise<boolean> {
     try {
-      this.logger.log(`Checking cash token approval for ${owner} to ${spender} for amount ${amount}`);
-      const CASH_TOKEN_ADDRESS = await this.getFromSettings('CASH_TOKEN_CONTRACT');
+      this.logger.log(
+        `Checking cash token approval for ${owner} to ${spender} for amount ${amount}`
+      );
+      const CASH_TOKEN_ADDRESS = await this.getFromSettings(
+        'CASH_TOKEN_CONTRACT'
+      );
       const cashTokenContract = new ethers.Contract(
         CASH_TOKEN_ADDRESS,
         [
@@ -429,7 +445,7 @@ export class BatchTokenTransferProcessor {
       );
       return false;
     }
-  } 
+  }
 
   private async updateBeneficiaryFieldOfficerRedeemRecords(
     transfers: SingleTransfer[],
@@ -678,7 +694,7 @@ export class BatchTokenTransferProcessor {
       // Get contract settings
       const contract = await this.getFromSettings('CONTRACT');
 
-      console.log("contract ->>> ", contract);
+      console.log('contract ->>> ', contract);
 
       const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
       const deployerPrivateKey = await this.getFromSettings(
