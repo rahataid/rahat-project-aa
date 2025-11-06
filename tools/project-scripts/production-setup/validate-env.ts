@@ -50,11 +50,11 @@ class EnvironmentValidator {
       'DEPLOYER_PRIVATE_KEY',
       'RAHAT_CORE_URL',
       'DATABASE_URL',
-      'SUBGRAPH_NETWORK',
-      'SUBGRAPH_NAME',
-      'SUBGRAPH_AUTH_TOKEN',
+      // SUBGRAPH_PROVIDER is selected interactively, not from env
     ];
 
+    // Note: Subgraph provider-specific vars will be validated during deployment
+    // The provider is selected interactively in the CLI
     const optionalButRecommended = [
       'CHAIN_TYPE',
       'CHAIN_CURRENCY_NAME',
@@ -62,6 +62,13 @@ class EnvironmentValidator {
       'CHAIN_EXPLORER_URL',
       'CORE_DATABASE_URL',
       'SUBGRAPH_QUERY_URL',
+      'SUBGRAPH_PROJECT_ID', // For The Graph URL construction
+      // Subgraph vars (provider-specific, validated during deployment):
+      'SUBGRAPH_NETWORK', // Required for The Graph
+      'SUBGRAPH_NAME', // Required for both
+      'SUBGRAPH_AUTH_TOKEN', // Required for The Graph
+      'SUBGRAPH_DEPLOY_KEY', // Required for Alchemy
+      'SUBGRAPH_VERSION_LABEL', // Required for Alchemy
     ];
 
     // Check required variables
