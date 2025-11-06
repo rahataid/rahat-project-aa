@@ -1,34 +1,35 @@
 {
   "projectUUID": "30d1a534-b02f-4135-87e3-e820aede1dce",
-  "startedAt": "2025-11-06T09:37:12.472Z",
+  "startedAt": "2025-11-06T11:28:19.236Z",
   "completedSteps": [
     "deploy-contracts",
     "configure-permissions",
     "save-deployment-state",
-    "configure-graph-networks"
+    "configure-graph-networks",
+    "deploy-subgraph-config"
   ],
   "failedSteps": [
     "deploy-subgraph"
   ],
   "deployedContracts": {
     "TriggerManager": {
-      "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
-      "blockNumber": 33326846
+      "address": "0x0c5A2AE3016aA3A42C1FCEF30284de8344fc9022",
+      "blockNumber": 1
     },
     "RahatDonor": {
-      "address": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+      "address": "0x0bb171434eD5301f5ee2a8e893B4cae36DD5Ee6b",
       "blockNumber": 1
     },
     "RahatToken": {
-      "address": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
+      "address": "0xC4E67C4BEff943478Ca8E2d383d80947Db819BeF",
       "blockNumber": 1
     },
     "AAProject": {
-      "address": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
+      "address": "0x61b09Fe398F62A76bFFe5E13Ef039Aa9b8dB2ebD",
       "blockNumber": 1
     },
     "CashToken": {
-      "address": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+      "address": "0xDe4D2dE6C40570733ebDC52C8e63bE6f04D53331",
       "blockNumber": 1
     }
   },
@@ -39,10 +40,10 @@
         "contracts": {
           "TriggerManager": {
             "contractName": "TriggerManager",
-            "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
-            "blockNumber": 33326846,
+            "address": "0x0c5A2AE3016aA3A42C1FCEF30284de8344fc9022",
+            "blockNumber": 1,
             "contract": {
-              "target": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
+              "target": "0x0c5A2AE3016aA3A42C1FCEF30284de8344fc9022",
               "interface": {
                 "fragments": [
                   {
@@ -391,10 +392,10 @@
           },
           "RahatDonor": {
             "contractName": "RahatDonor",
-            "address": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+            "address": "0x0bb171434eD5301f5ee2a8e893B4cae36DD5Ee6b",
             "blockNumber": 1,
             "contract": {
-              "target": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+              "target": "0x0bb171434eD5301f5ee2a8e893B4cae36DD5Ee6b",
               "interface": {
                 "fragments": [
                   {
@@ -1349,10 +1350,10 @@
           },
           "RahatToken": {
             "contractName": "RahatToken",
-            "address": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
+            "address": "0xC4E67C4BEff943478Ca8E2d383d80947Db819BeF",
             "blockNumber": 1,
             "contract": {
-              "target": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
+              "target": "0xC4E67C4BEff943478Ca8E2d383d80947Db819BeF",
               "interface": {
                 "fragments": [
                   {
@@ -2412,10 +2413,10 @@
           },
           "AAProject": {
             "contractName": "AAProject",
-            "address": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
+            "address": "0x61b09Fe398F62A76bFFe5E13Ef039Aa9b8dB2ebD",
             "blockNumber": 1,
             "contract": {
-              "target": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
+              "target": "0x61b09Fe398F62A76bFFe5E13Ef039Aa9b8dB2ebD",
               "interface": {
                 "fragments": [
                   {
@@ -3579,10 +3580,10 @@
           },
           "CashToken": {
             "contractName": "CashToken",
-            "address": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+            "address": "0xDe4D2dE6C40570733ebDC52C8e63bE6f04D53331",
             "blockNumber": 1,
             "contract": {
-              "target": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+              "target": "0xDe4D2dE6C40570733ebDC52C8e63bE6f04D53331",
               "interface": {
                 "fragments": [
                   {
@@ -4291,17 +4292,17 @@
         }
       }
     },
-    "configure-graph-networks_error": {
-      "message": "ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'",
-      "stack": "Error: ENOENT: no such file or directory, open '/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/../../../apps/graph/networks.json'"
+    "deploy-subgraph-config": {
+      "provider": "thegraph",
+      "config": {
+        "name": "ra",
+        "network": "base-sepolia",
+        "authToken": "gh23teh23egh23"
+      }
     },
     "deploy-subgraph_error": {
-      "message": "Subgraph configuration missing for thegraph. Required: SUBGRAPH_AUTH_TOKEN, SUBGRAPH_NETWORK, SUBGRAPH_NAME",
-      "stack": "Error: Subgraph configuration missing for thegraph. Required: SUBGRAPH_AUTH_TOKEN, SUBGRAPH_NETWORK, SUBGRAPH_NAME\n    at DeploySubgraphCommand.execute (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:70:21)\n    at async deploySubgraph (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:297:10)\n    at async Object.command (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:129:11)\n    at async DeploymentPipeline.execute (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:194:9)\n    at async main (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:273:5)"
-    },
-    "deploy-subgraph": {
-      "skipped": true,
-      "reason": "Subgraph configuration missing"
+      "message": "Subgraph URL not available. Please set SUBGRAPH_QUERY_URL or the required provider-specific environment variables (SUBGRAPH_PROJECT_ID for The Graph, ALCHEMY_API_KEY for Alchemy).",
+      "stack": "Error: Subgraph URL not available. Please set SUBGRAPH_QUERY_URL or the required provider-specific environment variables (SUBGRAPH_PROJECT_ID for The Graph, ALCHEMY_API_KEY for Alchemy).\n    at SubgraphUrlService.updateDeploymentFile (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/services/_subgraph-url.ts:65:13)\n    at DeploySubgraphCommand.execute (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:104:29)\n    at async deploySubgraph (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/commands/deploy-subgraph.ts:158:10)\n    at async Object.command (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:129:11)\n    at async DeploymentPipeline.execute (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:195:9)\n    at async main (/Users/argahv/Projects/rumsan/aa/rahat-project-aa/tools/project-scripts/production-setup/pipelines/deploy-pipeline.ts:292:5)"
     }
   },
   "lastCheckpoint": "configure-graph-networks"

@@ -26,11 +26,14 @@ blockchain_setup() {
     # Use new modular pipeline if available, fallback to legacy script
     if [ -f "$SCRIPT_DIR/pipelines/deploy-pipeline.ts" ]; then
         npx ts-node "$SCRIPT_DIR/pipelines/deploy-pipeline.ts"
+        EXIT_CODE=$?
     else
         npx ts-node "$SCRIPT_DIR/_setup-deployment.ts"
+        EXIT_CODE=$?
     fi
-    if [ $? -ne 0 ]; then
+    if [ $EXIT_CODE -ne 0 ]; then
         echo "❌ Contract deployment failed."
+        echo "⚠️  Pipeline failed - database will NOT be updated."
         exit 1
     fi
 }
@@ -122,6 +125,9 @@ validate_environment
 blockchain_setup
 # Graph setup is now handled within the pipeline (deploy-pipeline.ts)
 # graph_setup() is kept for backward compatibility but not called by default
+
+# Only update database if blockchain_setup succeeded
+# Note: blockchain_setup will exit with code 1 if pipeline fails, so if we reach here, it succeeded
 update_database
 
 echo ""

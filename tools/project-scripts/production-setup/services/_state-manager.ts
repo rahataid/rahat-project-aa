@@ -144,6 +144,7 @@ export class StateManager {
   /**
    * Save checkpoint
    * Also ensures the step is marked as completed if not already
+   * IMPORTANT: Do NOT call this if the step failed - check isStepFailed first!
    */
   async saveCheckpoint(stepName: string): Promise<void> {
     const state = await this.load();
@@ -151,13 +152,17 @@ export class StateManager {
       throw new Error('Deployment state not initialized');
     }
 
+    // CRITICAL: Don't mark as complete if step is already marked as failed
+    if (state.failedSteps.includes(stepName)) {
+      throw new Error(
+        `Cannot save checkpoint for failed step: ${stepName}. Step must succeed before checkpointing.`
+      );
+    }
+
     // Ensure step is marked as completed
     if (!state.completedSteps.includes(stepName)) {
       state.completedSteps.push(stepName);
     }
-
-    // Remove from failed steps if present
-    state.failedSteps = state.failedSteps.filter((s) => s !== stepName);
 
     // Update checkpoint
     state.lastCheckpoint = stepName;
@@ -189,6 +194,18 @@ export class StateManager {
     }
 
     return state.completedSteps.includes(stepName);
+  }
+
+  /**
+   * Check if step is failed
+   */
+  async isStepFailed(stepName: string): Promise<boolean> {
+    const state = await this.load();
+    if (!state) {
+      return false;
+    }
+
+    return state.failedSteps.includes(stepName);
   }
 
   /**

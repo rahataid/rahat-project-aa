@@ -191,7 +191,23 @@ export class DeploymentPipeline {
       const isRequired = step.required !== false; // Default to true if not specified
 
       try {
+        Logger.debug(`About to execute step.command() for '${step.name}'...`);
         await step.command();
+        Logger.debug(`step.command() completed for '${step.name}'`);
+
+        // Only save checkpoint/mark complete if command succeeded (didn't throw)
+        // Check if step was already marked as failed (command may have marked it)
+        Logger.debug(`Checking if step '${step.name}' was marked as failed...`);
+        const isFailed = await this.stateManager.isStepFailed(step.name);
+        if (isFailed) {
+          // Step was marked as failed by command - don't mark as complete
+          Logger.error(`Step '${step.name}' was marked as failed by command`);
+          throw new Error(`Step '${step.name}' failed`);
+        }
+
+        Logger.debug(
+          `Step '${step.name}' was not marked as failed, proceeding to save checkpoint...`
+        );
 
         // Save checkpoint if configured (this ensures step is marked complete and state is saved)
         if (step.checkpoint) {
@@ -209,7 +225,10 @@ export class DeploymentPipeline {
 
         Logger.success(`Step '${step.name}' completed`);
       } catch (error: any) {
-        Logger.error(`Step '${step.name}' failed`, error);
+        Logger.error(`Step '${step.name}' failed - entering catch block`, {
+          message: error?.message,
+          stack: error?.stack,
+        });
         // Ensure failure is saved to state
         await this.stateManager.markStepFailed(step.name, error);
 
