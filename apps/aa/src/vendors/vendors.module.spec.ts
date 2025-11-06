@@ -4,9 +4,11 @@ import { VendorsService } from './vendors.service';
 import { PrismaService } from '@rumsan/prisma';
 import { ReceiveService } from '@rahataid/stellar-sdk';
 import { SettingsService } from '@rumsan/settings';
-import { CORE_MODULE } from '../constants';
+import { CORE_MODULE, BQUEUE } from '../constants';
 import { ClientProxy } from '@nestjs/microservices';
 import { VendorTokenRedemptionService } from './vendorTokenRedemption.service';
+import { getQueueToken } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 describe('VendorsModule', () => {
   let module: TestingModule;
@@ -61,6 +63,10 @@ describe('VendorsModule', () => {
     getVendorTokenRedemptionStats: jest.fn(),
   };
 
+  const mockVendorCVAPayoutQueue = {
+    add: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Mock the SettingsService to return stellar settings
     mockSettingsService.getPublic.mockResolvedValue({
@@ -108,6 +114,10 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
         },
       ],
     }).compile();
@@ -216,6 +226,10 @@ describe('VendorsModule', () => {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
         },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
+        },
       ],
     }).compile();
 
@@ -263,6 +277,10 @@ describe('VendorsModule', () => {
         {
           provide: VendorTokenRedemptionService,
           useValue: mockVendorTokenRedemptionService,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
         },
       ],
     }).compile();
