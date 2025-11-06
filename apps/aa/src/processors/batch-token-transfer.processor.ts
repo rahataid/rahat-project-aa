@@ -241,14 +241,18 @@ export class BatchTokenTransferProcessor {
           );
           continue;
         }
+        const formattedAmountBn = ethers.parseUnits(
+          transfer.amount.toString(),
+          decimal
+        );
         console.log('transfer amount ', transfer.amount);
-        console.log('decimal ', decimal);
+        console.log('decimal ', decimal, formattedAmountBn);
 
         multicallTxnPayload.push([
           transfer.beneficiaryWalletAddress,
           transfer.vendorWalletAddress,
           CASH_TOKEN_ADDRESS,
-          ethers.formatUnits(transfer.amount, decimal),
+          formattedAmountBn,
         ]);
       }
 
