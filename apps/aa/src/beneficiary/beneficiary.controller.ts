@@ -11,10 +11,14 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
 export class BeneficiaryController {
-  constructor(private readonly beneficiaryService: BeneficiaryService) {}
+  constructor(
+    private readonly beneficiaryService: BeneficiaryService,
+    private readonly beneficiaryMultisigService: BeneficiaryMultisigService
+  ) {}
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   // findAll(data) {
@@ -172,4 +176,22 @@ export class BeneficiaryController {
   assignToken() {
     return this.beneficiaryService.assignToken();
   }
+
+  // ***** multisig starts ********** //
+  @MessagePattern({
+    cmd: JOBS.MULTISIG.GET_SAFE_OWNER,
+    uuid: process.env.PROJECT_ID,
+  })
+  getOwnersList() {
+    return this.beneficiaryMultisigService.getOwnersList();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.MULTISIG.CREATE_SAFE_TRANSACTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  createSafeTransaction(@Payload() payload) {
+    return this.beneficiaryMultisigService.createSafeTransaction(payload);
+  }
+  // ***** multisig ends ********** //
 }
