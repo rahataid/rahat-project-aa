@@ -13,10 +13,37 @@ import {
 @Injectable()
 export class BeneficiaryMultisigService {
   private safeApiKit: SafeApiKit;
-  constructor(protected prisma: PrismaService) {
-    this.safeApiKit = new SafeApiKit({
-      chainId: BigInt(process.env.CHAIN_ID),
+  private NETWORK_PROVIDER: string;
+  private SAFE_PROPOSER_PRIVATE_ADDRESS: string;
+  constructor(protected prisma: PrismaService) {}
+
+  async onModuleInit() {
+    const chainSettings = await this.prisma.setting.findFirst({
+      where: {
+        name: 'CHAIN_SETTINGS',
+      },
     });
+
+    const safeProposerPrivateKeySetting = await this.prisma.setting.findFirst({
+      where: {
+        name: 'SAFE_PROPOSER_PRIVATE_ADDRESS',
+      },
+    });
+
+    if (!chainSettings || !safeProposerPrivateKeySetting) {
+      throw new Error(
+        'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS may be missing'
+      );
+    }
+
+    const CHAIN_ID = chainSettings.value['chainId'];
+    this.safeApiKit = new SafeApiKit({
+      chainId: BigInt(CHAIN_ID),
+    });
+
+    this.NETWORK_PROVIDER = chainSettings.value['rpcUrl'];
+    this.SAFE_PROPOSER_PRIVATE_ADDRESS =
+      safeProposerPrivateKeySetting.value as string;
   }
 
   async getSafeInstance() {
@@ -29,8 +56,8 @@ export class BeneficiaryMultisigService {
     });
 
     const safeKit = await Safe.init({
-      provider: process.env.NETWORK_PROVIDER,
-      signer: process.env.SAFE_PROPOSER_PRIVATE_ADDRESS,
+      provider: this.NETWORK_PROVIDER,
+      signer: this.SAFE_PROPOSER_PRIVATE_ADDRESS,
       safeAddress: SAFE_ADDRESS.value['ADDRESS'],
     });
 
@@ -85,7 +112,7 @@ export class BeneficiaryMultisigService {
     const tokenContract = new ethers.Contract(
       tokenAddress,
       erc20Abi,
-      new JsonRpcProvider(process.env.NETWORK_PROVIDER)
+      new JsonRpcProvider(this.NETWORK_PROVIDER)
     );
     // getWalletFromPrivateKey(process.env.SAFE_PROPOSER_PRIVATE_ADDRESS));
     const decimals = await tokenContract.decimals();
@@ -118,7 +145,7 @@ export class BeneficiaryMultisigService {
       const safeTxHash = await safeWallet.getTransactionHash(safeTransaction);
       const signature = await safeWallet.signHash(safeTxHash);
       const deployerWallet = getWalletFromPrivateKey(
-        process.env.SAFE_PROPOSER_PRIVATE_ADDRESS
+        this.SAFE_PROPOSER_PRIVATE_ADDRESS
       );
       const safeAddress = await safeWallet.getAddress();
 
