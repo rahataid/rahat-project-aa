@@ -82,17 +82,36 @@ export class BeneficiaryMultisigService {
 
       const address = SAFE_ADDRESS.value['ADDRESS'];
 
+      const CONTRACTS = await this.prisma.setting.findUnique({
+        where: {
+          name: 'CONTRACTS',
+        },
+      });
+      const aaAddress = CONTRACTS.value['AAPROJECT']['ADDRESS'];
+      const tokenAddress = CONTRACTS.value['RAHATTOKEN']['ADDRESS'];
+
+      //TODO: Seperate function to get all transactions//
+      const res = await this.safeApiKit.getAllTransactions(address, {
+        executed: true,
+      });
+      const filteredTxns =
+        res?.results?.filter((tx: any) => tx.to === tokenAddress) || [];
+      const transfers = filteredTxns?.flatMap((tx: any) => tx.transfers);
+      //***//
+
       const contract = await createContractInstance(
         'RAHATTOKEN',
         this.prisma.setting
       );
-
+      const projectBalance = await contract.balanceOf.staticCall(aaAddress);
       const safeBalance = await contract.balanceOf.staticCall(address);
       const decimals = await contract.decimals.staticCall();
       const safeInfo = {
         ...safeDetails,
-        nativeBalance: ethers.formatUnits(balance, decimals),
+        nativeBalance: ethers.formatEther(balance),
         tokenBalance: ethers.formatUnits(safeBalance, decimals),
+        projectBalance: ethers.formatUnits(projectBalance, decimals),
+        transfers,
       };
       return safeInfo;
     } catch (err) {
