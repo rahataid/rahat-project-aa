@@ -18,6 +18,20 @@ export class BeneficiaryMultisigService {
   constructor(protected prisma: PrismaService) {}
 
   async onModuleInit() {
+    const fundManagementConfig = await this.prisma.setting.findFirst({
+      where: {
+        name: 'FUNDMANAGEMENT_TAB_CONFIG',
+      },
+    });
+
+    const isSourceGnosis = fundManagementConfig?.value['tabs']?.some(
+      (tab: any) => tab.value === 'multisigWallet'
+    );
+
+    if (!isSourceGnosis) {
+      return;
+    }
+
     const chainSettings = await this.prisma.setting.findFirst({
       where: {
         name: 'CHAIN_SETTINGS',
