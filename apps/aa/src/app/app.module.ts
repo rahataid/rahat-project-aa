@@ -2,32 +2,33 @@ import { BullModule } from '@nestjs/bull';
 import { Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
+import { ActivitiesModule } from '../activities/activites.module';
 import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { CashTrackerModule } from '../cash-tracker';
+import { ChainModule } from '../chain/chain.module';
+import { CommsModule } from '../comms/comms.module';
+import { BQUEUE } from '../constants';
 import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
 import { DataSourceModule } from '../datasource/datasource.module';
+import { GrievancesModule } from '../grievances/grievances.module';
+import { InkindTrackerModule } from '../inkind-tracker';
 import { ListenersModule } from '../listeners/listeners.module';
+import { PayoutsModule } from '../payouts/payouts.module';
 import { PhasesModule } from '../phases/phases.module';
 import { ProcessorsModule } from '../processors/processors.module';
+import { QueueService } from '../queue/queue.service';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { StatsModule } from '../stats';
+import { StellarModule } from '../stellar/stellar.module';
 import { TriggersModule } from '../triggers/triggers.module';
+import { VendorsModule } from '../vendors/vendors.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CommsModule } from '../comms/comms.module';
-import { ActivitiesModule } from '../activities/activites.module';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { StellarModule } from '../stellar/stellar.module';
-import { VendorsModule } from '../vendors/vendors.module';
-import { PayoutsModule } from '../payouts/payouts.module';
-import { QueueService } from '../queue/queue.service';
-import { BQUEUE } from '../constants';
-import { ChainModule } from '../chain/chain.module';
-import { CashTrackerModule } from '../cash-tracker';
-import { InkindTrackerModule } from '../inkind-tracker';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { InkindTrackerModule } from '../inkind-tracker';
     PayoutsModule,
     ChainModule,
     CashTrackerModule,
+    GrievancesModule,
     InkindTrackerModule,
   ],
   controllers: [AppController],

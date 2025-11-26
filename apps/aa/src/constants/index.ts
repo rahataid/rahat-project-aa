@@ -292,6 +292,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.grievances.update',
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
+    GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
   },
   EVM: {
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
