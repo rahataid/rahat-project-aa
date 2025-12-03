@@ -1,6 +1,6 @@
-import { InjectQueue, Process, Processor } from '@nestjs/bull';
+import {  Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
-import { Job, Queue } from 'bull';
+import { Job } from 'bull';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
@@ -9,13 +9,13 @@ import {
   VendorOfflinePayoutDto,
   BeneficiaryOtpData,
   CreateClaimDto,
+  VendorOnlinePayoutDto,
 } from '../vendors/dto/vendor-offline-payout.dto';
 import { StellarService } from '../stellar/stellar.service';
-import { SettingsService } from '@rumsan/settings';
 import bcrypt from 'bcryptjs';
-import { StellarModule } from '../stellar/stellar.module';
+import { Prisma } from '@prisma/client';
 
-@Processor(BQUEUE.VENDOR_OFFLINE)
+@Processor(BQUEUE.VENDOR_CVA)
 @Injectable()
 export class VendorOfflinePayoutProcessor {
   private readonly logger = new Logger(VendorOfflinePayoutProcessor.name);
@@ -24,10 +24,103 @@ export class VendorOfflinePayoutProcessor {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prismaService: PrismaService,
     private readonly stellarService: StellarService,
-    private readonly settingService: SettingsService,
-    @InjectQueue(BQUEUE.VENDOR_OFFLINE)
-    private readonly vendorOfflineQueue: Queue
   ) {}
+
+  @Process({ name: JOBS.VENDOR.ONLINE_PAYOUT, concurrency: 5 })
+  async processVendorOnlinePayout(job: Job<VendorOnlinePayoutDto>) {
+    const { data } = job;
+    try {
+      this.logger.log(
+        `Processing vendor online payout for group ${data.beneficiaryGroupUuid}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      // Fetch beneficiary group tokens and payout details
+      const beneficiaryGroupTokens =
+        await this.prismaService.beneficiaryGroupTokens.findFirst({
+          where: { groupId: data.beneficiaryGroupUuid },
+          include: {
+            payout: true,
+            beneficiaryGroup: {
+              include: {
+                beneficiaries: {
+                  include: {
+                    beneficiary: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      if (!beneficiaryGroupTokens) {
+        throw new Error(
+          `No beneficiary group tokens found for group ${data.beneficiaryGroupUuid}`
+        );
+      }
+
+      const { payout, beneficiaryGroup } = beneficiaryGroupTokens;
+
+      // Validate amount is provided
+      if (!data.amount) {
+        throw new Error('Amount is required for vendor offline payout');
+      }
+
+      // Extract beneficiaries from the group
+      const beneficiaries = beneficiaryGroup.beneficiaries.map(
+        (bg) => bg.beneficiary
+      );
+
+      if (!beneficiaries || beneficiaries.length === 0) {
+        throw new Error(
+          `No beneficiaries found in group ${data.beneficiaryGroupUuid}`
+        );
+      }
+
+      this.logger.log(
+        `Found ${beneficiaries.length} beneficiaries in group ${data.beneficiaryGroupUuid}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      // Calculate amount per beneficiary (total amount divided by number of beneficiaries)
+      const totalAmount = parseFloat(data.amount);
+      const amountPerBeneficiary = totalAmount / beneficiaries.length;
+
+      this.logger.log(
+        `Total amount: ${data.amount}, Beneficiaries: ${beneficiaries.length}, Amount per beneficiary: ${amountPerBeneficiary}`,
+        VendorOfflinePayoutProcessor.name
+      );
+
+      const redeemLogPayloads: Prisma.BeneficiaryRedeemCreateManyInput[] =
+        beneficiaries.map((beneficiary) => ({
+          beneficiaryWalletAddress: beneficiary.walletAddress,
+
+          amount: amountPerBeneficiary,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'PENDING',
+          isCompleted: false,
+          payoutId: payout.uuid,
+          info: { mode: 'ONLINE' },
+        }));
+
+      // Create log entry for online payout processing
+      await this.prismaService.beneficiaryRedeem.createMany({
+        data: redeemLogPayloads,
+      });
+
+      this.logger.log(
+        `Successfully processed vendor Online payout for group ${data.beneficiaryGroupUuid}`,
+        VendorOfflinePayoutProcessor.name
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to process vendor online payout for group ${job.data.beneficiaryGroupUuid}: ${error.message}`,
+        error.stack,
+        VendorOfflinePayoutProcessor.name
+      );
+      throw error;
+    }
+  }
 
   @Process({ name: JOBS.VENDOR.OFFLINE_PAYOUT, concurrency: 5 })
   async processVendorOfflinePayout(job: Job<VendorOfflinePayoutDto>) {

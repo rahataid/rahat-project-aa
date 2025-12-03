@@ -69,7 +69,7 @@ import { AppService } from './app.service';
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.VENDOR_OFFLINE,
+      name: BQUEUE.VENDOR_CVA,
     }),
     BullModule.registerQueue({
       name: BQUEUE.COMMUNICATION,
