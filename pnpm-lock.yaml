@@ -4824,17 +4824,17 @@ packages:
     dev: false
 
   /@rumsan/communication@0.0.17:
-    resolution: {integrity: sha512-bqkJVzonn78LAaZlSwQ/WVuLEkS4DuPJRVA+z35LzWKImDS8jA1RzJMA6r7nP8LXsg+r0nJms6bj0L9L1Lm/jQ==, tarball: https://npm.pkg.github.com/download/@rumsan/communication/0.0.17/7ae8bd62a30349860de4ec5d38647add940e6cff}
+    resolution: {integrity: sha512-LYZlfjyiOzpvp73bOie3Okx9uepvUO95D6PI+MDxIHnZnfsTOCcYBYtNzoJ4W+05zD1QPc+QyfAvUs8iA1oZHg==}
     dev: false
 
   /@rumsan/connect@1.0.0:
-    resolution: {integrity: sha512-zmItGc4vruGL2SSaOOTB0g1tME1Ss3MjwKRxC5rwh5pIW4oskAZAXHhnaPUTcyAw3S/wwStNYjImJJf3HO1TtQ==, tarball: https://npm.pkg.github.com/download/@rumsan/connect/1.0.0/024fb0bb3e60c1fa56a0317a12b093755bea7436}
+    resolution: {integrity: sha512-zmItGc4vruGL2SSaOOTB0g1tME1Ss3MjwKRxC5rwh5pIW4oskAZAXHhnaPUTcyAw3S/wwStNYjImJJf3HO1TtQ==}
     dependencies:
       tslib: 2.8.1
     dev: false
 
   /@rumsan/core@3.0.116(@nestjs/core@10.4.20)(prisma@5.10.2)(reflect-metadata@0.1.14):
-    resolution: {integrity: sha512-BMpikkcSDSqTr3TSpFjfPyg0g9r2cYchqySi5XNOuf4wwAExSdx5b9UNCrMpN8iBaUNs13B8T29Z7CsDDo/yMA==, tarball: https://npm.pkg.github.com/download/@rumsan/core/3.0.116/ffe97a6a5986d871820d517b2ddb82d7936c0b01}
+    resolution: {integrity: sha512-+IGGUZp7cdmuvdFa6hvdxpC/rfgJets18UKJxTgjDLPgja/B4h2t2sXsYd67XGWM4yciCLmuiT+i+2JSXdUPBw==}
     dependencies:
       '@nestjs/common': 10.4.20(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2)
       '@nestjs/swagger': 7.4.2(@nestjs/common@10.4.20)(@nestjs/core@10.4.20)(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)
@@ -4853,7 +4853,7 @@ packages:
     dev: false
 
   /@rumsan/prisma@1.0.112(class-transformer@0.5.1)(class-validator@0.14.3)(prisma@5.10.2)(reflect-metadata@0.1.14)(rxjs@7.8.2):
-    resolution: {integrity: sha512-j0POzEFg62uL0sadQI72KSaY9nD5iIX/itCTU1rZSWhCyGxRw3h2AJhAx9hPplTKsj2KpRAOqHObfiHtOvEIGw==, tarball: https://npm.pkg.github.com/download/@rumsan/prisma/1.0.112/71fbb6c324ef1c72bd9e85a8eeb483fdf787c28a}
+    resolution: {integrity: sha512-zuWcTBQuWGCWHkVVg/n4KsM4+1Sbpc3Wzwld/SZ4SGX66Gul2ihuhrmk8rBj/ZRg22OYIuibqv8lkBzlGg3hig==}
     dependencies:
       '@nestjs/common': 10.4.20(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2)
       '@prisma/client': 5.10.2(prisma@5.10.2)
@@ -4868,7 +4868,7 @@ packages:
     dev: false
 
   /@rumsan/prisma@1.0.130(class-transformer@0.5.1)(class-validator@0.14.3)(prisma@5.10.2)(reflect-metadata@0.1.14)(rxjs@7.8.2):
-    resolution: {integrity: sha512-tIWGpPr+vL1gBaAC3xxEAtzpRApmHaAFQ2k+RBLxOJBTCu/iVv/poJSiqPFT4Ez9Knn4+BiTisGfPpjYrcvPrQ==, tarball: https://npm.pkg.github.com/download/@rumsan/prisma/1.0.130/dfca28563b229e9ea50bfb28f21af3da5469a352}
+    resolution: {integrity: sha512-gkYYQtll4BhEOPARjEIxdxgZlq2yEV/lOXkg1JGiNnLVMIaCgtq3tOucsiuucwqhc5MSEbNqaBg5wA94jScdAg==}
     dependencies:
       '@nestjs/common': 10.4.20(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2)
       '@prisma/client': 5.10.2(prisma@5.10.2)
@@ -4886,7 +4886,7 @@ packages:
     dev: false
 
   /@rumsan/sdk@0.0.22(@nestjs/core@10.4.20)(prisma@5.10.2)(reflect-metadata@0.1.14):
-    resolution: {integrity: sha512-sKa9mHR3Peck39wH5jaMiSt9o1YsFGhi9C5fTuLRL2Di6OjHG0BxZMl8dUQHdA3dD7QzgXuM7IdQLqoVy1Zw8w==, tarball: https://npm.pkg.github.com/download/@rumsan/sdk/0.0.22/a1c807d431e7c9832dc12eb0194502edb98b55ca}
+    resolution: {integrity: sha512-j6ZRI9+V67HRcMwBTYqnLSceP8kfNKHLrYQ3EbiQpuauriNvXcDzGlCcqDEpUWQoe4NuIbQQw/6UjEaPbQwXMQ==}
     dependencies:
       '@nestjs/common': 10.4.20(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2)
       '@nestjs/swagger': 7.4.2(@nestjs/common@10.4.20)(@nestjs/core@10.4.20)(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)
@@ -4909,7 +4909,7 @@ packages:
     dev: false
 
   /@rumsan/sdk@0.0.41:
-    resolution: {integrity: sha512-trrVSzK57ZJraXu4wFEyzBM63omLowxPF1qJT8yOIgovuIS0LK3CM1rocE6p0kG6HWkm/nCqpUvhQKJogCkRrg==, tarball: https://npm.pkg.github.com/download/@rumsan/sdk/0.0.41/1662146719ff5aef7871d89b1de5a76869b94038}
+    resolution: {integrity: sha512-5JfUoPPnU/lMi+ohBGA0uuafNaD9R3Ktuno9vPjEEKrfxLqcVoE5lutDbgFm44Oz0mLujRrJGX8suWuwtX0y0g==}
     dependencies:
       axios: 1.13.2
       tslib: 2.6.2
@@ -4918,7 +4918,7 @@ packages:
     dev: false
 
   /@rumsan/sdk@0.0.42:
-    resolution: {integrity: sha512-/u9Oj9UtyZxMqpQoYZijoVq2mdO/ejxUYB2Bevxc5jAySo5Qb9rwmIraki2vNhXoZTnNwD8asaV46621o+1ZxQ==, tarball: https://npm.pkg.github.com/download/@rumsan/sdk/0.0.42/88f1ecdcfbe72064f64782ae015c94178c35a1a7}
+    resolution: {integrity: sha512-aM5CjVIQhkiUuAWCd0RZDzl0i+dRw6VRslBUasFy9UJOlXZ9rmlJLLiX/2J7S4UTraAlfzKlWUsTQBgAeS2tmA==}
     dependencies:
       axios: 1.13.2
       tslib: 2.6.2
@@ -4927,7 +4927,7 @@ packages:
     dev: false
 
   /@rumsan/settings@0.0.108(@nestjs/core@10.4.20)(prisma@5.10.2)(reflect-metadata@0.1.14):
-    resolution: {integrity: sha512-fph5QtpQF+x+EF/Ie8gI5572TRJQQtfjVTQQlisXJc0+6QE6IDtjR7eOn83ffCnyglWvUHTqrtwSLINRftkFiA==, tarball: https://npm.pkg.github.com/download/@rumsan/settings/0.0.108/ff6002fd14f442ab9875712765abb973cd7e90e7}
+    resolution: {integrity: sha512-wiCJqtrcBojWnfS1UTqmvVottm3kvEys0fPSjK5R7GiLHo3EnY6EozQzHtNQdbJ2HntFIGS7iYstMnPq80DLqg==}
     dependencies:
       '@nestjs/common': 10.4.20(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2)
       '@nestjs/swagger': 7.4.2(@nestjs/common@10.4.20)(@nestjs/core@10.4.20)(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)
