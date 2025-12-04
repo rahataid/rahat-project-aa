@@ -29,6 +29,14 @@ import { TriggersModule } from '../triggers/triggers.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CommsModule } from '../comms/comms.module';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { StellarModule } from '../stellar/stellar.module';
+import { VendorsModule } from '../vendors/vendors.module';
+import { PayoutsModule } from '../payouts/payouts.module';
+import { QueueService } from '../queue/queue.service';
+import { BQUEUE } from '../constants';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
@@ -89,16 +97,12 @@ import { AppService } from './app.service';
     TriggersModule,
     DataSourceModule,
     ProcessorsModule,
-    ActivitiesModule,
-    PhasesModule,
-    ActivityCategoriesModule,
     BeneficiaryModule,
     StakeholdersModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
     StellarModule,
-    DailyMonitoringModule,
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,
