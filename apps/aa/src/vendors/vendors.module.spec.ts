@@ -81,6 +81,10 @@ describe('VendorsModule', () => {
     getVendorTokenRedemptionStats: jest.fn(),
   };
 
+  const mockVendorCVAPayoutQueue = {
+    add: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Mock the SettingsService to return stellar settings
     mockSettingsService.getPublic.mockResolvedValue({
@@ -169,7 +173,9 @@ describe('VendorsModule', () => {
   it('should create ReceiveService with correct configuration', () => {
     expect(receiveService).toBeDefined();
     expect(receiveService).toBeInstanceOf(ReceiveService);
-    expect(mockSettingsService.getPublic).toHaveBeenCalledWith('STELLAR_SETTINGS');
+    expect(mockSettingsService.getPublic).toHaveBeenCalledWith(
+      'STELLAR_SETTINGS'
+    );
   });
 
   it('should have correct module dependencies', () => {
@@ -255,7 +261,8 @@ describe('VendorsModule', () => {
       ],
     }).compile();
 
-    const receiveServiceWithoutSettings = moduleWithoutSettings.get<ReceiveService>(ReceiveService);
+    const receiveServiceWithoutSettings =
+      moduleWithoutSettings.get<ReceiveService>(ReceiveService);
     expect(receiveServiceWithoutSettings).toBeDefined();
 
     await moduleWithoutSettings.close();
@@ -311,7 +318,8 @@ describe('VendorsModule', () => {
       ],
     }).compile();
 
-    const receiveServiceWithEmptySettings = moduleWithEmptySettings.get<ReceiveService>(ReceiveService);
+    const receiveServiceWithEmptySettings =
+      moduleWithEmptySettings.get<ReceiveService>(ReceiveService);
     expect(receiveServiceWithEmptySettings).toBeDefined();
 
     await moduleWithEmptySettings.close();
@@ -319,6 +327,8 @@ describe('VendorsModule', () => {
 
   it('should inject SettingsService into ReceiveService factory', () => {
     // Verify that SettingsService was injected and called
-    expect(mockSettingsService.getPublic).toHaveBeenCalledWith('STELLAR_SETTINGS');
+    expect(mockSettingsService.getPublic).toHaveBeenCalledWith(
+      'STELLAR_SETTINGS'
+    );
   });
 });
