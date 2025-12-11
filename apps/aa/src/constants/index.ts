@@ -77,27 +77,6 @@ export const JOBS = {
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
   },
-  RIVER_STATIONS: {
-    GET_DHM: 'aa.jobs.riverStations.getDhm',
-  },
-  WATER_LEVELS: {
-    GET_DHM: 'aa.jobs.waterLevels.getDhm',
-    GET_GLOFAS: 'aa.jobs.waterLevels.getGlofas',
-  },
-  SCHEDULE: {
-    ADD: 'aa.jobs.schedule.add',
-  },
-  TRIGGERS: {
-    DEV_ONLY: 'aa.jobs.triggers.devOnly',
-    GET_ALL: 'aa.jobs.triggers.getAll',
-    GET_ONE: 'aa.jobs.triggers.getOne',
-    ADD: 'aa.jobs.triggers.add',
-    REMOVE: 'aa.jobs.triggers.remove',
-    UPDATE: 'aa.jobs.triggers.update',
-    ACTIVATE: 'aa.jobs.triggers.activate',
-    REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
-    COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
-  },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
@@ -153,33 +132,6 @@ export const JOBS = {
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
     VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
-  ACTIVITIES: {
-    GET_ONE: 'aa.jobs.activities.getOne',
-    GET_ALL: 'aa.jobs.activities.getAll',
-    GET_HAVING_COMMS: 'aa.jobs.activities.getHavingComms',
-    ADD: 'aa.jobs.activities.add',
-    REMOVE: 'aa.jobs.activities.remove',
-    UPDATE: 'aa.jobs.activities.update',
-    UPDATE_STATUS: 'aa.jobs.activities.updateStatus',
-    COMMUNICATION: {
-      TRIGGER: 'aa.jobs.activity.communication.trigger',
-      SESSION_LOGS: 'aa.jobs.activities.communication.sessionLogs',
-      RETRY_FAILED: 'aa.jobs.activities.communication.retryFailed',
-      GET_STATS: 'aa.jobs.activities.communication.getStats',
-    },
-  },
-  ACTIVITY_CATEGORIES: {
-    GET_ALL: 'aa.jobs.activityCategories.getAll',
-    ADD: 'aa.jobs.activityCategories.add',
-    REMOVE: 'aa.jobs.activityCategories.remove',
-  },
-  PHASES: {
-    GET_ONE: 'aa.jobs.phases.getOne',
-    GET_ALL: 'aa.jobs.phases.getAll',
-    GET_STATS: 'aa.jobs.phases.getStats',
-    ADD_TRIGGERS: 'aa.jobs.phases.addTriggers',
-    REVERT_PHASE: 'aa.jobs.phases.revertPhase',
-  },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
     GET_ONE: 'aa.jobs.stakeholders.getOne',
@@ -209,13 +161,6 @@ export const JOBS = {
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
-  },
-  DAILY_MONITORING: {
-    ADD: 'aa.jobs.dailyMonitoring.add',
-    GET_ALL: 'aa.jobs.dailyMonitoring.getAll',
-    GET_ONE: 'aa.jobs.dailyMonitoring.getOne',
-    UPDATE: 'aa.jobs.dailyMonitoring.update',
-    REMOVE: 'aa.jobs.dailyMonitoring.remove',
   },
   VENDOR: {
     REIMBURSE: {
@@ -252,11 +197,6 @@ export const JOBS = {
 };
 
 export const EVENTS = {
-  PHASE_ACTIVATED: 'events.phase_activated',
-  PHASE_REVERTED: 'events.phase_reverted',
-  ACTIVITY_COMPLETED: 'events.activity_completed',
-  ACTIVITY_DELETED: 'events.activity_deleted',
-  ACTIVITY_ADDED: 'events.activity_added',
   BENEFICIARY_CREATED: 'events.beneficiary_created',
   BENEFICIARY_REMOVED: 'events.beneficiary_updated',
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
