@@ -3,8 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import { JsonRpcProvider, Wallet } from 'ethers';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
-// Load environment variables from .env.setup if it exists, otherwise fallback to .env
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env.prod, then .env
 dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config({ path: `${__dirname}/.env.prod` });
 dotenv.config(); // Fallback to default .env
 
 interface ValidationResult {

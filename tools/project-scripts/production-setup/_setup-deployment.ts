@@ -8,7 +8,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { DeployedContract } from '../types/blockchain';
 import axios from 'axios';
 // Load environment variables from .env.setup if it exists, otherwise fallback to .env
-dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config({ path: `${__dirname}/.env.prod` });
 dotenv.config(); // Fallback to default .env
 
 const corePrisma = new PrismaClient({
@@ -48,8 +48,8 @@ class ContractSeed extends ContractLib {
     // const contractDetails = await this.getDevSettings();
     // console.log('contractDetails', contractDetails);
 
-     const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
-     const { data } = await axios.get(url);
+    const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
+    const { data } = await axios.get(url);
     const contractDetails = data?.data;
     const RahatAccessManagerAddress =
       contractDetails.value.RAHATACCESSMANAGER.address;
@@ -211,7 +211,7 @@ class ContractSeed extends ContractLib {
       value: network,
       isPrivate: false,
     };
-   await settings.create(data);
+    await settings.create(data);
   }
 
   public async addChainSettings() {

@@ -4,9 +4,10 @@ SCRIPT_DIR=$(dirname "$0")
 
 get_env_value() {
   local var_name=$1
-  # Try .env.setup first, then fallback to .env.prod
+  echo "Getting environment value for $var_name"
   local value=$(grep "^${var_name}=" "$SCRIPT_DIR/.env.setup" 2>/dev/null | cut -d '=' -f2)
   if [ -z "$value" ]; then
+    echo "Environment value not found in .env.setup, trying .env.prod"
     value=$(grep "^${var_name}=" "$SCRIPT_DIR/.env.prod" 2>/dev/null | cut -d '=' -f2)
   fi
   echo "$value"
