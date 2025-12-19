@@ -194,7 +194,7 @@ export class BatchTokenTransferProcessor {
         'FUNDMANAGEMENT_TAB_CONFIG'
       );
 
-      const isSourceGnosis = fundManagementConfig.value['tabs']?.some(
+      const isSourceGnosis = fundManagementConfig.tabs?.some(
         (tab: any) => tab.value === 'multisigWallet'
       );
 
