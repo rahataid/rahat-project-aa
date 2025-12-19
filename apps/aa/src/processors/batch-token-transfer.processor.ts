@@ -190,14 +190,23 @@ export class BatchTokenTransferProcessor {
     batchNumber: number
   ) {
     try {
-      const CASH_TOKEN_ADDRESS = await this.getFromSettings(
-        'CASH_TOKEN_CONTRACT'
+      const fundManagementConfig = await this.getFromSettings(
+        'FUNDMANAGEMENT_TAB_CONFIG'
+      );
+
+      const isSourceGnosis = fundManagementConfig.value['tabs']?.some(
+        (tab: any) => tab.value === 'multisigWallet'
       );
 
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
       );
       const contract = await this.getFromSettings('CONTRACT');
+
+      let CASH_TOKEN_ADDRESS = isSourceGnosis
+        ? contract.AAPROJECT.ADDRESS
+        : await this.getFromSettings('CASH_TOKEN_CONTRACT');
+
       const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
       const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
 
