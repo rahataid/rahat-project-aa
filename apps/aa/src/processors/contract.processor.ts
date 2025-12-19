@@ -5,6 +5,7 @@ import { Job } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
 import { JsonRpcProvider, ethers } from 'ethers';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { lowerCaseObjectKeys } from '../utils/utility';
 
 type IStringArr = string[];
 type ICallData = IStringArr[];
@@ -736,16 +737,41 @@ export class ContractProcessor {
       );
 
       const multicallTxnPayload = [];
+
+      const contract = await this.getFromSettings('CONTRACT');
+      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+
+      const rpcUrl = chainConfig.rpcUrl;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        provider
+      );
+
+      const decimal = await rahatTokenContract.decimals.staticCall();
+
       for (const benf of benfs) {
         if (benf.benTokens) {
-          multicallTxnPayload.push([benf.walletAddress, benf.benTokens]);
+          const formattedAmountBn = ethers.parseUnits(
+            benf.benTokens.toString(),
+            decimal
+          );
+
+          this.logger.log(
+            `Contract process: Converting amount ${benf.benTokens} to formatted amount ${formattedAmountBn} for beneficiary ${benf.walletAddress} using decimal ${decimal}`
+          );
+          multicallTxnPayload.push([benf.walletAddress, formattedAmountBn]);
         }
       }
 
-      const {
-        contract: aaContract,
-      } = await this.createContractInstanceSign('AAPROJECT');
-    
+      const { contract: aaContract } = await this.createContractInstanceSign(
+        'AAPROJECT'
+      );
+
       const txn = await this.multiSend(
         aaContract,
         'assignTokenToBeneficiary',
@@ -788,6 +814,25 @@ export class ContractProcessor {
       provider,
       wallet,
     };
+  }
+
+  private async getFromSettings(key: string): Promise<any> {
+    try {
+      const settings = await this.prisma.setting.findUnique({
+        where: {
+          name: key,
+        },
+      });
+
+      if (!settings?.value) {
+        throw new Error(`${key} not found`);
+      }
+
+      return settings.value;
+    } catch (error) {
+      this.logger.error(`Error getting setting ${key}: ${error.message}`);
+      throw error;
+    }
   }
 
   async getContractByName(contractName: string) {
