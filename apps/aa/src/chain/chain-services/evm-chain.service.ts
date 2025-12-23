@@ -1149,7 +1149,13 @@ export class EvmChainService implements IChainService {
   private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
     try {
       const beneficiary = await lastValueFrom(
-        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
+          {
+            phone,
+            projectUUID: process.env.PROJECT_UUID,
+          }
+        )
       );
 
       if (!beneficiary) {
