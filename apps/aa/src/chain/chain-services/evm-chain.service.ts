@@ -1163,6 +1163,11 @@ export class EvmChainService implements IChainService {
         throw new RpcException('Beneficiary not found');
       }
 
+      if (!beneficiary.groupedBeneficiaries) {
+        this.logger.error('Beneficiary has no grouped beneficiaries');
+        throw new RpcException('Beneficiary has no grouped beneficiaries');
+      }
+
       // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
       const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
         (g) => g.groupPurpose !== 'COMMUNICATION'
