@@ -19,6 +19,7 @@ import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dt
 import { GroupPurpose, Prisma } from '@prisma/client';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
+import { ethers } from 'ethers';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -956,6 +957,13 @@ export class BeneficiaryService {
 
       // Initialize total balance
       let totalBalance = 0n;
+      const metadataResponse = await axios.post(alchemyApiUrl.URL, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'alchemy_getTokenMetadata',
+        params: [tokenAddress],
+      });
+      const decimals = metadataResponse.data?.result?.decimals ?? 18;
 
       // Fetch balances for each wallet
       await Promise.all(
@@ -966,7 +974,6 @@ export class BeneficiaryService {
             method: 'alchemy_getTokenBalances',
             params: [wallet, [tokenAddress]],
           });
-
           const tokenBalances = response.data?.result?.tokenBalances || [];
           for (const balance of tokenBalances) {
             if (balance.tokenBalance) {
@@ -990,8 +997,9 @@ export class BeneficiaryService {
             updatedAt: true,
           },
         });
+      const formattedData = Number(totalBalance);
       return {
-        totalBalance: totalBalance.toString(),
+        totalBalance: ethers.formatUnits(formattedData.toString(), decimals),
         latestCompletedRedeemAt: latestCompletedRedeem?.updatedAt || null,
       };
     } catch (error) {
