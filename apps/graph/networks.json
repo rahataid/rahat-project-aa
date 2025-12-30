@@ -1,52 +1,82 @@
 {
-    "arbitrum-sepolia": {
-        "AAProject": {
-            "address": "0x8f21ae33d6bf9C23EF79a164632A44F2bb2daeeA",
-            "startBlock": 60735707
-        },
-        "RahatToken": {
-            "address": "0xe5c02a14153ec1227B1e42f72B57E038144c3231",
-            "startBlock": 60735707
-        },
-        "RahatDonor": {
-            "address": "0x6371274a7c90a8563B32505d3E2E5044c39d32C1",
-            "startBlock": 60735707
-        }
+  "arbitrum-sepolia": {
+    "AAProject": {
+      "address": "0x8f21ae33d6bf9C23EF79a164632A44F2bb2daeeA",
+      "startBlock": 60735707
     },
-    "mainnet": {
-        "TriggerManager": {
-            "address": "0xDdDde5c21761aA89EA3e29C3C4A3FA16c611fF29",
-            "startBlock": 1
-        },
-        "RahatDonor": {
-            "address": "0x6e8EAaE432AC681224D95F73c18cBacdd755AE06",
-            "startBlock": 1
-        },
-        "RahatToken": {
-            "address": "0x627f4Cf449E3baBdE459a6eC609590bA5C8E7611",
-            "startBlock": 1
-        },
-        "AAProject": {
-            "address": "0xA60d0E74A0e20d99564225d7BcefFB5E97eaC6cE",
-            "startBlock": 1
-        }
+    "RahatToken": {
+      "address": "0xe5c02a14153ec1227B1e42f72B57E038144c3231",
+      "startBlock": 60735707
     },
-    "base-sepolia": {
-        "TriggerManager": {
-            "address": "0x0600171E123dE3811642448C3B891c4bc593BDED",
-            "startBlock": 13401347
-        },
-        "RahatDonor": {
-            "address": "0xB8949420C77471471341666c64E07Fd8FDdEddEd",
-            "startBlock": 13401352
-        },
-        "RahatToken": {
-            "address": "0x702968C16A0496e41272e723e4Fde16807472d32",
-            "startBlock": 13401356
-        },
-        "AAProject": {
-            "address": "0x0E0e2Df15944c6c6f72981C365907f73782235eF",
-            "startBlock": 13401361
-        }
+    "RahatDonor": {
+      "address": "0x6371274a7c90a8563B32505d3E2E5044c39d32C1",
+      "startBlock": 60735707
     }
+  },
+  "mainnet": {
+    "TriggerManager": {
+      "address": "0x0d180e78649ACFcab5bf3BAA2e323bE8A081c180",
+      "startBlock": 33326846
+    },
+    "RahatDonor": {
+      "address": "0xE1cf7d2bADF013425a67513f59714379Dd8D72d3",
+      "startBlock": 1
+    },
+    "RahatToken": {
+      "address": "0x422ceEDdCC4113daE9cAc8813BF1af8dE6F23609",
+      "startBlock": 1
+    },
+    "AAProject": {
+      "address": "0x0a10FA9Ab531F31a2C1e5a338fFa2Fd39AdCf1EA",
+      "startBlock": 1
+    },
+    "CashToken": {
+      "address": "0xc5b9ad7fE68281A17eC187AFEcF3750EDf5FC2CE",
+      "startBlock": 1
+    }
+  },
+  "base-sepolia": {
+    "TriggerManager": {
+      "address": "0x7B9bA4ee1b283bEf4efe265638c026F71c737B46",
+      "startBlock": 35055042
+    },
+    "RahatDonor": {
+      "address": "0xf567B4e80C678912e2fAFdD5462fd9642c910522",
+      "startBlock": 35055042
+    },
+    "RahatToken": {
+      "address": "0x13Da8d1463d616481B0fDa4B2C6D98F63117c32E",
+      "startBlock": 35055042
+    },
+    "AAProject": {
+      "address": "0xD4fFB546aA4711e6667eEe8cfc9E106A26668839",
+      "startBlock": 35055042
+    },
+    "CashToken": {
+      "address": "0x308F718c44205D54804F4dE2614DCbD3C1d7d168",
+      "startBlock": 35055042
+    }
+  },
+  "Base Sepolia": {
+    "TriggerManager": {
+      "address": "0x0c5A2AE3016aA3A42C1FCEF30284de8344fc9022",
+      "startBlock": 1
+    },
+    "RahatDonor": {
+      "address": "0x0bb171434eD5301f5ee2a8e893B4cae36DD5Ee6b",
+      "startBlock": 1
+    },
+    "RahatToken": {
+      "address": "0xC4E67C4BEff943478Ca8E2d383d80947Db819BeF",
+      "startBlock": 1
+    },
+    "AAProject": {
+      "address": "0x61b09Fe398F62A76bFFe5E13Ef039Aa9b8dB2ebD",
+      "startBlock": 1
+    },
+    "CashToken": {
+      "address": "0xDe4D2dE6C40570733ebDC52C8e63bE6f04D53331",
+      "startBlock": 1
+    }
+  }
 }

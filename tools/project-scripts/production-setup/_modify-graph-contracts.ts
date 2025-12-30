@@ -1,6 +1,8 @@
 import * as fs from 'fs/promises';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: `${__dirname}/.env.prod` });
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
+dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config(); // Fallback to default .env
 
 
 const modifyNetworksFile = async (
@@ -8,7 +10,7 @@ const modifyNetworksFile = async (
     networkName: string = 'mainnet',
 ) => {
     const graphNetworksPath = `${__dirname}/../../../apps/graph/networks.json`;
-    const deploymentFilePath = `${__dirname}/.data/deployments/${projectUUID}.json`;
+    const deploymentFilePath = `${__dirname}/deployments/${projectUUID}.json`;
     try {
         const contractData = await fs.readFile(deploymentFilePath, 'utf8');
         const newAddresses = JSON.parse(contractData).CONTRACTS;

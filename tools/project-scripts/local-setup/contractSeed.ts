@@ -170,198 +170,6 @@ class ContractSeed extends ContractLib {
       RahatAccessManagerAddress,
       deployerAccount
     );
-
-    // !!!! todo: Remove after test
-    // console.log('Adding donor as token owner, remove after test');
-
-    // // First, add the donor as an owner directly to the RahatToken contract
-    // // await this.callContractMethod(
-    // //   'RahatToken',
-    // //   'addOwner',
-    // //   [donorContractAddress],
-    // //   await RahatToken.contract.getAddress(),
-    // //   deployerAccount
-    // // );
-
-    // // Then, also add through the donor contract for consistency
-    // await this.callContractMethod(
-    //   'RahatDonor',
-    //   'addTokenOwner',
-    //   [await RahatToken.contract.getAddress(), donorContractAddress],
-    //   donorContractAddress,
-    //   deployerAccount
-    // );
-
-    // console.log('Minting initial tokens to project');
-    // // Mint 1,000,000 tokens (with 1 decimal, this is 1,000,000 * 10^1 = 10,000,000)
-    // const initialTokenAmount = BigInt(100000000) * BigInt(10); // 1 million tokens with 1 decimal
-    // await this.callContractMethod(
-    //   'RahatDonor',
-    //   'mintTokens',
-    //   [
-    //     await RahatToken.contract.getAddress(),
-    //     AAProjectContract.contract.target,
-    //     initialTokenAmount,
-    //   ],
-    //   donorContractAddress,
-    //   deployerAccount
-    // );
-
-    // console.log(`Minted ${initialTokenAmount} tokens to project`);
-
-    // // Test assignTokenToBeneficiary functionality
-    // console.log('Testing assignTokenToBeneficiary functionality...');
-
-    // // Generate a random beneficiary address for testing
-    // const randomWallet = this.getWalletFromPrivateKey(
-    //   '0x' + randomBytes(32).toString('hex')
-    // );
-    // const testBeneficiaryAddress = randomWallet.address.toString();
-    // const testTokenAmount = BigInt(1000) * BigInt(10); // 1000 tokens with 1 decimal
-
-    // console.log(`Test beneficiary address: ${testBeneficiaryAddress}`);
-    // console.log(`Test token amount: ${testTokenAmount.toString()}`);
-
-    // // Call assignTokenToBeneficiary method on AAProject contract
-    // console.log('Calling assignTokenToBeneficiary...');
-    // await this.callContractMethod(
-    //   'AAProject',
-    //   'assignTokenToBeneficiary',
-    //   [testBeneficiaryAddress, testTokenAmount],
-    //   AAProjectContract.contract.target.toString(),
-    //   deployerAccount
-    // );
-
-    // console.log('Token assignment completed. Verifying assignment...');
-
-    // // Wait a bit for the transaction to be processed
-    // await this.sleep(5000);
-
-    // // Verify the assignment by checking benTokens mapping
-    // console.log('Checking benTokens mapping...');
-    // const benTokensBalance = await this.callContractMethod(
-    //   'AAProject',
-    //   'benTokens',
-    //   [testBeneficiaryAddress],
-    //   AAProjectContract.contract.target.toString(),
-    //   deployerAccount
-    // );
-
-    // console.log(
-    //   `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalance.toString()} tokens in benTokens mapping`
-    // );
-
-    // // Verify both balances match
-    // if (benTokensBalance.toString() === testTokenAmount.toString()) {
-    //   console.log('✅ SUCCESS: benTokens mapping shows correct amount');
-    // } else {
-    //   console.log('❌ ERROR: benTokens mapping amount mismatch');
-    //   console.log(
-    //     `Expected: ${testTokenAmount.toString()}, Got: ${benTokensBalance.toString()}`
-    //   );
-    // }
-
-    // console.log('Token assignment test completed!');
-
-    // // Test transferTokenToVendor functionality
-    // console.log('Testing transferTokenToVendor functionality...');
-
-    // // Generate a random vendor address for testing
-    // const randomVendorWallet = this.getWalletFromPrivateKey(
-    //   '0x' + randomBytes(32).toString('hex')
-    // );
-    // const testVendorAddress = randomVendorWallet.address.toString();
-    // const transferAmount = BigInt(5) * BigInt(10); // 500 tokens with 1 decimal
-
-    // console.log(`Test vendor address: ${testVendorAddress}`);
-    // console.log(`Transfer amount: ${transferAmount.toString()}`);
-
-    // // Check project token balance before transfer
-    // console.log('Checking project token balance before transfer...');
-    // const projectTokenBalanceBefore = await this.callContractMethod(
-    //   'RahatToken',
-    //   'balanceOf',
-    //   [AAProjectContract.contract.target],
-    //   await RahatToken.contract.getAddress(),
-    //   deployerAccount
-    // );
-
-    // console.log(
-    //   `Project ${
-    //     AAProjectContract.contract.target
-    //   } has ${projectTokenBalanceBefore.toString()} tokens before transfer`
-    // );
-
-    // // Call transferTokenToVendor method on AAProject contract
-    // console.log('Calling transferTokenToVendor...');
-    // await this.callContractMethod(
-    //   'AAProject',
-    //   'transferTokenToVendor',
-    //   [testBeneficiaryAddress, testVendorAddress, transferAmount],
-    //   AAProjectContract.contract.target.toString(),
-    //   deployerAccount
-    // );
-
-    // console.log('Token transfer completed. Verifying transfer...');
-
-    // // Wait a bit for the transaction to be processed
-    // await this.sleep(5000);
-
-    // // Verify the transfer by checking benTokens mapping (should be reduced)
-    // console.log('Checking benTokens mapping after transfer...');
-    // const benTokensBalanceAfterTransfer = await this.callContractMethod(
-    //   'AAProject',
-    //   'benTokens',
-    //   [testBeneficiaryAddress],
-    //   AAProjectContract.contract.target.toString(),
-    //   deployerAccount
-    // );
-
-    // const expectedBalanceAfterTransfer = testTokenAmount - transferAmount;
-    // console.log(
-    //   `Beneficiary ${testBeneficiaryAddress} has ${benTokensBalanceAfterTransfer.toString()} tokens in benTokens mapping after transfer`
-    // );
-
-    // // Verify the balance was reduced correctly
-    // if (
-    //   benTokensBalanceAfterTransfer.toString() ===
-    //   expectedBalanceAfterTransfer.toString()
-    // ) {
-    //   console.log(
-    //     '✅ SUCCESS: benTokens mapping shows correct amount after transfer'
-    //   );
-    // } else {
-    //   console.log('❌ ERROR: benTokens mapping amount mismatch after transfer');
-    //   console.log(
-    //     `Expected: ${expectedBalanceAfterTransfer.toString()}, Got: ${benTokensBalanceAfterTransfer.toString()}`
-    //   );
-    // }
-
-    // // Check vendor token balance (should have received the tokens)
-    // console.log('Checking vendor token balance...');
-    // const vendorTokenBalance = await this.callContractMethod(
-    //   'RahatToken',
-    //   'balanceOf',
-    //   [testVendorAddress],
-    //   await RahatToken.contract.getAddress(),
-    //   deployerAccount
-    // );
-
-    // console.log(
-    //   `Vendor ${testVendorAddress} has ${vendorTokenBalance.toString()} tokens`
-    // );
-
-    // // Verify vendor received the tokens
-    // if (vendorTokenBalance.toString() === transferAmount.toString()) {
-    //   console.log('✅ SUCCESS: Vendor received the correct amount of tokens');
-    // } else {
-    //   console.log('❌ ERROR: Vendor token balance mismatch');
-    //   console.log(
-    //     `Expected: ${transferAmount.toString()}, Got: ${vendorTokenBalance.toString()}`
-    //   );
-    // }
-
-    // console.log('Token transfer test completed!');
   }
 
   public async addContractSettings() {
@@ -376,6 +184,44 @@ class ContractSeed extends ContractLib {
       isPrivate: false,
     };
 
+    const data2 = {
+      name: 'CONTRACTS',
+      value: contracts,
+      isPrivate: false,
+    };
+
+
+    await settings.create(data);
+    await settings.create(data2)
+  }
+
+  public async addNetworkProvider(){
+    const network = await this.getNetworkSettings();
+    const data = {
+      name:'BLOCKCHAIN',
+      value:network,
+      isPrivate:false
+    }
+   await settings.create(data);
+  }
+
+  public async addChainSettings(){
+    const chainData = {
+      "name":process.env.CHAIN_NAME,
+      "type":process.env.CHAIN_TYPE,
+      "rpcUrl":process.env.CHAIN_RPCURL,
+      "chainId":process.env.CHAIN_ID,
+      "currency":{
+        "name":process.env.CHAIN_CURRENCY_NAME,
+        "symbol":process.env.CHAIN_CURRENCY_SYMBOL
+      },
+      "explorerUrl":process.env.CHAIN_EXPLORER_URL
+    }
+    const data = {
+      name:'CHAIN_SETTINGS',
+      value:chainData,
+      isPrivate:false
+    } 
     await settings.create(data);
   }
 }
@@ -384,6 +230,8 @@ async function main() {
   const contractSeed = new ContractSeed();
   await contractSeed.deployAAContracts();
   await contractSeed.addContractSettings();
+  await contractSeed.addNetworkProvider();
+  await contractSeed.addChainSettings();
 
   process.exit(0);
 }
