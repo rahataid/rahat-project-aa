@@ -126,28 +126,31 @@ export class EVMProcessor {
 
       const multicallTxnPayload = [];
 
-      const contract = await this.getFromSettings('CONTRACT');
-      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+      // const contract = await this.getFromSettings('CONTRACT');
+      // const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
 
-      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+      // const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
 
-      const rpcUrl = chainConfig.rpcUrl;
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      // const rpcUrl = chainConfig.rpcUrl;
+      // const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-      const rahatTokenContract = new ethers.Contract(
-        contract.RAHATTOKEN.ADDRESS,
-        formatedAbi,
-        provider
-      );
+      // const rahatTokenContract = new ethers.Contract(
+      //   contract.RAHATTOKEN.ADDRESS,
+      //   formatedAbi,
+      //   provider
+      // );
 
-      const decimal = await rahatTokenContract.decimals.staticCall();
+      // const decimal = await rahatTokenContract.decimals.staticCall();
+
+      console.log('this are the bens', bens);
 
       for (const benf of bens) {
+        console.log('benf', benf);
         if (benf.amount) {
-          const formattedAmountBn = ethers.parseUnits(
-            benf.amount.toString(),
-            decimal
-          );
+          // const formattedAmountBn = ethers.parseUnits(
+          //   benf.amount.toString(),
+          //   decimal
+          // );
 
           multicallTxnPayload.push([benf.walletAddress, benf.amount]);
         }
