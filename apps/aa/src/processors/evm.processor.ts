@@ -149,10 +149,7 @@ export class EVMProcessor {
             decimal
           );
 
-          this.logger.log(
-            `EVM process: Converting amount ${benf.amount} to formatted amount ${formattedAmountBn} for beneficiary ${benf.walletAddress} using decimal ${decimal}`
-          );
-          multicallTxnPayload.push([benf.walletAddress, formattedAmountBn]);
+          multicallTxnPayload.push([benf.walletAddress, benf.amount]);
         }
       }
 
