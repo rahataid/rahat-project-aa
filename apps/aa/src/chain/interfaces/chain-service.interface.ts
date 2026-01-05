@@ -34,7 +34,7 @@ export interface IChainService {
   getChainType(): ChainType;
 
   // Stats
-  getDisbursementStats?(): Promise<any[]>;
+  getDisbursementStats?(): Promise<any>;
 }
 
 export type ChainType = 'stellar' | 'evm';

@@ -1149,12 +1149,23 @@ export class EvmChainService implements IChainService {
   private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
     try {
       const beneficiary = await lastValueFrom(
-        this.client.send({ cmd: 'rahat.jobs.beneficiary.get_by_phone' }, phone)
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
+          {
+            phone,
+            projectUUID: process.env.PROJECT_UUID,
+          }
+        )
       );
 
       if (!beneficiary) {
         this.logger.error('Beneficiary not found');
         throw new RpcException('Beneficiary not found');
+      }
+
+      if (!beneficiary.groupedBeneficiaries) {
+        this.logger.error('Beneficiary has no grouped beneficiaries');
+        throw new RpcException('Beneficiary has no grouped beneficiaries');
       }
 
       // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
