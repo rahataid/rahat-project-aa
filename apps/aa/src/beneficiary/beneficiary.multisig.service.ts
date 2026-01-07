@@ -109,9 +109,11 @@ export class BeneficiaryMultisigService {
         address
       );
 
-      const transfers = multisigTxns?.results?.filter(
+      const successTransfers = multisigTxns?.results?.filter(
         (tx: any) =>
-          tx.to === tokenAddress && tx.dataDecoded?.method === 'transfer'
+          tx.to === tokenAddress &&
+          tx.dataDecoded?.method === 'transfer' &&
+          tx.executionDate !== null
       );
 
       const pendingTxns = await this.safeApiKit.getPendingTransactions(address);
@@ -131,7 +133,7 @@ export class BeneficiaryMultisigService {
         projectBalance: ethers.formatUnits(projectBalance, decimals),
         decimals: Number(decimals),
         pendingTxCount: pendingTxns?.count,
-        transfers,
+        transfers: [...pendingTxns?.results, ...successTransfers],
       };
       return safeInfo;
     } catch (err) {
