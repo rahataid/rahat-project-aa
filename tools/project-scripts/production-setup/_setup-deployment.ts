@@ -103,7 +103,7 @@ class ContractSeed extends ContractLib {
         'RahatToken',
         'RHT',
         await DonorContract.contract.getAddress(),
-        1,
+        6,
       ],
       deployerKey
     );
@@ -238,9 +238,9 @@ export default ContractSeed;
 async function main() {
   const contractSeed = new ContractSeed();
   await contractSeed.deployAAContracts();
-  await contractSeed.addContractSettings();
-  await contractSeed.addNetworkProvider();
-  await contractSeed.addChainSettings();
+  // await contractSeed.addContractSettings();
+  // await contractSeed.addNetworkProvider();
+  // await contractSeed.addChainSettings();
 
   process.exit(0);
 }
