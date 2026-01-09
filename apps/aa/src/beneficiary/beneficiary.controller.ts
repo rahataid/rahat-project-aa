@@ -5,15 +5,20 @@ import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
   CreateBeneficiaryDto,
+  CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
 export class BeneficiaryController {
-  constructor(private readonly beneficiaryService: BeneficiaryService) {}
+  constructor(
+    private readonly beneficiaryService: BeneficiaryService,
+    private readonly beneficiaryMultisigService: BeneficiaryMultisigService
+  ) {}
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   // findAll(data) {
@@ -28,6 +33,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.create(data);
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  createBulk(data: CreateBulkBeneficiaryDto) {
+    return this.beneficiaryService.createBulk(data);
+  }
+
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {
     return this.beneficiaryService.findOne(payload);
@@ -40,6 +53,7 @@ export class BeneficiaryController {
   findOneBeneficiary(payload) {
     return this.beneficiaryService.findOneBeneficiary(payload);
   }
+
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.LIST_PROJECT_PII,
     uuid: process.env.PROJECT_ID,
@@ -83,7 +97,6 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async getAllGroups(payload: GetBenfGroupDto) {
-    console.log(payload);
     return this.beneficiaryService.getAllGroups(payload);
   }
 
@@ -147,6 +160,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.getReservationStats(payload);
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_BALANCE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBalance(payload) {
+    return this.beneficiaryService.getBalance();
+  }
+
   // ***** groups fund mgmt end ********** //
   @MessagePattern({
     cmd: CVA_JOBS.PAYOUT.ASSIGN_TOKEN,
@@ -155,4 +176,22 @@ export class BeneficiaryController {
   assignToken() {
     return this.beneficiaryService.assignToken();
   }
+
+  // ***** multisig starts ********** //
+  @MessagePattern({
+    cmd: JOBS.MULTISIG.GET_SAFE_OWNER,
+    uuid: process.env.PROJECT_ID,
+  })
+  getOwnersList() {
+    return this.beneficiaryMultisigService.getOwnersList();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.MULTISIG.CREATE_SAFE_TRANSACTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  createSafeTransaction(@Payload() payload) {
+    return this.beneficiaryMultisigService.createSafeTransaction(payload);
+  }
+  // ***** multisig ends ********** //
 }

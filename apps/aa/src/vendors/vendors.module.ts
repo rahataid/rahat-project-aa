@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
 import { BullModule } from '@nestjs/bull';
 import { VendorsService } from './vendors.service';
@@ -31,6 +31,9 @@ import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedempt
     ]),
     BullModule.registerQueue({
       name: BQUEUE.VENDOR_CVA,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.BATCH_TRANSFER,
     }),
   ],
   providers: [

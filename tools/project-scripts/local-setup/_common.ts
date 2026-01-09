@@ -10,17 +10,17 @@ dotenv.config();
 
 export class ContractLib {
   private provider: JsonRpcProvider;
-  private networkSettings: Config['blockchain'];
+  private  networkSettings: Config['blockchain'];
   public deployedContracts: DeployedContractsData;
 
   constructor() {
-    const network = 'http://127.0.0.1:8888';
+   const network = process.env.CHAIN_RPCURL || ''
     this.networkSettings = {
       rpcUrl: network,
-      chainName: 'localhost',
-      chainId: 8888,
+      chainName: process.env.CHAIN_NAME || '',
+      chainId: process.env.CHAIN_ID || 84532,
       blockExplorerUrls: [
-        'http://local-explorer.com/',
+        '',
       ],
     };
     this.provider = new JsonRpcProvider(network);

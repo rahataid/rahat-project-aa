@@ -12,10 +12,13 @@ export interface IChainService {
   // Send otp operations
   sendOtp(data: SendOtpDto): Promise<any>;
   sendAssetToVendor(data: SendAssetDto): Promise<any>;
-
+  // getWalletBalance, getRahatTokenBalance, getDisbursementStats
   // Account operations
   fundAccount(data: FundAccountDto): Promise<any>;
   checkBalance(address: string): Promise<any>;
+  getWalletBalance?(data: { address: string }): Promise<any>;
+  getRahatTokenBalance?(data: { address: string }): Promise<any>;
+  getDisbursementStats?(): Promise<any[]>;
 
   // Authentication operations
   sendOtp(data: SendOtpDto): Promise<any>;
@@ -23,14 +26,15 @@ export interface IChainService {
 
   // Trigger operations (optional for chains that support it)
   addTrigger?(data: AddTriggerDto): Promise<any>;
+  addTriggerOnChain?(data: AddTriggerDto): Promise<any>;
   updateTrigger?(data: UpdateTriggerDto): Promise<any>;
 
   // Utility methods
   validateAddress(address: string): boolean;
   getChainType(): ChainType;
 
-  /// Statistics
-  getDisbursementStats(): Promise<any>;
+  // Stats
+  getDisbursementStats?(): Promise<any>;
 }
 
 export type ChainType = 'stellar' | 'evm';

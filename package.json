@@ -5,8 +5,8 @@
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",
     "test:aa": "npx nx test aa",
-    "test":"nx test aa",
-    "test-coverage":"nx test aa --coverage",
+    "test": "nx test aa",
+    "test-coverage": "nx test aa --coverage",
     "start": "nx serve aa",
     "dev": "nx serve aa --watch --verbose",
     "trigger-activation": "ts-node tools/scripts/trigger-activation.ts",
@@ -48,7 +48,8 @@
     "graph:deploy-local": "cd ./apps/graph && graph deploy -l v0.0.1 --node http://localhost:8020/ --ipfs http://localhost:5001 --network mainnet rahat/aa",
     "graph:studio:deploy-arbitrum-sepolia-stage": "cd ./apps/graph && graph deploy --studio --network arbitrum-sepolia rahat-aa-stage",
     "graph:studio:deploy-arbitrum-sepolia-demo": "cd ./apps/graph && graph deploy --studio --network arbitrum-sepolia rahat-aa-demo",
-    "graph:studio:deploy-arbitrum-sepolia-demo-2": "cd ./apps/graph && graph deploy --studio --network arbitrum-sepolia rahat-aa-demo-2"
+    "graph:studio:deploy-arbitrum-sepolia-demo-2": "cd ./apps/graph && graph deploy --studio --network arbitrum-sepolia rahat-aa-demo-2",
+    "graph:studio:deploy-base-sepolia-aa-dev-gnosis": "cd ./apps/graph && graph deploy --studio --network base-sepolia rahat-aa-dev-gnosis"
   },
   "private": true,
   "dependencies": {
@@ -70,12 +71,14 @@
     "@rumsan/connect": "1.0.0",
     "@rumsan/prisma": "1.0.130",
     "@rumsan/settings": "^0.0.108",
+    "@safe-global/api-kit": "^2.4.1",
+    "@safe-global/protocol-kit": "^4.0.1",
+    "@safe-global/safe-core-sdk-types": "^5.0.1",
     "@stellar/stellar-sdk": "^13.1.0",
     "async-mutex": "^0.5.0",
     "axios": "^1.7.2",
     "bcryptjs": "^3.0.2",
     "bull": "^4.12.9",
-    "cheerio": "1.0.0-rc.12",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "date-fns": "^4.1.0",
@@ -138,5 +141,6 @@
     "ts-node": "10.9.1",
     "typescript": "~5.4.5",
     "webpack-cli": "^5.1.4"
-  }
+  },
+  "packageManager": "pnpm@8.14.1"
 }

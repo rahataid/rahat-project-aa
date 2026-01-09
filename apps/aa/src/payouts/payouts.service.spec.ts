@@ -22,6 +22,7 @@ import {
 import { of } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '@rumsan/settings';
 
 describe('PayoutsService', () => {
   let service: PayoutsService;
@@ -32,6 +33,36 @@ describe('PayoutsService', () => {
   let beneficiaryService: BeneficiaryService;
   let appService: AppService;
   let clientProxy: ClientProxy;
+
+  const mockSettingsService = {
+    getPublic: jest.fn().mockResolvedValue({
+      value: [
+        {
+          alias: 'UNICEF Donor',
+          address: '0xC52e90DB78DeB581D6CB8b5aEBda0802bA8F37B8',
+          privateKey:
+            '5fbfba72d025d3ab62849a654b5d90f7839af854f756c0317251e6becc17ac',
+          smartAccount: '0xE17Fa0F009d2A3EaC3C2994D7933eD750CbCe257',
+        },
+        {
+          alias: 'UNICEF Head Office',
+          address: '0x7131EDcF4500521cB6B55C0658b2d83589946f55',
+          privateKey:
+            '51812b53380becea3bd28994d28151adb36b7ce04fb777926499fc5e88574b',
+          smartAccount: '0xE17Fa0F009d2A3EaC3C2994D7933eD750CbCe257',
+        },
+        {
+          alias: 'UNICEF Field Office',
+          address: '0xCc95BeEE78Cc66C03Dc6aa70080d66c85DCB309D',
+          privateKey:
+            '7d3eec01a87880cb3506377a94f3fd9f232793a094a6a361a8788b6603c6d4',
+          smartAccount: '0xe5159f997F32D04F8276567bb2ED2CC0CdC9D8E4',
+          isFieldOffice: true,
+        },
+      ],
+    }),
+  };
+
   let stellarQueue: Queue;
 
   const mockPrismaService = {
@@ -144,6 +175,10 @@ describe('PayoutsService', () => {
       providers: [
         PayoutsService,
         {
+          provide: SettingsService,
+          useValue: mockSettingsService,
+        },
+        {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
@@ -173,6 +208,14 @@ describe('PayoutsService', () => {
         },
         {
           provide: getQueueToken(BQUEUE.STELLAR),
+          useValue: mockStellarQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.OFFRAMP),
+          useValue: mockStellarQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
           useValue: mockStellarQueue,
         },
         {
@@ -314,7 +357,9 @@ describe('PayoutsService', () => {
           },
         },
       });
-      expect(mockVendorsService.processVendorOnlinePayout).not.toHaveBeenCalled();
+      expect(
+        mockVendorsService.processVendorOnlinePayout
+      ).not.toHaveBeenCalled();
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         EVENTS.NOTIFICATION.CREATE,
         expect.objectContaining({
@@ -411,7 +456,9 @@ describe('PayoutsService', () => {
       expect(mockVendorsService.findOne).toHaveBeenCalledWith(
         '123e4567-e89b-12d3-a456-426614174000'
       );
-      expect(mockVendorsService.processVendorOfflinePayout).toHaveBeenCalledWith({
+      expect(
+        mockVendorsService.processVendorOfflinePayout
+      ).toHaveBeenCalledWith({
         beneficiaryGroupUuid: 'group-uuid-123',
         amount: '1000',
       });
@@ -887,7 +934,8 @@ describe('PayoutsService', () => {
       expect(log['Amount Disbursed']).toBe(
         mockRedeems[1].payout.status === 'FAILED'
           ? 0
-          : (mockPayout.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+          : (mockPayout.beneficiaryGroupToken.numberOfTokens || 0) *
+              ONE_TOKEN_VALUE
       );
     });
 

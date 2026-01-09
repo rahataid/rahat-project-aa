@@ -54,6 +54,17 @@ describe('VendorsService', () => {
     getAccountBalance: jest.fn(),
   };
 
+  const mockVendorOfflineQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
+
+  const mockBatchTransferQueue = {
+    add: jest.fn(),
+    process: jest.fn(),
+    on: jest.fn(),
+  };
   const mockVendorCVAPayoutQueue = {
     add: jest.fn(),
   };
@@ -61,7 +72,7 @@ describe('VendorsService', () => {
   beforeEach(async () => {
     // Reset all mocks
     jest.clearAllMocks();
-    
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VendorsService,
@@ -78,8 +89,12 @@ describe('VendorsService', () => {
           useValue: mockReceiveService,
         },
         {
-          provide: getQueueToken(BQUEUE.VENDOR_CVA),
-          useValue: mockVendorCVAPayoutQueue,
+          provide: getQueueToken(BQUEUE.VENDOR_OFFLINE),
+          useValue: mockVendorOfflineQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
+          useValue: mockBatchTransferQueue,
         },
       ],
     }).compile();
@@ -245,6 +260,7 @@ describe('VendorsService', () => {
         transactions: expect.any(Array),
         createdAt: undefined,
         updatedAt: undefined,
+        // vendorAssignedBalance: 1000,
       });
     });
 
@@ -660,15 +676,6 @@ describe('VendorsService', () => {
         updatedAt: new Date(),
       };
 
-      const mockPayouts = [
-        {
-          uuid: 'payout-1',
-          type: 'VENDOR',
-          mode: 'OFFLINE',
-          payoutProcessorId: 'test-vendor-uuid',
-        },
-      ];
-
       const mockGroupTokens = [
         {
           groupId: 'group-1',
@@ -713,7 +720,7 @@ describe('VendorsService', () => {
         mockBeneficiaryRedeems
       );
       mockClientProxy.send.mockReturnValue(of(mockBeneficiaryResponse));
-      
+
       const result = await service.getVendorBeneficiaries(payload);
 
       expect(result.data).toHaveLength(1);
@@ -805,10 +812,8 @@ describe('VendorsService', () => {
         walletAddress: 'test-wallet',
       };
 
-      const mockPayouts = [{ uuid: 'payout-1' }];
-
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-      mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
+      // mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
       mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue([]);
       mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
@@ -832,14 +837,11 @@ describe('VendorsService', () => {
         walletAddress: 'test-wallet',
       };
 
-      const mockPayouts = [{ uuid: 'payout-1' }];
-      const mockGroupTokens = [{ groupId: 'group-1', payoutId: 'payout-1' }];
-
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
-      mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
-      mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
-        mockGroupTokens
-      );
+      // mockPrismaService.payouts.findMany.mockResolvedValue(mockPayouts);
+      // mockPrismaService.beneficiaryGroupTokens.findMany.mockResolvedValue(
+      //   mockGroupTokens
+      // );
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
       mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
@@ -924,6 +926,8 @@ describe('VendorsService', () => {
       mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([]);
 
       const result = await service.getVendorBeneficiaries(payload);
+
+      expect(result.data).toEqual([]);
 
       expect(result.data).toHaveLength(0);
       expect(result.meta.total).toBe(0);

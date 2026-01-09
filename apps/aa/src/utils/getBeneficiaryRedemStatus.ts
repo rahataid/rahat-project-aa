@@ -43,7 +43,7 @@ export function calculatePayoutStatus(
   const beneficiariesCount =
     payout.beneficiaryGroupToken?.beneficiaryGroup?._count?.beneficiaries || 0;
   const expectedCount =
-    payout.type === 'FSP' ? beneficiariesCount * 2 : beneficiariesCount;
+    payout.type === 'FSP' && payout.payoutProcessorId !== 'manual-bank-transfer' ? beneficiariesCount * 2 : beneficiariesCount;
 
   if (redeemCount === 0) return 'NOT_STARTED';
   if (redeemStatuses.some((s) => FAILED_STATUSES.includes(s))) return 'FAILED';

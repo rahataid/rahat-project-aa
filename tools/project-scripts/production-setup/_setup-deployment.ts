@@ -1,161 +1,247 @@
+import { PrismaService } from '@rumsan/prisma';
+import { SettingsService } from '@rumsan/settings';
+import { randomUUID } from 'crypto';
 import * as dotenv from 'dotenv';
-import { commonLib } from './_common';
-import axios from 'axios';
+import { writeFileSync } from 'fs';
+import { ContractLib } from './_common';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { DeployedContract } from '../types/blockchain';
-import { Wallet } from 'ethers';
+import axios from 'axios';
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
 dotenv.config({ path: `${__dirname}/.env.prod` });
+dotenv.config(); // Fallback to default .env
 
-
-//RAHAT_ADMIN_PRIVATE_KEY
-//BLOCKCHAIN
-//SUBGRAPH_URL
-
-const rahatTokenDetails = {
-    name: 'RHT Coin',
-    symbol: 'RHT',
-    description: 'RHT Coin',
-    decimals: 0,
-    initialSupply: '100000',
-};
-
-class DeploymentSetup extends commonLib {
-    contracts: Record<string, DeployedContract>;
-    deployerAccount: Wallet;
-    rahatAccessManagerAddress: string = '';
-    forwarderAddress: string = '';
-
-    constructor() {
-        super();
-        this.contracts = {};
-        this.deployerAccount = this.getDeployerWallet();
-
-    }
-    public async setupRahatAAContracts() {
-
-        const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
-        const { data } = await axios.get(url);
-        const contracts = data?.data?.value;
-        this.rahatAccessManagerAddress = contracts.RAHATACCESSMANAGER.ADDRESS
-        const rahatTreasuryAddress = contracts.RAHATTREASURY.ADDRESS
-        this.forwarderAddress = contracts.ERC2771FORWARDER.ADDRESS
-
-        console.log('----------Depolying Trigger Manager-------------------');
-        const TriggerManager = await this.deployContract('TriggerManager', [2]);
-        this.contracts['TriggerManager'] = {
-            address: TriggerManager.contract.target,
-            startBlock: TriggerManager.blockNumber
-        };
-        console.log('----------Depolying Rahat Donor-------------------');
-        const RahatDonor = await this.deployContract('RahatDonor', [this.deployerAccount, this.rahatAccessManagerAddress]);
-        this.contracts['RahatDonor'] = {
-            address: RahatDonor.contract.target,
-            startBlock: RahatDonor.blockNumber
-        };
-
-        console.log('----------Depolying Rahat Token-------------------');
-        const RahatToken = await this.deployContract(
-            'RahatToken',
-            [
-                this.forwarderAddress, "RahatToken", "RHT", RahatDonor.contract.target, 0
-            ]
-        );
-        this.contracts['RahatToken'] = {
-            address: RahatToken.contract.target,
-            startBlock: RahatToken.blockNumber
-        };
-
-        console.log('----------Depolying AA Project-------------------');
-        const AAProjectContract = await this.deployContract('AAProject', [
-            "AAProject",
-            RahatToken.contract.target,
-            this.forwarderAddress,
-            this.rahatAccessManagerAddress,
-            TriggerManager.contract.target
-        ]);
-        this.contracts['AAProject'] = {
-            address: AAProjectContract.contract.target,
-            startBlock: AAProjectContract.blockNumber
-        };
-
-        console.log('Writing deployed address to file');
-        await this.writeToDeploymentFile(
-            this.projectUUID,
-            { CONTRACTS: this.contracts }
-        );
-        await this.writeToDeploymentFile(this.projectUUID, {
-            RahatToken: {
-                contractAddress: RahatToken.contract.target,
-                name: rahatTokenDetails.name,
-                symbol: rahatTokenDetails.symbol,
-                description: rahatTokenDetails.description,
-                decimals: rahatTokenDetails.decimals,
-                initialSupply: rahatTokenDetails.initialSupply,
-                fromBlock: RahatToken.blockNumber,
-                transactionHash: RahatToken.hash,
-                type: 'CREATED'
-            }
-        })
-    }
-
-    public async setupBlockchainNetowrk() {
-        console.log("writing chain settings to file")
-        const SUBGRAPH_URL = process.env.SUBGRAPH_QUERY_URL;
-        const BLOCKCHAIN = {
-            rpcUrl: process.env.NETWORK_PROVIDER,
-            chainName: process.env.CHAIN_NAME,
-            chainId: process.env.NETWORK_ID,
-            nativeCurrency: {
-                name: process.env.CURRENCY_NAME,
-                symbol: process.env.CURRENCY_SYMBOL,
-            },
-        };
-        await this.writeToDeploymentFile(this.projectUUID, { BLOCKCHAIN, SUBGRAPH_URL: { URL: SUBGRAPH_URL } });
-        await this.writeToDeploymentFile(this.projectUUID, { projectUUID: this.projectUUID })
-    }
-    public async setupAdminKeys() {
-        await this.writeToDeploymentFile(this.projectUUID,
-            {
-                ADMIN: { ADDRESS: this.deployerAccount.address },
-                RAHAT_ADMIN_PRIVATE_KEY: this.deployerAccount.privateKey,
-                DEPLOYER_PRIVATE_KEY: this.deployerAccount.privateKey
-
-            })
-    }
-
-    public async addAdminToAA(addresses: any, deployerKey: string) {
-        const adminValues = addresses.map((address: any) => [0, address, 0]);
-        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
-        const contracts = await this.getContracts('RahatAccessManager', this.rahatAccessManagerAddress, deployerKey);
-        const res = await contracts.multicall(multicallData);
-        await this.sleep(2000)
-        console.log(`Added Admins ${addresses} to AccessManager`)
-    }
-
-    public async addDonor(addresses: any, deployerKey: string) {
-        const adminValues = addresses.map((address: any) => [0, address, 0]);
-        const multicallData = await this.generateMultiCallData('RahatAccessManager', 'grantRole', adminValues);
-        const contracts = await this.getContracts('RahatAccessManager', this.rahatAccessManagerAddress, deployerKey);
-        const res = await contracts.multicall(multicallData);
-        await this.sleep(2000)
-        console.log(`Added Donor ${addresses} to  Project`)
-    }
-
-}
-
-async function main() {
-    const deploymentSetup = new DeploymentSetup();
-    await deploymentSetup.setupRahatAAContracts();
-    await deploymentSetup.setupBlockchainNetowrk();
-    await deploymentSetup.setupAdminKeys();
-
-    //Make Contract call to make admins
-    //addAdminToAA
-    //addDonorAsAdmin
-    await deploymentSetup.addAdminToAA([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
-    await deploymentSetup.addDonor([deploymentSetup.deployerAccount.address], deploymentSetup.deployerAccount.privateKey);
-
-}
-main().catch((error) => {
-    console.error(error);
-    process.exit(1);
+const corePrisma = new PrismaClient({
+  datasourceUrl: process.env.CORE_DATABASE_URL as string,
 });
+const prisma = new PrismaService();
+const settings = new SettingsService(prisma);
+
+const contractName = ['AAProject', 'RahatDonor', 'RahatToken'];
+
+class ContractSeed extends ContractLib {
+  projectUUID: string;
+  contracts: Record<string, DeployedContract>;
+
+  constructor() {
+    super();
+    this.projectUUID = process.env.PROJECT_UUID as string;
+    this.contracts = {};
+  }
+
+  static getUUID() {
+    return randomUUID();
+  }
+
+  public sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  public async getDevSettings() {
+    const [devSettings] = await corePrisma.$queryRaw<any[]>(
+      Prisma.sql([`SELECT *  FROM tbl_settings WHERE name='CONTRACTS'`])
+    );
+    return devSettings;
+  }
+
+  public async deployAAContracts() {
+    // const contractDetails = await this.getDevSettings();
+    // console.log('contractDetails', contractDetails);
+
+    const url = `${process.env.RAHAT_CORE_URL}/v1/settings/CONTRACTS`;
+    const { data } = await axios.get(url);
+    const contractDetails = data?.data;
+    const RahatAccessManagerAddress =
+      contractDetails.value.RAHATACCESSMANAGER.address;
+    const forwarderAddress = contractDetails.value.ERC2771FORWARDER.address;
+    const treasuryAddress = contractDetails.value.RAHATTREASURY.address;
+
+    const deployerKey = (
+      await prisma.setting.findUnique({
+        where: {
+          name: 'DEPLOYER_PRIVATE_KEY',
+        },
+      })
+    )?.value as string;
+
+    // const deployerKey = process.env.DEPLOYER_PRIVATE_KEY as string;
+
+    console.log('------DEPLOYER KEY-----');
+    console.log(deployerKey);
+
+    const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
+
+    console.log(deployerAccount);
+
+    console.log('----------Depolying Trigger Contract -------------------');
+    const TriggerManager = await this.deployContract(
+      'TriggerManager',
+      [2],
+      deployerKey
+    );
+    this.contracts['TriggerManager'] = {
+      address: TriggerManager.contract.target,
+      startBlock: TriggerManager.blockNumber,
+    };
+
+    console.log('----------Depolying Rahat Donor-------------------');
+    const DonorContract = await this.deployContract(
+      'RahatDonor',
+      [deployerAccount, RahatAccessManagerAddress],
+      deployerKey
+    );
+    this.contracts['RahatDonor'] = {
+      address: DonorContract.contract.target,
+      startBlock: DonorContract.blockNumber,
+    };
+
+    console.log('----------Depolying Rahat Token-------------------');
+    const RahatToken = await this.deployContract(
+      'RahatToken',
+      [
+        forwarderAddress,
+        'RahatToken',
+        'RHT',
+        await DonorContract.contract.getAddress(),
+        1,
+      ],
+      deployerKey
+    );
+    this.contracts['RahatToken'] = {
+      address: RahatToken.contract.target,
+      startBlock: RahatToken.blockNumber,
+    };
+    console.log('----------Depolying AA Project Contract-------------------');
+    const AAProjectContract = await this.deployContract(
+      'AAProject',
+      [
+        'AAProject',
+        await RahatToken.contract.getAddress(),
+        forwarderAddress,
+        RahatAccessManagerAddress,
+        await TriggerManager.contract.getAddress(),
+      ],
+      deployerKey
+    );
+    this.contracts['AAProject'] = {
+      address: AAProjectContract.contract.target,
+      startBlock: AAProjectContract.blockNumber,
+    };
+
+    console.log("----------Deploying CashToken Contract-------------------'");
+    const CashToken = await this.deployContract(
+      'CashToken',
+      ['CashToken', 'CASH', 1, 100000, DonorContract.contract.target],
+      deployerKey
+    );
+    this.contracts['CashToken'] = {
+      address: CashToken.contract.target,
+      startBlock: CashToken.blockNumber,
+    };
+
+    console.log('Writing deployed address to file');
+    // Write contracts with CONTRACTS key for consistency with graph scripts
+    const deploymentData = {
+      CONTRACTS: this.contracts,
+      deployedAt: new Date().toISOString(),
+      network: process.env.CHAIN_NAME || 'unknown',
+    };
+    this.writeToDeploymentFile(this.projectUUID, deploymentData);
+
+    this.sleep(20000);
+
+    console.log('Adding donor contract as admin in AA Project');
+    console.log([DonorContract.contract.target, true]);
+    await this.callContractMethod(
+      'RahatAccessManager',
+      'grantRole',
+      [0, DonorContract.contract.target, 0],
+      RahatAccessManagerAddress,
+      deployerAccount
+    );
+
+    console.log('Registering Project in Donor');
+    const donorContractAddress = this.getDeployedAddress(
+      this.projectUUID,
+      'RahatDonor'
+    );
+    await this.callContractMethod(
+      'RahatDonor',
+      'registerProject',
+      [AAProjectContract.contract.target, true],
+      donorContractAddress,
+      deployerAccount
+    );
+
+    console.log('Adding deployer address as admin in AA Project ');
+    await this.callContractMethod(
+      'RahatAccessManager',
+      'grantRole',
+      [0, deployerAccount, 0],
+      RahatAccessManagerAddress,
+      deployerAccount
+    );
+  }
+
+  public async addContractSettings() {
+    console.log('Adding contract settings');
+    const contracts = await this.getDeployedContractDetails(
+      this.projectUUID,
+      contractName
+    );
+    const data = {
+      name: 'CONTRACT',
+      value: contracts,
+      isPrivate: false,
+    };
+    const data2 = {
+      name: 'CONTRACTS',
+      value: contracts,
+      isPrivate: false,
+    };
+
+    await settings.create(data);
+    await settings.create(data2);
+  }
+
+  public async addNetworkProvider() {
+    const network = await this.getNetworkSettings();
+    const data = {
+      name: 'BLOCKCHAIN',
+      value: network,
+      isPrivate: false,
+    };
+    await settings.create(data);
+  }
+
+  public async addChainSettings() {
+    const chainData = {
+      name: process.env.CHAIN_NAME,
+      type: process.env.CHAIN_TYPE,
+      rpcUrl: process.env.CHAIN_RPCURL,
+      chainId: process.env.CHAIN_ID,
+      currency: {
+        name: process.env.CHAIN_CURRENCY_NAME,
+        symbol: process.env.CHAIN_CURRENCY_SYMBOL,
+      },
+      explorerUrl: process.env.CHAIN_EXPLORER_URL,
+    };
+    const data = {
+      name: 'CHAIN_SETTINGS',
+      value: chainData,
+      isPrivate: false,
+    };
+    await settings.create(data);
+  }
+}
+export default ContractSeed;
+async function main() {
+  const contractSeed = new ContractSeed();
+  await contractSeed.deployAAContracts();
+  await contractSeed.addContractSettings();
+  await contractSeed.addNetworkProvider();
+  await contractSeed.addChainSettings();
+
+  process.exit(0);
+}
+main();

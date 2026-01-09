@@ -31,11 +31,26 @@ export class ChainController {
   }
 
   @MessagePattern({
+    cmd: 'aa.jobs.chain.getWalletBalance',
+    uuid: process.env.PROJECT_ID,
+  })
+  getWalletBalance(data: { address: string }) {
+    return this.chainService.getWalletBalance(data);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.getRahatTokenBalance',
+    uuid: process.env.PROJECT_ID,
+  })
+  getRahatTokenBalance(data: { address: string }) {
+    return this.chainService.getRahatTokenBalance(data);
+  }
+
+  @MessagePattern({
     cmd: 'aa.jobs.chain.getDisbursementStats',
     uuid: process.env.PROJECT_ID,
   })
-  getDisbursmentStats() {
-    console.log('chain');
-    return this.chainService.getdisbursmentStats();
+  getDisbursementStats() {
+    return this.chainService.getDisbursementStats();
   }
 }

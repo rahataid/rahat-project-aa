@@ -5,20 +5,17 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
-import { ActivityCategoriesModule } from '../activity-categories/activity-categories.module';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { DailyMonitoringModule } from '../daily-monitoring/daily-monitoring.module';
-import { DataSourceModule } from '../datasource/datasource.module';
+import { CashTrackerModule } from '../cash-tracker';
+import { GrievancesModule } from '../grievances/grievances.module';
+import { InkindTrackerModule } from '../inkind-tracker';
 import { ListenersModule } from '../listeners/listeners.module';
-import { PhasesModule } from '../phases/phases.module';
 import { ProcessorsModule } from '../processors/processors.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { StatsModule } from '../stats';
-import { TriggersModule } from '../triggers/triggers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
-import { ActivitiesModule } from '../activities/activites.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
@@ -80,24 +77,24 @@ import { ChainModule } from '../chain/chain.module';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
-    TriggersModule,
-    DataSourceModule,
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     ProcessorsModule,
-    ActivitiesModule,
-    PhasesModule,
-    ActivityCategoriesModule,
     BeneficiaryModule,
     StakeholdersModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
     StellarModule,
-    DailyMonitoringModule,
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,
     PayoutsModule,
     ChainModule,
+    CashTrackerModule,
+    GrievancesModule,
+    InkindTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

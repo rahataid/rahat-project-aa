@@ -1,6 +1,8 @@
 import * as fs from 'fs/promises';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: `${__dirname}/.env.prod` });
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env
+dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config(); // Fallback to default .env
 
 
 const modifyNetworksFile = async (

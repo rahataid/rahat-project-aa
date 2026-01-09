@@ -93,6 +93,7 @@ model Beneficiary {
   BeneficiaryRedeem  BeneficiaryRedeem[]
   BeneficiaryGroup   BeneficiaryGroup[]
   BeneficiaryToGroup BeneficiaryToGroup[]
+  DisbursementLogs   DisbursementLogs[]
 
   @@map("tbl_beneficiaries")
 }
@@ -152,7 +153,27 @@ model BeneficiaryGroupTokens {
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
 
+  // Relations
+  evmDisbursements DisbursementLogs[]
+
   @@map("tbl_beneficiaries_groups_tokens")
+}
+
+model DisbursementLogs {
+  id   Int    @id @default(autoincrement()) @db.Integer()
+  uuid String @unique @default(uuid())
+
+  txnHash String 
+
+  beneficiaryGroupTokenId String
+  beneficiaryGroupToken   BeneficiaryGroupTokens    @relation(fields: [beneficiaryGroupTokenId], references: [uuid])
+
+  beneficiaryWalletAddress String?
+  beneficiary               Beneficiary? @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+
+  createdAt DateTime @default(now())
+
+  @@map("tbl_disbursement_logs")
 }
 
 model Payouts {
@@ -610,3 +631,46 @@ enum Gender {
   OTHER
   UNKNOWN
 }
+
+// ============== Start Grievance SCHEMAS ================
+model Grievance {
+  id              Int             @id @default(autoincrement())
+  uuid            String          @unique @default(uuid()) @db.Uuid()
+  reportedBy      String
+  reporterContact String
+  tags            String[]
+  title           String
+  type            GrievanceType
+  description     String
+  status          GrievanceStatus @default(NEW)
+  priority        GrievancePriority @default(LOW)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  createdByUser       Json
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
+
+  @@map("tbl_grievances")
+}
+
+enum GrievanceStatus {
+  NEW
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum GrievanceType {
+  TECHNICAL
+  NON_TECHNICAL
+  OTHER
+}
+
+enum GrievancePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+// ============== End Grievance SCHEMAS ================
