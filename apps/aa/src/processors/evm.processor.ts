@@ -142,8 +142,6 @@ export class EVMProcessor {
 
       // const decimal = await rahatTokenContract.decimals.staticCall();
 
-      console.log('this are the bens', bens);
-
       for (const benf of bens) {
         console.log('benf', benf);
         if (benf.amount) {
@@ -155,8 +153,6 @@ export class EVMProcessor {
           multicallTxnPayload.push([benf.walletAddress, benf.amount]);
         }
       }
-
-      console.log('multicallTxnPayload', multicallTxnPayload);
 
       let totalTokens: number = 0;
       bens?.forEach((ben) => {
@@ -261,7 +257,7 @@ export class EVMProcessor {
             totalBatches: numberOfBatches,
           },
           {
-            delay: 3 * 60 * 1000, // 3 minutes
+            delay: 0.2 * 60 * 1000, // 0.2 minutes
             attempts: 3,
             backoff: {
               type: 'exponential',
@@ -356,12 +352,12 @@ export class EVMProcessor {
             EVMProcessor.name
           );
 
-          // Add another status update job to check again in 2 minutes
+          // Add another status update job to check again in 0.2 minutes
           this.evmQueue.add(
             JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
             job.data,
             {
-              delay: 2 * 60 * 1000, // 2 minutes
+              delay: 0.2 * 60 * 1000, // 0.2 minutes
               attempts: 3,
               backoff: {
                 type: 'exponential',
