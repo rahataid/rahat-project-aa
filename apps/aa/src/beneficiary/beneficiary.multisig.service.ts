@@ -105,12 +105,18 @@ export class BeneficiaryMultisigService {
       const tokenAddress = CONTRACTS.value['RAHATTOKEN']['ADDRESS'];
 
       //TODO: Seperate function to get all transactions//
-      const res = await this.safeApiKit.getAllTransactions(address, {
-        executed: true,
-      });
-      const filteredTxns =
-        res?.results?.filter((tx: any) => tx.to === tokenAddress) || [];
-      const transfers = filteredTxns?.flatMap((tx: any) => tx.transfers);
+      const multisigTxns = await this.safeApiKit.getMultisigTransactions(
+        address
+      );
+
+      const successTransfers = multisigTxns?.results?.filter(
+        (tx: any) =>
+          tx.to === tokenAddress &&
+          tx.dataDecoded?.method === 'transfer' &&
+          tx.executionDate !== null
+      );
+
+      const pendingTxns = await this.safeApiKit.getPendingTransactions(address);
       //***//
 
       const contract = await createContractInstance(
@@ -125,7 +131,9 @@ export class BeneficiaryMultisigService {
         nativeBalance: ethers.formatEther(balance),
         tokenBalance: ethers.formatUnits(safeBalance, decimals),
         projectBalance: ethers.formatUnits(projectBalance, decimals),
-        transfers,
+        decimals: Number(decimals),
+        pendingTxCount: pendingTxns?.count,
+        transfers: [...pendingTxns?.results, ...successTransfers],
       };
       return safeInfo;
     } catch (err) {
