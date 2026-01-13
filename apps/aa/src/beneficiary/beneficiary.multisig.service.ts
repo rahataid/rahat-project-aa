@@ -50,9 +50,16 @@ export class BeneficiaryMultisigService {
       );
     }
 
+    const safeApiKey = await this.prisma.setting.findFirst({
+      where: {
+        name: 'SAFE_API_KEY',
+      },
+    });
+
     const CHAIN_ID = chainSettings.value['chainId'];
     this.safeApiKit = new SafeApiKit({
       chainId: BigInt(CHAIN_ID),
+      apiKey: safeApiKey.value as string,
     });
 
     this.NETWORK_PROVIDER = chainSettings.value['rpcUrl'];
