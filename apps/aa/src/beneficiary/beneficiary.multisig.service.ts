@@ -44,17 +44,17 @@ export class BeneficiaryMultisigService {
       },
     });
 
-    if (!chainSettings || !safeProposerPrivateKeySetting) {
-      throw new Error(
-        'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS may be missing'
-      );
-    }
-
     const safeApiKey = await this.prisma.setting.findFirst({
       where: {
         name: 'SAFE_API_KEY',
       },
     });
+
+    if (!chainSettings || !safeProposerPrivateKeySetting || !safeApiKey) {
+      throw new Error(
+        'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS or SAFE_API_KEY may be missing'
+      );
+    }
 
     const CHAIN_ID = chainSettings.value['chainId'];
     this.safeApiKit = new SafeApiKit({
