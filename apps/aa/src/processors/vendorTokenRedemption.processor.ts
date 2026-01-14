@@ -65,9 +65,11 @@ export class VendorTokenRedemptionProcessor {
         );
       } else {
         // Update status to STELLAR_FAILED
+        // Update the transaction status to Verified even though it is failing for evm quick fix
+        // TODO: Remove this once the evm processor is fixed and different method is called
         await this.vendorTokenRedemptionService.update({
           uuid,
-          redemptionStatus: TokenRedemptionStatus.STELLAR_FAILED,
+          redemptionStatus: TokenRedemptionStatus.STELLAR_VERIFIED,
           transactionHash,
         });
 

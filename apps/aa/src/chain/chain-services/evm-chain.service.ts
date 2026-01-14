@@ -564,11 +564,11 @@ export class EvmChainService implements IChainService {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      // await this.verifyOTP(
-      //   verifyOtpDto.otp,
-      //   verifyOtpDto.phoneNumber,
-      //   amount as number
-      // );
+      await this.verifyOTP(
+        verifyOtpDto.otp,
+        verifyOtpDto.phoneNumber,
+        amount as number
+      );
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
