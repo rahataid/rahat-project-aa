@@ -1022,11 +1022,19 @@ export class EVMProcessor {
       );
       await this.ensureInitialized();
 
-      const aaContract = await this.createContractInstanceSign(
+      const aaContractwithSign = await this.createContractInstanceSign(
         'AAPROJECT',
         AAProjectABI,
         this.signer
       );
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+      console.log('aaContractwithSign', aaContractwithSign);
+
+      console.log('aaContract', aaContract);
+
       const decimals = await aaContract.decimals.staticCall();
 
       // Get token balance using benTokens.staticCall
