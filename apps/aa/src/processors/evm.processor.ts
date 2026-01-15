@@ -1033,7 +1033,8 @@ export class EVMProcessor {
       );
       console.log('aaContractwithSign', aaContractwithSign);
 
-      console.log('aaContract', aaContract);
+      console.log('decimals', aaContract.decimals);
+      console.log('benTokens', aaContract.benTokens);
 
       const decimals = await aaContract.decimals.staticCall();
 
