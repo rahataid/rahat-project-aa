@@ -126,31 +126,31 @@ export class EVMProcessor {
 
       const multicallTxnPayload = [];
 
-      // const contract = await this.getFromSettings('CONTRACT');
-      // const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+      const contract = await this.getFromSettings('CONTRACT');
+      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
 
-      // const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
 
-      // const rpcUrl = chainConfig.rpcUrl;
-      // const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const rpcUrl = chainConfig.rpcUrl;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-      // const rahatTokenContract = new ethers.Contract(
-      //   contract.RAHATTOKEN.ADDRESS,
-      //   formatedAbi,
-      //   provider
-      // );
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        provider
+      );
 
-      // const decimal = await rahatTokenContract.decimals.staticCall();
+      const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
         console.log('benf', benf);
         if (benf.amount) {
-          // const formattedAmountBn = ethers.parseUnits(
-          //   benf.amount.toString(),
-          //   decimal
-          // );
+          const formattedAmountBn = ethers.parseUnits(
+            benf.amount.toString(),
+            decimal
+          );
 
-          multicallTxnPayload.push([benf.walletAddress, benf.amount]);
+          multicallTxnPayload.push([benf.walletAddress, formattedAmountBn]);
         }
       }
 
@@ -1027,6 +1027,7 @@ export class EVMProcessor {
         AAProjectABI,
         this.signer
       );
+      const decimals = await aaContract.decimals.staticCall();
 
       // Get token balance using benTokens.staticCall
       const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
@@ -1037,7 +1038,7 @@ export class EVMProcessor {
       );
 
       return {
-        balance: tokenBalance.toString(),
+        balance: ethers.formatUnits(tokenBalance, decimals),
         address: walletAddress,
       };
     } catch (error) {
