@@ -1022,21 +1022,16 @@ export class EVMProcessor {
       );
       await this.ensureInitialized();
 
-      const aaContractwithSign = await this.createContractInstanceSign(
-        'AAPROJECT',
-        AAProjectABI,
-        this.signer
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
       );
       const aaContract = await this.createContractInstance(
         'AAPROJECT',
         AAProjectABI
       );
-      console.log('aaContractwithSign', aaContractwithSign);
+      console.log('decimals', rahatTokenContract.decimals);
 
-      console.log('decimals', aaContract.decimals);
-      console.log('benTokens', aaContract.benTokens);
-
-      const decimals = await aaContract.decimals.staticCall();
+      const decimals = await rahatTokenContract.decimals.staticCall();
 
       // Get token balance using benTokens.staticCall
       const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
