@@ -10,8 +10,8 @@
     "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 rahat-aa",
     "test": "graph test",
     "prepare:base-sepolia": "mustache config/base-sepolia.json subgraph.template.yaml > subgraph.yaml",
-    "deploy-base-sepolia": "graph deploy --studio --network base-sepolia aa-unicef-evm-dev"
-
+    "deploy-base-sepolia": "graph deploy --studio --network base-sepolia aa-unicef-evm-dev",
+    "deploy-base-sepolia-dry-run-evm": "graph deploy --studio --network base-sepolia dry-run-evm"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.73.0",
