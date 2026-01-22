@@ -1194,10 +1194,28 @@ export class EVMProcessor {
       const groupToken = tokens.find((t) => t.groupId === group.uuid);
       const totalTokens = groupToken?.numberOfTokens ?? 0;
 
-      const totalBeneficiaries = group._count?.groupedBeneficiaries;
+      // Deduplicate beneficiaries within this group by beneficiary UUID
+      const uniqueBeneficiaries = new Map<
+        string,
+        typeof group.groupedBeneficiaries[0]
+      >();
+      group.groupedBeneficiaries.forEach((item) => {
+        const beneficiaryId = item.Beneficiary.uuid;
+        if (!uniqueBeneficiaries.has(beneficiaryId)) {
+          uniqueBeneficiaries.set(beneficiaryId, item);
+        }
+      });
+
+      const totalBeneficiaries = uniqueBeneficiaries.size;
+      if (totalBeneficiaries === 0) {
+        this.logger.warn(`Group ${group.uuid} has no unique beneficiaries`);
+        return;
+      }
+
       const tokenPerBeneficiary = totalTokens / totalBeneficiaries;
 
-      group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
+      // Distribute tokens only to unique beneficiaries
+      uniqueBeneficiaries.forEach(({ Beneficiary }) => {
         const phone = Beneficiary.pii.phone;
         const walletAddress = Beneficiary.walletAddress;
         const amount = tokenPerBeneficiary;
