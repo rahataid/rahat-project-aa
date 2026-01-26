@@ -316,18 +316,19 @@ export class StakeholdersService {
 
     if (!existingGroup) throw new RpcException('Group not found!');
 
-    const updatedGroup = await this.prisma.stakeholdersGroups.update({
-      where: { uuid: uuid },
-      data: {
-        name: name || existingGroup.name,
+    const data = {
+      ...(name && { name }),
+      ...(stakeholders && {
         stakeholders: {
-          // disconnect all current stakeholders
           set: [],
-          // connect new stakeholders
           connect: stakeholders,
         },
-        updatedAt: new Date(),
-      },
+      }),
+    };
+
+    const updatedGroup = await this.prisma.stakeholdersGroups.update({
+      where: { uuid: uuid },
+      data,
     });
     return updatedGroup;
   }
@@ -417,6 +418,7 @@ export class StakeholdersService {
     });
   }
 
+  // TODO: before deleting a group, i have to create if any communication data is linked to this group
   async removeGroup(payload: RemoveStakeholdersGroup) {
     const { uuid } = payload;
     return await this.prisma.stakeholdersGroups.update({
