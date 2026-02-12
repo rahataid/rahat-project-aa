@@ -15,7 +15,7 @@ contract RahatToken is
     IRahatToken,
     ERC2771Context
 {
-    uint8 private decimalPoints;
+    uint8  immutable private decimalPoints;
     string public description;
     uint256 public price;
     string public currency;

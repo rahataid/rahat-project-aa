@@ -117,7 +117,7 @@ abstract contract AbstractProject is Multicall {
   ) internal {
     // require(RahatCommunity.isProject(address(this)), 'project not approved');
 
-    IERC20(_tokenAddress).transferFrom(_from, address(this), _amount);
+    require(IERC20(_tokenAddress).transferFrom(_from, address(this), _amount), 'Transfer failed');
     _tokenBudgetIncrease(_tokenAddress, _amount);
     emit TokenReceived(_tokenAddress, _from, _amount);
   }
@@ -127,7 +127,7 @@ abstract contract AbstractProject is Multicall {
     uint _amount,
     address _to
   ) internal {
-    IERC20(_tokenAddress).transfer(_to, _amount);
+    require(IERC20(_tokenAddress).transfer(_to, _amount), 'Transfer failed');
     _tokenBudgetDecrease(_tokenAddress, _amount);
     emit TokenTransfer(_tokenAddress, _to, _amount);
   }

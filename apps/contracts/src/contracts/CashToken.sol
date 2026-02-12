@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.23;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -11,7 +11,7 @@ import "../interfaces/ICashToken.sol";
  */
 contract CashToken is ERC20, Ownable {
     // Decimals are set to 18 by default in ERC20
-    uint8 private _decimals;
+    uint8 private immutable _decimals;
 
     /**
      * @dev Constructor that initializes the token with a name, symbol, and optional initial supply to the deployer

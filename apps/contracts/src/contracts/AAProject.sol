@@ -11,6 +11,8 @@ import '../interfaces/ITriggerManager.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
+import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+
 /// @title AAProject - Implementation of IAAProject interface
 /// @notice This contract implements the IAAProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
 /// @dev This contract uses the ERC2771Context for meta-transactions and extends AbstractProject for basic project functionality.
@@ -18,7 +20,8 @@ contract AAProject is
   AbstractProject,
   IAAProject,
   ERC2771Context,
-  AccessManaged
+  AccessManaged,
+  ReentrancyGuard
   {
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -36,10 +39,10 @@ contract AAProject is
   bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
 
   /// @dev access manager
-  ITriggerManager public TriggerManager;
+  ITriggerManager public immutable  TriggerManager;
 
   /// @dev address of default token
-  address public defaultToken;
+  address public immutable defaultToken;
 
   /// @dev set of claim assigners
   EnumerableSet.AddressSet private claimAssigners;
@@ -102,7 +105,7 @@ contract AAProject is
   function assignTokenToBeneficiary(
     address _address,
     uint _amount
-  ) public restricted {
+  ) public restricted nonReentrant {
     require(
       IERC20(defaultToken).balanceOf(address(this)) >=
         totalClaimsAssigned() + _amount,
@@ -148,12 +151,14 @@ contract AAProject is
     address _assigner
   ) private {
     require(benTokens[_beneficiary] >= _tokenAssigned, 'not enough balance');
-    IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
     benTokens[_beneficiary] = benTokens[_beneficiary] - _tokenAssigned;
+    require(IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned),
+      'transfer failed'
+    );
     emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
   }
 
-  function assignClaims(address _beneficiary, uint256 _tokenAssigned) public {
+  function assignClaims(address _beneficiary, uint256 _tokenAssigned) public nonReentrant {
     // require(TriggerManager.hasTriggered(), 'distribution not triggered');
     _assignClaims(_beneficiary, defaultToken, _tokenAssigned, _msgSender());
   }
@@ -162,7 +167,7 @@ function transferTokenToVendor(
     address _benAddress,
     address _vendorAddress,
     uint _amount
-  ) public {
+  ) public restricted  nonReentrant{
     require(
       benTokens[_benAddress] >= _amount,
       'not enough balace'
@@ -180,7 +185,7 @@ function transferTokenToVendor(
     address _vendorAddress,
     address _cashTokenAddress,
     uint _amount
-  ) public {
+  ) public  restricted nonReentrant {
     require(
       benTokens[_benAddress] >= _amount,
       'not enough balace'

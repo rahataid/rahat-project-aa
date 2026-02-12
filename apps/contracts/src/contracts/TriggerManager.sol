@@ -46,7 +46,7 @@ contract TriggerManager is ITriggerManager {
     string memory sourceDetails,
     address triggerAddress
   ) public {
-    triggerSourceIds.add(sourceId);
+    require(triggerSourceIds.add(sourceId), 'Source already exists');
     triggerSources[sourceId] = TriggerSource({
       sourceName: sourceName,
       sourceDetails: sourceDetails,
@@ -61,7 +61,7 @@ contract TriggerManager is ITriggerManager {
   }
 
   function removeTriggerSource(bytes32 sourceId) public {
-    triggerSourceIds.remove(sourceId);
+    require(triggerSourceIds.remove(sourceId), 'Source not found');
     delete triggerSources[sourceId];
   }
 
