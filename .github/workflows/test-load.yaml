@@ -37,7 +37,8 @@ jobs:
         run: |
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
-
+          
+      #Import vault Secrets
       - name: Import Secrets from Vault
         id: vault
         uses: hashicorp/vault-action@v2.4.0
