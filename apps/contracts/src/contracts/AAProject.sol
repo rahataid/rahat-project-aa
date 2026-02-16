@@ -7,7 +7,6 @@ import '@openzeppelin/contracts/metatx/ERC2771Context.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
-import '../interfaces/ITriggerManager.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
@@ -38,14 +37,8 @@ contract AAProject is
   /// @dev Interface ID for IAAProject
   bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
 
-  /// @dev access manager
-  ITriggerManager public immutable  TriggerManager;
-
   /// @dev address of default token
   address public immutable defaultToken;
-
-  /// @dev set of claim assigners
-  EnumerableSet.AddressSet private claimAssigners;
 
   /// @notice tracks the registered token address
   /// @dev key-value pair of token address and registered status
@@ -66,15 +59,13 @@ contract AAProject is
     string memory _name,
     address _defaultToken,
     address _forwarder,
-    address _accessManager,
-    address _triggerManager
+    address _accessManager
   )
     AbstractProject(_name)
     ERC2771Context(_forwarder)
     AccessManaged(_accessManager)
   {
     defaultToken = _defaultToken;
-    TriggerManager = ITriggerManager(_triggerManager);
   }
 
   // #endregion
@@ -88,7 +79,7 @@ contract AAProject is
   ///@param _amount amount to increase the budget
   ///@param _tokenAddress address of the token to increase budget
   ///@dev can only be called by admin.Mainly called during minting of tokens
-  function increaseTokenBudget(address _tokenAddress, uint256 _amount) public {
+  function increaseTokenBudget(address _tokenAddress, uint256 _amount) public restricted {
     uint256 budget = tokenBudget(_tokenAddress);
     //TODO might not be needed
     require(
@@ -117,12 +108,30 @@ contract AAProject is
   }
 
   ///@notice function to add beneficiaries
+  ///@param offset starting index for beneficiaries list 
+  ///@param limit total number of beneficiaries 
   ///@dev can only be called by project admin when project is open
-  function totalClaimsAssigned() public view returns (uint _totalClaims) {
-    for (uint i = 0; i < _beneficiaries.length(); i++) {
-      _totalClaims += benTokens[_beneficiaries.at(i)];
+  function totalClaimsAssigned(
+    uint256 offset,
+    uint256 limit
+) public view returns (uint256 totalClaims) {
+    uint256 length = _beneficiaries.length();
+
+    if (offset >= length) {
+        return 0;
     }
-  }
+
+    uint256 end = offset + limit;
+    if (end > length) {
+        end = length;
+    }
+
+    for (uint256 i = offset; i < end; i++) {
+        address beneficiary = _beneficiaries.at(i);
+        totalClaims += benTokens[beneficiary];
+    }
+}
+
 
   ///@notice function to remove beneficiaries
   ///@param _address address of the beneficiary to be removed

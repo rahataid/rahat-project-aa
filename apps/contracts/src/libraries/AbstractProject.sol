@@ -24,7 +24,7 @@ abstract contract AbstractProject is Multicall {
 
   // #region ***** Variables *********//
   bool internal _closed;
-  mapping(address => uint) private _tokenBudget;
+  mapping(address => uint) internal _tokenBudget;
   mapping(address => bool) private _registeredTokens;
   mapping(address => bool) private _vendor;
 
