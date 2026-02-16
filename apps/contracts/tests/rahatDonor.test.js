@@ -67,7 +67,7 @@ describe('RahatDonor', function () {
         rahatTokenContract.target,
         forwarderContract.target,
         accessManagerContract.target,
-        accessManagerContract.target,
+        // accessManagerContract.target,
       ]);
     });
   });

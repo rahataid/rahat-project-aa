@@ -49,6 +49,8 @@ contract AAProject is
   mapping(address => uint) public benTokens;
   mapping(address => uint) public benCashTokens;
 
+  uint256 totalClaimAssigned;
+
   ///@notice constructor
   ///@param _name name of the project
   ///@param _defaultToken address of the default token(ERC20)
@@ -99,11 +101,12 @@ contract AAProject is
   ) public restricted nonReentrant {
     require(
       IERC20(defaultToken).balanceOf(address(this)) >=
-        totalClaimsAssigned() + _amount,
+        totalClaimAssigned + _amount,
       'not enough tokens'
     );
     _addBeneficiary(_address);
     benTokens[_address] = benTokens[_address] + _amount;
+    totalClaimAssigned += _amount;
     emit BenTokensAssigned(_address, _amount);
   }
 
@@ -161,6 +164,7 @@ contract AAProject is
   ) private {
     require(benTokens[_beneficiary] >= _tokenAssigned, 'not enough balance');
     benTokens[_beneficiary] = benTokens[_beneficiary] - _tokenAssigned;
+    totalClaimAssigned -= _tokenAssigned;
     require(IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned),
       'transfer failed'
     );
@@ -182,6 +186,7 @@ function transferTokenToVendor(
       'not enough balace'
     );
     benTokens[_benAddress] -= _amount;
+    totalClaimAssigned -= _amount;
     require(
       IERC20(defaultToken).transfer(_vendorAddress, _amount),
       'transfer failed'
@@ -200,6 +205,7 @@ function transferTokenToVendor(
       'not enough balace'
     );
     benTokens[_benAddress] -= _amount;
+    totalClaimAssigned -= _amount;
     require( IERC20(defaultToken).transfer(_vendorAddress, _amount),'value token transfer failed' );
     require( IERC20(_cashTokenAddress).transferFrom(_vendorAddress, _benAddress, _amount),'cash token transfer failed' );
 
