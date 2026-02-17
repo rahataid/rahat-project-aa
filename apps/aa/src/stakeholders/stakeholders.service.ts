@@ -156,6 +156,7 @@ export class StakeholdersService {
 
     return {
       successCount: result.count,
+      result,
       message: 'All stakeholders successfully added.',
     };
   }
