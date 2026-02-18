@@ -21,6 +21,7 @@ import {
   GetVendorRedemptionsDto,
   GetVendorTokenRedemptionStatsDto,
 } from './dto/vendorTokenRedemption.dto';
+import { BatchTransferDto } from '../processors/types';
 
 @Controller()
 export class VendorsController {
@@ -158,5 +159,13 @@ export class VendorsController {
   })
   async getVendorTokenRedemptionStats(dto: GetVendorTokenRedemptionStatsDto) {
     return this.vendorTokenRedemptionService.getVendorTokenRedemptionStats(dto);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.vendor.batch_transfer',
+    uuid: process.env.PROJECT_ID,
+  })
+  async processBatchTransfer(data: BatchTransferDto) {
+    return this.vendorService.processBatchTransfer(data);
   }
 }

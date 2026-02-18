@@ -3,6 +3,8 @@ import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
 import { OfframpService } from './offramp.service';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { BullModule } from '@nestjs/bull';
+import { BQUEUE } from '../constants';
 
 describe('PayoutsModule', () => {
   let controller: PayoutsController;
@@ -21,7 +23,18 @@ describe('PayoutsModule', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [EventEmitterModule.forRoot()],
+      imports: [
+        EventEmitterModule.forRoot(),
+        BullModule.registerQueue({
+          name: BQUEUE.STELLAR,
+        }),
+        BullModule.registerQueue({
+          name: BQUEUE.OFFRAMP,
+        }),
+        BullModule.registerQueue({
+          name: BQUEUE.BATCH_TRANSFER,
+        }),
+      ],
 
       controllers: [PayoutsController],
       providers: [

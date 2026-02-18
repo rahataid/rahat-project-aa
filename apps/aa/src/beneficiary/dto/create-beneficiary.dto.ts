@@ -1,7 +1,14 @@
 import { GroupPurpose } from '@prisma/client';
 import { BaseBeneficiaryDto } from '@rahat-project/cva';
 import { Enums } from '@rahataid/sdk';
-import { IsEnum, IsNumber, IsOptional } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 interface optionalBeneficiaryFields {
   benTokens?: number;
@@ -56,4 +63,11 @@ export interface AssignBenfGroupToProject {
       deletedAt: Date | null;
     }>;
   };
+}
+
+export class CreateBulkBeneficiaryDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateBeneficiaryDto)
+  beneficiaries: CreateBeneficiaryDto[];
 }

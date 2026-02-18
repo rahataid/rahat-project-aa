@@ -1,6 +1,6 @@
 export type Config = {
   blockchain: {
-    chainId: number;
+    chainId: number | string;
     chainName: string;
     nativeCurrency?: {
       name?: string;

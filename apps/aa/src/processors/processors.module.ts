@@ -5,6 +5,7 @@ import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
 import { StellarProcessor } from './stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
+import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
 import { VendorOfflinePayoutProcessor } from './vendor-cva-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
@@ -16,6 +17,7 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { SettingsService } from '@rumsan/settings';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
+import { EVMProcessor } from './evm.processor';
 
 @Module({
   imports: [
@@ -46,6 +48,12 @@ import { NotificationProcessor } from './notification.processor';
     BullModule.registerQueue({
       name: BQUEUE.VENDOR_CVA,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.BATCH_TRANSFER,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
   ],
   providers: [
     PrismaService,
@@ -56,6 +64,8 @@ import { NotificationProcessor } from './notification.processor';
     NotificationProcessor,
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
+    BatchTokenTransferProcessor,
+    EVMProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
@@ -74,5 +84,6 @@ import { NotificationProcessor } from './notification.processor';
       inject: [SettingsService],
     },
   ],
+  exports: [EVMProcessor, ContractProcessor],
 })
 export class ProcessorsModule {}

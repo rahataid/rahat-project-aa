@@ -9,6 +9,7 @@ import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
+  CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -16,6 +17,9 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, Prisma } from '@prisma/client';
+import axios from 'axios';
+import { SettingsService } from '@rumsan/settings';
+import { ethers } from 'ethers';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -35,6 +39,7 @@ export class BeneficiaryService {
   private readonly logger = new Logger(BeneficiaryService.name);
   constructor(
     protected prisma: PrismaService,
+    private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     private eventEmitter: EventEmitter2
@@ -70,6 +75,23 @@ export class BeneficiaryService {
     const rdata = await this.rsprisma.beneficiary.create({
       data: rest,
     });
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    return rdata;
+  }
+
+  async createBulk(dto: CreateBulkBeneficiaryDto) {
+    const { beneficiaries } = dto;
+
+    // Process each beneficiary to remove isVerified field
+    const processedBeneficiaries = beneficiaries.map(
+      ({ isVerified, ...rest }) => rest
+    );
+
+    const rdata = await this.rsprisma.beneficiary.createMany({
+      data: processedBeneficiaries,
+      skipDuplicates: true,
+    });
+
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     return rdata;
   }
@@ -675,7 +697,9 @@ export class BeneficiaryService {
     }
   }
 
-  async createBeneficiaryRedeemBulk(payload: Prisma.BeneficiaryRedeemCreateManyInput[]) {
+  async createBeneficiaryRedeemBulk(
+    payload: Prisma.BeneficiaryRedeemCreateManyInput[]
+  ) {
     try {
       const logs = await this.prisma.beneficiaryRedeem.createMany({
         data: payload,
@@ -904,6 +928,86 @@ export class BeneficiaryService {
       throw new RpcException(
         `Failed to update beneficiary tokens for group ${groupUuid}: ${error.message}`
       );
+    }
+  }
+
+  async getBalance() {
+    try {
+      // Fetch all active beneficiaries with wallet addresses
+      const redeems = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          payoutId: { not: null },
+        },
+        select: {
+          beneficiaryWalletAddress: true,
+        },
+        distinct: ['beneficiaryWalletAddress'],
+      });
+
+      const wallets = redeems.map((r) => r.beneficiaryWalletAddress);
+
+      // Get token contract address and Alchemy API URL
+      const cashTokenSetting = await this.settingsService.getPublic(
+        'CASH_TOKEN_CONTRACT'
+      );
+      const tokenAddress = cashTokenSetting.value;
+
+      const alchemyApiUrl = (await this.settingsService.getPublic('API_URL'))
+        .value as { URL: string };
+
+      // Initialize total balance
+      let totalBalance = 0n;
+      const metadataResponse = await axios.post(alchemyApiUrl.URL, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'alchemy_getTokenMetadata',
+        params: [tokenAddress],
+      });
+      const decimals = metadataResponse.data?.result?.decimals ?? 18;
+
+      // Fetch balances for each wallet
+      await Promise.all(
+        wallets.map(async (wallet) => {
+          const response = await axios.post(alchemyApiUrl.URL, {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'alchemy_getTokenBalances',
+            params: [wallet, [tokenAddress]],
+          });
+          const tokenBalances = response.data?.result?.tokenBalances || [];
+          for (const balance of tokenBalances) {
+            if (balance.tokenBalance) {
+              const rawBalance = BigInt(balance.tokenBalance);
+              totalBalance += rawBalance;
+            }
+          }
+        })
+      );
+      // Get the latest updatedAt from completed redeems
+      const latestCompletedRedeem =
+        await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            payoutId: { not: null }, // Redeems with payouts
+            isCompleted: true,
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          select: {
+            updatedAt: true,
+          },
+        });
+      const formattedData = Number(totalBalance);
+      return {
+        totalBalance: ethers.formatUnits(formattedData.toString(), decimals),
+        latestCompletedRedeemAt: latestCompletedRedeem?.updatedAt || null,
+      };
+    } catch (error) {
+      console.error(
+        'Error fetching balances:',
+        error.response?.data || error.message
+      );
+      throw new Error('Failed to fetch balances');
     }
   }
 }

@@ -6,6 +6,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { MS_TRIGGER_CLIENTS, RahatCvaModule } from '@rahat-project/cva';
 import { SettingsModule } from '@rumsan/settings';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { CashTrackerModule } from '../cash-tracker';
+import { GrievancesModule } from '../grievances/grievances.module';
+import { InkindTrackerModule } from '../inkind-tracker';
 import { ListenersModule } from '../listeners/listeners.module';
 import { ProcessorsModule } from '../processors/processors.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
@@ -74,6 +77,9 @@ import { ChainModule } from '../chain/chain.module';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     ProcessorsModule,
     BeneficiaryModule,
     StakeholdersModule,
@@ -86,6 +92,9 @@ import { ChainModule } from '../chain/chain.module';
     VendorsModule,
     PayoutsModule,
     ChainModule,
+    CashTrackerModule,
+    GrievancesModule,
+    InkindTrackerModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

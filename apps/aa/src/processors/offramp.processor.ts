@@ -7,7 +7,7 @@ import { FSPManualPayoutDetails, FSPOfframpDetails } from './types';
 import { getBankId } from '../utils/bank';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { CipsResponseData } from '../payouts/dto/types';
+import { CipsResponseData, EnrichedManualPayoutRow } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
@@ -229,7 +229,7 @@ export class OfframpProcessor {
   }
 
   @Process({ name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT, concurrency: 1 })
-  async verifyManualPayout(job: Job<any>) {
+  async verifyManualPayout(job: Job<EnrichedManualPayoutRow>) {
     const data = job.data;
     console.log('data in verify manual payout', data);
 

@@ -4,6 +4,7 @@ import { ChainQueueService } from './chain-queue.service';
 @Injectable()
 export class ChainService {
   constructor(private chainQueueService: ChainQueueService) {}
+
   disburse(disburseDto: any) {
     return this.chainQueueService.disburse(disburseDto);
   }
@@ -16,7 +17,15 @@ export class ChainService {
     return this.chainQueueService.sendAssetToVendor(sendAssetDto);
   }
 
-  getdisbursmentStats() {
-    return this.chainQueueService.disbursementStats();
+  getWalletBalance(data: { address: string }) {
+    return this.chainQueueService.getWalletBalance(data);
+  }
+
+  getRahatTokenBalance(data: { address: string }) {
+    return this.chainQueueService.getRahatTokenBalance(data);
+  }
+
+  getDisbursementStats() {
+    return this.chainQueueService.getDisbursementStats();
   }
 }
