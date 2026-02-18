@@ -325,7 +325,7 @@ export class BeneficiaryStatService {
         rData
           .map((item) => {
             const extras = item.extras as { ward_no?: number };
-            return extras.ward_no;
+            return extras?.ward_no;
           })
           .filter((ward) => typeof ward === 'number')
       )

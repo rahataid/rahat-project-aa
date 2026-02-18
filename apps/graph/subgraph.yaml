@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: AAProject
-    network: mainnet
+    network: base-sepolia
     source:
       abi: AAProject
-      address: "0xA60d0E74A0e20d99564225d7BcefFB5E97eaC6cE"
-      startBlock: 1
+      address: "0xB0083Ec3e65d897BC3e9c9FD0C91e98065bb5eDF"
+      startBlock: 36392691
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -53,11 +53,11 @@ dataSources:
       file: ./src/aa-project.ts
   - kind: ethereum
     name: RahatToken
-    network: mainnet
+    network: base-sepolia
     source:
       abi: RahatToken
-      address: "0x627f4Cf449E3baBdE459a6eC609590bA5C8E7611"
-      startBlock: 1
+      address: "0xB8a022a89dfd4cf87B1c0f83a39961795a88d553"
+      startBlock: 36392691
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -88,11 +88,11 @@ dataSources:
       file: ./src/rahat-token.ts
   - kind: ethereum
     name: RahatDonor
-    network: mainnet
+    network: base-sepolia
     source:
       abi: RahatDonor
-      address: "0x6e8EAaE432AC681224D95F73c18cBacdd755AE06"
-      startBlock: 1
+      address: "0x478e185AFd99c9910b9A15C1d0413EE748cD9B28"
+      startBlock: 36392691
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -115,3 +115,29 @@ dataSources:
         - event: TokenMintedAndApproved(indexed address,indexed address,uint256)
           handler: handleTokenMintedAndApproved
       file: ./src/rahat-donor.ts
+  - kind: ethereum
+    name: CashToken
+    network: base-sepolia
+    source:
+      abi: CashToken
+      address: "0xcCf34bdC1B635C241910298Ed91517628bD6f85E"
+      startBlock: 36392691
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Approval
+        - OwnershipTransferred
+        - Transfer
+      abis:
+        - name: CashToken
+          file: ./abis/CashToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./src/cash-token.ts

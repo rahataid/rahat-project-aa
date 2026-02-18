@@ -57,6 +57,7 @@ export const JOBS = {
   },
   BENEFICIARY: {
     CREATE: 'rahat.jobs.beneficiary.create',
+    ADD_BULK_TO_PROJECT: 'rahat.jobs.beneficiary.create_bulk',
     LIST: 'rahat.jobs.beneficiary.list',
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
@@ -76,6 +77,7 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
+    GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -154,7 +156,37 @@ export const JOBS = {
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
+    // Token Management
+    ASSIGN_TOKENS: 'aa.jobs.contract.assignTokens',
+    TRANSFER_TOKENS: 'aa.jobs.contract.transferTokens',
+    MINT_TOKENS: 'aa.jobs.contract.mintTokens',
+    BURN_TOKENS: 'aa.jobs.contract.burnTokens',
+
+    // Disbursement Operations
+    DISBURSE_BATCH: `aa.jobs.contract.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.contract.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+
+    // Account Management
+    FUND_ACCOUNT: 'aa.jobs.contract.fundAccount',
+    CHECK_BALANCE: 'aa.jobs.contract.checkBalance',
+
+    // Trigger Management
+    ADD_TRIGGER: 'aa.jobs.contract.addTrigger',
+    UPDATE_TRIGGER_PARAMS: 'aa.jobs.contract.updateTriggerParams',
+    TRIGGER_STATUS: 'aa.jobs.contract.triggerStatus',
+
+    // Project Management
+    CREATE_PROJECT: 'aa.jobs.contract.createProject',
+    ADD_BENEFICIARY: 'aa.jobs.contract.addBeneficiary',
+    REMOVE_BENEFICIARY: 'aa.jobs.contract.removeBeneficiary',
+
+    // Budget Management
     INCREASE_BUDGET: 'aa.jobs.contract.increaseBudget',
+    DECREASE_BUDGET: 'aa.jobs.contract.decreaseBudget',
+
+    // Transaction Monitoring
+    WAIT_FOR_CONFIRMATION: 'aa.jobs.contract.waitForConfirmation',
+    RETRY_TRANSACTION: 'aa.jobs.contract.retryTransaction',
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
@@ -194,6 +226,42 @@ export const JOBS = {
     SYNC_OFFLINE_DATA: 'aa.jobs.vendor.sync_offline_data',
     SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
+  BATCH_TRANSFER: {
+    PROCESS_BATCH: 'aa.jobs.batch_transfer.process_batch',
+    PROCESS_MANUAL_PAYOUT_BATCH:
+      'aa.jobs.batch_transfer.process_manual_payout_batch',
+  },
+  GRIEVANCES: {
+    CREATE: 'aa.jobs.grievances.create',
+    LIST: 'aa.jobs.grievances.list',
+    GET: 'aa.jobs.grievances.get',
+    UPDATE: 'aa.jobs.grievances.update',
+    REMOVE: 'aa.jobs.grievances.remove',
+    UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
+    GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
+  },
+  EVM: {
+    ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
+    DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
+    DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
+    FUND_ACCOUNT: `aa.jobs.evm.fundAccount_${process.env.PROJECT_ID}`,
+    CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
+    ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
+    UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+  },
+  CASH_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
+    CREATE_BUDGET: 'aa.jobs.cash-tracker.createBudget',
+  },
+  INKIND_TRACKER: {
+    EXECUTE_ACTION: 'aa.jobs.inkind-tracker.executeAction',
+    GET_TRANSACTIONS: 'aa.jobs.inkind-tracker.getTransactions',
+  },
+  MULTISIG: {
+    GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
+    CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
+  },
 };
 
 export const EVENTS = {
@@ -219,8 +287,12 @@ export const BQUEUE = {
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
+  EVM: `EVM_${process.env.PROJECT_ID}`,
+  // EVM:"EVM"
+  VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
+  BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
 };
 

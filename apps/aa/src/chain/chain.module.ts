@@ -8,6 +8,7 @@ import { StellarChainService } from './chain-services/stellar-chain.service';
 import { EvmChainService } from './chain-services/evm-chain.service';
 import { BQUEUE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
+import { ProcessorsModule } from '../processors/processors.module';
 import { ClientsModule } from '@nestjs/microservices';
 import { Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
@@ -34,7 +35,11 @@ import { SettingsService } from '@rumsan/settings';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
     StellarModule,
+    ProcessorsModule,
   ],
   controllers: [ChainController],
   providers: [

@@ -9,6 +9,7 @@ import '@openzeppelin/contracts/metatx/ERC2771Forwarder.sol';
 import '@openzeppelin/contracts/utils/Multicall.sol';
 import '../interfaces/ITriggerManager.sol';
 import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
+import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
 /// @title AAProject - Implementation of IAAProject interface
 /// @notice This contract implements the IAAProject interface and provides functionalities for managing beneficiaries, claims, and referrals.
@@ -18,7 +19,7 @@ contract AAProject is
   IAAProject,
   ERC2771Context,
   AccessManaged
-{
+  {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   event ClaimAssigned(
@@ -28,6 +29,8 @@ contract AAProject is
   );
 
   event BenTokensAssigned(address indexed beneficiary, uint indexed amount);
+  event TokenTransferred(address indexed beneficiary, address indexed vendor,uint indexed amount);
+  event CashTokenTransferred(address indexed vendor, address indexed beneficiary,uint indexed amount);
 
   /// @dev Interface ID for IAAProject
   bytes4 public constant IID_RAHAT_PROJECT = type(IAAProject).interfaceId;
@@ -48,11 +51,13 @@ contract AAProject is
   /// @notice tracks the number of tokens assigned to a beneficiary
   /// @dev key-value pair of token address and registered status
   mapping(address => uint) public benTokens;
+  mapping(address => uint) public benCashTokens;
 
   ///@notice constructor
   ///@param _name name of the project
   ///@param _defaultToken address of the default token(ERC20)
   ///@param _forwarder address of the forwarder contract
+  ///@param _accessManager Access Manager contract address
   ///@param _accessManager Access Manager contract address
   constructor(
     string memory _name,
@@ -152,6 +157,45 @@ contract AAProject is
     // require(TriggerManager.hasTriggered(), 'distribution not triggered');
     _assignClaims(_beneficiary, defaultToken, _tokenAssigned, _msgSender());
   }
+
+function transferTokenToVendor(
+    address _benAddress,
+    address _vendorAddress,
+    uint _amount
+  ) public {
+    require(
+      benTokens[_benAddress] >= _amount,
+      'not enough balace'
+    );
+    benTokens[_benAddress] -= _amount;
+    require(
+      IERC20(defaultToken).transfer(_vendorAddress, _amount),
+      'transfer failed'
+    );
+    emit TokenTransferred(_benAddress, _vendorAddress, _amount);
+  }
+
+  function transferTokenToVendorForCashToken(
+    address _benAddress,
+    address _vendorAddress,
+    address _cashTokenAddress,
+    uint _amount
+  ) public {
+    require(
+      benTokens[_benAddress] >= _amount,
+      'not enough balace'
+    );
+    benTokens[_benAddress] -= _amount;
+    require( IERC20(defaultToken).transfer(_vendorAddress, _amount),'value token transfer failed' );
+    require( IERC20(_cashTokenAddress).transferFrom(_vendorAddress, _benAddress, _amount),'cash token transfer failed' );
+
+    benCashTokens[_benAddress] += _amount;
+    emit TokenTransferred(_benAddress, _vendorAddress, _amount);
+    emit CashTokenTransferred(_vendorAddress, _benAddress, _amount);
+  } 
+  
+  // #endregion
+
 
   // endregion
   /// @dev overriding the method to ERC2771Context
