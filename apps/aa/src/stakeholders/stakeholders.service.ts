@@ -22,7 +22,7 @@ import { validate } from 'class-validator';
 import { ValidateStakeholdersResponse } from './dto/type';
 import { StatsService } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EVENTS, TRIGGGERS_MODULE } from '../constants';
+import { EVENTS, JOBS, TRIGGGERS_MODULE } from '../constants';
 import { firstValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -432,18 +432,7 @@ export class StakeholdersService {
 
     if (!existingGroup) throw new RpcException('Group not found!');
 
-    const activities = await firstValueFrom(
-      this.client.send(
-        { cmd: 'ms.jobs.activities.getByStakeholderUuid' },
-        { stakeholderGroupUuid: uuid }
-      )
-    );
-
-    if (!activities) {
-      throw new RpcException(
-        'Error fetching related activities. Please try again later.'
-      );
-    }
+    const activities = await this.getActivitiesByStakeholderGroupUuid(uuid);
 
     if (activities && activities?.length > 0) {
       const activitiesNames = activities.map((a) => a.title);
@@ -467,6 +456,23 @@ export class StakeholdersService {
       activities: [],
     };
   }
+
+  async getActivitiesByStakeholderGroupUuid(uuid: string) {
+    try {
+      const activities = await firstValueFrom(
+        this.client.send(
+          { cmd: JOBS.ACTIVITIES.GET_BY_STAKEHOLDER_UUID },
+          { stakeholderGroupUuid: uuid }
+        )
+      );
+      return activities;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching related activities. ${err.message}`
+      );
+    }
+  }
+
   async findOneGroup(payload: FindStakeholdersGroup) {
     const { uuid } = payload;
     return await this.prisma.stakeholdersGroups.findUnique({
