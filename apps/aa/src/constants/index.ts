@@ -148,6 +148,9 @@ export const JOBS = {
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
   },
+  ACTIVITIES: {
+    GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
+  },
   SETTINGS: {
     CREATE: 'rahat.jobs.settings.create',
     LIST: 'rahat.jobs.settings.list',
