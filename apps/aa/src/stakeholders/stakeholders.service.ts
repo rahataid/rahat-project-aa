@@ -439,15 +439,21 @@ export class StakeholdersService {
       )
     );
 
-    if (activities && activities?.length > 0) {
-      const activitiesNames = activities.map((a) => a.title).join(', ');
+    if (!activities) {
       throw new RpcException(
-        `This stakeholder group is currently used in one or more communications under the following activities: (${activitiesNames}). 
-  Please remove the group from those communications before deleting it.`
+        'Error fetching related activities. Please try again later.'
       );
     }
 
-    return await this.prisma.stakeholdersGroups.update({
+    if (activities && activities?.length > 0) {
+      const activitiesNames = activities.map((a) => a.title);
+      return {
+        isSuccess: false,
+        activities: activitiesNames,
+      };
+    }
+
+    await this.prisma.stakeholdersGroups.update({
       where: {
         uuid: uuid,
       },
@@ -455,6 +461,11 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
+
+    return {
+      isSuccess: true,
+      activities: [],
+    };
   }
   async findOneGroup(payload: FindStakeholdersGroup) {
     const { uuid } = payload;
