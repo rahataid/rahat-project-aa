@@ -190,95 +190,41 @@ export class BatchTokenTransferProcessor {
     batchNumber: number
   ) {
     try {
-      const CASH_TOKEN_ADDRESS = await this.getFromSettings(
-        'CASH_TOKEN_CONTRACT'
-      );
-
+      const isSourceGnosis = await this.isUsingGnosisMultisig();
       const { contract: aaContract } = await this.createContractInstanceSign(
         'AAPROJECT'
       );
-      const contract = await this.getFromSettings('CONTRACT');
-      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
-      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+      const decimal = await this.getTokenDecimals();
+      const cashTokenAddress = await this.getCashTokenAddress(isSourceGnosis);
 
-      const rpcUrl = chainConfig.rpcUrl;
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-
-      const rahatTokenContract = new ethers.Contract(
-        contract.RAHATTOKEN.ADDRESS,
-        formatedAbi,
-        provider
+      const multicallTxnPayload = await this.buildManualPayoutPayload(
+        transfers,
+        decimal,
+        cashTokenAddress,
+        isSourceGnosis
       );
-      const decimal = await rahatTokenContract.decimals.staticCall();
-
-      const multicallTxnPayload: any[][] = [];
-
-      //TODO: Check for the cash token approval from vendor(WARD Smart account) to AA contract
-      //TODO: test this code
-
-      //  const hasApproval = await this.checkCashTokenApproval(
-      //     transfers[0].vendorWalletAddress,// assuming all transfers in batch are from same vendor
-      //     aaContract.target.toString(),
-      //     transfers.reduce((sum, t) => sum + BigInt(t.amount), BigInt(0)).toString()
-      //   );
-      //   if (!hasApproval) {
-      //     this.logger.error(
-      //       `Vendor ${transfers[0].vendorWalletAddress} has not approved enough cash tokens to AA contract ${aaContract.target.toString()}, skipping transfer`,
-      //       BatchTokenTransferProcessor.name
-      //     );
-      //     throw new RpcException('Vendor has not approved enough cash tokens to AA contract');
-      //   }
-
-      for (const transfer of transfers) {
-        const hasTokens = await this.checkBeneficiaryHasTokens(
-          transfer.beneficiaryWalletAddress
-        );
-
-        if (!hasTokens) {
-          this.logger.warn(
-            `Beneficiary ${transfer.beneficiaryWalletAddress} has no tokens, skipping transfer`,
-            BatchTokenTransferProcessor.name
-          );
-          continue;
-        }
-        const formattedAmountBn = ethers.parseUnits(
-          transfer.amount.toString(),
-          decimal
-        );
-        console.log('transfer amount ', transfer.amount);
-        console.log('decimal ', decimal, formattedAmountBn);
-
-        multicallTxnPayload.push([
-          transfer.beneficiaryWalletAddress,
-          transfer.vendorWalletAddress,
-          CASH_TOKEN_ADDRESS,
-          formattedAmountBn,
-        ]);
-      }
 
       if (multicallTxnPayload.length === 0) {
-        this.logger.warn(
-          `No valid transfers in batch ${batchNumber}`,
-          BatchTokenTransferProcessor.name
-        );
-        return {
-          batchNumber,
-          success: true,
-          message: 'No valid transfers in batch',
-          transfers: transfers.length,
-          processedTransfers: 0,
-        };
+        return this.createEmptyBatchResult(batchNumber, transfers.length);
       }
 
-      // Execute multicall
+      const functionName = isSourceGnosis
+        ? 'transferTokenToVendor'
+        : 'transferTokenToVendorForCashToken';
+
+      this.logger.log(
+        `Executing ${functionName} for batch ${batchNumber} (${multicallTxnPayload.length} transfers)`,
+        BatchTokenTransferProcessor.name
+      );
+
       const txn = await this.multiSend(
         aaContract,
-        'transferTokenToVendorForCashToken',
+        functionName,
         multicallTxnPayload
       );
 
       this.logger.log(
-        `Batch ${batchNumber} executed successfully. Transaction hash: ${txn.hash}`,
+        `Batch ${batchNumber} executed. Transaction: ${txn.hash}`,
         BatchTokenTransferProcessor.name
       );
 
@@ -754,5 +700,94 @@ export class BatchTokenTransferProcessor {
       );
       throw error;
     }
+  }
+
+  private async isUsingGnosisMultisig(): Promise<boolean> {
+    const fundManagementConfig = await this.getFromSettings(
+      'FUNDMANAGEMENT_TAB_CONFIG'
+    );
+    return fundManagementConfig.tabs?.some(
+      (tab: any) => tab.value === 'multisigWallet'
+    );
+  }
+
+  private async getTokenDecimals(): Promise<number> {
+    const contract = await this.getFromSettings('CONTRACT');
+    const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+    const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    const rahatTokenContract = new ethers.Contract(
+      contract.RAHATTOKEN.ADDRESS,
+      formatedAbi,
+      provider
+    );
+    return await rahatTokenContract.decimals.staticCall();
+  }
+
+  private async getCashTokenAddress(isSourceGnosis: boolean): Promise<string> {
+    if (isSourceGnosis) {
+      const contract = await this.getFromSettings('CONTRACT');
+      return contract.AAPROJECT.ADDRESS;
+    }
+    return await this.getFromSettings('CASH_TOKEN_CONTRACT');
+  }
+
+  private async buildManualPayoutPayload(
+    transfers: SingleTransfer[],
+    decimal: number,
+    cashTokenAddress: string,
+    isSourceGnosis: boolean
+  ): Promise<any[][]> {
+    const payload: any[][] = [];
+
+    for (const transfer of transfers) {
+      const hasTokens = await this.checkBeneficiaryHasTokens(
+        transfer.beneficiaryWalletAddress
+      );
+
+      if (!hasTokens) {
+        this.logger.warn(
+          `Beneficiary ${transfer.beneficiaryWalletAddress} has no tokens, skipping`,
+          BatchTokenTransferProcessor.name
+        );
+        continue;
+      }
+
+      const formattedAmount = ethers.parseUnits(
+        transfer.amount.toString(),
+        decimal
+      );
+
+      if (isSourceGnosis) {
+        payload.push([
+          transfer.beneficiaryWalletAddress,
+          transfer.vendorWalletAddress,
+          formattedAmount,
+        ]);
+      } else {
+        payload.push([
+          transfer.beneficiaryWalletAddress,
+          transfer.vendorWalletAddress,
+          cashTokenAddress,
+          formattedAmount,
+        ]);
+      }
+    }
+
+    return payload;
+  }
+
+  private createEmptyBatchResult(batchNumber: number, transferCount: number) {
+    this.logger.warn(
+      `No valid transfers in batch ${batchNumber}`,
+      BatchTokenTransferProcessor.name
+    );
+    return {
+      batchNumber,
+      success: true,
+      message: 'No valid transfers in batch',
+      transfers: transferCount,
+      processedTransfers: 0,
+    };
   }
 }

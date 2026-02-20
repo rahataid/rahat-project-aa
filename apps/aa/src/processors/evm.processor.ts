@@ -11,6 +11,7 @@ import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { AddTriggerDto } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { lowerCaseObjectKeys } from '../utils/utility';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -124,13 +125,34 @@ export class EVMProcessor {
       }
 
       const multicallTxnPayload = [];
+
+      const contract = await this.getFromSettings('CONTRACT');
+      const formatedAbi = lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+
+      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+
+      const rpcUrl = chainConfig.rpcUrl;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        provider
+      );
+
+      const decimal = await rahatTokenContract.decimals.staticCall();
+
       for (const benf of bens) {
+        console.log('benf', benf);
         if (benf.amount) {
-          multicallTxnPayload.push([benf.walletAddress, BigInt(benf.amount)]);
+          const formattedAmountBn = ethers.parseUnits(
+            benf.amount.toString(),
+            decimal
+          );
+
+          multicallTxnPayload.push([benf.walletAddress, formattedAmountBn]);
         }
       }
-
-      console.log('multicallTxnPayload', multicallTxnPayload);
 
       let totalTokens: number = 0;
       bens?.forEach((ben) => {
@@ -235,7 +257,7 @@ export class EVMProcessor {
             totalBatches: numberOfBatches,
           },
           {
-            delay: 3 * 60 * 1000, // 3 minutes
+            delay: 0.2 * 60 * 1000, // 0.2 minutes
             attempts: 3,
             backoff: {
               type: 'exponential',
@@ -330,12 +352,12 @@ export class EVMProcessor {
             EVMProcessor.name
           );
 
-          // Add another status update job to check again in 2 minutes
+          // Add another status update job to check again in 0.2 minutes
           this.evmQueue.add(
             JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
             job.data,
             {
-              delay: 2 * 60 * 1000, // 2 minutes
+              delay: 0.2 * 60 * 1000, // 0.2 minutes
               attempts: 3,
               backoff: {
                 type: 'exponential',
@@ -1000,11 +1022,16 @@ export class EVMProcessor {
       );
       await this.ensureInitialized();
 
-      const aaContract = await this.createContractInstanceSign(
-        'AAPROJECT',
-        AAProjectABI,
-        this.signer
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
       );
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+      console.log('decimals', rahatTokenContract.decimals);
+
+      const decimals = await rahatTokenContract.decimals.staticCall();
 
       // Get token balance using benTokens.staticCall
       const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
@@ -1015,7 +1042,7 @@ export class EVMProcessor {
       );
 
       return {
-        balance: tokenBalance.toString(),
+        balance: ethers.formatUnits(tokenBalance, decimals),
         address: walletAddress,
       };
     } catch (error) {

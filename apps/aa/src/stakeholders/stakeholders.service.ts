@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
@@ -15,14 +15,15 @@ import {
   UpdateStakeholdersData,
   UpdateStakeholdersGroups,
 } from './dto';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ValidateStakeholdersResponse } from './dto/type';
 import { StatsService } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EVENTS } from '../constants';
+import { EVENTS, JOBS, TRIGGGERS_MODULE } from '../constants';
+import { firstValueFrom } from 'rxjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -34,6 +35,7 @@ export class StakeholdersService {
     private prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly statsService: StatsService,
+    @Inject(TRIGGGERS_MODULE) private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.communicationService = new CommunicationService({
@@ -156,6 +158,7 @@ export class StakeholdersService {
 
     return {
       successCount: result.count,
+      result,
       message: 'All stakeholders successfully added.',
     };
   }
@@ -316,18 +319,19 @@ export class StakeholdersService {
 
     if (!existingGroup) throw new RpcException('Group not found!');
 
-    const updatedGroup = await this.prisma.stakeholdersGroups.update({
-      where: { uuid: uuid },
-      data: {
-        name: name || existingGroup.name,
+    const data = {
+      ...(name && { name }),
+      ...(stakeholders && {
         stakeholders: {
-          // disconnect all current stakeholders
           set: [],
-          // connect new stakeholders
           connect: stakeholders,
         },
-        updatedAt: new Date(),
-      },
+      }),
+    };
+
+    const updatedGroup = await this.prisma.stakeholdersGroups.update({
+      where: { uuid: uuid },
+      data,
     });
     return updatedGroup;
   }
@@ -418,8 +422,28 @@ export class StakeholdersService {
   }
 
   async removeGroup(payload: RemoveStakeholdersGroup) {
+    this.logger.log('Removing stakeholder group...', payload);
     const { uuid } = payload;
-    return await this.prisma.stakeholdersGroups.update({
+
+    const existingGroup = await this.prisma.stakeholdersGroups.findUnique({
+      where: {
+        uuid: uuid,
+      },
+    });
+
+    if (!existingGroup) throw new RpcException('Group not found!');
+
+    const activities = await this.getActivitiesByStakeholderGroupUuid(uuid);
+
+    if (activities && activities?.length > 0) {
+      const activitiesNames = activities.map((a) => a.title);
+      return {
+        isSuccess: false,
+        activities: activitiesNames,
+      };
+    }
+
+    await this.prisma.stakeholdersGroups.update({
       where: {
         uuid: uuid,
       },
@@ -427,7 +451,29 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
+
+    return {
+      isSuccess: true,
+      activities: [],
+    };
   }
+
+  async getActivitiesByStakeholderGroupUuid(uuid: string) {
+    try {
+      const activities = await firstValueFrom(
+        this.client.send(
+          { cmd: JOBS.ACTIVITIES.GET_BY_STAKEHOLDER_UUID },
+          { stakeholderGroupUuid: uuid }
+        )
+      );
+      return activities;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching related activities. ${err.message}`
+      );
+    }
+  }
+
   async findOneGroup(payload: FindStakeholdersGroup) {
     const { uuid } = payload;
     return await this.prisma.stakeholdersGroups.findUnique({

@@ -98,7 +98,7 @@ class ContractSeed extends ContractLib {
         'RahatToken',
         'RHT',
         await DonorContract.contract.getAddress(),
-        1,
+        6,
       ],
       deployerKey
     );
@@ -190,38 +190,37 @@ class ContractSeed extends ContractLib {
       isPrivate: false,
     };
 
-
     await settings.create(data);
-    await settings.create(data2)
+    await settings.create(data2);
   }
 
-  public async addNetworkProvider(){
+  public async addNetworkProvider() {
     const network = await this.getNetworkSettings();
     const data = {
-      name:'BLOCKCHAIN',
-      value:network,
-      isPrivate:false
-    }
-   await settings.create(data);
+      name: 'BLOCKCHAIN',
+      value: network,
+      isPrivate: false,
+    };
+    await settings.create(data);
   }
 
-  public async addChainSettings(){
+  public async addChainSettings() {
     const chainData = {
-      "name":process.env.CHAIN_NAME,
-      "type":process.env.CHAIN_TYPE,
-      "rpcUrl":process.env.CHAIN_RPCURL,
-      "chainId":process.env.CHAIN_ID,
-      "currency":{
-        "name":process.env.CHAIN_CURRENCY_NAME,
-        "symbol":process.env.CHAIN_CURRENCY_SYMBOL
+      name: process.env.CHAIN_NAME,
+      type: process.env.CHAIN_TYPE,
+      rpcUrl: process.env.CHAIN_RPCURL,
+      chainId: process.env.CHAIN_ID,
+      currency: {
+        name: process.env.CHAIN_CURRENCY_NAME,
+        symbol: process.env.CHAIN_CURRENCY_SYMBOL,
       },
-      "explorerUrl":process.env.CHAIN_EXPLORER_URL
-    }
+      explorerUrl: process.env.CHAIN_EXPLORER_URL,
+    };
     const data = {
-      name:'CHAIN_SETTINGS',
-      value:chainData,
-      isPrivate:false
-    } 
+      name: 'CHAIN_SETTINGS',
+      value: chainData,
+      isPrivate: false,
+    };
     await settings.create(data);
   }
 }

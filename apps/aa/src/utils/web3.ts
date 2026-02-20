@@ -9,7 +9,7 @@ export async function createContractInstance(contractName: any, model: any) {
   //  Get RPC URL
   const res = await model.findFirstOrThrow({
     where: {
-      name: 'BLOCKCHAIN',
+      name: 'CHAIN_SETTINGS',
     },
     select: {
       name: true,
@@ -18,7 +18,7 @@ export async function createContractInstance(contractName: any, model: any) {
   });
 
   //  Create Provider
-  const provider = new JsonRpcProvider(res?.value?.RPCURL);
+  const provider = new JsonRpcProvider(res?.value?.rpcUrl);
 
   const convertToLowerCase = (obj) => {
     const newObj = {};
