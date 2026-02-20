@@ -3,8 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import { JsonRpcProvider, Wallet } from 'ethers';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
-// Load environment variables from .env.setup if it exists, otherwise fallback to .env
+// Load environment variables from .env.setup if it exists, otherwise fallback to .env.prod, then .env
 dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config({ path: `${__dirname}/.env.prod` });
 dotenv.config(); // Fallback to default .env
 
 interface ValidationResult {
@@ -50,18 +51,25 @@ class EnvironmentValidator {
       'DEPLOYER_PRIVATE_KEY',
       'RAHAT_CORE_URL',
       'DATABASE_URL',
+      // SUBGRAPH_PROVIDER is selected interactively, not from env
     ];
 
+    // Note: Subgraph provider-specific vars will be validated during deployment
+    // The provider is selected interactively in the CLI
     const optionalButRecommended = [
       'CHAIN_TYPE',
       'CHAIN_CURRENCY_NAME',
       'CHAIN_CURRENCY_SYMBOL',
       'CHAIN_EXPLORER_URL',
       'CORE_DATABASE_URL',
-      'SUBGRAPH_NETWORK',
-      'SUBGRAPH_NAME',
-      'SUBGRAPH_AUTH_TOKEN',
       'SUBGRAPH_QUERY_URL',
+      'SUBGRAPH_PROJECT_ID', // For The Graph URL construction
+      // Subgraph vars (provider-specific, validated during deployment):
+      'SUBGRAPH_NETWORK', // Required for The Graph
+      'SUBGRAPH_NAME', // Required for both
+      'SUBGRAPH_AUTH_TOKEN', // Required for The Graph
+      'SUBGRAPH_DEPLOY_KEY', // Required for Alchemy
+      'SUBGRAPH_VERSION_LABEL', // Required for Alchemy
     ];
 
     // Check required variables

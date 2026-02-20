@@ -7,9 +7,10 @@ import { SettingsService } from '@rumsan/settings';
 import { Job, Queue } from 'bull';
 import { ethers } from 'ethers';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { AddTriggerDto } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -55,6 +56,7 @@ export class EVMProcessor {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly beneficiaryService: BeneficiaryService,
     private readonly settingService: SettingsService,
+    private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly prismaService: PrismaService
   ) {
@@ -376,6 +378,10 @@ export class EVMProcessor {
               },
             },
           });
+          // emitting new event
+          this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, {
+            groupUuid,
+          });
         } else {
           this.logger.log(
             `Transaction ${txHash} failed on blockchain`,
@@ -469,17 +475,17 @@ export class EVMProcessor {
         const amount = amounts[i];
 
         // Create individual disbursement log record
-        const disbursementLog =
-          await this.prismaService.disbursementLogs.create({
-            data: {
-              txnHash: txHash,
-              beneficiaryGroupTokenId: groupToken.uuid,
-              beneficiaryWalletAddress: beneficiaryWalletAddress,
-              // Additional metadata can be stored in a separate field if needed
-            },
-          });
+        // const disbursementLog =
+        //   await this.prismaService.disbursementLogs.create({
+        //     data: {
+        //       txnHash: txHash,
+        //       beneficiaryGroupTokenId: groupToken.uuid,
+        //       beneficiaryWalletAddress: beneficiaryWalletAddress,
+        //       // Additional metadata can be stored in a separate field if needed
+        //     },
+        //   });
 
-        disbursementLogs.push(disbursementLog);
+        // disbursementLogs.push(disbursementLog);
 
         this.logger.log(
           `Created DisbursementLog for beneficiary ${beneficiaryWalletAddress} with amount ${amount}`,

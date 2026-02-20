@@ -2,7 +2,13 @@
  * Deployment State Manager
  * Tracks deployment progress and enables resumability
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  copyFileSync,
+} from 'fs';
 import { join } from 'path';
 import { Logger } from './_logger';
 
@@ -60,7 +66,9 @@ export class StateManager {
     try {
       const content = readFileSync(this.stateFile, 'utf8');
       const state = JSON.parse(content) as DeploymentState;
-      Logger.debug('Loaded deployment state', { lastCheckpoint: state.lastCheckpoint });
+      Logger.debug('Loaded deployment state', {
+        lastCheckpoint: state.lastCheckpoint,
+      });
       return state;
     } catch (error) {
       Logger.error('Failed to load deployment state', error);
@@ -74,7 +82,9 @@ export class StateManager {
   async save(state: DeploymentState): Promise<void> {
     try {
       writeFileSync(this.stateFile, JSON.stringify(state, null, 2), 'utf8');
-      Logger.debug('Saved deployment state', { checkpoint: state.lastCheckpoint });
+      Logger.debug('Saved deployment state', {
+        checkpoint: state.lastCheckpoint,
+      });
     } catch (error) {
       Logger.error('Failed to save deployment state', error);
       throw error;
@@ -133,6 +143,8 @@ export class StateManager {
 
   /**
    * Save checkpoint
+   * Also ensures the step is marked as completed if not already
+   * IMPORTANT: Do NOT call this if the step failed - check isStepFailed first!
    */
   async saveCheckpoint(stepName: string): Promise<void> {
     const state = await this.load();
@@ -140,7 +152,22 @@ export class StateManager {
       throw new Error('Deployment state not initialized');
     }
 
+    // CRITICAL: Don't mark as complete if step is already marked as failed
+    if (state.failedSteps.includes(stepName)) {
+      throw new Error(
+        `Cannot save checkpoint for failed step: ${stepName}. Step must succeed before checkpointing.`
+      );
+    }
+
+    // Ensure step is marked as completed
+    if (!state.completedSteps.includes(stepName)) {
+      state.completedSteps.push(stepName);
+    }
+
+    // Update checkpoint
     state.lastCheckpoint = stepName;
+
+    // Save state immediately
     await this.save(state);
     Logger.info(`Checkpoint saved: ${stepName}`);
   }
@@ -167,6 +194,18 @@ export class StateManager {
     }
 
     return state.completedSteps.includes(stepName);
+  }
+
+  /**
+   * Check if step is failed
+   */
+  async isStepFailed(stepName: string): Promise<boolean> {
+    const state = await this.load();
+    if (!state) {
+      return false;
+    }
+
+    return state.failedSteps.includes(stepName);
   }
 
   /**
@@ -210,7 +249,10 @@ export class StateManager {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFile = this.stateFile.replace('.json', `-backup-${timestamp}.json`);
+    const backupFile = this.stateFile.replace(
+      '.json',
+      `-backup-${timestamp}.json`
+    );
     copyFileSync(this.stateFile, backupFile);
     Logger.info(`Backup created: ${backupFile}`);
     return backupFile;
@@ -237,4 +279,3 @@ Deployment State Summary:
 `;
   }
 }
-

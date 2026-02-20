@@ -86,10 +86,18 @@ export class UpdateDatabaseCommand {
 
       // 2. Add blockchain settings
       Logger.info('Adding blockchain settings');
-      const network = this.contractLib.getNetworkSettings();
+      // Transform to match DB format: { RPCURL, CHAINNAME, NATIVECURRENCY }
+      const blockchainSettings = {
+        RPCURL: process.env.CHAIN_RPCURL || '',
+        CHAINNAME: process.env.CHAIN_NAME || '',
+        NATIVECURRENCY: {
+          NAME: process.env.CHAIN_CURRENCY_NAME || 'ETH',
+          SYMBOL: process.env.CHAIN_CURRENCY_SYMBOL || 'ETH',
+        },
+      };
       await this.settings.create({
         name: 'BLOCKCHAIN',
-        value: network,
+        value: blockchainSettings,
         isPrivate: false,
       });
       Logger.success('Blockchain settings added');

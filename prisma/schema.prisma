@@ -637,8 +637,8 @@ model Grievance {
   id              Int             @id @default(autoincrement())
   uuid            String          @unique @default(uuid()) @db.Uuid()
   reportedBy      String
-  reporterUserId  Int
   reporterContact String
+  tags            String[]
   title           String
   type            GrievanceType
   description     String
@@ -647,29 +647,30 @@ model Grievance {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   deletedAt       DateTime?
+  createdByUser       Json
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
 
   @@map("tbl_grievances")
+}
+
+enum GrievanceStatus {
+  NEW
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum GrievanceType {
+  TECHNICAL
+  NON_TECHNICAL
+  OTHER
 }
 
 enum GrievancePriority {
   LOW
   MEDIUM
   HIGH
-  CRITICAL
-}
-
-enum GrievanceType {
-  TECHNICAL
-  OPERATIONAL
-  FINANCIAL
-  OTHER
-}
-
-enum GrievanceStatus {
-  NEW
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-  REJECTED
 }
 // ============== End Grievance SCHEMAS ================

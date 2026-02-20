@@ -79,27 +79,6 @@ export const JOBS = {
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
   },
-  RIVER_STATIONS: {
-    GET_DHM: 'aa.jobs.riverStations.getDhm',
-  },
-  WATER_LEVELS: {
-    GET_DHM: 'aa.jobs.waterLevels.getDhm',
-    GET_GLOFAS: 'aa.jobs.waterLevels.getGlofas',
-  },
-  SCHEDULE: {
-    ADD: 'aa.jobs.schedule.add',
-  },
-  TRIGGERS: {
-    DEV_ONLY: 'aa.jobs.triggers.devOnly',
-    GET_ALL: 'aa.jobs.triggers.getAll',
-    GET_ONE: 'aa.jobs.triggers.getOne',
-    ADD: 'aa.jobs.triggers.add',
-    REMOVE: 'aa.jobs.triggers.remove',
-    UPDATE: 'aa.jobs.triggers.update',
-    ACTIVATE: 'aa.jobs.triggers.activate',
-    REACHED_THRESHOLD: 'aa.jobs.triggers.reachedThreshold',
-    COMMS_TRIGGER: 'aa.jobs.triggers.commsTrigger',
-  },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
@@ -154,33 +133,6 @@ export const JOBS = {
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
     VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
-  },
-  ACTIVITIES: {
-    GET_ONE: 'aa.jobs.activities.getOne',
-    GET_ALL: 'aa.jobs.activities.getAll',
-    GET_HAVING_COMMS: 'aa.jobs.activities.getHavingComms',
-    ADD: 'aa.jobs.activities.add',
-    REMOVE: 'aa.jobs.activities.remove',
-    UPDATE: 'aa.jobs.activities.update',
-    UPDATE_STATUS: 'aa.jobs.activities.updateStatus',
-    COMMUNICATION: {
-      TRIGGER: 'aa.jobs.activity.communication.trigger',
-      SESSION_LOGS: 'aa.jobs.activities.communication.sessionLogs',
-      RETRY_FAILED: 'aa.jobs.activities.communication.retryFailed',
-      GET_STATS: 'aa.jobs.activities.communication.getStats',
-    },
-  },
-  ACTIVITY_CATEGORIES: {
-    GET_ALL: 'aa.jobs.activityCategories.getAll',
-    ADD: 'aa.jobs.activityCategories.add',
-    REMOVE: 'aa.jobs.activityCategories.remove',
-  },
-  PHASES: {
-    GET_ONE: 'aa.jobs.phases.getOne',
-    GET_ALL: 'aa.jobs.phases.getAll',
-    GET_STATS: 'aa.jobs.phases.getStats',
-    ADD_TRIGGERS: 'aa.jobs.phases.addTriggers',
-    REVERT_PHASE: 'aa.jobs.phases.revertPhase',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -242,13 +194,6 @@ export const JOBS = {
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
-  DAILY_MONITORING: {
-    ADD: 'aa.jobs.dailyMonitoring.add',
-    GET_ALL: 'aa.jobs.dailyMonitoring.getAll',
-    GET_ONE: 'aa.jobs.dailyMonitoring.getOne',
-    UPDATE: 'aa.jobs.dailyMonitoring.update',
-    REMOVE: 'aa.jobs.dailyMonitoring.remove',
-  },
   VENDOR: {
     REIMBURSE: {
       CREATE: 'rahat.jobs.vendor.reimburse.create',
@@ -274,6 +219,7 @@ export const JOBS = {
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
     OFFLINE_PAYOUT: 'aa.jobs.vendor.offline_payout',
+    ONLINE_PAYOUT: 'aa.jobs.vendor.online_payout',
     SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
     PROCESS_OFFLINE_TOKEN_TRANSFER:
       'aa.jobs.vendor.process_offline_token_transfer',
@@ -292,6 +238,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.grievances.update',
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
+    GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
   },
   EVM: {
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
@@ -311,14 +258,13 @@ export const JOBS = {
     EXECUTE_ACTION: 'aa.jobs.inkind-tracker.executeAction',
     GET_TRANSACTIONS: 'aa.jobs.inkind-tracker.getTransactions',
   },
+  MULTISIG: {
+    GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
+    CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
+  },
 };
 
 export const EVENTS = {
-  PHASE_ACTIVATED: 'events.phase_activated',
-  PHASE_REVERTED: 'events.phase_reverted',
-  ACTIVITY_COMPLETED: 'events.activity_completed',
-  ACTIVITY_DELETED: 'events.activity_deleted',
-  ACTIVITY_ADDED: 'events.activity_added',
   BENEFICIARY_CREATED: 'events.beneficiary_created',
   BENEFICIARY_REMOVED: 'events.beneficiary_updated',
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
@@ -344,6 +290,7 @@ export const BQUEUE = {
   EVM: `EVM_${process.env.PROJECT_ID}`,
   // EVM:"EVM"
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
+  VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,

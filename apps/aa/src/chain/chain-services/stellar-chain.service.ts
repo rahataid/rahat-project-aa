@@ -20,8 +20,9 @@ import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import bcrypt from 'bcryptjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+import { IDisbursement, ReceiveService } from '@rahataid/stellar-sdk';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+import { getFormattedTimeDiff } from '../../utils/date';
 
 @Injectable()
 export class StellarChainService implements IChainService {
@@ -218,6 +219,155 @@ export class StellarChainService implements IChainService {
     }
   }
 
+  async getDisbursementStats() {
+    const oneTokenPrice = (await this.getFromSettings('ONE_TOKEN_PRICE')) ?? 1;
+    const tokenName = (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT';
+
+    const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      include: {
+        beneficiaryGroup: {
+          include: {
+            _count: {
+              select: {
+                beneficiaries: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
+      if (token.isDisbursed) {
+        acc += token.numberOfTokens;
+      }
+      return acc;
+    }, 0);
+
+    const totalTokens = benfTokens.reduce(
+      (acc, token) => acc + token.numberOfTokens,
+      0
+    );
+
+    const totalBeneficiaries = benfTokens
+      .filter((token) => token.isDisbursed)
+      .reduce(
+        (acc, token) => acc + token.beneficiaryGroup._count.beneficiaries,
+        0
+      );
+
+    const disbursementsInfo = benfTokens
+      .filter(
+        (token) =>
+          token.isDisbursed && (token.info as any)?.disbursementTimeTaken
+      )
+      .map((token) => (token.info as any)?.disbursementTimeTaken);
+
+    const averageDisbursementTime =
+      disbursementsInfo.reduce((acc, time) => acc + time, 0) /
+      disbursementsInfo.length;
+
+    const activityActivationTime = await this.getActivityActivationTime();
+    let averageDuration = 0;
+
+    if (activityActivationTime) {
+      averageDuration =
+        benfTokens
+          .filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .reduce((acc, token) => {
+            const info = JSON.parse(JSON.stringify(token.info)) as {
+              disbursement: IDisbursement;
+            };
+            // getting disbursement completion time
+            const {
+              disbursement: { updated_at },
+            } = info;
+
+            // diff between disbursement completion time and activity activation time
+            const timeTaken =
+              new Date(updated_at).getTime() -
+              new Date(activityActivationTime).getTime();
+
+            return acc + timeTaken;
+          }, 0) /
+        benfTokens.filter((b) => b.isDisbursed && (b.info as any)?.disbursement)
+          .length;
+
+      averageDuration = averageDuration;
+    }
+
+    return [
+      {
+        name: 'Token Disbursed',
+        value: totalDisbursedTokens,
+      },
+      {
+        name: 'Budget Assigned',
+        value: totalTokens * oneTokenPrice,
+      },
+      {
+        name: 'Token',
+        value: tokenName,
+      },
+      { name: 'Token Price', value: oneTokenPrice },
+      { name: 'Total Beneficiaries', value: totalBeneficiaries },
+      {
+        name: 'Average Disbursement time',
+        value: getFormattedTimeDiff(averageDisbursementTime),
+      },
+      {
+        name: 'Average Duration',
+        value:
+          averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
+      },
+    ];
+  }
+
+  async getActivityActivationTime() {
+    const projectInfo = await this.settingService.getPublic('PROJECTINFO');
+
+    if (!projectInfo) {
+      throw new RpcException('Project info not found, in SETTINGS');
+    }
+    const activeYear = projectInfo?.value?.['active_year'];
+    const riverBasin = projectInfo?.value?.['river_basin'];
+
+    if (!activeYear || !riverBasin) {
+      this.logger.warn(`Active year or river basin not found, in SETTINGS`);
+
+      return null;
+    }
+
+    const data = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phases.getAll' },
+        {
+          activeYear,
+          riverBasin,
+        }
+      )
+    );
+
+    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+
+    if (!activationPhase) {
+      this.logger.warn(
+        `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    if (!activationPhase.isActive) {
+      this.logger.warn(
+        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+
+      return null;
+    }
+
+    return activationPhase.activatedAt;
+  }
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({
       where: { phoneNumber },

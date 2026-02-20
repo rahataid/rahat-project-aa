@@ -1,7 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
-import { BeneficiaryRedeem, Payouts, PayoutType, Prisma } from '@prisma/client';
+import {
+  BeneficiaryRedeem,
+  Payouts,
+  PayoutTransactionStatus,
+  PayoutTransactionType,
+  PayoutType,
+  Prisma,
+} from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { VendorsService } from '../vendors/vendors.service';
 import { isUUID } from 'class-validator';
@@ -48,7 +55,7 @@ import { SettingsService } from '@rumsan/settings';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
-const ONE_TOKEN_VALUE = 1;
+export const ONE_TOKEN_VALUE = 1;
 
 @Injectable()
 export class PayoutsService {
@@ -249,36 +256,43 @@ export class PayoutsService {
         },
       });
 
-      if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
-        this.logger.log(
-          `Processing manual bank transfer payout for UUID: ${payout.uuid}`
-        );
+      if (payout.type === 'VENDOR') {
+        if (createPayoutDto.mode === 'OFFLINE') {
+          await this.vendorsService.processVendorOfflinePayout({
+            beneficiaryGroupUuid: beneficiaryGroup.groupId,
+            amount: String(beneficiaryGroup.numberOfTokens),
+          });
+        } else {
+          await this.vendorsService.processVendorOnlinePayout({
+            beneficiaryGroupUuid: beneficiaryGroup.groupId,
+            amount: String(beneficiaryGroup.numberOfTokens),
+          });
+        }
+      } else {
+        if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
+          this.logger.log(
+            `Processing manual bank transfer payout for UUID: ${payout.uuid}`
+          );
 
-        const BeneficiaryPayoutDetails =
-          await this.fetchBeneficiaryPayoutDetails(payout.uuid);
+          const BeneficiaryPayoutDetails =
+            await this.fetchBeneficiaryPayoutDetails(payout.uuid);
 
-        const manualPayoutDetails: FSPManualPayoutDetails[] =
-          BeneficiaryPayoutDetails.map((beneficiary) => ({
-            amount: beneficiary.amount,
-            beneficiaryWalletAddress: beneficiary.walletAddress,
-            beneficiaryBankDetails: beneficiary.bankDetails,
-            payoutUUID: payout.uuid,
-            payoutProcessorId: createPayoutDto.payoutProcessorId,
-            beneficiaryPhoneNumber: beneficiary.phoneNumber,
-          }));
+          const manualPayoutDetails: FSPManualPayoutDetails[] =
+            BeneficiaryPayoutDetails.map((beneficiary) => ({
+              amount: beneficiary.amount,
+              beneficiaryWalletAddress: beneficiary.walletAddress,
+              beneficiaryBankDetails: beneficiary.bankDetails,
+              payoutUUID: payout.uuid,
+              payoutProcessorId: createPayoutDto.payoutProcessorId,
+              beneficiaryPhoneNumber: beneficiary.phoneNumber,
+            }));
 
-        await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
+          await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
 
-        this.logger.log(
-          `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
-        );
-      }
-
-      if (createPayoutDto.mode === 'OFFLINE') {
-        await this.vendorsService.processVendorOfflinePayout({
-          beneficiaryGroupUuid: beneficiaryGroup.groupId,
-          amount: String(beneficiaryGroup.numberOfTokens),
-        });
+          this.logger.log(
+            `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
+          );
+        }
       }
 
       this.logger.log(`Successfully created payout with UUID: ${payout.uuid}`);
@@ -778,26 +792,27 @@ export class PayoutsService {
     );
 
     // Fetch beneficiaries who have incomplete redeems for this payout
-    const beneficiariesWithIncompleteRedeems = await this.prisma.beneficiary.findMany({
-      where: {
-        BeneficiaryRedeem: {
-          some: {
-            transactionType: 'FIAT_TRANSFER',
-            payoutId: payoutUUID,
-            isCompleted: false,
+    const beneficiariesWithIncompleteRedeems =
+      await this.prisma.beneficiary.findMany({
+        where: {
+          BeneficiaryRedeem: {
+            some: {
+              transactionType: 'FIAT_TRANSFER',
+              payoutId: payoutUUID,
+              isCompleted: false,
+            },
           },
         },
-      },
-      include: {
-        BeneficiaryRedeem: {
-          where: {
-            transactionType: 'FIAT_TRANSFER',
-            payoutId: payoutUUID,
-            isCompleted: false,
+        include: {
+          BeneficiaryRedeem: {
+            where: {
+              transactionType: 'FIAT_TRANSFER',
+              payoutId: payoutUUID,
+              isCompleted: false,
+            },
           },
         },
-      },
-    });
+      });
 
     if (beneficiariesWithIncompleteRedeems.length === 0) {
       this.logger.warn(
@@ -807,42 +822,58 @@ export class PayoutsService {
     }
 
     // Calculate token amount per beneficiary
-    const totalBeneficiariesInGroup = payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
-    const numberOfTokensToTransfer = totalBeneficiariesInGroup > 0 
-      ? payout.beneficiaryGroupToken.numberOfTokens / totalBeneficiariesInGroup
-      : 0;
+    const totalBeneficiariesInGroup =
+      payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
+    const numberOfTokensToTransfer =
+      totalBeneficiariesInGroup > 0
+        ? payout.beneficiaryGroupToken.numberOfTokens /
+          totalBeneficiariesInGroup
+        : 0;
 
     // Format beneficiaries to match BeneficiaryPayoutDetails structure
-    const formattedBeneficiaries: BeneficiaryPayoutDetails[] = beneficiariesWithIncompleteRedeems
-      .map((beneficiary) => {
-        if (!beneficiary.walletAddress) {
-          return null;
-        }
+    const formattedBeneficiaries: BeneficiaryPayoutDetails[] =
+      beneficiariesWithIncompleteRedeems
+        .map((beneficiary) => {
+          if (!beneficiary.walletAddress) {
+            return null;
+          }
 
-        return {
-          amount: numberOfTokensToTransfer,
-          walletAddress: beneficiary.walletAddress,
-          phoneNumber: beneficiary.phone || structuredClone<any>(beneficiary.extras)?.phone || '',
-          bankDetails: {
-            accountName: structuredClone<any>(beneficiary.extras)?.bank_ac_name || '',
-            accountNumber: structuredClone<any>(beneficiary.extras)?.bank_ac_number || '',
-            bankName: structuredClone<any>(beneficiary.extras)?.bank_name || '',
-          },
-        };
-      })
-      .filter((beneficiary): beneficiary is BeneficiaryPayoutDetails => beneficiary !== null);
+          return {
+            amount: numberOfTokensToTransfer,
+            walletAddress: beneficiary.walletAddress,
+            phoneNumber:
+              beneficiary.phone ||
+              structuredClone<any>(beneficiary.extras)?.phone ||
+              '',
+            bankDetails: {
+              accountName:
+                structuredClone<any>(beneficiary.extras)?.bank_ac_name || '',
+              accountNumber:
+                structuredClone<any>(beneficiary.extras)?.bank_ac_number || '',
+              bankName:
+                structuredClone<any>(beneficiary.extras)?.bank_name || '',
+            },
+          };
+        })
+        .filter(
+          (beneficiary): beneficiary is BeneficiaryPayoutDetails =>
+            beneficiary !== null
+        );
 
     // Check if any wallet addresses were filtered out
-    if (formattedBeneficiaries.length !== beneficiariesWithIncompleteRedeems.length) {
+    if (
+      formattedBeneficiaries.length !==
+      beneficiariesWithIncompleteRedeems.length
+    ) {
       this.logger.warn(
         `Some beneficiaries have null or undefined wallet addresses for payout UUID: '${payoutUUID}'. ` +
-        `Expected: ${beneficiariesWithIncompleteRedeems.length}, Got: ${formattedBeneficiaries.length}`
+          `Expected: ${beneficiariesWithIncompleteRedeems.length}, Got: ${formattedBeneficiaries.length}`
       );
     }
 
     this.logger.log(
       `Successfully fetched and formatted ${formattedBeneficiaries.length} beneficiaries with incomplete redeems ` +
-      `for payout UUID: '${payoutUUID}'`
+        `for payout UUID: '${payoutUUID}'`
     );
 
     return formattedBeneficiaries;
@@ -1202,78 +1233,12 @@ export class PayoutsService {
       }
 
       if (payout.type === 'FSP') {
-        const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
-          where: {
-            payoutId: payoutUUID,
-            ...(transactionType && { transactionType }),
-            ...(transactionStatus && { status: transactionStatus }),
-            ...(search && {
-              OR: [
-                {
-                  beneficiaryWalletAddress: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  txHash: { contains: search, mode: 'insensitive' },
-                },
-                {
-                  info: {
-                    path: ['error'],
-                    string_contains: search,
-                  },
-                },
-                {
-                  Vendor: {
-                    walletAddress: { contains: search, mode: 'insensitive' },
-                  },
-                },
-                {
-                  Beneficiary: {
-                    phone: { contains: search, mode: 'insensitive' },
-                  },
-                },
-              ],
-            }),
-          },
-          include: {
-            Beneficiary: true,
-            Vendor: true,
-            payout: true,
-          },
+        const filteredRedeems = await this.getFilteredFspRedeems({
+          payoutUUID,
+          transactionType,
+          transactionStatus,
+          search,
         });
-
-        // Group by beneficiary wallet address
-        const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
-          const walletAddress = redeem.beneficiaryWalletAddress;
-          if (!acc[walletAddress]) {
-            acc[walletAddress] = {
-              TOKEN_TRANSFER: null,
-              FIAT_TRANSFER: null,
-            };
-          }
-          acc[walletAddress][redeem.transactionType] = redeem;
-          return acc;
-        }, {});
-
-        // - If FIAT_TRANSFER exists, include it and exclude TOKEN_TRANSFER
-        // - If FIAT_TRANSFER doesn't exist, include TOKEN_TRANSFER
-        const filteredRedeems = [];
-        for (const walletAddress in redeemsByWallet) {
-          const walletRedeems = redeemsByWallet[walletAddress];
-          if (walletRedeems.FIAT_TRANSFER) {
-            filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
-          } else if (walletRedeems.TOKEN_TRANSFER) {
-            if (
-              walletRedeems.TOKEN_TRANSFER.status !==
-              'TOKEN_TRANSACTION_COMPLETED'
-            ) {
-              filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
-            }
-          }
-        }
-
         const total = filteredRedeems.length;
         const pageNumber = page || 1;
         const itemsPerPage = perPage || 10;
@@ -1610,7 +1575,8 @@ export class PayoutsService {
 
     this.logger.log(
       `Fetched ${beneficiaries.length} beneficiaries with incomplete redeems for payout UUID: '${payoutUUID}'`
-    );``
+    );
+    ``;
 
     const verificationResult = this.matchBeneficiariesWithPayoutRows(
       payoutRows,
@@ -1731,9 +1697,13 @@ export class PayoutsService {
 
     this.logger.log(`Parsed ${rows.length} payout records from provided data`);
 
-    rows = rows.filter((row) => row['Transaction Status'].toLowerCase() === 'completed');
+    rows = rows.filter(
+      (row) => row['Transaction Status'].toLowerCase() === 'completed'
+    );
 
-    this.logger.log(`Filtered ${rows.length} payout records from provided data`);
+    this.logger.log(
+      `Filtered ${rows.length} payout records from provided data`
+    );
 
     return rows;
   }
@@ -1966,7 +1936,15 @@ export class PayoutsService {
         );
       }
 
-      const result = log.beneficiaryRedeem.map((redeemLog) => {
+      // 👇 if payout type is FSP, use your filtering function
+      let redeemLogs = log.beneficiaryRedeem;
+      if (log.type === 'FSP') {
+        redeemLogs = await this.getFilteredFspRedeems({
+          payoutUUID: uuid,
+        });
+      }
+
+      const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
 
@@ -2016,5 +1994,84 @@ export class PayoutsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  private async getFilteredFspRedeems(params: {
+    payoutUUID: string;
+    transactionType?: PayoutTransactionType;
+    transactionStatus?: PayoutTransactionStatus;
+    search?: string;
+  }) {
+    const { payoutUUID, transactionType, transactionStatus, search } = params;
+
+    const allRedeems = await this.prisma.beneficiaryRedeem.findMany({
+      where: {
+        payoutId: payoutUUID,
+        ...(transactionType && { transactionType }),
+        ...(transactionStatus && { status: transactionStatus }),
+        ...(search && {
+          OR: [
+            {
+              beneficiaryWalletAddress: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+            { txHash: { contains: search, mode: 'insensitive' } },
+            {
+              info: {
+                path: ['error'],
+                string_contains: search,
+              },
+            },
+            {
+              Vendor: {
+                walletAddress: { contains: search, mode: 'insensitive' },
+              },
+            },
+            {
+              Beneficiary: {
+                phone: { contains: search, mode: 'insensitive' },
+              },
+            },
+          ],
+        }),
+      },
+      include: {
+        Beneficiary: true,
+        Vendor: true,
+        payout: true,
+      },
+    });
+
+    // Group by beneficiary wallet address
+    const redeemsByWallet = allRedeems.reduce((acc, redeem) => {
+      const walletAddress = redeem.beneficiaryWalletAddress;
+      if (!acc[walletAddress]) {
+        acc[walletAddress] = {
+          TOKEN_TRANSFER: null,
+          FIAT_TRANSFER: null,
+        };
+      }
+      acc[walletAddress][redeem.transactionType] = redeem;
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Apply filtering logic
+    const filteredRedeems = [];
+    for (const walletAddress in redeemsByWallet) {
+      const walletRedeems = redeemsByWallet[walletAddress];
+      if (walletRedeems.FIAT_TRANSFER) {
+        filteredRedeems.push(walletRedeems.FIAT_TRANSFER);
+      } else if (walletRedeems.TOKEN_TRANSFER) {
+        if (
+          walletRedeems.TOKEN_TRANSFER.status !== 'TOKEN_TRANSACTION_COMPLETED'
+        ) {
+          filteredRedeems.push(walletRedeems.TOKEN_TRANSFER);
+        }
+      }
+    }
+
+    return filteredRedeems;
   }
 }

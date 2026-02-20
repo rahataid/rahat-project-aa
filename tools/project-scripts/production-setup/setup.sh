@@ -4,9 +4,10 @@ SCRIPT_DIR=$(dirname "$0")
 
 get_env_value() {
   local var_name=$1
-  # Try .env.setup first, then fallback to .env.prod
+  echo "Getting environment value for $var_name"
   local value=$(grep "^${var_name}=" "$SCRIPT_DIR/.env.setup" 2>/dev/null | cut -d '=' -f2)
   if [ -z "$value" ]; then
+    echo "Environment value not found in .env.setup, trying .env.prod"
     value=$(grep "^${var_name}=" "$SCRIPT_DIR/.env.prod" 2>/dev/null | cut -d '=' -f2)
   fi
   echo "$value"
@@ -26,11 +27,14 @@ blockchain_setup() {
     # Use new modular pipeline if available, fallback to legacy script
     if [ -f "$SCRIPT_DIR/pipelines/deploy-pipeline.ts" ]; then
         npx ts-node "$SCRIPT_DIR/pipelines/deploy-pipeline.ts"
+        EXIT_CODE=$?
     else
         npx ts-node "$SCRIPT_DIR/_setup-deployment.ts"
+        EXIT_CODE=$?
     fi
-    if [ $? -ne 0 ]; then
+    if [ $EXIT_CODE -ne 0 ]; then
         echo "❌ Contract deployment failed."
+        echo "⚠️  Pipeline failed - database will NOT be updated."
         exit 1
     fi
 }
@@ -43,7 +47,8 @@ graph_setup() {
         echo "📝 Using modular graph setup..."
         npx ts-node "$SCRIPT_DIR/graph-setup.ts"
         if [ $? -ne 0 ]; then
-            echo "⚠️  Modular graph setup failed, falling back to legacy script..."
+            echo "❌ Modular graph setup failed."
+            echo "⚠️  Falling back to legacy script..."
             # Fall through to legacy script
         else
             return 0
@@ -119,7 +124,11 @@ echo "=========================================="
 
 validate_environment
 blockchain_setup
-graph_setup
+# Graph setup is now handled within the pipeline (deploy-pipeline.ts)
+# graph_setup() is kept for backward compatibility but not called by default
+
+# Only update database if blockchain_setup succeeded
+# Note: blockchain_setup will exit with code 1 if pipeline fails, so if we reach here, it succeeded
 update_database
 
 echo ""

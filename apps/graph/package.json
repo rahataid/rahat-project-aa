@@ -8,11 +8,16 @@
     "create-local": "graph create --node http://localhost:8020/ rahat-aa",
     "remove-local": "graph remove --node http://localhost:8020/ rahat-aa",
     "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 rahat-aa",
-    "test": "graph test"
+    "test": "graph test",
+    "prepare:base-sepolia": "mustache config/base-sepolia.json subgraph.template.yaml > subgraph.yaml",
+    "deploy:base-sepolia": "pnpm run prepare:base-sepolia && pnpm run codegen && pnpm run build && goldsky subgraph deploy rahat-aa/1.0.0 --path . --tag base-sepolia --tag testnet"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.73.0",
     "@graphprotocol/graph-ts": "0.32.0"
   },
-  "devDependencies": { "matchstick-as": "0.5.0" }
+  "devDependencies": {
+    "matchstick-as": "0.5.0",
+    "mustache": "^4.2.0"
+  }
 }

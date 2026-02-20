@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 // Load environment variables from .env.setup if it exists, otherwise fallback to .env
 dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config({ path: `${__dirname}/.env.prod` });
 dotenv.config(); // Fallback to default .env
 
 interface DeploymentFile {
@@ -31,13 +32,7 @@ function getDeploymentFile(projectUUID: string): DeploymentFile | null {
   }
 }
 
-const contractNames = [
-  'AAProject',
-  'RahatDonor',
-  'RahatToken',
-  'TriggerManager',
-  'CashToken',
-];
+const contractNames = ['AAProject', 'RahatDonor', 'RahatToken'];
 
 const prisma = new PrismaService();
 const settings = new SettingsService(prisma);
@@ -110,43 +105,58 @@ class DeploymentUpdater {
       isPrivate: false,
     };
 
-    await settings.create(data);
-    await settings.create(data2);
+    try {
+      await settings.create(data);
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('CONTRACT setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
+
+    try {
+      await settings.create(data2);
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('CONTRACTS setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('Contract settings added successfully');
   }
 
   public async addBlockchainSettings() {
     console.log('Adding Blockchain settings');
 
-    if (!this.deploymentSettings?.chainSettings) {
-      // Generate from environment variables if not in deployment file
-      const chainData = {
-        name: process.env.CHAIN_NAME,
-        type: process.env.CHAIN_TYPE,
-        rpcUrl: process.env.CHAIN_RPCURL,
-        chainId: process.env.CHAIN_ID,
-        currency: {
-          name: process.env.CHAIN_CURRENCY_NAME,
-          symbol: process.env.CHAIN_CURRENCY_SYMBOL,
-        },
-        explorerUrl: process.env.CHAIN_EXPLORER_URL,
-      };
+    // Use getNetworkSettings() format like old flow, but transform to match DB format
+    const networkSettings = {
+      RPCURL: process.env.CHAIN_RPCURL || '',
+      CHAINNAME: process.env.CHAIN_NAME || '',
+      NATIVECURRENCY: {
+        NAME: process.env.CHAIN_CURRENCY_NAME || 'ETH',
+        SYMBOL: process.env.CHAIN_CURRENCY_SYMBOL || 'ETH',
+      },
+    };
 
-      const data = {
-        name: 'BLOCKCHAIN',
-        value: chainData,
-        isPrivate: false,
-      };
+    const data = {
+      name: 'BLOCKCHAIN',
+      value: networkSettings,
+      isPrivate: false,
+    };
+
+    try {
       await settings.create(data);
-    } else {
-      const data = {
-        name: 'BLOCKCHAIN',
-        value: this.deploymentSettings.chainSettings,
-        isPrivate: false,
-      };
-      await settings.create(data);
+      console.log('Blockchain settings added successfully');
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('BLOCKCHAIN setting already exists, skipping...');
+      } else {
+        throw error;
+      }
     }
-    console.log('Blockchain settings added successfully');
   }
 
   public async addChainSettings() {
@@ -170,8 +180,16 @@ class DeploymentUpdater {
       isPrivate: false,
     };
 
-    await settings.create(data);
-    console.log('Chain settings added successfully');
+    try {
+      await settings.create(data);
+      console.log('Chain settings added successfully');
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('CHAIN_SETTINGS setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
   }
 
   public async addGraphSettings() {
@@ -194,7 +212,17 @@ class DeploymentUpdater {
         },
         isPrivate: false,
       };
-      await settings.create(data);
+      try {
+        await settings.create(data);
+      } catch (error: any) {
+        if (error.message?.includes('already exists')) {
+          console.log(
+            'CASHTRACKER_SUBGRAPH_URL setting already exists, skipping...'
+          );
+        } else {
+          throw error;
+        }
+      }
 
       // Add SUBGRAPH_URL (main subgraph)
       const data2 = {
@@ -204,7 +232,15 @@ class DeploymentUpdater {
         },
         isPrivate: false,
       };
-      await settings.create(data2);
+      try {
+        await settings.create(data2);
+      } catch (error: any) {
+        if (error.message?.includes('already exists')) {
+          console.log('SUBGRAPH_URL setting already exists, skipping...');
+        } else {
+          throw error;
+        }
+      }
     } else {
       const subgraphUrl =
         typeof this.deploymentSettings.subgraphUrl === 'string'
@@ -219,7 +255,17 @@ class DeploymentUpdater {
         },
         isPrivate: false,
       };
-      await settings.create(data);
+      try {
+        await settings.create(data);
+      } catch (error: any) {
+        if (error.message?.includes('already exists')) {
+          console.log(
+            'CASHTRACKER_SUBGRAPH_URL setting already exists, skipping...'
+          );
+        } else {
+          throw error;
+        }
+      }
 
       // Add SUBGRAPH_URL (main subgraph)
       const data2 = {
@@ -229,7 +275,15 @@ class DeploymentUpdater {
         },
         isPrivate: false,
       };
-      await settings.create(data2);
+      try {
+        await settings.create(data2);
+      } catch (error: any) {
+        if (error.message?.includes('already exists')) {
+          console.log('SUBGRAPH_URL setting already exists, skipping...');
+        } else {
+          throw error;
+        }
+      }
     }
     console.log('Subgraph URL settings added successfully');
   }
@@ -254,7 +308,15 @@ class DeploymentUpdater {
       },
       isPrivate: false,
     };
-    await settings.create(adminData);
+    try {
+      await settings.create(adminData);
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('ADMIN setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
 
     // Add DEPLOYER_PRIVATE_KEY (as private)
     const deployerData = {
@@ -262,7 +324,15 @@ class DeploymentUpdater {
       value: deployerKey,
       isPrivate: true,
     };
-    await settings.create(deployerData);
+    try {
+      await settings.create(deployerData);
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('DEPLOYER_PRIVATE_KEY setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
 
     // Add RAHAT_ADMIN_PRIVATE_KEY (as private)
     const rahatAdminData = {
@@ -270,7 +340,17 @@ class DeploymentUpdater {
       value: deployerKey,
       isPrivate: true,
     };
-    await settings.create(rahatAdminData);
+    try {
+      await settings.create(rahatAdminData);
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log(
+          'RAHAT_ADMIN_PRIVATE_KEY setting already exists, skipping...'
+        );
+      } else {
+        throw error;
+      }
+    }
 
     console.log('Admin settings added successfully');
   }
@@ -292,8 +372,16 @@ class DeploymentUpdater {
       isPrivate: false,
     };
 
-    await settings.create(data);
-    console.log('CashToken contract setting added successfully');
+    try {
+      await settings.create(data);
+      console.log('CashToken contract setting added successfully');
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('CASH_TOKEN_CONTRACT setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
   }
 
   public async addEntryPoint() {
@@ -309,8 +397,16 @@ class DeploymentUpdater {
       isPrivate: false,
     };
 
-    await settings.create(data);
-    console.log('Entry Point setting added successfully');
+    try {
+      await settings.create(data);
+      console.log('Entry Point setting added successfully');
+    } catch (error: any) {
+      if (error.message?.includes('already exists')) {
+        console.log('ENTRY_POINT setting already exists, skipping...');
+      } else {
+        throw error;
+      }
+    }
   }
 }
 

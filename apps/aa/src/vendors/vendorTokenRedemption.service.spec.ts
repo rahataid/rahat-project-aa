@@ -385,7 +385,9 @@ describe('VendorTokenRedemptionService', () => {
       expect(prisma.vendorTokenRedemption.findMany).toHaveBeenCalledWith({
         where: {
           vendorUuid: 'v-1',
-          redemptionStatus: { in: ['STELLAR_VERIFIED', 'REQUESTED'] },
+          redemptionStatus: {
+            in: ['STELLAR_VERIFIED', 'REQUESTED'],
+          },
           vendor: { name: { contains: 'Shop', mode: 'insensitive' } },
         },
         include: { vendor: true },

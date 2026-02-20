@@ -8,7 +8,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { DeployedContract } from '../types/blockchain';
 import axios from 'axios';
 // Load environment variables from .env.setup if it exists, otherwise fallback to .env
-dotenv.config({ path: `${__dirname}/.env.setup` });
+dotenv.config({ path: `${__dirname}/.env.prod` });
 dotenv.config(); // Fallback to default .env
 
 const corePrisma = new PrismaClient({
