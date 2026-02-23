@@ -1153,7 +1153,7 @@ export class EvmChainService implements IChainService {
           { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
           {
             phone,
-            projectUUID: process.env.PROJECT_UUID,
+            projectUUID: process.env.PROJECT_ID,
           }
         )
       );
@@ -1180,6 +1180,17 @@ export class EvmChainService implements IChainService {
         );
       }
 
+      if (payoutEligibleGroups.length > 1) {
+        this.logger.warn(
+          `Multiple payout-eligible groups found for beneficiary. Using the first one: ${payoutEligibleGroups
+            .map((g) => g.beneficiaryGroupId)
+            .join(', ')}`
+        );
+        throw new RpcException(
+          'Multiple payout-eligible groups found for beneficiary. Please contact support.'
+        );
+      }
+
       // Use the first payout-eligible group for the lookup
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
@@ -1195,7 +1206,9 @@ export class EvmChainService implements IChainService {
       });
 
       if (!beneficiaryGroups) {
-        this.logger.error('Beneficiary group not found');
+        this.logger.error(
+          `Beneficiary group not found for ID: ${payoutEligibleGroups[0].beneficiaryGroupId}`
+        );
         throw new RpcException('Beneficiary group not found');
       }
 
