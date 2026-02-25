@@ -405,6 +405,33 @@ export class StakeholdersService {
     }
   }
 
+  async getGroupDetailsByUuids(payload: { uuids: string[] }) {
+    this.logger.log('Fetching all stakeholders group details by group uuids');
+    const { uuids } = payload;
+    try {
+      const groups = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          uuid: {
+            in: uuids,
+          },
+          isDeleted: false,
+        },
+        include: {
+          stakeholders: {
+            where: {
+              isDeleted: false,
+            },
+          },
+        },
+      });
+      return groups;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching stakeholders groups by uuids. ${err.message}`
+      );
+    }
+  }
+
   async getOneGroup(payload: GetOneGroup) {
     const { uuid } = payload;
     return this.prisma.stakeholdersGroups.findUnique({

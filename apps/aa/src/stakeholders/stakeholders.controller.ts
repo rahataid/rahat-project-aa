@@ -115,6 +115,14 @@ export class StakeholdersController {
   }
 
   @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.GET_GROUP_DETAILS_BY_UUIDS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getGroupDetailsByUuids(payload: { uuids: string[] }) {
+    return this.stakeholdersService.getGroupDetailsByUuids(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.STAKEHOLDERS.GET_ONE_GROUP,
     uuid: process.env.PROJECT_ID,
   })
