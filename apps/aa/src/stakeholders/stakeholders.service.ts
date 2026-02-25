@@ -424,9 +424,6 @@ export class StakeholdersService {
           },
         },
       });
-
-      console.log(groups);
-
       return groups;
     } catch (err) {
       throw new RpcException(
