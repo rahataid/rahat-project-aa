@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
+import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 import {
   CreateBeneficiaryDto,
   AddTokenToGroup,
@@ -34,6 +35,10 @@ describe('BeneficiaryController', () => {
     assignToken: jest.fn(),
   };
 
+  const mockBeneficiaryMultisigService = {
+    processMultisigPayout: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BeneficiaryController],
@@ -41,6 +46,10 @@ describe('BeneficiaryController', () => {
         {
           provide: BeneficiaryService,
           useValue: mockBeneficiaryService,
+        },
+        {
+          provide: BeneficiaryMultisigService,
+          useValue: mockBeneficiaryMultisigService,
         },
       ],
     }).compile();
@@ -290,7 +299,7 @@ describe('BeneficiaryController', () => {
   });
 
   describe('getAllGroups', () => {
-    it('should get all groups with console log', async () => {
+    it('should get all groups', async () => {
       const payload: GetBenfGroupDto = {
         page: 1,
         perPage: 20,
@@ -305,16 +314,12 @@ describe('BeneficiaryController', () => {
         meta: { total: 1, page: 1, perPage: 20 },
       };
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       mockBeneficiaryService.getAllGroups.mockResolvedValue(expectedResult);
 
       const result = await controller.getAllGroups(payload);
 
       expect(result).toEqual(expectedResult);
       expect(mockBeneficiaryService.getAllGroups).toHaveBeenCalledWith(payload);
-      expect(consoleSpy).toHaveBeenCalledWith(payload);
-
-      consoleSpy.mockRestore();
     });
 
     it('should handle getAllGroups with minimal payload', async () => {
@@ -329,15 +334,13 @@ describe('BeneficiaryController', () => {
         data: [],
         meta: { total: 0, page: 1, perPage: 10 },
       };
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
       mockBeneficiaryService.getAllGroups.mockResolvedValue(expectedResult);
 
       const result = await controller.getAllGroups(payload);
 
       expect(result).toEqual(expectedResult);
-      expect(consoleSpy).toHaveBeenCalledWith(payload);
-
-      consoleSpy.mockRestore();
+      expect(mockBeneficiaryService.getAllGroups).toHaveBeenCalledWith(payload);
     });
   });
 

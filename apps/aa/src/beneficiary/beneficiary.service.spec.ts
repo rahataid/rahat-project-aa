@@ -5,6 +5,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getQueueToken } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
+import { SettingsService } from '@rumsan/settings';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { GetBenfGroupDto } from './dto/get-group.dto';
@@ -81,6 +82,10 @@ describe('BeneficiaryService', () => {
     add: jest.fn(),
   };
 
+  const mockSettingsService = {
+    getPublic: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -88,6 +93,10 @@ describe('BeneficiaryService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: SettingsService,
+          useValue: mockSettingsService,
         },
         {
           provide: CORE_MODULE,
