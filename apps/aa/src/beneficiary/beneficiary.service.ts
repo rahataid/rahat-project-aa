@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
@@ -20,6 +20,7 @@ import { GroupPurpose, Prisma } from '@prisma/client';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
+import { PayoutsService } from '../payouts/payouts.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -42,7 +43,9 @@ export class BeneficiaryService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => PayoutsService))
+    private readonly payoutService: PayoutsService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -400,6 +403,8 @@ export class BeneficiaryService {
       title,
       totalTokensReserved,
       user,
+      isPayoutIntegrated,
+      params
     } = payload;
 
     const isAlreadyReserved =
@@ -430,7 +435,8 @@ export class BeneficiaryService {
       );
     }
 
-    return this.prisma.$transaction(async () => {
+    // Tx definies a single transaction with a number of operations that either all succeed or all fail together, which is crucial for maintaining data integrity when reserving tokens and creating payouts.
+    return this.prisma.$transaction(async (tx) => {
       const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
       if (!group || !group?.groupedBeneficiaries) {
@@ -451,7 +457,7 @@ export class BeneficiaryService {
       const tokenAssignedBenfWallet = [];
 
       for (const benf of benfIdsAndWalletAddress) {
-        const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany(
+        const tokenAssignedGroup = await tx.beneficiaryGroups.findMany(
           {
             where: {
               tokensReserved: {
@@ -471,7 +477,6 @@ export class BeneficiaryService {
       }
 
       if (tokenAssignedBenfWallet.length > 0) {
-        // Handle the case where tokens are already assigned to some beneficiaries
         return {
           status: 'error',
           message:
@@ -481,21 +486,9 @@ export class BeneficiaryService {
         };
       }
 
-      // await this.prisma.beneficiary.updateMany({
-      //   where: {
-      //     uuid: {
-      //       in: benfIds,
-      //     },
-      //   },
-      //   data: {
-      //     benTokens: {
-      //       increment: numberOfTokens,
-      //     },
-      //   },
-      // });
       // when disbursement is successful, we will update the benTokens not now
 
-      await this.prisma.beneficiaryGroupTokens.create({
+      const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
           groupId: beneficiaryGroupId,
@@ -503,6 +496,18 @@ export class BeneficiaryService {
           createdBy: user?.name,
         },
       });
+
+      if(isPayoutIntegrated && params) {
+        await this.payoutService.create({
+          type: params.type,
+          groupId: data.uuid,
+          mode: params.mode,
+          extras: params.extras,
+          payoutProcessorId: params.payoutProcessorId,
+          status: params.status,
+          user: user
+        }, tx as any)
+      }
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
 

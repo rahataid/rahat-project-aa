@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { BeneficiaryController } from './beneficiary.controller';
@@ -10,9 +10,11 @@ import { BQUEUE, CORE_MODULE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
 import { SettingsModule } from '@rumsan/settings';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
+import { PayoutsModule } from '../payouts/payouts.module';
 
 @Module({
   imports: [
+    forwardRef(() => PayoutsModule),
     StellarModule,
     SettingsModule,
     ClientsModule.register([
