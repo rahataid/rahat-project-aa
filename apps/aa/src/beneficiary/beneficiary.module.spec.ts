@@ -16,6 +16,8 @@ import { SettingsService } from '@rumsan/settings';
 import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
 import { StellarModule } from '../stellar/stellar.module';
 import { AppService } from '../app/app.service';
+import { VendorTokenRedemptionService } from '../vendors/vendorTokenRedemption.service';
+import { PayoutsService } from '../payouts/payouts.service';
 
 describe('BeneficiaryModule', () => {
   it('should compile the module', async () => {
@@ -144,6 +146,22 @@ describe('BeneficiaryModule', () => {
       .overrideProvider(EventEmitter2)
       .useValue({
         emit: jest.fn(),
+      })
+      .overrideProvider(VendorTokenRedemptionService)
+      .useValue({
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        update: jest.fn(),
+        remove: jest.fn(),
+      })
+      .overrideProvider(PayoutsService)
+      .useValue({
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        update: jest.fn(),
+        remove: jest.fn(),
       })
       .compile();
 
