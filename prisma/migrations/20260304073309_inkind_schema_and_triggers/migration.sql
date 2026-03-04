@@ -6,6 +6,7 @@ CREATE TABLE "tbl_inkinds" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     "description" TEXT,
     "image" TEXT,
     "availableStock" INTEGER NOT NULL DEFAULT 0,

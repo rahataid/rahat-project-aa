@@ -690,6 +690,7 @@ model Inkind {
   id          Int     @id @default(autoincrement())
   uuid        String  @unique @default(uuid())
   name        String
+  type        String
   description String?
   image       String?
 
