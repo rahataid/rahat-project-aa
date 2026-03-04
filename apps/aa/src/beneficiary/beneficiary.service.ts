@@ -433,6 +433,7 @@ export class BeneficiaryService {
 
     if (tokenAssignedBenfWallet.length > 0) {
       return {
+        isAssignable: false,
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
@@ -442,6 +443,7 @@ export class BeneficiaryService {
     }
 
     return {
+      isAssignable: true,
       status: 'success',
       message: 'No tokens have been assigned yet. Tokens can be assigned.',
       groupName: benfGroup.name,
@@ -525,6 +527,7 @@ export class BeneficiaryService {
 
     if (tokenAssignedBenfWallet.length > 0) {
       return {
+        isAssignable: false,
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
