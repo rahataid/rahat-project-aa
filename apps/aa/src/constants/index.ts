@@ -68,6 +68,7 @@ export const JOBS = {
     BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
     REMOVE: 'rahat.jobs.beneficiary.remove',
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
+    VALIDATE_TOKEN_ASSIGNMENT: 'aa.jobs.beneficiary.validate_token_assignment',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',

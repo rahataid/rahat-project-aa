@@ -396,6 +396,58 @@ export class BeneficiaryService {
     };
   }
 
+  async checkIsTokenAlreadyAssigned(groupId: UUID) {
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: groupId as string },
+    });
+
+    if (!benfGroup) {
+      throw new RpcException('Beneficiary group not found.');
+    }
+
+    const group = await this.getOneGroup(groupId);
+
+    const benfIdsAndWalletAddress = group.groupedBeneficiaries.map(
+      (d: any) => ({
+        uuid: d?.Beneficiary?.uuid,
+        walletAddress: d?.Beneficiary?.walletAddress,
+      })
+    );
+
+    const tokenAssignedBenfWallet: string[] = [];
+
+    for (const benf of benfIdsAndWalletAddress) {
+      const tokenAssignedGroups = await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          tokensReserved: { isNot: null },
+          beneficiaries: {
+            some: { beneficiaryId: { equals: benf.uuid } },
+          },
+        },
+      });
+
+      if (tokenAssignedGroups.length > 0) {
+        tokenAssignedBenfWallet.push(benf.walletAddress);
+      }
+    }
+
+    if (tokenAssignedBenfWallet.length > 0) {
+      return {
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        wallets: tokenAssignedBenfWallet,
+        groupName: benfGroup.name,
+      };
+    }
+
+    return {
+      status: 'success',
+      message: 'No tokens have been assigned yet. Tokens can be assigned.',
+      groupName: benfGroup.name,
+    };
+  }
+
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const {
       beneficiaryGroupId,
@@ -434,12 +486,14 @@ export class BeneficiaryService {
       );
     }
 
+    // Fetch group for the success response (after all validations pass)
     const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
     if (!group || !group?.groupedBeneficiaries) {
       throw new RpcException('No beneficiaries found in the specified group.');
     }
 
+    // Could call checkIsTokenAlreadyAssigned here but it will map the entire group again, may cause overhead
     const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
       (d: any) => {
         return {
