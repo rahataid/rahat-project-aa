@@ -399,12 +399,11 @@ export class BeneficiaryService {
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const {
       beneficiaryGroupId,
-      numberOfTokens,
       title,
       totalTokensReserved,
       user,
       isPayoutIntegrated,
-      params
+      params,
     } = payload;
 
     const isAlreadyReserved =
@@ -435,59 +434,54 @@ export class BeneficiaryService {
       );
     }
 
-    // Tx definies a single transaction with a number of operations that either all succeed or all fail together, which is crucial for maintaining data integrity when reserving tokens and creating payouts.
-    return this.prisma.$transaction(async (tx) => {
-      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
+    const group = await this.getOneGroup(beneficiaryGroupId as UUID);
 
-      if (!group || !group?.groupedBeneficiaries) {
-        throw new RpcException(
-          'No beneficiaries found in the specified group.'
-        );
-      }
+    if (!group || !group?.groupedBeneficiaries) {
+      throw new RpcException('No beneficiaries found in the specified group.');
+    }
 
-      const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
-        (d: any) => {
-          return {
-            uuid: d?.Beneficiary?.uuid,
-            walletAddress: d?.Beneficiary?.walletAddress,
-          };
-        }
-      );
-
-      const tokenAssignedBenfWallet = [];
-
-      for (const benf of benfIdsAndWalletAddress) {
-        const tokenAssignedGroup = await tx.beneficiaryGroups.findMany(
-          {
-            where: {
-              tokensReserved: {
-                isNot: null,
-              },
-              beneficiaries: {
-                some: {
-                  beneficiaryId: { equals: benf.uuid },
-                },
-              },
-            },
-          }
-        );
-        if (tokenAssignedGroup.length > 0) {
-          tokenAssignedBenfWallet.push(benf.walletAddress);
-        }
-      }
-
-      if (tokenAssignedBenfWallet.length > 0) {
+    const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
+      (d: any) => {
         return {
-          status: 'error',
-          message:
-            'Tokens have already been assigned to the following beneficiaries wallet addresses',
-          wallets: tokenAssignedBenfWallet,
-          groupName: benfGroup.name,
+          uuid: d?.Beneficiary?.uuid,
+          walletAddress: d?.Beneficiary?.walletAddress,
         };
       }
+    );
 
-      // when disbursement is successful, we will update the benTokens not now
+    const tokenAssignedBenfWallet = [];
 
+    for (const benf of benfIdsAndWalletAddress) {
+      const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          tokensReserved: {
+            isNot: null,
+          },
+          beneficiaries: {
+            some: {
+              beneficiaryId: { equals: benf.uuid },
+            },
+          },
+        },
+      });
+      if (tokenAssignedGroup.length > 0) {
+        tokenAssignedBenfWallet.push(benf.walletAddress);
+      }
+    }
+
+    if (tokenAssignedBenfWallet.length > 0) {
+      return {
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        wallets: tokenAssignedBenfWallet,
+        groupName: benfGroup.name,
+      };
+    }
+
+    // Tx definies a single transaction with a number of operations that either all succeed or all fail together
+    // Which is crucial for maintaining data integrity when reserving tokens and creating payouts.
+    return this.prisma.$transaction(async (tx) => {
       const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
@@ -497,16 +491,19 @@ export class BeneficiaryService {
         },
       });
 
-      if(isPayoutIntegrated && params) {
-        await this.payoutService.create({
-          type: params.type,
-          groupId: data.uuid,
-          mode: params.mode,
-          extras: params.extras,
-          payoutProcessorId: params.payoutProcessorId,
-          status: params.status,
-          user: user
-        }, tx as any)
+      if (isPayoutIntegrated && params) {
+        await this.payoutService.create(
+          {
+            type: params.type,
+            groupId: data.uuid,
+            mode: params.mode,
+            extras: params.extras,
+            payoutProcessorId: params.payoutProcessorId,
+            status: params.status,
+            user: user,
+          },
+          tx as any
+        );
       }
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
