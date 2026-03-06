@@ -1347,6 +1347,7 @@ describe('BeneficiaryService', () => {
       };
 
       const mockGroup = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           {
             Beneficiary: {
@@ -1427,7 +1428,6 @@ describe('BeneficiaryService', () => {
       expect(result).toEqual({
         status: 'success',
         message: `Successfully reserved 1000 tokens for group Test Group.`,
-        group: mockGroup,
       });
     });
 
