@@ -397,14 +397,6 @@ export class BeneficiaryService {
   }
 
   async checkIsTokenAlreadyAssigned(groupId: UUID) {
-    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
-      where: { uuid: groupId as string },
-    });
-
-    if (!benfGroup) {
-      throw new RpcException('Beneficiary group not found.');
-    }
-
     const group = await this.getOneGroup(groupId);
 
     const benfIdsAndWalletAddress = group.groupedBeneficiaries.map(
@@ -438,7 +430,7 @@ export class BeneficiaryService {
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
         wallets: tokenAssignedBenfWallet,
-        groupName: benfGroup.name,
+        groupName: group.name,
       };
     }
 
@@ -446,7 +438,7 @@ export class BeneficiaryService {
       isAssignable: true,
       status: 'success',
       message: 'No tokens have been assigned yet. Tokens can be assigned.',
-      groupName: benfGroup.name,
+      groupName: group.name,
     };
   }
 
@@ -488,52 +480,12 @@ export class BeneficiaryService {
       );
     }
 
-    // Fetch group for the success response (after all validations pass)
-    const group = await this.getOneGroup(beneficiaryGroupId as UUID);
-
-    if (!group || !group?.groupedBeneficiaries) {
-      throw new RpcException('No beneficiaries found in the specified group.');
-    }
-
-    // Could call checkIsTokenAlreadyAssigned here but it will map the entire group again, may cause overhead
-    const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
-      (d: any) => {
-        return {
-          uuid: d?.Beneficiary?.uuid,
-          walletAddress: d?.Beneficiary?.walletAddress,
-        };
-      }
+    const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
+      beneficiaryGroupId as UUID
     );
 
-    const tokenAssignedBenfWallet = [];
-
-    for (const benf of benfIdsAndWalletAddress) {
-      const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany({
-        where: {
-          tokensReserved: {
-            isNot: null,
-          },
-          beneficiaries: {
-            some: {
-              beneficiaryId: { equals: benf.uuid },
-            },
-          },
-        },
-      });
-      if (tokenAssignedGroup.length > 0) {
-        tokenAssignedBenfWallet.push(benf.walletAddress);
-      }
-    }
-
-    if (tokenAssignedBenfWallet.length > 0) {
-      return {
-        isAssignable: false,
-        status: 'error',
-        message:
-          'Tokens have already been assigned to the following beneficiaries wallet addresses',
-        wallets: tokenAssignedBenfWallet,
-        groupName: benfGroup.name,
-      };
+    if (!tokenAssignmentCheck.isAssignable) {
+      return tokenAssignmentCheck;
     }
 
     // Tx definies a single transaction with a number of operations that either all succeed or all fail together
@@ -567,8 +519,7 @@ export class BeneficiaryService {
 
       return {
         status: 'success',
-        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
-        group,
+        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`
       };
     });
   }
