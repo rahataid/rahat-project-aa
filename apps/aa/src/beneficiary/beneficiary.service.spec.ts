@@ -1195,30 +1195,21 @@ describe('BeneficiaryService', () => {
     const groupId = 'group-uuid-123' as any;
 
     it('should throw RpcException when beneficiary group not found', async () => {
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(null);
+      jest
+        .spyOn(service, 'getOneGroup')
+        .mockRejectedValue(new RpcException('Beneficiary group not found.'));
 
       await expect(
         service.checkIsTokenAlreadyAssigned(groupId)
       ).rejects.toThrow(new RpcException('Beneficiary group not found.'));
-
-      expect(
-        mockPrismaService.beneficiaryGroups.findUnique
-      ).toHaveBeenCalledWith({ where: { uuid: groupId } });
     });
 
     it('should return success when no beneficiaries are in the group', async () => {
-      const mockBenfGroup = {
-        uuid: groupId,
-        name: 'Test Group',
-      };
-
       const mockGroupData = {
+        name: 'Test Group',
         groupedBeneficiaries: [],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
-        mockBenfGroup
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
 
       const result = await service.checkIsTokenAlreadyAssigned(groupId);
@@ -1235,23 +1226,15 @@ describe('BeneficiaryService', () => {
     });
 
     it('should return success when no beneficiaries have tokens assigned', async () => {
-      const mockBenfGroup = {
-        uuid: groupId,
-        name: 'Test Group',
-      };
-
       const mockGroupData = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
           { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
         ],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
-        mockBenfGroup
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
-      // No beneficiary belongs to a group with tokens reserved
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
 
       const result = await service.checkIsTokenAlreadyAssigned(groupId);
@@ -1268,21 +1251,14 @@ describe('BeneficiaryService', () => {
     });
 
     it('should return error when some beneficiaries already have tokens assigned', async () => {
-      const mockBenfGroup = {
-        uuid: groupId,
-        name: 'Test Group',
-      };
-
       const mockGroupData = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
           { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
         ],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
-        mockBenfGroup
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
 
       // First beneficiary has a token-assigned group, second does not
@@ -1303,21 +1279,14 @@ describe('BeneficiaryService', () => {
     });
 
     it('should return error listing all wallets when all beneficiaries have tokens assigned', async () => {
-      const mockBenfGroup = {
-        uuid: groupId,
-        name: 'Test Group',
-      };
-
       const mockGroupData = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
           { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
         ],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
-        mockBenfGroup
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
 
       // Both beneficiaries have token-assigned groups
@@ -1341,16 +1310,13 @@ describe('BeneficiaryService', () => {
     });
 
     it('should query findMany with correct filter for each beneficiary', async () => {
-      const mockBenfGroup = { uuid: groupId, name: 'Test Group' };
       const mockGroupData = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           { Beneficiary: { uuid: 'benf-uuid-1', walletAddress: 'WALLET-1' } },
         ],
       };
 
-      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
-        mockBenfGroup
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
 
