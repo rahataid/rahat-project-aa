@@ -163,7 +163,10 @@ export class PayoutsService {
     }
   }
 
-  async create(payload: CreatePayoutDto, prismaService = this.prisma): Promise<Payouts> {
+  async create(
+    payload: CreatePayoutDto,
+    prismaService = this.prisma
+  ): Promise<Payouts> {
     const { groupId, user, ...createPayoutDto } = payload;
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
@@ -275,24 +278,9 @@ export class PayoutsService {
             `Processing manual bank transfer payout for UUID: ${payout.uuid}`
           );
 
-          const BeneficiaryPayoutDetails =
-            await this.fetchBeneficiaryPayoutDetails(payout.uuid);
-
-          const manualPayoutDetails: FSPManualPayoutDetails[] =
-            BeneficiaryPayoutDetails.map((beneficiary) => ({
-              amount: beneficiary.amount,
-              beneficiaryWalletAddress: beneficiary.walletAddress,
-              beneficiaryBankDetails: beneficiary.bankDetails,
-              payoutUUID: payout.uuid,
-              payoutProcessorId: createPayoutDto.payoutProcessorId,
-              beneficiaryPhoneNumber: beneficiary.phoneNumber,
-            }));
-
-          await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
-
-          this.logger.log(
-            `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
-          );
+          await this.offrampService.addToManualPayoutQueue({
+            payoutUUID: payout.uuid,
+          });
         }
       }
 
@@ -321,6 +309,24 @@ export class PayoutsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  async getFSPManualPayoutDetails(payoutUUID: string) {
+    const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
+      payoutUUID
+    );
+
+    const manualPayoutDetails: FSPManualPayoutDetails[] =
+      BeneficiaryPayoutDetails.map((beneficiary) => ({
+        amount: beneficiary.amount,
+        beneficiaryWalletAddress: beneficiary.walletAddress,
+        beneficiaryBankDetails: beneficiary.bankDetails,
+        payoutUUID: payoutUUID,
+        payoutProcessorId: 'manual-bank-transfer',
+        beneficiaryPhoneNumber: beneficiary.phoneNumber,
+      }));
+
+    return manualPayoutDetails;
   }
 
   async findAll(
