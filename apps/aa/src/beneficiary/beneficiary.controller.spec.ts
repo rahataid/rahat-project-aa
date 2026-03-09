@@ -491,6 +491,7 @@ describe('BeneficiaryController', () => {
         totalTokensReserved: 5000,
         title: 'Test Token Reservation',
         user: { id: 1, name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       const expectedResult = {
@@ -516,6 +517,7 @@ describe('BeneficiaryController', () => {
         numberOfTokens: 10000,
         totalTokensReserved: 5000,
         title: 'Test Token Reservation',
+        isPayoutIntegrated: false,
       };
 
       const error = new Error('Insufficient tokens');

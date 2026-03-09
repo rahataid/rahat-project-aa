@@ -129,6 +129,16 @@ export class BeneficiaryController {
 
   // ***** groups fund mgmt ********** //
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.VALIDATE_TOKEN_ASSIGNMENT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async validateTokenAssignment(payload: { groupId: UUID }) {
+    return this.beneficiaryService.checkIsTokenAlreadyAssigned(
+      payload.groupId as UUID
+    );
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })

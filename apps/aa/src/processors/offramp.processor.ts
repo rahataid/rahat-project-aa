@@ -7,10 +7,14 @@ import { FSPManualPayoutDetails, FSPOfframpDetails } from './types';
 import { getBankId } from '../utils/bank';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { CipsResponseData, EnrichedManualPayoutRow } from '../payouts/dto/types';
+import {
+  CipsResponseData,
+  EnrichedManualPayoutRow,
+} from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
+import { PayoutsService } from '../payouts/payouts.service';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -19,6 +23,7 @@ export class OfframpProcessor {
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
+    private readonly payoutService: PayoutsService,
     private readonly eventEmitter: EventEmitter2,
     private readonly appService: AppService,
     private configService: ConfigService
@@ -182,38 +187,46 @@ export class OfframpProcessor {
   }
 
   @Process({ name: JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT, concurrency: 1 })
-  async sendInstantManualPayoutRequest(job: Job<FSPManualPayoutDetails[]>) {
-    const fspManualPayoutDetailsArray = job.data;
+  async sendInstantManualPayoutRequest(job: Job<{ payoutUUID: string }>) {
+    const { payoutUUID } = job.data;
+
+    const fspManualPayoutDetailsArray =
+      await this.payoutService.getFSPManualPayoutDetails(payoutUUID);
 
     this.logger.log(
       `Processing instant manual payout request for ${fspManualPayoutDetailsArray.length} beneficiaries`
     );
 
     try {
-      const payload: Prisma.BeneficiaryRedeemCreateManyInput[] = fspManualPayoutDetailsArray.map((fspManualPayoutDetails) => ({
+      const payload: Prisma.BeneficiaryRedeemCreateManyInput[] =
+        fspManualPayoutDetailsArray.map((fspManualPayoutDetails) => ({
           status: 'FIAT_TRANSACTION_INITIATED',
           transactionType: 'FIAT_TRANSFER',
-          beneficiaryWalletAddress: fspManualPayoutDetails.beneficiaryWalletAddress,
+          beneficiaryWalletAddress:
+            fspManualPayoutDetails.beneficiaryWalletAddress,
           fspId: fspManualPayoutDetails.payoutProcessorId,
           amount: +fspManualPayoutDetails.amount,
           payoutId: fspManualPayoutDetails.payoutUUID,
           info: {
             paymentProviderType: 'manual_bank_transfer',
-            beneficiaryWalletAddress: fspManualPayoutDetails.beneficiaryWalletAddress,
-            beneficiaryBankDetails: fspManualPayoutDetails.beneficiaryBankDetails,
-            beneficiaryPhoneNumber: fspManualPayoutDetails.beneficiaryPhoneNumber,
+            beneficiaryWalletAddress:
+              fspManualPayoutDetails.beneficiaryWalletAddress,
+            beneficiaryBankDetails:
+              fspManualPayoutDetails.beneficiaryBankDetails,
+            beneficiaryPhoneNumber:
+              fspManualPayoutDetails.beneficiaryPhoneNumber,
             numberOfAttempts: 1,
-            message: 'Manual bank transfer initiated - requires manual processing',
+            message:
+              'Manual bank transfer initiated - requires manual processing',
           },
-
-      }));
+        }));
 
       await this.beneficiaryService.createBeneficiaryRedeemBulk(payload);
 
       this.logger.log(
         `Successfully processed ${fspManualPayoutDetailsArray.length} manual payout requests`
       );
-      
+
       return {
         success: true,
         message: `Processed ${fspManualPayoutDetailsArray.length} manual payout requests`,
@@ -224,7 +237,9 @@ export class OfframpProcessor {
         error.stack
       );
 
-      throw new Error(`Failed to process instant manual payout: ${error.message}`);
+      throw new Error(
+        `Failed to process instant manual payout: ${error.message}`
+      );
     }
   }
 
@@ -234,11 +249,14 @@ export class OfframpProcessor {
     console.log('data in verify manual payout', data);
 
     try {
-      // match tranfer to benf 
+      // match tranfer to benf
       // mark benf as token redeemed and burn the token
       return data;
     } catch (error) {
-      this.logger.error(`Failed to verify manual payout: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to verify manual payout: ${error.message}`,
+        error.stack
+      );
       throw new Error(`Failed to verify manual payout: ${error.message}`);
     }
   }

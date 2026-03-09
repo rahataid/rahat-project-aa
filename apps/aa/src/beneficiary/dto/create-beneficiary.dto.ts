@@ -1,4 +1,4 @@
-import { GroupPurpose } from '@prisma/client';
+import { GroupPurpose, PayoutMode, PayoutType } from '@prisma/client';
 import { BaseBeneficiaryDto } from '@rahat-project/cva';
 import { Enums } from '@rahataid/sdk';
 import {
@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CreatePayoutDto } from '../../payouts/dto/create-payout.dto';
 
 interface optionalBeneficiaryFields {
   benTokens?: number;
@@ -45,6 +46,15 @@ export interface AddTokenToGroup {
   totalTokensReserved: number;
   title: string;
   user?: any;
+  isPayoutIntegrated: boolean;
+  params?: {
+    type: PayoutType;
+    mode: PayoutMode;
+    status?: string;
+    extras?: any;
+    payoutProcessorId?: string;
+    user?: any;
+  };
 }
 
 export interface AssignBenfGroupToProject {

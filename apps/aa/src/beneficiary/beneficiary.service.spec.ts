@@ -11,6 +11,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { GetBenfGroupDto } from './dto/get-group.dto';
 import { GroupPurpose } from '@prisma/client';
 import { of } from 'rxjs';
+import { PayoutsService } from '../payouts/payouts.service';
 
 describe('BeneficiaryService', () => {
   let service: BeneficiaryService;
@@ -86,6 +87,10 @@ describe('BeneficiaryService', () => {
     getPublic: jest.fn(),
   };
 
+  const mockPayoutsService = {
+    create: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -113,6 +118,10 @@ describe('BeneficiaryService', () => {
         {
           provide: EventEmitter2,
           useValue: mockEventEmitter,
+        },
+        {
+          provide: PayoutsService,
+          useValue: mockPayoutsService,
         },
       ],
     }).compile();
@@ -1182,6 +1191,150 @@ describe('BeneficiaryService', () => {
     });
   });
 
+  describe('checkIsTokenAlreadyAssigned', () => {
+    const groupId = 'group-uuid-123' as any;
+
+    it('should throw RpcException when beneficiary group not found', async () => {
+      jest
+        .spyOn(service, 'getOneGroup')
+        .mockRejectedValue(new RpcException('Beneficiary group not found.'));
+
+      await expect(
+        service.checkIsTokenAlreadyAssigned(groupId)
+      ).rejects.toThrow(new RpcException('Beneficiary group not found.'));
+    });
+
+    it('should return success when no beneficiaries are in the group', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: true,
+        status: 'success',
+        message: 'No tokens have been assigned yet. Tokens can be assigned.',
+        groupName: 'Test Group',
+      });
+      expect(
+        mockPrismaService.beneficiaryGroups.findMany
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should return success when no beneficiaries have tokens assigned', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+          { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: true,
+        status: 'success',
+        message: 'No tokens have been assigned yet. Tokens can be assigned.',
+        groupName: 'Test Group',
+      });
+      expect(
+        mockPrismaService.beneficiaryGroups.findMany
+      ).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return error when some beneficiaries already have tokens assigned', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+          { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      // First beneficiary has a token-assigned group, second does not
+      mockPrismaService.beneficiaryGroups.findMany
+        .mockResolvedValueOnce([{ uuid: 'other-group', name: 'Other Group' }])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: false,
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        wallets: ['WALLET-1'],
+        groupName: 'Test Group',
+      });
+    });
+
+    it('should return error listing all wallets when all beneficiaries have tokens assigned', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+          { Beneficiary: { uuid: 'benf-2', walletAddress: 'WALLET-2' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      // Both beneficiaries have token-assigned groups
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
+        { uuid: 'other-group' },
+      ]);
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: false,
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        wallets: ['WALLET-1', 'WALLET-2'],
+        groupName: 'Test Group',
+      });
+      expect(
+        mockPrismaService.beneficiaryGroups.findMany
+      ).toHaveBeenCalledTimes(2);
+    });
+
+    it('should query findMany with correct filter for each beneficiary', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-uuid-1', walletAddress: 'WALLET-1' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
+
+      await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(mockPrismaService.beneficiaryGroups.findMany).toHaveBeenCalledWith(
+        {
+          where: {
+            tokensReserved: { isNot: null },
+            beneficiaries: {
+              some: { beneficiaryId: { equals: 'benf-uuid-1' } },
+            },
+          },
+        }
+      );
+    });
+  });
+
   describe('reserveTokenToGroup', () => {
     it('should reserve tokens to group successfully when no wallets have tokens assigned', async () => {
       const payload = {
@@ -1190,9 +1343,11 @@ describe('BeneficiaryService', () => {
         totalTokensReserved: 1000,
         title: 'Test Token Reservation',
         user: { name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       const mockGroup = {
+        name: 'Test Group',
         groupedBeneficiaries: [
           {
             Beneficiary: {
@@ -1215,51 +1370,52 @@ describe('BeneficiaryService', () => {
         groupPurpose: GroupPurpose.BANK_TRANSFER,
       };
 
-      // Mock DB calls
+      const mockCreatedToken = {
+        id: 1,
+        uuid: 'token-uuid-1',
+        title: 'Test Token Reservation',
+      };
+
+      // Reads/validations happen outside the transaction now
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
         null
       ); // No token reserved yet
       mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
         mockBenfGroup
       );
-
       // No beneficiaries already assigned to tokens
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([]);
-
-      // Transaction mock
-      mockPrismaService.$transaction.mockImplementation(async (callback) =>
-        callback()
-      );
-
-      // Mock getOneGroup method
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
 
-      mockPrismaService.beneficiaryGroupTokens.create.mockResolvedValue({
-        id: 1,
-        title: 'Test Token Reservation',
-      });
+      // Transaction only wraps write operations — tx is the prisma client passed to the callback
+      const mockTx = {
+        beneficiaryGroupTokens: {
+          create: jest.fn().mockResolvedValue(mockCreatedToken),
+        },
+      };
+      mockPrismaService.$transaction.mockImplementation(async (callback) =>
+        callback(mockTx)
+      );
 
       const result = await service.reserveTokenToGroup(payload);
 
-      // Assertions
+      // Pre-transaction validations
       expect(
         mockPrismaService.beneficiaryGroupTokens.findUnique
       ).toHaveBeenCalledWith({
         where: { groupId: 'group-123' },
       });
-
       expect(
         mockPrismaService.beneficiaryGroups.findUnique
       ).toHaveBeenCalledWith({
         where: { uuid: 'group-123' },
       });
-
       expect(
         mockPrismaService.beneficiaryGroups.findMany
-      ).toHaveBeenCalledTimes(2); // For both beneficiaries
-      expect(
-        mockPrismaService.beneficiaryGroupTokens.create
-      ).toHaveBeenCalledWith({
+      ).toHaveBeenCalledTimes(2); // For both beneficiaries, outside tx
+
+      // Write inside transaction uses tx client
+      expect(mockTx.beneficiaryGroupTokens.create).toHaveBeenCalledWith({
         data: {
           title: 'Test Token Reservation',
           groupId: 'group-123',
@@ -1269,11 +1425,9 @@ describe('BeneficiaryService', () => {
       });
 
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(EVENTS.TOKEN_RESERVED);
-
       expect(result).toEqual({
         status: 'success',
         message: `Successfully reserved 1000 tokens for group Test Group.`,
-        group: mockGroup,
       });
     });
 
@@ -1284,6 +1438,7 @@ describe('BeneficiaryService', () => {
         totalTokensReserved: 1000,
         title: 'Test Token Reservation',
         user: { name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue({
@@ -1302,6 +1457,7 @@ describe('BeneficiaryService', () => {
         totalTokensReserved: 1000,
         title: 'Test Token Reservation',
         user: { name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
@@ -1321,6 +1477,7 @@ describe('BeneficiaryService', () => {
         totalTokensReserved: 1000,
         title: 'Test Token Reservation',
         user: { name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       const mockBenfGroup = {
@@ -1349,6 +1506,7 @@ describe('BeneficiaryService', () => {
         totalTokensReserved: 1000,
         title: 'Test Token Reservation',
         user: { name: 'Admin User' },
+        isPayoutIntegrated: false,
       };
 
       const mockGroup = {
@@ -1368,24 +1526,25 @@ describe('BeneficiaryService', () => {
         groupPurpose: GroupPurpose.BANK_TRANSFER,
       };
 
+      // All reads/validations now happen outside the transaction
       mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
         null
       );
       mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
         mockBenfGroup
       );
-      mockPrismaService.$transaction.mockImplementation(async (callback) =>
-        callback()
-      );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
 
       // Simulate beneficiary already in a group with tokens reserved
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([{}]);
 
+      // $transaction should NOT be called — we return early before reaching it
       const result = await service.reserveTokenToGroup(payload);
 
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
       expect(result.status).toBe('error');
-      expect(result.wallets).toEqual(['WALLET-1']);
+      expect((result as any).isAssignable).toBe(false);
+      expect((result as any).wallets).toEqual(['WALLET-1']);
       expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });

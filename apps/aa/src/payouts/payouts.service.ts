@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import {
@@ -72,6 +72,7 @@ export class PayoutsService {
     private readonly stellarQueue: Queue,
     private configService: ConfigService,
     private appService: AppService,
+    @Inject(forwardRef(() => BeneficiaryService))
     private readonly beneficiaryService: BeneficiaryService,
     private settingService: SettingsService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
@@ -162,7 +163,10 @@ export class PayoutsService {
     }
   }
 
-  async create(payload: CreatePayoutDto): Promise<Payouts> {
+  async create(
+    payload: CreatePayoutDto,
+    prismaService = this.prisma
+  ): Promise<Payouts> {
     const { groupId, user, ...createPayoutDto } = payload;
     const projectName = await this.appService.getSettings({
       name: 'PROJECTINFO',
@@ -175,7 +179,7 @@ export class PayoutsService {
       );
 
       const beneficiaryGroup =
-        await this.prisma.beneficiaryGroupTokens.findFirst({
+        await prismaService.beneficiaryGroupTokens.findFirst({
           where: { uuid: groupId },
           include: {
             beneficiaryGroup: {
@@ -191,7 +195,7 @@ export class PayoutsService {
           `Beneficiary group tokens with UUID '${groupId}' not found`
         );
       }
-      const existingPayout = await this.prisma.payouts.findFirst({
+      const existingPayout = await prismaService.payouts.findFirst({
         where: { beneficiaryGroupToken: { uuid: groupId } },
       });
 
@@ -243,7 +247,7 @@ export class PayoutsService {
         }
       }
 
-      const payout = await this.prisma.payouts.create({
+      const payout = await prismaService.payouts.create({
         data: {
           type: createPayoutDto.type,
           mode: createPayoutDto.mode,
@@ -274,24 +278,9 @@ export class PayoutsService {
             `Processing manual bank transfer payout for UUID: ${payout.uuid}`
           );
 
-          const BeneficiaryPayoutDetails =
-            await this.fetchBeneficiaryPayoutDetails(payout.uuid);
-
-          const manualPayoutDetails: FSPManualPayoutDetails[] =
-            BeneficiaryPayoutDetails.map((beneficiary) => ({
-              amount: beneficiary.amount,
-              beneficiaryWalletAddress: beneficiary.walletAddress,
-              beneficiaryBankDetails: beneficiary.bankDetails,
-              payoutUUID: payout.uuid,
-              payoutProcessorId: createPayoutDto.payoutProcessorId,
-              beneficiaryPhoneNumber: beneficiary.phoneNumber,
-            }));
-
-          await this.offrampService.addToManualPayoutQueue(manualPayoutDetails);
-
-          this.logger.log(
-            `Manual bank transfer queue added for payout UUID: ${payout.uuid}`
-          );
+          await this.offrampService.addToManualPayoutQueue({
+            payoutUUID: payout.uuid,
+          });
         }
       }
 
@@ -299,7 +288,7 @@ export class PayoutsService {
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         payload: {
           title: `Payout Created`,
-          description: `Payout has been created by ${user.name} in ${
+          description: `Payout has been created by ${user?.name} in ${
             projectName.value['project_name'] || projectId
           } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
             beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
@@ -320,6 +309,24 @@ export class PayoutsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  async getFSPManualPayoutDetails(payoutUUID: string) {
+    const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
+      payoutUUID
+    );
+
+    const manualPayoutDetails: FSPManualPayoutDetails[] =
+      BeneficiaryPayoutDetails.map((beneficiary) => ({
+        amount: beneficiary.amount,
+        beneficiaryWalletAddress: beneficiary.walletAddress,
+        beneficiaryBankDetails: beneficiary.bankDetails,
+        payoutUUID: payoutUUID,
+        payoutProcessorId: 'manual-bank-transfer',
+        beneficiaryPhoneNumber: beneficiary.phoneNumber,
+      }));
+
+    return manualPayoutDetails;
   }
 
   async findAll(
