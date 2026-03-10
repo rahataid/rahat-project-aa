@@ -25,6 +25,17 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS, JOBS, TRIGGGERS_MODULE } from '../constants';
 import { firstValueFrom } from 'rxjs';
 
+type StakeholderImportRow = {
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  designation?: string;
+  organization?: string;
+  district?: string;
+  municipality?: string;
+  supportArea?: string[];
+};
+
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
 export class StakeholdersService {
@@ -77,88 +88,22 @@ export class StakeholdersService {
   async bulkAdd(payloads: any) {
     this.logger.log('Adding bulk stakeholders...');
 
-    // validate the  parseddata with the stakeholder class
-    const rData = await this.validateStakeholders(payloads);
-
-    // Step 1: Clean and normalize input
-
-    const cleanedPayloads = rData.validStakeholders.map(
-      ({ phone, email, ...rest }) => {
-        let cleanedPhone = phone?.trim() || null;
-
-        // Normalize if it's a 10-digit number
-        if (/^\d{10}$/.test(cleanedPhone)) {
-          cleanedPhone = `+977${cleanedPhone}`;
-        }
-        let cleanedEmail = email?.trim().toLowerCase() || null;
-        return {
-          ...rest,
-          email: cleanedEmail,
-          phone: cleanedPhone,
-        };
-      }
+    const { validStakeholders } = await this.validateStakeholders(payloads);
+    const cleaned = this.normalizeAndCleanPayloads(validStakeholders);
+    const deduplicated = this.deduplicateByPhone(cleaned);
+    const existingPhoneToUuid = await this.fetchExistingByPhone(deduplicated);
+    const { toCreate, toUpdate } = this.classifyPayloads(
+      deduplicated,
+      existingPhoneToUuid
     );
-
-    // Step 2: Extract non-null phones
-    const phonesToCheck = cleanedPayloads
-      .map((p) => p.phone)
-      .filter((phone): phone is string => !!phone);
-
-    // Extract non-null email
-    const emailsToCheck = cleanedPayloads
-      .map((p) => p.email)
-      .filter((email): email is string => !!email);
-
-    // Step 3: Check for existing phones in DB
-    const existingPhones = await this.prisma.stakeholders.findMany({
-      where: {
-        phone: { in: phonesToCheck },
-      },
-      select: { phone: true },
-    });
-
-    // Step 4: Check for existing emails if provided
-    const existingEmails = emailsToCheck.length
-      ? await this.prisma.stakeholders.findMany({
-          where: {
-            email: { in: emailsToCheck },
-          },
-          select: { email: true },
-        })
-      : [];
-    const duplicates = {
-      phones: existingPhones.map((e) => e.phone),
-      emails: existingEmails.map((e) => e.email),
-    };
-
-    const duplicateMessages = [];
-
-    if (duplicates.phones.length > 0) {
-      duplicateMessages.push(`Phone(s): ${duplicates.phones.join(', ')}`);
-    }
-    if (duplicates.emails.length > 0) {
-      duplicateMessages.push(`Email(s): ${duplicates.emails.join(', ')}`);
-    }
-
-    if (duplicateMessages.length > 0) {
-      this.logger.warn(
-        `Found duplicate entries: ${duplicateMessages.join(' | ')}`
-      );
-      throw new RpcException(
-        `Duplicate(s) found: ${duplicateMessages.join(' | ')}`
-      );
-    }
-
-    // Step 4: Insert all if no duplicates
-    const result = await this.prisma.stakeholders.createMany({
-      data: cleanedPayloads,
-    });
+    await this.persistStakeholders(toCreate, toUpdate);
 
     await this.eventEmitter.emit(EVENTS.STAKEHOLDER_CREATED);
 
+    // build this response so that frontend is not breaking
     return {
-      successCount: result.count,
-      result,
+      successCount: deduplicated.length,
+      result: { count: deduplicated.length },
       message: 'All stakeholders successfully added.',
     };
   }
@@ -511,6 +456,155 @@ export class StakeholdersService {
         stakeholders: true,
       },
     });
+  }
+
+  /**
+   * Normalizes phone numbers, lowercases emails,
+   * and strips all empty fields from each payload row.
+   */
+  private normalizeAndCleanPayloads(payloads: any[]): StakeholderImportRow[] {
+    return payloads.map(({ phone, email, ...rest }) => {
+      let cleanedPhone = phone?.trim() || null;
+
+      // Normalize 10-digit number to +977 format
+      if (cleanedPhone && /^\d{10}$/.test(cleanedPhone)) {
+        cleanedPhone = `+977${cleanedPhone}`;
+      }
+
+      const raw = {
+        ...rest,
+        email: email?.trim().toLowerCase() || null,
+        phone: cleanedPhone,
+      };
+
+      return this.removeEmptyFields(raw) as StakeholderImportRow;
+    });
+  }
+
+  /**
+   * Removes duplicate rows by phone number within the same import batch.
+   * First occurrence wins. Null-phone rows are always kept.
+   */
+  private deduplicateByPhone(
+    payloads: StakeholderImportRow[]
+  ): StakeholderImportRow[] {
+    const seenPhones = new Set<string>();
+    return payloads.filter((p) => {
+      if (!p.phone) return true; // allow null-phone records through
+      if (seenPhones.has(p.phone)) return false;
+      seenPhones.add(p.phone);
+      return true;
+    });
+  }
+
+  /**
+   * Fetches existing stakeholders from DB by phone numbers.
+   * Returns a Map of phone → uuid for O(1) lookup.
+   * Single DB call regardless of record count.
+   */
+  private async fetchExistingByPhone(
+    payloads: StakeholderImportRow[]
+  ): Promise<Map<string, string>> {
+    const phonesToCheck = payloads
+      .map((p) => p.phone)
+      .filter((phone): phone is string => !!phone);
+
+    if (!phonesToCheck.length) return new Map();
+
+    const existing = await this.prisma.stakeholders.findMany({
+      where: { phone: { in: phonesToCheck } },
+      select: { uuid: true, phone: true },
+    });
+
+    return new Map(existing.map((s) => [s.phone, s.uuid]));
+  }
+
+  /**
+   * Classifies each payload as either a new record (toCreate)
+   * or an update to an existing record (toUpdate) based on phone match.
+   */
+  private classifyPayloads(
+    payloads: StakeholderImportRow[],
+    existingPhoneToUuid: Map<string, string>
+  ): {
+    toCreate: StakeholderImportRow[];
+    toUpdate: Array<{ uuid: string; fields: Record<string, any> }>;
+  } {
+    const toCreate: StakeholderImportRow[] = [];
+    const toUpdate: Array<{ uuid: string; fields: Record<string, any> }> = [];
+
+    for (const payload of payloads) {
+      const existingUuid =
+        payload.phone && existingPhoneToUuid.get(payload.phone);
+
+      if (existingUuid) {
+        // Phone matched → update (exclude phone from update fields)
+        const { phone, ...fields } = payload;
+        toUpdate.push({ uuid: existingUuid, fields });
+      } else {
+        // No phone match → create new stakeholder
+        toCreate.push(payload);
+      }
+    }
+
+    return { toCreate, toUpdate };
+  }
+
+  /**
+   * Persists creates and updates in a single atomic transaction.
+   * - createMany: 1 DB call for all new records
+   * - Promise.all: concurrent updates inside same transaction
+   */
+  private async persistStakeholders(
+    toCreate: StakeholderImportRow[],
+    toUpdate: Array<{ uuid: string; fields: Record<string, any> }>
+  ): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (toCreate.length) {
+          await tx.stakeholders.createMany({
+            data: toCreate as any,
+            skipDuplicates: true, // safety net for DB-level unique constraint
+          });
+        }
+
+        if (toUpdate.length) {
+          await Promise.all(
+            toUpdate.map(({ uuid, fields }) =>
+              tx.stakeholders.update({
+                where: { uuid },
+                data: { ...fields, updatedAt: new Date(), isDeleted: false },
+              })
+            )
+          );
+        }
+      });
+
+      this.logger.log(
+        `Bulk import complete: ${toCreate.length} created, ${toUpdate.length} updated`
+      );
+    } catch (error) {
+      this.logger.error('Error during bulk stakeholder import', error);
+      throw new RpcException(
+        `Bulk import failed: ${error.message || 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Removes empty fields from a payload object before DB operations.
+   * Prevents overwriting existing data with empty values.
+   */
+  private removeEmptyFields<T extends Record<string, any>>(
+    payload: T
+  ): Partial<T> {
+    return Object.fromEntries(
+      Object.entries(payload).filter(([_, value]) => {
+        if (value === null || value === undefined || value === '') return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      })
+    ) as Partial<T>;
   }
 
   async validateStakeholders(
