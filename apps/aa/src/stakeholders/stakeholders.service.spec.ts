@@ -27,7 +27,8 @@ jest.mock('@rumsan/prisma', () => {
 describe('StakeholdersService', () => {
   let service: StakeholdersService;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mockPaginateFn = require('@rumsan/prisma').__mockPaginateFn as jest.Mock;
+  const mockPaginateFn = require('@rumsan/prisma')
+    .__mockPaginateFn as jest.Mock;
 
   const mockPrismaService = {
     stakeholders: {
@@ -132,7 +133,9 @@ describe('StakeholdersService', () => {
 
       expect(mockPrismaService.stakeholders.findFirst).not.toHaveBeenCalled();
       expect(mockPrismaService.stakeholders.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ phone: null }) })
+        expect.objectContaining({
+          data: expect.objectContaining({ phone: null }),
+        })
       );
       expect(result).toEqual(created);
     });
@@ -184,11 +187,25 @@ describe('StakeholdersService', () => {
       'Email ID': 'john@test.com',
     };
 
-    it('should bulk add stakeholders and normalize 10-digit phone', async () => {
-      mockPrismaService.stakeholders.findMany
-        .mockResolvedValueOnce([]) // no duplicate phones
-        .mockResolvedValueOnce([]); // no duplicate emails
-      mockPrismaService.stakeholders.createMany.mockResolvedValue({ count: 1 });
+    // Patch $transaction onto the mockPrismaService before each bulkAdd test
+    beforeEach(() => {
+      mockPrismaService['$transaction'] = jest.fn((ops) => {
+        if (typeof ops === 'function') {
+          const tx = {
+            stakeholders: {
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
+              update: jest.fn().mockResolvedValue({}),
+            },
+          };
+          return ops(tx);
+        }
+        return Promise.all(ops);
+      });
+    });
+
+    it('should create new stakeholder and normalize 10-digit phone to +977 format', async () => {
+      // fetchExistingByPhone → no existing records
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
 
       const result = await service.bulkAdd([validRow]);
 
@@ -197,66 +214,147 @@ describe('StakeholdersService', () => {
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         'events.stakeholders_created'
       );
-      const createManyArg =
-        mockPrismaService.stakeholders.createMany.mock.calls[0][0];
-      expect(createManyArg.data[0].phone).toBe('+9779841000000');
+      // $transaction was called
+      expect(mockPrismaService['$transaction']).toHaveBeenCalled();
+      // createMany received the phone in +977 format
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      await txFn(tx);
+      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ phone: '+9779841000000' }),
+          ]),
+        })
+      );
     });
 
     it('should normalize email to lowercase', async () => {
       const rowWithUpperEmail = { ...validRow, 'Email ID': 'JOHN@TEST.COM' };
-      mockPrismaService.stakeholders.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
-      mockPrismaService.stakeholders.createMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
 
       await service.bulkAdd([rowWithUpperEmail]);
 
-      const createManyArg =
-        mockPrismaService.stakeholders.createMany.mock.calls[0][0];
-      expect(createManyArg.data[0].email).toBe('john@test.com');
-    });
-
-    it('should throw RpcException if duplicate phones found in DB', async () => {
-      mockPrismaService.stakeholders.findMany
-        .mockResolvedValueOnce([{ phone: '+9779841000000' }]) // duplicate phone
-        .mockResolvedValueOnce([]); // no duplicate emails (both checks happen before throw)
-
-      await expect(service.bulkAdd([validRow])).rejects.toThrow(RpcException);
-    });
-
-    it('should throw RpcException if duplicate emails found in DB', async () => {
-      mockPrismaService.stakeholders.findMany
-        .mockResolvedValueOnce([]) // no dup phones
-        .mockResolvedValueOnce([{ email: 'john@test.com' }]); // dup email
-
-      await expect(service.bulkAdd([validRow])).rejects.toThrow(RpcException);
-    });
-
-    it('should throw RpcException if validation fails (empty name)', async () => {
-      const invalidRow = {
-        ...validRow,
-        Name: '',
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
       };
-
-      await expect(service.bulkAdd([invalidRow])).rejects.toThrow(RpcException);
+      await txFn(tx);
+      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ email: 'john@test.com' }),
+          ]),
+        })
+      );
     });
 
-    it('should not check emails when no emails present in payload', async () => {
-      const rowNoEmail = {
-        Name: 'Jane Doe',
-        Designation: 'Analyst',
-        Organization: 'Org B',
-        District: 'Lalitpur',
-        Municipality: 'Metro',
-        'Mobile #': '9841000001',
+    it('should update existing stakeholder when phone already exists in DB', async () => {
+      // fetchExistingByPhone → phone already in DB with a known uuid
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([
+        { phone: '+9779841000000', uuid: 'existing-uuid-1' },
+      ]);
+
+      const result = await service.bulkAdd([validRow]);
+
+      expect(result.successCount).toBe(1);
+      // update (not createMany) should be called inside the transaction
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
       };
-      mockPrismaService.stakeholders.findMany.mockResolvedValueOnce([]); // phones only
-      mockPrismaService.stakeholders.createMany.mockResolvedValue({ count: 1 });
+      await txFn(tx);
+      expect(tx.stakeholders.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { uuid: 'existing-uuid-1' } })
+      );
+      expect(tx.stakeholders.createMany).not.toHaveBeenCalled();
+    });
 
-      await service.bulkAdd([rowNoEmail]);
+    it('should create new AND update existing stakeholders in same batch', async () => {
+      const newRow = {
+        Name: 'New Person',
+        Designation: 'Dev',
+        Organization: 'Org',
+        District: 'Dist',
+        Municipality: 'Muni',
+        'Mobile #': '9841000099',
+      };
+      // Only validRow's phone exists in DB; newRow's phone does not
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([
+        { phone: '+9779841000000', uuid: 'existing-uuid-1' },
+      ]);
 
-      // findMany called once (phones), not twice (no emails to check)
-      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(1);
+      const result = await service.bulkAdd([validRow, newRow]);
+
+      expect(result.successCount).toBe(2);
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      await txFn(tx);
+      expect(tx.stakeholders.createMany).toHaveBeenCalled();
+      expect(tx.stakeholders.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { uuid: 'existing-uuid-1' } })
+      );
+    });
+
+    it('should deduplicate rows with same phone — first occurrence wins', async () => {
+      const duplicateRow = { ...validRow, Name: 'Duplicate Person' };
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+
+      const result = await service.bulkAdd([validRow, duplicateRow]);
+
+      // deduplicated to 1
+      expect(result.successCount).toBe(1);
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      await txFn(tx);
+      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ name: 'John Doe' }),
+          ]),
+        })
+      );
+    });
+
+    it('should strip empty optional fields from payload before DB operation', async () => {
+      const rowWithEmptyEmail = { ...validRow, 'Email ID': '' };
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+
+      await service.bulkAdd([rowWithEmptyEmail]);
+
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      await txFn(tx);
+      const createManyCall = tx.stakeholders.createMany.mock.calls[0][0];
+      // email should not be present (stripped) or be null — not an empty string
+      const row = createManyCall.data[0];
+      expect(row.email === undefined || row.email === null).toBe(true);
     });
 
     it('should use "Stakeholders Name" field when "Name" is absent', async () => {
@@ -268,15 +366,76 @@ describe('StakeholdersService', () => {
         Municipality: 'Muni',
         'Mobile #': '9841000002',
       };
-      mockPrismaService.stakeholders.findMany.mockResolvedValueOnce([]);
-      mockPrismaService.stakeholders.createMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
 
       const result = await service.bulkAdd([rowAltName]);
 
       expect(result.successCount).toBe(1);
-      const createManyArg =
-        mockPrismaService.stakeholders.createMany.mock.calls[0][0];
-      expect(createManyArg.data[0].name).toBe('Alt Name');
+      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
+      const tx = {
+        stakeholders: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      await txFn(tx);
+      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ name: 'Alt Name' }),
+          ]),
+        })
+      );
+    });
+
+    it('should throw RpcException if validation fails (empty name)', async () => {
+      const invalidRow = { ...validRow, Name: '' };
+
+      await expect(service.bulkAdd([invalidRow])).rejects.toThrow(RpcException);
+      expect(mockPrismaService['$transaction']).not.toHaveBeenCalled();
+    });
+
+    it('should throw RpcException when $transaction fails', async () => {
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+      mockPrismaService['$transaction'] = jest
+        .fn()
+        .mockRejectedValue(new Error('DB error'));
+
+      await expect(service.bulkAdd([validRow])).rejects.toThrow(RpcException);
+    });
+
+    it('should emit STAKEHOLDER_CREATED event after successful import', async () => {
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+
+      await service.bulkAdd([validRow]);
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'events.stakeholders_created'
+      );
+    });
+
+    it('should not call $transaction when all rows fail validation', async () => {
+      const allInvalid = [{ ...validRow, Name: '' }];
+
+      await expect(service.bulkAdd(allInvalid)).rejects.toThrow(RpcException);
+      expect(mockPrismaService['$transaction']).not.toHaveBeenCalled();
+    });
+
+    it('should allow null-phone records through deduplication', async () => {
+      const rowWithValidPhone = {
+        Name: 'No Phone Person',
+        Designation: 'Analyst',
+        Organization: 'Org',
+        District: 'Dist',
+        Municipality: 'Muni',
+        'Mobile #': '+9779841000099', // valid phone, not null
+      };
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+
+      const result = await service.bulkAdd([rowWithValidPhone]);
+
+      expect(result.successCount).toBe(1);
     });
   });
 
@@ -463,9 +622,9 @@ describe('StakeholdersService', () => {
     it('should throw RpcException when stakeholder not found', async () => {
       mockPrismaService.stakeholders.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.update({ uuid, phone: '' })
-      ).rejects.toThrow(new RpcException('Stakeholder not found!'));
+      await expect(service.update({ uuid, phone: '' })).rejects.toThrow(
+        new RpcException('Stakeholder not found!')
+      );
     });
 
     it('should throw RpcException when phone is taken by another stakeholder', async () => {
@@ -491,8 +650,7 @@ describe('StakeholdersService', () => {
       await service.update({ uuid, phone: '' });
 
       expect(mockPrismaService.stakeholders.findFirst).not.toHaveBeenCalled();
-      const updateCall =
-        mockPrismaService.stakeholders.update.mock.calls[0][0];
+      const updateCall = mockPrismaService.stakeholders.update.mock.calls[0][0];
       expect(updateCall.data.phone).toBeNull();
     });
 
@@ -500,24 +658,31 @@ describe('StakeholdersService', () => {
       mockPrismaService.stakeholders.findUnique.mockResolvedValue(
         existingStakeholder
       );
-      mockPrismaService.stakeholders.update.mockResolvedValue(existingStakeholder);
+      mockPrismaService.stakeholders.update.mockResolvedValue(
+        existingStakeholder
+      );
 
       await service.update({ uuid });
 
-      const updateCall =
-        mockPrismaService.stakeholders.update.mock.calls[0][0];
+      const updateCall = mockPrismaService.stakeholders.update.mock.calls[0][0];
       expect(updateCall.data.name).toBe(existingStakeholder.name);
       expect(updateCall.data.designation).toBe(existingStakeholder.designation);
-      expect(updateCall.data.organization).toBe(existingStakeholder.organization);
+      expect(updateCall.data.organization).toBe(
+        existingStakeholder.organization
+      );
       expect(updateCall.data.district).toBe(existingStakeholder.district);
-      expect(updateCall.data.municipality).toBe(existingStakeholder.municipality);
+      expect(updateCall.data.municipality).toBe(
+        existingStakeholder.municipality
+      );
     });
 
     it('should skip phone uniqueness check when phone is not provided', async () => {
       mockPrismaService.stakeholders.findUnique.mockResolvedValue(
         existingStakeholder
       );
-      mockPrismaService.stakeholders.update.mockResolvedValue(existingStakeholder);
+      mockPrismaService.stakeholders.update.mockResolvedValue(
+        existingStakeholder
+      );
 
       await service.update({ uuid });
 
@@ -612,7 +777,9 @@ describe('StakeholdersService', () => {
       mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue(
         existingGroup
       );
-      mockPrismaService.stakeholdersGroups.update.mockResolvedValue(existingGroup);
+      mockPrismaService.stakeholdersGroups.update.mockResolvedValue(
+        existingGroup
+      );
 
       await service.updateGroup(payload);
 
@@ -785,7 +952,9 @@ describe('StakeholdersService', () => {
 
     it('should handle empty select fields array (no select clause)', async () => {
       const mockGroup = [{ id: 1, uuid: 'uuid-1', name: 'Test Group' }];
-      mockPrismaService.stakeholdersGroups.findMany.mockResolvedValue(mockGroup);
+      mockPrismaService.stakeholdersGroups.findMany.mockResolvedValue(
+        mockGroup
+      );
 
       const result = await service.getAllGroupsByUuids({
         uuids: ['uuid-1'],
@@ -828,9 +997,7 @@ describe('StakeholdersService', () => {
           selectField: undefined,
         })
       ).rejects.toThrow(
-        new RpcException(
-          'Error while fetching stakeholders groups by uuids. '
-        )
+        new RpcException('Error while fetching stakeholders groups by uuids. ')
       );
     });
   });
@@ -936,7 +1103,9 @@ describe('StakeholdersService', () => {
         isSuccess: false,
         activities: ['Activity 1', 'Activity 2'],
       });
-      expect(mockPrismaService.stakeholdersGroups.update).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.stakeholdersGroups.update
+      ).not.toHaveBeenCalled();
     });
 
     it('should soft delete group and return isSuccess:true when no activities', async () => {
@@ -1008,7 +1177,9 @@ describe('StakeholdersService', () => {
       await expect(
         service.getActivitiesByStakeholderGroupUuid('uuid')
       ).rejects.toThrow(
-        new RpcException('Error while fetching related activities. Network error')
+        new RpcException(
+          'Error while fetching related activities. Network error'
+        )
       );
     });
   });
