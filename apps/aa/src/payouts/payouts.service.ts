@@ -503,6 +503,7 @@ export class PayoutsService {
     Payouts & {
       beneficiaryGroupToken?: {
         numberOfTokens?: number;
+        isDisbursed?: boolean;
         info?: any;
         beneficiaryGroup?: {
           beneficiaries?: any[];
@@ -936,6 +937,14 @@ export class PayoutsService {
       );
     }
 
+    // Check if tokens have been disbursed to the beneficiary group
+    // isDisbursed is set to true only after EVM/Stellar blockchain confirmation
+    if (!payoutDetails.beneficiaryGroupToken?.isDisbursed) {
+      throw new RpcException(
+        `Payout cannot be triggered as tokens have not been disbursed to the beneficiary group ${payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name} yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    }
+
     // Check if this is a manual bank transfer payout - these cannot be triggered
     if (payoutDetails.payoutProcessorId === 'manual-bank-transfer') {
       throw new RpcException(
@@ -984,7 +993,7 @@ export class PayoutsService {
         notify: true,
       },
     });
-    return 'Payout Initiated Successfully';
+    return 'Payout initiated successfully. It may take some time to complete. If a payout trigger fails, you can retry it by clicking "Retry Failed Request" button.';
   }
 
   async triggerOneFailedPayoutRequest(payload: {
@@ -1648,6 +1657,16 @@ export class PayoutsService {
         },
       },
     });
+
+    // Ensure tokens have been disbursed to the beneficiary group
+    if (
+      payout?.beneficiaryGroupToken &&
+      !payout.beneficiaryGroupToken.isDisbursed
+    ) {
+      throw new RpcException(
+        `Payout cannot be verified as tokens have not been disbursed to the beneficiary group ${payout.beneficiaryGroupToken.beneficiaryGroup.name} yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    }
 
     if (!payout) {
       throw new RpcException(
