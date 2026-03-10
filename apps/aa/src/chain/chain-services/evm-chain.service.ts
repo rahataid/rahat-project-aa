@@ -859,11 +859,6 @@ export class EvmChainService implements IChainService {
             },
           },
           { isDisbursed: false },
-          {
-            payout: {
-              is: null,
-            },
-          },
         ],
       },
       select: { uuid: true, groupId: true },
