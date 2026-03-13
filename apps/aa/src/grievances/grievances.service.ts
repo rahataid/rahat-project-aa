@@ -39,7 +39,11 @@ export class GrievancesService {
     return this.prisma.$transaction(async (tx) => {
       const { user, ...rest } = data;
       const grievance = await tx.grievance.create({
-        data: { ...rest, createdByUser: user },
+        data: {
+          ...rest,
+          // Spread converts typed interface to plain object, satisfying Prisma's InputJsonValue index signature
+          createdByUser: user ? { ...user } : Prisma.JsonNull, 
+        },
       });
       console.log(
         'Grievance created successfully in project, now payload for core:',

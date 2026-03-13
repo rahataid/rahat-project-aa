@@ -4,19 +4,15 @@ import {
   GrievanceStatus,
   GrievanceType,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsEmail,
   IsEnum,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
   registerDecorator,
-  ValidateNested,
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
@@ -151,5 +147,5 @@ export class CreateGrievanceDto {
     required: false,
   })
   @IsOptional()
-  user?: any;
+  user?: CreatedByUser;
 }
