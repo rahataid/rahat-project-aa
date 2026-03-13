@@ -4,19 +4,15 @@ import {
   GrievanceStatus,
   GrievanceType,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsEmail,
   IsEnum,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
   registerDecorator,
-  ValidateNested,
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
@@ -53,44 +49,6 @@ function IsEmailOrPhoneNumber(validationOptions?: ValidationOptions) {
 export interface CreatedByUser {
   id: number;
   name: string;
-  email: string;
-}
-
-export class CreatedByUserDto {
-  @ApiProperty({
-    description: 'Unique identifier of the user',
-    example: 123,
-  })
-  @IsInt()
-  @IsNotEmpty()
-  id: number;
-
-  @ApiProperty({
-    description: 'Full name of the user',
-    example: 'John Doe',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(2, {
-    message: 'Name must be at least 2 characters long',
-  })
-  @MaxLength(100, {
-    message: 'Name must not be longer than 100 characters',
-  })
-  name: string;
-
-  @ApiProperty({
-    description: 'Email address of the user',
-    example: 'john@example.com',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @IsEmail(
-    {},
-    {
-      message: 'Email must be a valid email address',
-    }
-  )
   email: string;
 }
 
@@ -186,11 +144,8 @@ export class CreateGrievanceDto {
 
   @ApiProperty({
     description: 'Information about the user who created the grievance',
-    type: CreatedByUserDto,
     required: false,
   })
   @IsOptional()
-  @ValidateNested()
-  @Type(() => CreatedByUserDto)
-  createdByUser?: CreatedByUserDto;
+  user?: CreatedByUser;
 }
