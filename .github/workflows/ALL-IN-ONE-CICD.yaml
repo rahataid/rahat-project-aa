@@ -1,4 +1,4 @@
-name: Test Load CICD
+name: ALL-IN-ONE CICD
 
 on:
   workflow_dispatch:
