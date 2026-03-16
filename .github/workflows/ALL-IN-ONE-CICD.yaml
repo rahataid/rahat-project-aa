@@ -1,17 +1,24 @@
-name: AA CORE CICD
+name: ALL-IN-ONE CICD
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       image_name:
+        description: 'Docker image name (e.g., rahat-project-aa)'
         required: true
+        default: 'rahat-project-aa'
         type: string
       dockerfile_path:
+        description: 'Path to Dockerfile'
         required: true
+        default: 'Dockerfile.aa'
         type: string
       tag_prefix:
+        description: 'Tag prefix (e.g., test-load)'
         required: true
+        default: 'test-load'
         type: string
+
 env:
   CI: false
   NODE_VERSION: '20.10.0'
@@ -83,14 +90,14 @@ jobs:
             ${{ runner.os }}-node-modules-
 
       # Cache Nx build cache
-      - name: Cache Nx
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
-            ${{ runner.os }}-nx-
+      # - name: Cache Nx
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: .nx/cache
+      #     key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
+      #       ${{ runner.os }}-nx-
 
       # Install dependencies with lockfile handling
       - name: Install dependencies
