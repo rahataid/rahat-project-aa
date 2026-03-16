@@ -1,4 +1,4 @@
-name: Test Load CICD
+name: ALL-IN-ONE CICD
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
         default: 'Dockerfile.aa'
         type: string
       tag_prefix:
-        description: 'Tag prefix (e.g., test-load)'
+        description: 'Tag prefix (e.g., Img tag)'
         required: true
         default: 'test-load'
         type: string
