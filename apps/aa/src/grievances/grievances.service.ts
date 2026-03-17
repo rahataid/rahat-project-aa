@@ -198,7 +198,7 @@ export class GrievancesService {
       const grievance = await tx.grievance.update({
         where: { uuid },
         data: {
-          updateDto,
+          ...updateDto,
           createdByUser: createdByUser
             ? {
                 id: createdByUser.id,
@@ -222,7 +222,7 @@ export class GrievancesService {
           tx.grievance.update({
             where: { uuid },
             data: {
-              updateDto,
+              ...updateDto,
               createdByUser: createdByUser
                 ? {
                     id: createdByUser.id,
