@@ -133,7 +133,7 @@ export interface ManualPayoutRowData {
   'Bank Account Holder Name ': string;
   'Approval Date': string;
   'Transaction Status': string;
-  'Date': string;
+  Date: string;
 }
 
 export interface EnrichedManualPayoutRow extends ManualPayoutRowData {
@@ -158,6 +158,7 @@ export interface PayoutWithBeneficiaryDetails {
   uuid: string;
   beneficiaryGroupToken: {
     numberOfTokens: number;
+    isDisbursed: boolean;
     uuid: string;
     beneficiaryGroup: {
       uuid: string;
