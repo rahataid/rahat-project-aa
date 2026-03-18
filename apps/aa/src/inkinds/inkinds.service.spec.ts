@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { InkindsService } from './inkinds.service';
-import { InkindType } from './dto/inkind.dto';
+import { InkindType, ListInkindDto } from './dto/inkind.dto';
 
 // Mock the entire @rumsan/prisma module
 jest.mock('@rumsan/prisma', () => {
@@ -89,7 +89,7 @@ describe('InkindsService', () => {
       const result = await service.create(createDto);
 
       expect(mockPrismaService.inkind.findFirst).toHaveBeenCalledWith({
-        where: { name: createDto.name },
+        where: { name: createDto.name, deletedAt: null },
       });
       expect(mockPrismaService.$transaction).toHaveBeenCalled();
       expect(mockTx.inkind.create).toHaveBeenCalledWith({
@@ -111,7 +111,7 @@ describe('InkindsService', () => {
       const result = await service.create({ ...createDto, quantity: 50 });
 
       expect(mockPrismaService.inkind.findFirst).toHaveBeenCalledWith({
-        where: { name: createDto.name },
+        where: { name: createDto.name, deletedAt: null },
       });
       expect(mockTx.inkind.create).toHaveBeenCalled();
       expect(mockTx.inkindStockMovement.create).toHaveBeenCalledWith({
@@ -269,7 +269,7 @@ describe('InkindsService', () => {
   });
 
   describe('get', () => {
-    const listDto = {
+    const listDto: ListInkindDto = {
       page: 1,
       perPage: 10,
       type: InkindType.WALK_IN,

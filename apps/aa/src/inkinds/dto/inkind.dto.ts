@@ -5,6 +5,7 @@ import {
   IsInt,
   IsUUID,
   Min,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -69,7 +70,8 @@ export class DeleteInkindDto {
 export class ListInkindDto {
   @IsOptional()
   @IsString()
-  order?: string = 'desc';
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc' = 'desc';
 
   @IsOptional()
   @IsInt()
@@ -85,7 +87,8 @@ export class ListInkindDto {
 
   @IsOptional()
   @IsString()
-  sort?: string = 'createdAt';
+  @IsIn(['createdAt', 'name', 'type', 'availableStock'])
+  sort?: 'createdAt' | 'name' | 'type' | 'availableStock' = 'createdAt';
 
   @IsOptional()
   @IsEnum(InkindType)

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { RpcException } from '@nestjs/microservices';
-import { Prisma } from '@prisma/client';
+import { InkindStockMovementType, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -22,7 +22,7 @@ export class InkindsService {
     try {
       this.logger.log(`Creating new inkind item: ${inkindData.name}`);
       const existingInkind = await this.prisma.inkind.findFirst({
-        where: { name: inkindData.name },
+        where: { name: inkindData.name, deletedAt: null },
       });
 
       if (existingInkind) {
@@ -46,7 +46,7 @@ export class InkindsService {
             data: {
               inkindId: created.uuid,
               quantity,
-              type: 'ADD',
+              type: InkindStockMovementType.ADD,
             },
           });
           created.availableStock = quantity; // Attach quantity to the created inkind for response
@@ -86,7 +86,6 @@ export class InkindsService {
         `Failed to update inkind: ${error.message}`,
         error.stack
       );
-      if (error instanceof NotFoundException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -109,7 +108,6 @@ export class InkindsService {
         `Failed to delete inkind: ${error.message}`,
         error.stack
       );
-      if (error instanceof NotFoundException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -137,8 +135,21 @@ export class InkindsService {
         }),
       };
 
+      const allowedSortFields: Array<
+        keyof Prisma.InkindOrderByWithRelationInput
+      > = ['createdAt', 'name', 'type', 'availableStock'];
+
+      const safeSort = allowedSortFields.includes(
+        sort as keyof Prisma.InkindOrderByWithRelationInput
+      )
+        ? (sort as keyof Prisma.InkindOrderByWithRelationInput)
+        : 'createdAt';
+
+      const safeOrder: Prisma.SortOrder =
+        order === 'asc' || order === 'desc' ? order : 'desc';
+
       const orderBy: Prisma.InkindOrderByWithRelationInput = {
-        [sort]: order,
+        [safeSort]: safeOrder,
       };
 
       return paginate(
