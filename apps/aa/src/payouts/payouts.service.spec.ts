@@ -1289,6 +1289,7 @@ describe('PayoutsService', () => {
         },
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
             name: 'Test Group',
             _count: { beneficiaries: 2 },
@@ -1336,7 +1337,9 @@ describe('PayoutsService', () => {
         name: 'Admin',
       });
 
-      expect(result).toBe('Payout Initiated Successfully');
+      expect(result).toBe(
+        'Payout verification initiated successfully. It may take some time to complete. If a payout verification fails, you can retry it by re-clicking "Verify Manual Payout" button.'
+      );
       expect(mockStellarService.addBulkToTokenTransferQueue).toHaveBeenCalled();
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         EVENTS.NOTIFICATION.CREATE,
@@ -1379,6 +1382,44 @@ describe('PayoutsService', () => {
       );
     });
 
+    it('should throw error when tokens have not been disbursed to the beneficiary group', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        isPayoutTriggered: false,
+        type: 'FSP',
+        status: 'PENDING',
+        payoutProcessorId: 'processor-1',
+        beneficiaryRedeem: [],
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 100,
+          isDisbursed: false,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            _count: { beneficiaries: 1 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(service.triggerPayout('payout-123')).rejects.toThrow(
+        `Payout cannot be triggered as tokens have not been disbursed to the beneficiary group "Test Group" yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    });
+
     it('should throw error for manual-bank-transfer payout', async () => {
       const mockPayout = {
         uuid: 'payout-123',
@@ -1390,7 +1431,9 @@ describe('PayoutsService', () => {
         beneficiaryGroupToken: {
           groupId: 'group-123',
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             _count: { beneficiaries: 1 },
             beneficiaries: [
               {
@@ -1863,6 +1906,26 @@ describe('PayoutsService', () => {
       );
     });
 
+    it('should throw error when tokens have not been disbursed to the beneficiary group', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: false,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000')
+      ).rejects.toThrow(
+        `Payout cannot be verified as tokens have not been disbursed to the beneficiary group "Test Group" yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    });
+
     it('should throw error when no beneficiaries found', async () => {
       mockPrismaService.payouts.findUnique.mockResolvedValue({
         uuid: '123e4567-e89b-12d3-a456-426614174000',
@@ -1879,7 +1942,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [{ id: 'ben-1' }],
           },
         },
@@ -1897,7 +1962,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [{ id: 'ben-1' }],
           },
         },
@@ -1913,7 +1980,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [{ id: 'ben-1' }],
           },
         },
@@ -1942,7 +2011,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [{ id: 'ben-1' }],
           },
         },
@@ -1971,7 +2042,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [{ id: 'ben-1' }],
           },
         },
@@ -2002,7 +2075,9 @@ describe('PayoutsService', () => {
         uuid: '123e4567-e89b-12d3-a456-426614174000',
         beneficiaryGroupToken: {
           numberOfTokens: 100,
+          isDisbursed: true,
           beneficiaryGroup: {
+            name: 'Test Group',
             beneficiaries: [
               {
                 beneficiary: {
