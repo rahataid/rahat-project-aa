@@ -29,7 +29,7 @@ import {
 import { StatsService } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EVENTS, JOBS, TRIGGGERS_MODULE } from '../constants';
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 type StakeholderImportRow = {
   name?: string;
@@ -113,7 +113,7 @@ export class StakeholdersService {
     const { errors: dtoErrors } = await this.validateParsedStakeholders(parsed);
     dtoErrors.forEach((e) => addError(e));
 
-    // Step 2: Normalize phones and emails on valid rows only
+    // Step 2: Normalize phones and emails on all parsed rows
     const cleanedPayloads = this.normalizeStakeholders(parsed);
 
     // Step 3: Intra-payload dedup check
@@ -816,7 +816,7 @@ export class StakeholdersService {
   removeEmptyFields(obj: Record<string, any>): Record<string, any> {
     return Object.fromEntries(
       Object.entries(obj).filter(
-        ([_, value]) => value !== undefined && value !== ''
+        ([_, value]) => value != null && value !== undefined && value !== ''
       )
     );
   }

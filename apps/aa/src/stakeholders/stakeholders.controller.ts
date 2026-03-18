@@ -34,6 +34,10 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async validateBulkStakeholders(payload: any) {
+    if (!payload) {
+      throw new Error('No data provided for validation');
+    }
+
     const normalizedData = Array.isArray(payload)
       ? payload
       : Object.values(payload);
@@ -45,6 +49,10 @@ export class StakeholdersController {
     uuid: process.env.PROJECT_ID,
   })
   async bulkAdd(payloads: BulkAddStakeholdersPayload) {
+    if (!payloads || !payloads?.data) {
+      throw new Error('Missing data in bulkAdd payload');
+    }
+
     const normalizedData = Array.isArray(payloads?.data)
       ? payloads.data
       : Object.values(payloads.data);

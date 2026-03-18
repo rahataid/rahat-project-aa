@@ -145,6 +145,26 @@ describe('StakeholdersController', () => {
       expect(result).toEqual(expected);
     });
 
+    it('should throw an error when payload is null', async () => {
+      await expect(controller.validateBulkStakeholders(null)).rejects.toThrow(
+        'No data provided for validation'
+      );
+
+      expect(
+        mockStakeholdersService.validateBulkStakeholders
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should throw an error when payload is undefined', async () => {
+      await expect(
+        controller.validateBulkStakeholders(undefined)
+      ).rejects.toThrow('No data provided for validation');
+
+      expect(
+        mockStakeholdersService.validateBulkStakeholders
+      ).not.toHaveBeenCalled();
+    });
+
     it('should return isValid false when service returns errors', async () => {
       const expected = {
         isValid: false,
@@ -184,6 +204,22 @@ describe('StakeholdersController', () => {
       ],
       isGroupCreate: false,
     };
+
+    it('should throw an error when payload is null', async () => {
+      await expect(controller.bulkAdd(null)).rejects.toThrow(
+        'Missing data in bulkAdd payload'
+      );
+
+      expect(mockStakeholdersService.bulkAdd).not.toHaveBeenCalled();
+    });
+
+    it('should throw an error when payload.data is missing', async () => {
+      await expect(
+        controller.bulkAdd({ isGroupCreate: false } as any)
+      ).rejects.toThrow('Missing data in bulkAdd payload');
+
+      expect(mockStakeholdersService.bulkAdd).not.toHaveBeenCalled();
+    });
 
     it('should normalize array data and delegate to service.bulkAdd', async () => {
       const expected = {
