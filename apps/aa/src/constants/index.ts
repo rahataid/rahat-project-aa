@@ -260,9 +260,12 @@ export const JOBS = {
     GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
     CREATE_BUDGET: 'aa.jobs.cash-tracker.createBudget',
   },
-  INKIND_TRACKER: {
-    EXECUTE_ACTION: 'aa.jobs.inkind-tracker.executeAction',
-    GET_TRANSACTIONS: 'aa.jobs.inkind-tracker.getTransactions',
+  INKINDS: {
+    CREATE: 'aa.jobs.inkinds.create',
+    UPDATE: 'aa.jobs.inkinds.update',
+    DELETE: 'aa.jobs.inkinds.delete',
+    GET: 'aa.jobs.inkinds.get',
+    GET_ONE: 'aa.jobs.inkinds.getOne',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
