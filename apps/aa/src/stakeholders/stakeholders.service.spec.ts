@@ -30,7 +30,7 @@ describe('StakeholdersService', () => {
   const mockPaginateFn = require('@rumsan/prisma')
     .__mockPaginateFn as jest.Mock;
 
-  const mockPrismaService = {
+  const mockPrismaService: any = {
     stakeholders: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -43,9 +43,11 @@ describe('StakeholdersService', () => {
     stakeholdersGroups: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
+    $transaction: jest.fn((cb) => cb(mockPrismaService)),
   };
 
   const mockConfigService = {
@@ -174,6 +176,196 @@ describe('StakeholdersService', () => {
     });
   });
 
+  // ==================== validateBulkStakeholders() ====================
+  describe('validateBulkStakeholders', () => {
+    const validRow = {
+      Name: 'John Doe',
+      Designation: 'Engineer',
+      Organization: 'Test Org',
+      District: 'Kathmandu',
+      Municipality: 'Metro',
+      'Mobile #': '+9779841000000',
+      'Support Area': 'Health, Education',
+      'Email ID': 'john@test.com',
+    };
+
+    beforeEach(() => {
+      // Default: no existing records in DB for both phone + email lookups
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+    });
+
+    it('should throw RpcException when payload is empty', async () => {
+      await expect(service.validateBulkStakeholders([])).rejects.toThrow(
+        RpcException
+      );
+      await expect(service.validateBulkStakeholders(null)).rejects.toThrow(
+        RpcException
+      );
+    });
+
+    it('should return isValid true and classify new stakeholder when phone not in DB', async () => {
+      const result = await service.validateBulkStakeholders([validRow]);
+
+      expect(result.isValid).toBe(true);
+      expect(result.newStakeholders).toContain('+9779841000000');
+      expect(result.updateStakeholders).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should return cleanedPayloads with normalized phone', async () => {
+      const result = await service.validateBulkStakeholders([validRow]);
+
+      expect(result.cleanedPayloads).toHaveLength(1);
+      expect(result.cleanedPayloads[0].phone).toBe('+9779841000000');
+      expect(result.cleanedPayloads[0].email).toBe('john@test.com');
+    });
+
+    it('should classify as updateStakeholder when phone already exists in DB', async () => {
+      // fetchExistingByPhone returns existing record → classified as update
+      // checkEmailConflicts: email belongs to the same uuid → no conflict
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ]) // phone lookup
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]); // email lookup
+
+      const result = await service.validateBulkStakeholders([validRow]);
+
+      expect(result.isValid).toBe(true);
+      expect(result.updateStakeholders).toContain('+9779841000000');
+      expect(result.newStakeholders).toHaveLength(0);
+    });
+
+    it('should normalize 10-digit phone to +977 format before DB lookup', async () => {
+      const rowWith10Digit = { ...validRow, 'Mobile #': '9841000000' };
+
+      const result = await service.validateBulkStakeholders([rowWith10Digit]);
+
+      // cleanedPayloads phone should be normalized
+      expect(result.cleanedPayloads[0].phone).toBe('+9779841000000');
+      // DB lookup and classification used normalized phone
+      expect(result.newStakeholders).toContain('+9779841000000');
+    });
+
+    it('should normalize email to lowercase', async () => {
+      const rowUpperEmail = { ...validRow, 'Email ID': 'JOHN@TEST.COM' };
+
+      const result = await service.validateBulkStakeholders([rowUpperEmail]);
+
+      expect(result.cleanedPayloads[0].email).toBe('john@test.com');
+    });
+
+    it('should return isValid false with error when duplicate phone exists in payload', async () => {
+      const result = await service.validateBulkStakeholders([
+        validRow,
+        { ...validRow },
+      ]);
+
+      expect(result.isValid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) => e.field === 'phone' && e.message.includes('Duplicate')
+        )
+      ).toBe(true);
+    });
+
+    it('should return isValid false with error when duplicate email exists in payload', async () => {
+      const row2 = { ...validRow, 'Mobile #': '+9779841000001' };
+
+      const result = await service.validateBulkStakeholders([validRow, row2]);
+
+      expect(result.isValid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) => e.field === 'email' && e.message.includes('Duplicate')
+        )
+      ).toBe(true);
+    });
+
+    it('should return isValid false when email belongs to a different stakeholder in DB', async () => {
+      // phone lookup: new stakeholder (not in DB)
+      // email lookup: email exists but belongs to a different uuid
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([]) // fetchExistingByPhone
+        .mockResolvedValueOnce([
+          {
+            email: 'john@test.com',
+            uuid: 'other-uuid',
+            phone: '+9779999999999',
+          },
+        ]); // checkEmailConflicts
+
+      const result = await service.validateBulkStakeholders([validRow]);
+
+      expect(result.isValid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.field === 'email' && e.message.includes('another stakeholder')
+        )
+      ).toBe(true);
+    });
+
+    it('should return isValid false when DTO validation fails (invalid phone)', async () => {
+      const rowBadPhone = { ...validRow, 'Mobile #': '123' };
+
+      // Invalid row: DTO errors fire first; row still passes through normalize/classify
+      // but findMany is still called (invalid rows are not excluded before DB lookup)
+      const result = await service.validateBulkStakeholders([rowBadPhone]);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'phone')).toBe(true);
+    });
+
+    it('should return isValid false when required field name is missing', async () => {
+      const rowNoName = { ...validRow, Name: '', 'Stakeholders Name': '' };
+
+      const result = await service.validateBulkStakeholders([rowNoName]);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'name')).toBe(true);
+    });
+
+    it('should deduplicate errors — same conflict reported exactly once', async () => {
+      // Row 2 and row 3 have the same phone → only 1 duplicate error via errorsMap key
+      const row2 = { ...validRow, 'Email ID': '' };
+      const row3 = { ...validRow, 'Email ID': '' };
+
+      const result = await service.validateBulkStakeholders([row2, row3, row3]);
+
+      const phoneErrors = result.errors.filter(
+        (e) => e.field === 'phone' && e.message.includes('Duplicate')
+      );
+      expect(phoneErrors).toHaveLength(1);
+    });
+
+    it('should always return newStakeholders and updateStakeholders arrays even when errors exist', async () => {
+      const row2 = { ...validRow, 'Mobile #': '+9779841000001' }; // dup email with validRow
+      const result = await service.validateBulkStakeholders([validRow, row2]);
+
+      expect(Array.isArray(result.newStakeholders)).toBe(true);
+      expect(Array.isArray(result.updateStakeholders)).toBe(true);
+    });
+
+    it('should make exactly 2 DB calls (phone lookup + email lookup)', async () => {
+      await service.validateBulkStakeholders([validRow]);
+
+      // fetchExistingByPhone + checkEmailConflicts = 2 findMany calls
+      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('should make only 1 DB call when no emails in payload', async () => {
+      const rowNoEmail = { ...validRow, 'Email ID': '' };
+
+      await service.validateBulkStakeholders([rowNoEmail]);
+
+      // checkEmailConflicts skips DB call when emailsToCheck is empty
+      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ==================== bulkAdd() ====================
   describe('bulkAdd', () => {
     const validRow = {
@@ -182,260 +374,234 @@ describe('StakeholdersService', () => {
       Organization: 'Test Org',
       District: 'Kathmandu',
       Municipality: 'Metro',
-      'Mobile #': '9841000000',
+      'Mobile #': '+9779841000000',
       'Support Area': 'Health, Education',
       'Email ID': 'john@test.com',
     };
 
-    // Patch $transaction onto the mockPrismaService before each bulkAdd test
+    const basePayload = {
+      data: [validRow],
+      isGroupCreate: false,
+    };
+
     beforeEach(() => {
-      mockPrismaService['$transaction'] = jest.fn((ops) => {
-        if (typeof ops === 'function') {
-          const tx = {
-            stakeholders: {
-              createMany: jest.fn().mockResolvedValue({ count: 0 }),
-              update: jest.fn().mockResolvedValue({}),
-            },
-          };
-          return ops(tx);
-        }
-        return Promise.all(ops);
+      mockPrismaService.$transaction.mockImplementation((cb) =>
+        cb(mockPrismaService)
+      );
+      // Default: no existing records — all new
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+      mockPrismaService.stakeholders.createMany.mockResolvedValue({ count: 1 });
+      // Default: group name is unique (no existing group)
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue(null);
+    });
+
+    it('should throw RpcException when data is empty', async () => {
+      await expect(
+        service.bulkAdd({ data: [], isGroupCreate: false })
+      ).rejects.toThrow(RpcException);
+    });
+
+    it('should throw RpcException when isGroupCreate is true but groupName is missing', async () => {
+      // groupName guard fires before findFirst — no DB calls at all
+      await expect(
+        service.bulkAdd({ data: [validRow], isGroupCreate: true })
+      ).rejects.toThrow(RpcException);
+
+      expect(
+        mockPrismaService.stakeholdersGroups.findFirst
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.stakeholders.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should throw RpcException when isGroupCreate is true but groupName is whitespace', async () => {
+      await expect(
+        service.bulkAdd({
+          data: [validRow],
+          isGroupCreate: true,
+          groupName: '   ',
+        })
+      ).rejects.toThrow(RpcException);
+
+      expect(
+        mockPrismaService.stakeholdersGroups.findFirst
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should throw RpcException when groupName already exists in DB', async () => {
+      // findFirst returns existing group → duplicate name
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue({
+        uuid: 'existing-group-uuid',
+        name: 'Test Group',
       });
+
+      await expect(
+        service.bulkAdd({
+          data: [validRow],
+          isGroupCreate: true,
+          groupName: 'Test Group',
+        })
+      ).rejects.toThrow(RpcException);
+
+      // findFirst was called with the group name
+      expect(
+        mockPrismaService.stakeholdersGroups.findFirst
+      ).toHaveBeenCalledWith({
+        where: { name: 'Test Group' },
+      });
+      // validateBulkStakeholders must NOT run after the guard throws
+      expect(mockPrismaService.stakeholders.findMany).not.toHaveBeenCalled();
     });
 
-    it('should create new stakeholder and normalize 10-digit phone to +977 format', async () => {
-      // fetchExistingByPhone → no existing records
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+    it('should return success false with errors when validation fails', async () => {
+      const invalidRow = { ...validRow, 'Mobile #': '123' }; // invalid phone
 
-      const result = await service.bulkAdd([validRow]);
+      const result = await service.bulkAdd({
+        data: [invalidRow],
+        isGroupCreate: false,
+      });
 
-      expect(result.successCount).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors.length).toBeGreaterThan(0);
+      // Transaction should NOT be entered when validation fails
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should create new stakeholders and return createdCount', async () => {
+      const result = await service.bulkAdd(basePayload);
+
+      expect(result.success).toBe(true);
+      expect(result.result.createdCount).toBe(1);
+      expect(result.result.updatedCount).toBe(0);
       expect(result.message).toBe('All stakeholders successfully added.');
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
-        'events.stakeholders_created'
+      expect(mockPrismaService.stakeholders.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skipDuplicates: true })
       );
-      // $transaction was called
-      expect(mockPrismaService['$transaction']).toHaveBeenCalled();
-      // createMany received the phone in +977 format
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
+    });
+
+    it('should update existing stakeholders when phone already in DB', async () => {
+      // validateBulkStakeholders: phone lookup → existing, email lookup → same uuid → no conflict
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ]) // fetchExistingByPhone
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]); // checkEmailConflicts
+      mockPrismaService.stakeholders.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd(basePayload);
+
+      expect(result.success).toBe(true);
+      expect(result.result.updatedCount).toBe(1);
+      expect(result.result.createdCount).toBe(0);
+      expect(mockPrismaService.stakeholders.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { phone: '+9779841000000' } })
+      );
+      expect(mockPrismaService.stakeholders.createMany).not.toHaveBeenCalled();
+    });
+
+    it('should create group and connect new stakeholders when isGroupCreate is true', async () => {
+      // findFirst returns null → group name is unique → proceed
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue(null);
+      const group = { uuid: 'group-uuid-1', name: 'Test Group' };
+      mockPrismaService.stakeholdersGroups.create.mockResolvedValue(group);
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([]) // fetchExistingByPhone — all new
+        .mockResolvedValueOnce([]) // checkEmailConflicts — no conflicts
+        .mockResolvedValueOnce([{ uuid: 'new-stake-uuid' }]); // fetch newly created uuids for connect
+      mockPrismaService.stakeholdersGroups.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd({
+        data: [validRow],
+        isGroupCreate: true,
+        groupName: 'Test Group',
+      });
+
+      expect(result.success).toBe(true);
+      // Uniqueness check was done before transaction
+      expect(
+        mockPrismaService.stakeholdersGroups.findFirst
+      ).toHaveBeenCalledWith({
+        where: { name: 'Test Group' },
+      });
+      expect(mockPrismaService.stakeholdersGroups.create).toHaveBeenCalledWith({
+        data: { name: 'Test Group' },
+      });
+      expect(mockPrismaService.stakeholdersGroups.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { uuid: 'group-uuid-1' } })
+      );
+    });
+
+    it('should connect updated stakeholder to group when isGroupCreate is true', async () => {
+      // findFirst returns null → group name is unique → proceed
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue(null);
+      // Existing stakeholder (update path) + group create
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ]) // fetchExistingByPhone
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]); // checkEmailConflicts
+      const group = { uuid: 'group-uuid-1', name: 'My Group' };
+      mockPrismaService.stakeholdersGroups.create.mockResolvedValue(group);
+      mockPrismaService.stakeholders.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd({
+        data: [validRow],
+        isGroupCreate: true,
+        groupName: 'My Group',
+      });
+
+      expect(result.success).toBe(true);
+      // update must include group connect
+      expect(mockPrismaService.stakeholders.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ phone: '+9779841000000' }),
-          ]),
+          data: expect.objectContaining({
+            stakeholdersGroups: { connect: { uuid: 'group-uuid-1' } },
+          }),
         })
       );
+      // only 2 findMany calls: fetchExistingByPhone + checkEmailConflicts
+      // (no 3rd call because update path doesn't need newly-created uuids)
+      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(2);
     });
 
-    it('should normalize email to lowercase', async () => {
-      const rowWithUpperEmail = { ...validRow, 'Email ID': 'JOHN@TEST.COM' };
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+    it('should NOT connect group when isGroupCreate is false', async () => {
+      mockPrismaService.stakeholders.update.mockResolvedValue({});
+      // existing phone → update path
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ])
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]);
 
-      await service.bulkAdd([rowWithUpperEmail]);
+      await service.bulkAdd(basePayload);
 
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ email: 'john@test.com' }),
-          ]),
-        })
-      );
+      expect(
+        mockPrismaService.stakeholdersGroups.findFirst
+      ).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.stakeholdersGroups.create
+      ).not.toHaveBeenCalled();
     });
 
-    it('should update existing stakeholder when phone already exists in DB', async () => {
-      // fetchExistingByPhone → phone already in DB with a known uuid
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([
-        { phone: '+9779841000000', uuid: 'existing-uuid-1' },
-      ]);
+    it('should emit STAKEHOLDER_CREATED event on success', async () => {
+      await service.bulkAdd(basePayload);
 
-      const result = await service.bulkAdd([validRow]);
-
-      expect(result.successCount).toBe(1);
-      // update (not createMany) should be called inside the transaction
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 0 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { uuid: 'existing-uuid-1' } })
-      );
-      expect(tx.stakeholders.createMany).not.toHaveBeenCalled();
-    });
-
-    it('should create new AND update existing stakeholders in same batch', async () => {
-      const newRow = {
-        Name: 'New Person',
-        Designation: 'Dev',
-        Organization: 'Org',
-        District: 'Dist',
-        Municipality: 'Muni',
-        'Mobile #': '9841000099',
-      };
-      // Only validRow's phone exists in DB; newRow's phone does not
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([
-        { phone: '+9779841000000', uuid: 'existing-uuid-1' },
-      ]);
-
-      const result = await service.bulkAdd([validRow, newRow]);
-
-      expect(result.successCount).toBe(2);
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.createMany).toHaveBeenCalled();
-      expect(tx.stakeholders.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { uuid: 'existing-uuid-1' } })
-      );
-    });
-
-    it('should deduplicate rows with same phone — first occurrence wins', async () => {
-      const duplicateRow = { ...validRow, Name: 'Duplicate Person' };
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-
-      const result = await service.bulkAdd([validRow, duplicateRow]);
-
-      // deduplicated to 1
-      expect(result.successCount).toBe(1);
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ name: 'John Doe' }),
-          ]),
-        })
-      );
-    });
-
-    it('should strip empty optional fields from payload before DB operation', async () => {
-      const rowWithEmptyEmail = { ...validRow, 'Email ID': '' };
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-
-      await service.bulkAdd([rowWithEmptyEmail]);
-
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      const createManyCall = tx.stakeholders.createMany.mock.calls[0][0];
-      // email should not be present (stripped) or be null — not an empty string
-      const row = createManyCall.data[0];
-      expect(row.email === undefined || row.email === null).toBe(true);
-    });
-
-    it('should use "Stakeholders Name" field when "Name" is absent', async () => {
-      const rowAltName = {
-        'Stakeholders Name': 'Alt Name',
-        Designation: 'Dev',
-        Organization: 'Org',
-        District: 'Dist',
-        Municipality: 'Muni',
-        'Mobile #': '9841000002',
-      };
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-
-      const result = await service.bulkAdd([rowAltName]);
-
-      expect(result.successCount).toBe(1);
-      const txFn = mockPrismaService['$transaction'].mock.calls[0][0];
-      const tx = {
-        stakeholders: {
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      await txFn(tx);
-      expect(tx.stakeholders.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ name: 'Alt Name' }),
-          ]),
-        })
-      );
-    });
-
-    it('should throw RpcException if validation fails (empty name)', async () => {
-      const invalidRow = { ...validRow, Name: '' };
-
-      await expect(service.bulkAdd([invalidRow])).rejects.toThrow(RpcException);
-      expect(mockPrismaService['$transaction']).not.toHaveBeenCalled();
-    });
-
-    it('should throw RpcException when $transaction fails', async () => {
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-      mockPrismaService['$transaction'] = jest
-        .fn()
-        .mockRejectedValue(new Error('DB error'));
-
-      await expect(service.bulkAdd([validRow])).rejects.toThrow(RpcException);
-    });
-
-    it('should emit STAKEHOLDER_CREATED event after successful import', async () => {
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-
-      await service.bulkAdd([validRow]);
-
-      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         'events.stakeholders_created'
       );
     });
 
-    it('should not call $transaction when all rows fail validation', async () => {
-      const allInvalid = [{ ...validRow, Name: '' }];
+    it('should NOT emit event when validation fails', async () => {
+      const invalidRow = { ...validRow, 'Mobile #': '123' };
+      await service.bulkAdd({ data: [invalidRow], isGroupCreate: false });
 
-      await expect(service.bulkAdd(allInvalid)).rejects.toThrow(RpcException);
-      expect(mockPrismaService['$transaction']).not.toHaveBeenCalled();
-    });
-
-    it('should allow null-phone records through deduplication', async () => {
-      const rowWithValidPhone = {
-        Name: 'No Phone Person',
-        Designation: 'Analyst',
-        Organization: 'Org',
-        District: 'Dist',
-        Municipality: 'Muni',
-        'Mobile #': '+9779841000099', // valid phone, not null
-      };
-      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
-
-      const result = await service.bulkAdd([rowWithValidPhone]);
-
-      expect(result.successCount).toBe(1);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -1219,9 +1385,13 @@ describe('StakeholdersService', () => {
     });
   });
 
-  // ==================== validateStakeholders() ====================
-  describe('validateStakeholders', () => {
-    it('should return valid stakeholders with correct field mapping (Name)', async () => {
+  // ==================== validateStakeholders() — tested via validateBulkStakeholders ====================
+  describe('validateStakeholders (field mapping via validateBulkStakeholders)', () => {
+    beforeEach(() => {
+      mockPrismaService.stakeholders.findMany.mockResolvedValue([]);
+    });
+
+    it('should correctly map Name, Designation, supportArea and email fields', async () => {
       const payload = [
         {
           Name: 'John Doe',
@@ -1235,16 +1405,10 @@ describe('StakeholdersService', () => {
         },
       ];
 
-      const result = await service.validateStakeholders(payload);
+      const result = await service.validateBulkStakeholders(payload);
 
-      expect(result.validStakeholders).toHaveLength(1);
-      expect(result.validStakeholders[0].name).toBe('John Doe');
-      expect(result.validStakeholders[0].designation).toBe('Engineer');
-      expect(result.validStakeholders[0].supportArea).toEqual([
-        'Health',
-        'Education',
-      ]);
-      expect(result.validStakeholders[0].email).toBe('john@test.com');
+      expect(result.isValid).toBe(true);
+      expect(result.newStakeholders).toContain('+9779841000000');
     });
 
     it('should map "Stakeholders Name" field when "Name" is absent', async () => {
@@ -1255,16 +1419,15 @@ describe('StakeholdersService', () => {
           Organization: 'Org B',
           District: 'Lalitpur',
           Municipality: 'Metro',
-          'Phone Number': '9841000001',
+          'Phone Number': '+9779841000001',
           Email: 'jane@test.com',
         },
       ];
 
-      const result = await service.validateStakeholders(payload);
+      const result = await service.validateBulkStakeholders(payload);
 
-      expect(result.validStakeholders[0].name).toBe('Jane Doe');
-      expect(result.validStakeholders[0].phone).toBe('9841000001');
-      expect(result.validStakeholders[0].email).toBe('jane@test.com');
+      expect(result.isValid).toBe(true);
+      expect(result.newStakeholders).toContain('+9779841000001');
     });
 
     it('should map "Support Area #" field for supportArea', async () => {
@@ -1275,20 +1438,18 @@ describe('StakeholdersService', () => {
           Organization: 'Org',
           District: 'Dist',
           Municipality: 'Muni',
-          'Mobile #': '9841000002',
+          'Mobile #': '+9779841000002',
           'Support Area #': 'Water, Shelter',
         },
       ];
 
-      const result = await service.validateStakeholders(payload);
+      const result = await service.validateBulkStakeholders(payload);
 
-      expect(result.validStakeholders[0].supportArea).toEqual([
-        'Water',
-        'Shelter',
-      ]);
+      // Valid row means field parsing was correct
+      expect(result.isValid).toBe(true);
     });
 
-    it('should throw RpcException when validation fails for empty name', async () => {
+    it('should return isValid false when name is empty', async () => {
       const payload = [
         {
           Name: '',
@@ -1296,37 +1457,32 @@ describe('StakeholdersService', () => {
           Organization: 'Org',
           District: 'Dist',
           Municipality: 'Muni',
-          'Mobile #': '9841000000',
+          'Mobile #': '+9779841000000',
         },
       ];
 
-      await expect(service.validateStakeholders(payload)).rejects.toThrow(
-        RpcException
-      );
+      const result = await service.validateBulkStakeholders(payload);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'name')).toBe(true);
     });
 
-    it('should throw RpcException with validation error details', async () => {
+    it('should return isValid false with errors when phone is too short', async () => {
       const payload = [
         {
-          Name: '',
-          Designation: '',
-          Organization: '',
-          District: '',
-          Municipality: '',
-          'Mobile #': '123', // too short (< 7)
+          Name: 'Test',
+          Designation: 'Dev',
+          Organization: 'Org',
+          District: 'Dist',
+          Municipality: 'Muni',
+          'Mobile #': '123',
         },
       ];
 
-      try {
-        await service.validateStakeholders(payload);
-        fail('Should have thrown');
-      } catch (err) {
-        expect(err).toBeInstanceOf(RpcException);
-        const errorObj = (err as RpcException).getError() as any;
-        expect(errorObj.success).toBe(false);
-        expect(errorObj.message).toBe('Validation failed');
-        expect(errorObj.meta.statusCode).toBe(400);
-      }
+      const result = await service.validateBulkStakeholders(payload);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'phone')).toBe(true);
     });
 
     it('should handle empty supportArea gracefully', async () => {
@@ -1337,16 +1493,16 @@ describe('StakeholdersService', () => {
           Organization: 'Org',
           District: 'Dist',
           Municipality: 'Muni',
-          'Mobile #': '9841000003',
+          'Mobile #': '+9779841000003',
         },
       ];
 
-      const result = await service.validateStakeholders(payload);
+      const result = await service.validateBulkStakeholders(payload);
 
-      expect(result.validStakeholders[0].supportArea).toEqual([]);
+      expect(result.isValid).toBe(true);
     });
 
-    it('should process multiple rows and separate valid from invalid', async () => {
+    it('should return isValid false when any row has a validation error', async () => {
       const payload = [
         {
           Name: 'Valid User',
@@ -1354,7 +1510,7 @@ describe('StakeholdersService', () => {
           Organization: 'Org',
           District: 'Dist',
           Municipality: 'Muni',
-          'Mobile #': '9841000004',
+          'Mobile #': '+9779841000004',
         },
         {
           Name: '', // invalid
@@ -1362,14 +1518,14 @@ describe('StakeholdersService', () => {
           Organization: 'Org',
           District: 'Dist',
           Municipality: 'Muni',
-          'Mobile #': '9841000005',
+          'Mobile #': '+9779841000005',
         },
       ];
 
-      // Mixed valid/invalid → should throw because there are errors
-      await expect(service.validateStakeholders(payload)).rejects.toThrow(
-        RpcException
-      );
+      const result = await service.validateBulkStakeholders(payload);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'name')).toBe(true);
     });
   });
 

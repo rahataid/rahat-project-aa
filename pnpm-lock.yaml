@@ -104,6 +104,9 @@ dependencies:
   ioredis:
     specifier: ^5.4.1
     version: 5.8.2
+  libphonenumber-js:
+    specifier: ^1.12.40
+    version: 1.12.40
   luxon:
     specifier: ^3.4.4
     version: 3.7.2
@@ -7395,7 +7398,7 @@ packages:
     resolution: {integrity: sha512-rXXekcjofVN1LTOSw+u4u9WXVEUvNBVjORW154q/IdmYWy1nMbOU9aNtZB0t8m+FJQ9q91jlr2f9CwwUFdFMRA==}
     dependencies:
       '@types/validator': 13.15.10
-      libphonenumber-js: 1.12.31
+      libphonenumber-js: 1.12.40
       validator: 13.15.23
 
   /clean-stack@2.2.0:
@@ -10779,8 +10782,8 @@ packages:
       type-check: 0.4.0
     dev: true
 
-  /libphonenumber-js@1.12.31:
-    resolution: {integrity: sha512-Z3IhgVgrqO1S5xPYM3K5XwbkDasU67/Vys4heW+lfSBALcUZjeIIzI8zCLifY+OCzSq+fpDdywMDa7z+4srJPQ==}
+  /libphonenumber-js@1.12.40:
+    resolution: {integrity: sha512-HKGs7GowShNls3Zh+7DTr6wYpPk5jC78l508yQQY3e8ZgJChM3A9JZghmMJZuK+5bogSfuTafpjksGSR3aMIEg==}
 
   /license-webpack-plugin@4.0.2(webpack@5.103.0):
     resolution: {integrity: sha512-771TFWFD70G1wLTC4oU2Cw4qvtmNrIw+wRvBtn+okgHl7slJVi7zfNcdmqDL72BojM30VNJ2UHylr1o77U37Jw==}

@@ -78,26 +78,40 @@ export interface FindStakeholdersGroup {
   uuid: string;
 }
 
+export interface BulkAddStakeholdersPayload {
+  data: any[];
+  isGroupCreate: boolean;
+  groupName?: string;
+}
+
 import { Transform } from 'class-transformer';
 import {
   IsArray,
+  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
   Length,
 } from 'class-validator';
+import { IsValidPhone } from '../../validators/phone.validator';
 
 export class CreateStakeholderDto {
   @IsString()
   @IsNotEmpty({ message: 'Name is required' })
   name: string;
 
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
+  @IsEmail({}, { message: 'Invalid email format' })
   email?: string;
 
   @IsString()
   @Length(7, 20, {
     message: 'Phone number must be between 7 and 20 characters',
+  })
+  @IsValidPhone({
+    message:
+      'Phone number is not valid. Please provide a valid international phone number.',
   })
   phone: string;
 

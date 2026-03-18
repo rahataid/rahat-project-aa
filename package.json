@@ -86,6 +86,7 @@
     "form-data": "^4.0.2",
     "inquirer": "^12.6.1",
     "ioredis": "^5.4.1",
+    "libphonenumber-js": "^1.12.40",
     "luxon": "^3.4.4",
     "nodemailer": "^6.9.13",
     "openmeteo": "^1.1.3",

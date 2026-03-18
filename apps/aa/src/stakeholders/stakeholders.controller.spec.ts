@@ -15,6 +15,7 @@ describe('StakeholdersController', () => {
   const mockStakeholdersService = {
     add: jest.fn(),
     bulkAdd: jest.fn(),
+    validateBulkStakeholders: jest.fn(),
     getAll: jest.fn(),
     remove: jest.fn(),
     update: jest.fn(),
@@ -92,46 +93,194 @@ describe('StakeholdersController', () => {
     });
   });
 
+  // ==================== validateBulkStakeholders() ====================
+  describe('validateBulkStakeholders', () => {
+    const rawRows = [
+      {
+        Name: 'John',
+        Designation: 'Dev',
+        Organization: 'Org',
+        District: 'Dist',
+        Municipality: 'Muni',
+        'Mobile #': '9841000000',
+      },
+    ];
+
+    it('should normalize array payload and delegate to service', async () => {
+      const expected = {
+        isValid: true,
+        newStakeholders: ['+9779841000000'],
+        updateStakeholders: [],
+        errors: [],
+      };
+      mockStakeholdersService.validateBulkStakeholders.mockResolvedValue(
+        expected
+      );
+
+      const result = await controller.validateBulkStakeholders(rawRows);
+
+      expect(
+        mockStakeholdersService.validateBulkStakeholders
+      ).toHaveBeenCalledWith(rawRows);
+      expect(result).toEqual(expected);
+    });
+
+    it('should normalize object payload via Object.values before delegating', async () => {
+      const objectPayload = { 0: rawRows[0] };
+      const expected = {
+        isValid: true,
+        newStakeholders: ['+9779841000000'],
+        updateStakeholders: [],
+        errors: [],
+      };
+      mockStakeholdersService.validateBulkStakeholders.mockResolvedValue(
+        expected
+      );
+
+      const result = await controller.validateBulkStakeholders(objectPayload);
+
+      expect(
+        mockStakeholdersService.validateBulkStakeholders
+      ).toHaveBeenCalledWith([rawRows[0]]);
+      expect(result).toEqual(expected);
+    });
+
+    it('should return isValid false when service returns errors', async () => {
+      const expected = {
+        isValid: false,
+        newStakeholders: [],
+        updateStakeholders: [],
+        errors: [
+          {
+            field: 'phone',
+            phone: '123',
+            message: 'Phone number is not valid',
+          },
+        ],
+      };
+      mockStakeholdersService.validateBulkStakeholders.mockResolvedValue(
+        expected
+      );
+
+      const result = await controller.validateBulkStakeholders(rawRows);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+    });
+  });
+
   // ==================== bulkAdd() ====================
   describe('bulkAdd', () => {
-    it('should pass array payload directly to service.bulkAdd', async () => {
-      const payload = [
-        { Name: 'John', Designation: 'Dev' },
-        { Name: 'Jane', Designation: 'Analyst' },
-      ];
-      const expected = { successCount: 2, message: 'All stakeholders successfully added.' };
-      mockStakeholdersService.bulkAdd.mockResolvedValue(expected);
+    const validPayload = {
+      data: [
+        {
+          Name: 'John',
+          Designation: 'Dev',
+          Organization: 'Org',
+          District: 'Dist',
+          Municipality: 'Muni',
+          'Mobile #': '9841000000',
+        },
+      ],
+      isGroupCreate: false,
+    };
 
-      const result = await controller.bulkAdd(payload);
-
-      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith(payload);
-      expect(result).toEqual(expected);
-    });
-
-    it('should normalize object payload to array via Object.values', async () => {
-      const payload = {
-        0: { Name: 'John' },
-        1: { Name: 'Jane' },
+    it('should normalize array data and delegate to service.bulkAdd', async () => {
+      const expected = {
+        success: true,
+        result: { createdCount: 1, updatedCount: 0 },
+        message: 'All stakeholders successfully added.',
       };
-      const expected = { successCount: 2, message: 'All stakeholders successfully added.' };
       mockStakeholdersService.bulkAdd.mockResolvedValue(expected);
 
-      const result = await controller.bulkAdd(payload);
+      const result = await controller.bulkAdd(validPayload);
 
-      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith([
-        { Name: 'John' },
-        { Name: 'Jane' },
-      ]);
+      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith({
+        data: validPayload.data,
+        isGroupCreate: false,
+        groupName: undefined,
+      });
       expect(result).toEqual(expected);
     });
 
-    it('should handle empty array payload', async () => {
-      mockStakeholdersService.bulkAdd.mockResolvedValue({ successCount: 0 });
+    it('should normalize object data via Object.values before delegating', async () => {
+      const payloadWithObjectData = {
+        data: { 0: validPayload.data[0] },
+        isGroupCreate: false,
+      };
+      const expected = {
+        success: true,
+        result: { createdCount: 1, updatedCount: 0 },
+        message: 'All stakeholders successfully added.',
+      };
+      mockStakeholdersService.bulkAdd.mockResolvedValue(expected);
 
-      const result = await controller.bulkAdd([]);
+      const result = await controller.bulkAdd(payloadWithObjectData as any);
 
-      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith([]);
-      expect(result).toEqual({ successCount: 0 });
+      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith({
+        data: [validPayload.data[0]],
+        isGroupCreate: false,
+        groupName: undefined,
+      });
+      expect(result).toEqual(expected);
+    });
+
+    it('should pass groupName when isGroupCreate is true', async () => {
+      const payloadWithGroup = {
+        ...validPayload,
+        isGroupCreate: true,
+        groupName: 'Test Group',
+      };
+      const expected = {
+        success: true,
+        result: { createdCount: 1, updatedCount: 0 },
+        message: 'All stakeholders successfully added.',
+      };
+      mockStakeholdersService.bulkAdd.mockResolvedValue(expected);
+
+      await controller.bulkAdd(payloadWithGroup);
+
+      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith({
+        data: payloadWithGroup.data,
+        isGroupCreate: true,
+        groupName: 'Test Group',
+      });
+    });
+
+    it('should return success false when validation fails', async () => {
+      const expected = {
+        success: false,
+        errors: [
+          {
+            field: 'phone',
+            phone: '123',
+            message: 'Phone number is not valid',
+          },
+        ],
+      };
+      mockStakeholdersService.bulkAdd.mockResolvedValue(expected);
+
+      const result = await controller.bulkAdd(validPayload);
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toHaveLength(1);
+    });
+
+    it('should handle empty data array', async () => {
+      const emptyPayload = { data: [], isGroupCreate: false };
+      mockStakeholdersService.bulkAdd.mockResolvedValue({
+        success: true,
+        result: { createdCount: 0, updatedCount: 0 },
+      });
+
+      const result = await controller.bulkAdd(emptyPayload);
+
+      expect(mockStakeholdersService.bulkAdd).toHaveBeenCalledWith({
+        data: [],
+        isGroupCreate: false,
+        groupName: undefined,
+      });
+      expect(result).toBeDefined();
     });
   });
 
@@ -210,7 +359,9 @@ describe('StakeholdersController', () => {
     it('should return null when stakeholder not found', async () => {
       mockStakeholdersService.getOne.mockResolvedValue(null);
 
-      const result = await controller.getOneStakeholder({ uuid: 'nonexistent' });
+      const result = await controller.getOneStakeholder({
+        uuid: 'nonexistent',
+      });
 
       expect(result).toBeNull();
     });
@@ -295,7 +446,9 @@ describe('StakeholdersController', () => {
         'getting all stakeholders groups',
         payload
       );
-      expect(mockStakeholdersService.getAllGroups).toHaveBeenCalledWith(payload);
+      expect(mockStakeholdersService.getAllGroups).toHaveBeenCalledWith(
+        payload
+      );
       expect(result).toEqual(expected);
       consoleSpy.mockRestore();
     });
