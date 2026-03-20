@@ -1,24 +1,28 @@
 import { InkindStockMovementType } from '@prisma/client';
-import { IsEnum, IsNumber, IsUUID } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
 
 export class AddInkindStockDto {
   @IsUUID()
   inkindId: string;
 
   @IsNumber()
+  @Min(1)
   quantity: number;
 
-  // @IsEnum(InkindStockMovementType)
-  // type?: InkindStockMovementType;
-
   @IsUUID()
+  @IsOptional()
   groupInkindId?: string;
 
   @IsUUID()
+  @IsOptional()
   redemptionId?: string;
 }
 
 export class RemoveInkindStockDto {
   @IsUUID()
-  uuid: string;
+  inkindUuid: string;
+
+  @IsNumber()
+  @Min(1)
+  quantity: number;
 }

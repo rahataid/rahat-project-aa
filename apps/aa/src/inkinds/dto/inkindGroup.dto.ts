@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
 
 export class AssignGroupInkindDto {
   @IsUUID()
@@ -9,5 +9,6 @@ export class AssignGroupInkindDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(1)
   quantity?: number;
 }

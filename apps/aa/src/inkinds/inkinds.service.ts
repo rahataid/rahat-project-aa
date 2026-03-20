@@ -197,8 +197,8 @@ export class InkindsService {
   async addInkindStock(payload: AddInkindStockDto) {
     const { inkindId, quantity, groupInkindId, redemptionId } = payload;
 
-    if (!inkindId || !quantity) {
-      throw new RpcException('Missing required fields');
+    if (!inkindId || quantity == null || quantity <= 0) {
+      throw new RpcException('Missing or invalid required fields');
     }
 
     try {
@@ -247,27 +247,20 @@ export class InkindsService {
   }
 
   async removeInkindStock(payload: RemoveInkindStockDto) {
-    const { uuid } = payload;
+    const { inkindUuid, quantity } = payload;
 
-    this.logger.log(`Removing stock for inkind: ${uuid}`);
+    this.logger.log(`Removing stock for inkind: ${inkindUuid}`);
 
-    if (!uuid) {
-      throw new RpcException('Missing uuid field');
+    if (!inkindUuid) {
+      throw new RpcException('Missing inkindUuid field');
     }
 
     try {
-      const stockMovement = await this.prisma.inkindStockMovement.findUnique({
-        where: { uuid },
-      });
-
-      if (!stockMovement) {
-        throw new RpcException(`Stock movement with UUID ${uuid} not found`);
-      }
-
+      await this.findOneOrThrow(inkindUuid);
       return await this.prisma.inkindStockMovement.create({
         data: {
-          inkindId: stockMovement.inkindId,
-          quantity: stockMovement.quantity,
+          inkindId: inkindUuid,
+          quantity: quantity,
           type: InkindStockMovementType.REMOVE,
         },
       });
@@ -293,6 +286,8 @@ export class InkindsService {
       throw new RpcException('Missing required fields');
     }
 
+    const inkind = await this.findOneOrThrow(inkindId);
+
     const existingAssignment = await this.prisma.groupInkind.findFirst({
       where: { groupId, inkindId },
     });
@@ -301,7 +296,6 @@ export class InkindsService {
       throw new RpcException(`Inkind is already assigned to this group.`);
     }
 
-    const inkind = await this.findOneOrThrow(inkindId);
     const availableStock = inkind.availableStock || 0;
 
     const numberOfGroupBeneficiaries =
@@ -317,7 +311,7 @@ export class InkindsService {
       );
     }
     try {
-      this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx) => {
         const groupInkind = await tx.groupInkind.create({
           data: {
             groupId,
