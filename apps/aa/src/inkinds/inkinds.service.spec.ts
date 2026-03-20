@@ -4,6 +4,9 @@ import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { InkindsService } from './inkinds.service';
 import { InkindType, ListInkindDto } from './dto/inkind.dto';
+import { InkindStockMovementType } from '@prisma/client';
+import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 // Mock the entire @rumsan/prisma module
 jest.mock('@rumsan/prisma', () => {
@@ -28,6 +31,10 @@ describe('InkindsService', () => {
     inkindStockMovement: {
       create: jest.fn(),
     },
+    groupInkind: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+    },
   };
 
   const mockPrismaService = {
@@ -35,6 +42,18 @@ describe('InkindsService', () => {
       create: jest.fn(),
       update: jest.fn(),
       findFirst: jest.fn(),
+    },
+    inkindStockMovement: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    groupInkind: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    beneficiaryToGroup: {
+      count: jest.fn(),
     },
     $transaction: jest.fn((cb) => cb(mockTx)),
   };
@@ -342,6 +361,468 @@ describe('InkindsService', () => {
 
       await expect(service.get(listDto)).rejects.toThrow(RpcException);
       expect(mockPaginateFn).toHaveBeenCalled();
+    });
+  });
+
+  describe('addInkindStock', () => {
+    const mockInkind = {
+      uuid: 'test-uuid',
+      name: 'Test Inkind',
+      type: InkindType.WALK_IN,
+      availableStock: 100,
+    };
+
+    const mockStockMovement = {
+      uuid: 'stock-movement-uuid',
+      inkindId: 'test-uuid',
+      quantity: 50,
+      type: InkindStockMovementType.ADD,
+      groupInkindId: null,
+      redemptionId: null,
+      createdAt: new Date(),
+    };
+
+    beforeEach(() => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(mockInkind);
+      mockPrismaService.inkindStockMovement.create.mockResolvedValue(
+        mockStockMovement
+      );
+    });
+
+    it('should add inkind stock successfully', async () => {
+      const addStockDto: AddInkindStockDto = {
+        inkindId: 'test-uuid',
+        quantity: 50,
+      };
+
+      const result = await service.addInkindStock(addStockDto);
+
+      expect(mockPrismaService.inkind.findFirst).toHaveBeenCalledWith({
+        where: { uuid: 'test-uuid', deletedAt: null },
+      });
+      expect(mockPrismaService.inkindStockMovement.create).toHaveBeenCalledWith(
+        {
+          data: {
+            inkindId: 'test-uuid',
+            quantity: 50,
+            type: InkindStockMovementType.ADD,
+            groupInkindId: undefined,
+            redemptionId: undefined,
+          },
+        }
+      );
+      expect(result).toEqual(mockStockMovement);
+    });
+
+    it('should add stock with groupInkindId and redemptionId', async () => {
+      const addStockDto: AddInkindStockDto = {
+        inkindId: 'test-uuid',
+        quantity: 25,
+        groupInkindId: 'group-inkind-uuid',
+        redemptionId: 'redemption-uuid',
+      };
+
+      await service.addInkindStock(addStockDto);
+
+      expect(mockPrismaService.inkindStockMovement.create).toHaveBeenCalledWith(
+        {
+          data: {
+            inkindId: 'test-uuid',
+            quantity: 25,
+            type: InkindStockMovementType.ADD,
+            groupInkindId: 'group-inkind-uuid',
+            redemptionId: 'redemption-uuid',
+          },
+        }
+      );
+    });
+
+    it('should throw RpcException for invalid inkindId', async () => {
+      const addStockDto: AddInkindStockDto = {
+        inkindId: '',
+        quantity: 50,
+      };
+
+      await expect(service.addInkindStock(addStockDto)).rejects.toThrow(
+        'Missing or invalid required fields'
+      );
+    });
+
+    it('should throw RpcException for invalid quantity', async () => {
+      const addStockDto: AddInkindStockDto = {
+        inkindId: 'test-uuid',
+        quantity: 0,
+      };
+
+      await expect(service.addInkindStock(addStockDto)).rejects.toThrow(
+        'Missing or invalid required fields'
+      );
+    });
+
+    it('should throw RpcException when inkind not found', async () => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(null);
+
+      const addStockDto: AddInkindStockDto = {
+        inkindId: 'invalid-uuid',
+        quantity: 50,
+      };
+
+      await expect(service.addInkindStock(addStockDto)).rejects.toThrow(
+        'Inkind with UUID invalid-uuid not found'
+      );
+    });
+  });
+
+  describe('getAllStockMovements', () => {
+    const mockStockMovements = [
+      {
+        uuid: 'movement-1',
+        inkindId: 'inkind-1',
+        quantity: 100,
+        type: InkindStockMovementType.ADD,
+        inkind: { name: 'Rice', type: InkindType.WALK_IN },
+        groupInkind: null,
+        redemption: null,
+        createdAt: new Date(),
+      },
+      {
+        uuid: 'movement-2',
+        inkindId: 'inkind-2',
+        quantity: 50,
+        type: InkindStockMovementType.REMOVE,
+        inkind: { name: 'Oil', type: InkindType.PRE_DEFINED },
+        groupInkind: null,
+        redemption: null,
+        createdAt: new Date(),
+      },
+    ];
+
+    it('should return all stock movements successfully', async () => {
+      mockPrismaService.inkindStockMovement.findMany.mockResolvedValue(
+        mockStockMovements
+      );
+
+      const result = await service.getAllStockMovements();
+
+      expect(
+        mockPrismaService.inkindStockMovement.findMany
+      ).toHaveBeenCalledWith({
+        include: {
+          inkind: true,
+          groupInkind: true,
+          redemption: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toEqual(mockStockMovements);
+    });
+
+    it('should return empty array when no movements exist', async () => {
+      mockPrismaService.inkindStockMovement.findMany.mockResolvedValue([]);
+
+      const result = await service.getAllStockMovements();
+
+      expect(result).toEqual([]);
+    });
+
+    it('should throw RpcException when database error occurs', async () => {
+      mockPrismaService.inkindStockMovement.findMany.mockRejectedValue(
+        new Error('Database error')
+      );
+
+      await expect(service.getAllStockMovements()).rejects.toThrow(
+        RpcException
+      );
+    });
+  });
+
+  describe('removeInkindStock', () => {
+    const mockInkind = {
+      uuid: 'test-uuid',
+      name: 'Test Inkind',
+      type: InkindType.WALK_IN,
+      availableStock: 100,
+    };
+
+    const mockStockMovement = {
+      uuid: 'stock-movement-uuid',
+      inkindId: 'test-uuid',
+      quantity: 25,
+      type: InkindStockMovementType.REMOVE,
+      createdAt: new Date(),
+    };
+
+    beforeEach(() => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(mockInkind);
+      mockPrismaService.inkindStockMovement.create.mockResolvedValue(
+        mockStockMovement
+      );
+    });
+
+    it('should remove inkind stock successfully', async () => {
+      const removeStockDto: RemoveInkindStockDto = {
+        inkindUuid: 'test-uuid',
+        quantity: 25,
+      };
+
+      const result = await service.removeInkindStock(removeStockDto);
+
+      expect(mockPrismaService.inkind.findFirst).toHaveBeenCalledWith({
+        where: { uuid: 'test-uuid', deletedAt: null },
+      });
+      expect(mockPrismaService.inkindStockMovement.create).toHaveBeenCalledWith(
+        {
+          data: {
+            inkindId: 'test-uuid',
+            quantity: 25,
+            type: InkindStockMovementType.REMOVE,
+          },
+        }
+      );
+      expect(result).toEqual(mockStockMovement);
+    });
+
+    it('should throw RpcException for missing inkindUuid', async () => {
+      const removeStockDto: RemoveInkindStockDto = {
+        inkindUuid: '',
+        quantity: 25,
+      };
+
+      await expect(service.removeInkindStock(removeStockDto)).rejects.toThrow(
+        'Missing inkindUuid field'
+      );
+    });
+
+    it('should throw RpcException when inkind not found', async () => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(null);
+
+      const removeStockDto: RemoveInkindStockDto = {
+        inkindUuid: 'invalid-uuid',
+        quantity: 25,
+      };
+
+      await expect(service.removeInkindStock(removeStockDto)).rejects.toThrow(
+        'Inkind with UUID invalid-uuid not found'
+      );
+    });
+  });
+
+  describe('assignGroupInkind', () => {
+    const mockInkind = {
+      uuid: 'inkind-uuid',
+      name: 'Test Inkind',
+      type: InkindType.WALK_IN,
+      availableStock: 100,
+    };
+
+    const mockGroupInkind = {
+      uuid: 'group-inkind-uuid',
+      groupId: 'group-uuid',
+      inkindId: 'inkind-uuid',
+      quantityAllocated: 2,
+    };
+
+    beforeEach(() => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(mockInkind);
+      mockPrismaService.groupInkind.findFirst.mockResolvedValue(null);
+      mockPrismaService.beneficiaryToGroup.count.mockResolvedValue(5);
+      mockTx.groupInkind.create.mockResolvedValue(mockGroupInkind);
+      mockTx.groupInkind.findFirst.mockResolvedValue(null);
+    });
+
+    it('should assign group inkind successfully', async () => {
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'inkind-uuid',
+        groupId: 'group-uuid',
+        quantity: 2,
+      };
+
+      const result = await service.assignGroupInkind(assignDto);
+
+      expect(mockPrismaService.inkind.findFirst).toHaveBeenCalledWith({
+        where: { uuid: 'inkind-uuid', deletedAt: null },
+      });
+      expect(mockPrismaService.groupInkind.findFirst).toHaveBeenCalledWith({
+        where: { groupId: 'group-uuid', inkindId: 'inkind-uuid' },
+      });
+      expect(mockPrismaService.beneficiaryToGroup.count).toHaveBeenCalledWith({
+        where: { groupId: 'group-uuid' },
+      });
+      expect(mockTx.groupInkind.create).toHaveBeenCalledWith({
+        data: {
+          groupId: 'group-uuid',
+          inkindId: 'inkind-uuid',
+          quantityAllocated: 2,
+        },
+      });
+      expect(mockTx.inkindStockMovement.create).toHaveBeenCalledWith({
+        data: {
+          inkindId: 'inkind-uuid',
+          quantity: 10, // 2 * 5 beneficiaries
+          type: InkindStockMovementType.LOCK,
+          groupInkindId: 'group-inkind-uuid',
+        },
+      });
+      expect(result).toEqual({
+        success: true,
+        message: 'Group inkind assigned successfully',
+      });
+    });
+
+    it('should use default quantity of 1 when not specified', async () => {
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'inkind-uuid',
+        groupId: 'group-uuid',
+      };
+
+      await service.assignGroupInkind(assignDto);
+
+      expect(mockTx.groupInkind.create).toHaveBeenCalledWith({
+        data: {
+          groupId: 'group-uuid',
+          inkindId: 'inkind-uuid',
+          quantityAllocated: 1,
+        },
+      });
+    });
+
+    it('should throw RpcException for missing required fields', async () => {
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: '',
+        groupId: 'group-uuid',
+      };
+
+      await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
+        'Missing required fields'
+      );
+    });
+
+    it('should throw RpcException when inkind not found', async () => {
+      mockPrismaService.inkind.findFirst.mockResolvedValue(null);
+
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'invalid-uuid',
+        groupId: 'group-uuid',
+      };
+
+      await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
+        'Inkind with UUID invalid-uuid not found'
+      );
+    });
+
+    it('should throw RpcException when group inkind already exists', async () => {
+      mockPrismaService.groupInkind.findFirst.mockResolvedValue(
+        mockGroupInkind
+      );
+
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'inkind-uuid',
+        groupId: 'group-uuid',
+      };
+
+      await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
+        'Inkind is already assigned to this group.'
+      );
+    });
+
+    it('should throw RpcException when insufficient stock', async () => {
+      const lowStockInkind = { ...mockInkind, availableStock: 5 };
+      mockPrismaService.inkind.findFirst.mockResolvedValue(lowStockInkind);
+
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'inkind-uuid',
+        groupId: 'group-uuid',
+        quantity: 2,
+      };
+
+      await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
+        'Not enough stock available. Requested: 10, Available: 5'
+      );
+    });
+
+    it('should handle transaction errors', async () => {
+      mockPrismaService.$transaction.mockRejectedValue(
+        new Error('Transaction failed')
+      );
+
+      const assignDto: AssignGroupInkindDto = {
+        inkindId: 'inkind-uuid',
+        groupId: 'group-uuid',
+        quantity: 1,
+      };
+
+      await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
+        RpcException
+      );
+    });
+  });
+
+  describe('getByGroup', () => {
+    const mockGroupInkinds = [
+      {
+        uuid: 'group-inkind-1',
+        groupId: 'group-1',
+        inkindId: 'inkind-1',
+        quantityAllocated: 2,
+        inkind: {
+          uuid: 'inkind-1',
+          name: 'Rice Bag',
+          type: InkindType.WALK_IN,
+          description: '25kg rice bag',
+        },
+        group: {
+          uuid: 'group-1',
+          name: 'Group A',
+        },
+      },
+      {
+        uuid: 'group-inkind-2',
+        groupId: 'group-2',
+        inkindId: 'inkind-2',
+        quantityAllocated: 1,
+        inkind: {
+          uuid: 'inkind-2',
+          name: 'Oil Bottle',
+          type: InkindType.PRE_DEFINED,
+          description: '1L oil bottle',
+        },
+        group: {
+          uuid: 'group-2',
+          name: 'Group B',
+        },
+      },
+    ];
+
+    it('should return group inkinds successfully', async () => {
+      mockPrismaService.groupInkind.findMany.mockResolvedValue(
+        mockGroupInkinds
+      );
+
+      const result = await service.getByGroup();
+
+      expect(mockPrismaService.groupInkind.findMany).toHaveBeenCalledWith({
+        include: {
+          inkind: true,
+          group: true,
+        },
+      });
+      expect(result).toEqual(mockGroupInkinds);
+    });
+
+    it('should return empty array when no group inkinds exist', async () => {
+      mockPrismaService.groupInkind.findMany.mockResolvedValue([]);
+
+      const result = await service.getByGroup();
+
+      expect(result).toEqual([]);
+    });
+
+    it('should throw RpcException when database error occurs', async () => {
+      mockPrismaService.groupInkind.findMany.mockRejectedValue(
+        new Error('Database error')
+      );
+
+      await expect(service.getByGroup()).rejects.toThrow(RpcException);
     });
   });
 });

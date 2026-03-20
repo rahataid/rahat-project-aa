@@ -7,6 +7,8 @@ import {
   UpdateInkindDto,
   ListInkindDto,
 } from './dto/inkind.dto';
+import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -189,5 +191,173 @@ export class InkindsService {
     }
 
     return inkind;
+  }
+
+  // Inkinds stock management
+  async addInkindStock(payload: AddInkindStockDto) {
+    const { inkindId, quantity, groupInkindId, redemptionId } = payload;
+
+    if (!inkindId || quantity == null || quantity <= 0) {
+      throw new RpcException('Missing or invalid required fields');
+    }
+
+    try {
+      this.logger.log(
+        `Adding stock for inkind: ${inkindId}, quantity: ${quantity}`
+      );
+
+      await this.findOneOrThrow(inkindId);
+
+      return this.prisma.inkindStockMovement.create({
+        data: {
+          inkindId,
+          quantity,
+          type: InkindStockMovementType.ADD,
+          groupInkindId,
+          redemptionId,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to add inkind stock: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getAllStockMovements() {
+    this.logger.log(`Fetching all inkind stock movements`);
+    try {
+      return await this.prisma.inkindStockMovement.findMany({
+        include: {
+          inkind: true,
+          groupInkind: true,
+          redemption: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind stock movements: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async removeInkindStock(payload: RemoveInkindStockDto) {
+    const { inkindUuid, quantity } = payload;
+
+    this.logger.log(`Removing stock for inkind: ${inkindUuid}`);
+
+    if (!inkindUuid) {
+      throw new RpcException('Missing inkindUuid field');
+    }
+
+    try {
+      await this.findOneOrThrow(inkindUuid);
+      return await this.prisma.inkindStockMovement.create({
+        data: {
+          inkindId: inkindUuid,
+          quantity: quantity,
+          type: InkindStockMovementType.REMOVE,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove inkind stock: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  // Group inkinds management
+  async assignGroupInkind(payload: AssignGroupInkindDto) {
+    const { inkindId, groupId, quantity } = payload;
+    const newQuantity = quantity || 1;
+
+    this.logger.log(
+      `Assigning group inkind: inkindId=${inkindId}, groupId=${groupId}, quantity=${newQuantity}`
+    );
+
+    if (!inkindId || !groupId) {
+      throw new RpcException('Missing required fields');
+    }
+
+    const inkind = await this.findOneOrThrow(inkindId);
+
+    const existingAssignment = await this.prisma.groupInkind.findFirst({
+      where: { groupId, inkindId },
+    });
+
+    if (existingAssignment) {
+      throw new RpcException(`Inkind is already assigned to this group.`);
+    }
+
+    const availableStock = inkind.availableStock || 0;
+
+    const numberOfGroupBeneficiaries =
+      await this.prisma.beneficiaryToGroup.count({
+        where: { groupId },
+      });
+
+    const totalNeedInkindQuantity = newQuantity * numberOfGroupBeneficiaries;
+
+    if (totalNeedInkindQuantity > availableStock) {
+      throw new RpcException(
+        `Not enough stock available. Requested: ${totalNeedInkindQuantity}, Available: ${availableStock}`
+      );
+    }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const groupInkind = await tx.groupInkind.create({
+          data: {
+            groupId,
+            inkindId,
+            quantityAllocated: newQuantity,
+          },
+        });
+        await tx.inkindStockMovement.create({
+          data: {
+            inkindId,
+            quantity: totalNeedInkindQuantity,
+            type: InkindStockMovementType.LOCK,
+            groupInkindId: groupInkind.uuid,
+          },
+        });
+      });
+      this.logger.log(
+        `Group inkind assigned successfully: groupId=${groupId}, inkindId=${inkindId}, quantity=${newQuantity}`
+      );
+      return { success: true, message: 'Group inkind assigned successfully' };
+    } catch (error) {
+      this.logger.error(
+        `Failed to assign group inkind: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getByGroup() {
+    try {
+      this.logger.log(`Fetching inkinds by group`);
+      const groupInkinds = await this.prisma.groupInkind.findMany({
+        include: {
+          inkind: true,
+          group: true,
+        },
+      });
+
+      return groupInkinds;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkinds by group: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
   }
 }

@@ -9,6 +9,8 @@ import {
   ListInkindDto,
   UpdateInkindDto,
 } from './dto/inkind.dto';
+import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 describe('InkindsController', () => {
   let controller: InkindsController;
@@ -20,6 +22,11 @@ describe('InkindsController', () => {
     delete: jest.fn(),
     get: jest.fn(),
     getOne: jest.fn(),
+    addInkindStock: jest.fn(),
+    getAllStockMovements: jest.fn(),
+    removeInkindStock: jest.fn(),
+    assignGroupInkind: jest.fn(),
+    getByGroup: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -241,6 +248,307 @@ describe('InkindsController', () => {
 
       await expect(controller.getOne(getInkindDto)).rejects.toThrow(
         'Inkind not found'
+      );
+    });
+  });
+
+  describe('addInkindStock', () => {
+    it('should add inkind stock successfully', async () => {
+      const addInkindStockDto: AddInkindStockDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        quantity: 50,
+      };
+
+      const expectedResult = {
+        uuid: 'stock-movement-uuid-123',
+        inkindId: addInkindStockDto.inkindId,
+        quantity: addInkindStockDto.quantity,
+        type: 'ADD',
+        createdAt: new Date(),
+      };
+
+      mockInkindsService.addInkindStock.mockResolvedValue(expectedResult);
+
+      const result = await controller.addInkindStock(addInkindStockDto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.addInkindStock).toHaveBeenCalledWith(
+        addInkindStockDto
+      );
+    });
+
+    it('should handle errors when adding inkind stock', async () => {
+      const addInkindStockDto: AddInkindStockDto = {
+        inkindId: 'invalid-uuid',
+        quantity: 50,
+      };
+
+      const error = new Error('Inkind not found');
+      mockInkindsService.addInkindStock.mockRejectedValue(error);
+
+      await expect(
+        controller.addInkindStock(addInkindStockDto)
+      ).rejects.toThrow('Inkind not found');
+    });
+
+    it('should add stock with optional groupInkindId and redemptionId', async () => {
+      const addInkindStockDto: AddInkindStockDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        quantity: 25,
+        groupInkindId: 'group-inkind-uuid-123',
+        redemptionId: 'redemption-uuid-123',
+      };
+
+      const expectedResult = {
+        uuid: 'stock-movement-uuid-456',
+        inkindId: addInkindStockDto.inkindId,
+        quantity: addInkindStockDto.quantity,
+        type: 'ADD',
+        groupInkindId: addInkindStockDto.groupInkindId,
+        redemptionId: addInkindStockDto.redemptionId,
+        createdAt: new Date(),
+      };
+
+      mockInkindsService.addInkindStock.mockResolvedValue(expectedResult);
+
+      const result = await controller.addInkindStock(addInkindStockDto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.addInkindStock).toHaveBeenCalledWith(
+        addInkindStockDto
+      );
+    });
+  });
+
+  describe('getAllStockMovements', () => {
+    it('should return all stock movements successfully', async () => {
+      const expectedResult = [
+        {
+          uuid: 'movement-uuid-1',
+          inkindId: 'inkind-uuid-1',
+          quantity: 50,
+          type: 'ADD',
+          inkind: { name: 'Rice Bag', type: 'WALK_IN' },
+          groupInkind: null,
+          redemption: null,
+          createdAt: new Date(),
+        },
+        {
+          uuid: 'movement-uuid-2',
+          inkindId: 'inkind-uuid-2',
+          quantity: 25,
+          type: 'REMOVE',
+          inkind: { name: 'Oil Bottle', type: 'PRE_DEFINED' },
+          groupInkind: null,
+          redemption: null,
+          createdAt: new Date(),
+        },
+      ];
+
+      mockInkindsService.getAllStockMovements.mockResolvedValue(expectedResult);
+
+      const result = await controller.getAllStockMovements();
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.getAllStockMovements).toHaveBeenCalled();
+    });
+
+    it('should handle errors when getting all stock movements', async () => {
+      const error = new Error('Database connection failed');
+      mockInkindsService.getAllStockMovements.mockRejectedValue(error);
+
+      await expect(controller.getAllStockMovements()).rejects.toThrow(
+        'Database connection failed'
+      );
+    });
+
+    it('should return empty array when no stock movements exist', async () => {
+      mockInkindsService.getAllStockMovements.mockResolvedValue([]);
+
+      const result = await controller.getAllStockMovements();
+
+      expect(result).toEqual([]);
+      expect(mockInkindsService.getAllStockMovements).toHaveBeenCalled();
+    });
+  });
+
+  describe('removeInkindStock', () => {
+    it('should remove inkind stock successfully', async () => {
+      const removeInkindStockDto: RemoveInkindStockDto = {
+        inkindUuid: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        quantity: 10,
+      };
+
+      const expectedResult = {
+        uuid: 'stock-movement-uuid-789',
+        inkindId: removeInkindStockDto.inkindUuid,
+        quantity: removeInkindStockDto.quantity,
+        type: 'REMOVE',
+        createdAt: new Date(),
+      };
+
+      mockInkindsService.removeInkindStock.mockResolvedValue(expectedResult);
+
+      const result = await controller.removeInkindStock(removeInkindStockDto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.removeInkindStock).toHaveBeenCalledWith(
+        removeInkindStockDto
+      );
+    });
+
+    it('should handle errors when removing inkind stock', async () => {
+      const removeInkindStockDto: RemoveInkindStockDto = {
+        inkindUuid: 'invalid-uuid',
+        quantity: 10,
+      };
+
+      const error = new Error('Inkind not found');
+      mockInkindsService.removeInkindStock.mockRejectedValue(error);
+
+      await expect(
+        controller.removeInkindStock(removeInkindStockDto)
+      ).rejects.toThrow('Inkind not found');
+    });
+  });
+
+  describe('assignGroupInkind', () => {
+    it('should assign group inkind successfully', async () => {
+      const assignGroupInkindDto: AssignGroupInkindDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        groupId: 'group-uuid-123',
+        quantity: 2,
+      };
+
+      const expectedResult = {
+        success: true,
+        message: 'Group inkind assigned successfully',
+      };
+
+      mockInkindsService.assignGroupInkind.mockResolvedValue(expectedResult);
+
+      const result = await controller.assignGroupInkind(assignGroupInkindDto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.assignGroupInkind).toHaveBeenCalledWith(
+        assignGroupInkindDto
+      );
+    });
+
+    it('should assign group inkind with default quantity of 1', async () => {
+      const assignGroupInkindDto: AssignGroupInkindDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        groupId: 'group-uuid-123',
+      };
+
+      const expectedResult = {
+        success: true,
+        message: 'Group inkind assigned successfully',
+      };
+
+      mockInkindsService.assignGroupInkind.mockResolvedValue(expectedResult);
+
+      const result = await controller.assignGroupInkind(assignGroupInkindDto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.assignGroupInkind).toHaveBeenCalledWith(
+        assignGroupInkindDto
+      );
+    });
+
+    it('should handle errors when assigning group inkind', async () => {
+      const assignGroupInkindDto: AssignGroupInkindDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        groupId: 'group-uuid-123',
+        quantity: 100,
+      };
+
+      const error = new Error('Not enough stock available');
+      mockInkindsService.assignGroupInkind.mockRejectedValue(error);
+
+      await expect(
+        controller.assignGroupInkind(assignGroupInkindDto)
+      ).rejects.toThrow('Not enough stock available');
+    });
+
+    it('should handle duplicate assignment error', async () => {
+      const assignGroupInkindDto: AssignGroupInkindDto = {
+        inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        groupId: 'group-uuid-123',
+        quantity: 1,
+      };
+
+      const error = new Error('Inkind is already assigned to this group');
+      mockInkindsService.assignGroupInkind.mockRejectedValue(error);
+
+      await expect(
+        controller.assignGroupInkind(assignGroupInkindDto)
+      ).rejects.toThrow('Inkind is already assigned to this group');
+    });
+  });
+
+  describe('getByGroup', () => {
+    it('should return group inkinds successfully', async () => {
+      const expectedResult = [
+        {
+          uuid: 'group-inkind-uuid-1',
+          groupId: 'group-uuid-1',
+          inkindId: 'inkind-uuid-1',
+          quantityAllocated: 2,
+          inkind: {
+            uuid: 'inkind-uuid-1',
+            name: 'Rice Bag',
+            type: 'WALK_IN',
+            description: '25kg rice bag',
+          },
+          group: {
+            uuid: 'group-uuid-1',
+            name: 'Group A',
+          },
+          createdAt: new Date(),
+        },
+        {
+          uuid: 'group-inkind-uuid-2',
+          groupId: 'group-uuid-2',
+          inkindId: 'inkind-uuid-2',
+          quantityAllocated: 1,
+          inkind: {
+            uuid: 'inkind-uuid-2',
+            name: 'Oil Bottle',
+            type: 'PRE_DEFINED',
+            description: '1L oil bottle',
+          },
+          group: {
+            uuid: 'group-uuid-2',
+            name: 'Group B',
+          },
+          createdAt: new Date(),
+        },
+      ];
+
+      mockInkindsService.getByGroup.mockResolvedValue(expectedResult);
+
+      const result = await controller.getByGroup();
+
+      expect(result).toEqual(expectedResult);
+      expect(mockInkindsService.getByGroup).toHaveBeenCalled();
+    });
+
+    it('should return empty array when no group assignments exist', async () => {
+      mockInkindsService.getByGroup.mockResolvedValue([]);
+
+      const result = await controller.getByGroup();
+
+      expect(result).toEqual([]);
+      expect(mockInkindsService.getByGroup).toHaveBeenCalled();
+    });
+
+    it('should handle errors when getting group inkinds', async () => {
+      const error = new Error('Database connection failed');
+      mockInkindsService.getByGroup.mockRejectedValue(error);
+
+      await expect(controller.getByGroup()).rejects.toThrow(
+        'Database connection failed'
       );
     });
   });
