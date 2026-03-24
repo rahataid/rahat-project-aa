@@ -6,6 +6,7 @@ import {
   IsUUID,
   Min,
   IsIn,
+  IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -97,4 +98,15 @@ export class ListInkindDto {
   @IsOptional()
   @IsString()
   name?: string;
+}
+
+export class RedeemInkindByBeneficiaryDto {
+  @IsString()
+  walletAddress: string;
+
+  @IsArray()
+  inkinds: {
+    uuid: string;
+    groupInkindUuid?: string;
+  }[];
 }

@@ -8,6 +8,7 @@ import {
   GetInkindDto,
   DeleteInkindDto,
   ListInkindDto,
+  RedeemInkindByBeneficiaryDto,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -104,5 +105,17 @@ export class InkindsController {
   })
   getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
     return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.REDEEM_BENEFICIARY_INKIND,
+    uuid: process.env.PROJECT_ID,
+  })
+  redeemBeneficiaryInkind(
+    @Payload() redeemInkindByBeneficiaryDto: RedeemInkindByBeneficiaryDto
+  ) {
+    return this.inkindsService.redeemInkindByBeneficiary(
+      redeemInkindByBeneficiaryDto
+    );
   }
 }
