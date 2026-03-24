@@ -1,4 +1,4 @@
-name: ALL-IN-ONE CICD
+name: ALL DEV CI/CD
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
       tag_prefix:
         description: 'Tag prefix (e.g., Img tag)'
         required: true
-        default: 'test-load'
+        default: 'Img tag'
         type: string
 
 env:
