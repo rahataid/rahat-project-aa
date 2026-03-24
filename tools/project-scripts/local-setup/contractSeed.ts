@@ -69,15 +69,15 @@ class ContractSeed extends ContractLib {
     console.log(deployerAccount);
 
     console.log('----------Depolying Trigger Contract -------------------');
-    const TriggerManager = await this.deployContract(
-      'TriggerManager',
-      [2],
-      deployerKey
-    );
-    this.contracts['TriggerManager'] = {
-      address: TriggerManager.contract.target,
-      startBlock: TriggerManager.blockNumber,
-    };
+    // const TriggerManager = await this.deployContract(
+    //   'TriggerManager',
+    //   [2],
+    //   deployerKey
+    // );
+    // this.contracts['TriggerManager'] = {
+    //   address: TriggerManager.contract.target,
+    //   startBlock: TriggerManager.blockNumber,
+    // };
 
     console.log('----------Depolying Rahat Donor-------------------');
     const DonorContract = await this.deployContract(
@@ -114,7 +114,6 @@ class ContractSeed extends ContractLib {
         await RahatToken.contract.getAddress(),
         forwarderAddress,
         RahatAccessManagerAddress,
-        await TriggerManager.contract.getAddress(),
       ],
       deployerKey
     );
