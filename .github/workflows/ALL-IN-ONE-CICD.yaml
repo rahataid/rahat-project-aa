@@ -16,7 +16,7 @@ on:
       tag_prefix:
         description: 'Tag prefix (e.g., Img tag)'
         required: true
-        default: 'Img tag'
+        default: 'main'
         type: string
 
 env:
