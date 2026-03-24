@@ -10,7 +10,7 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'stage'
+        default: 'aa-evm-unicef-stage'
       manifest_file:
         description: 'Path to Kubernetes manifest file'
         required: true
