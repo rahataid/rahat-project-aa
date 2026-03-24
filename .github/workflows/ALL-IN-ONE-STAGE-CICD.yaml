@@ -1,0 +1,115 @@
+name: ALL Stage CI/CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Project name (e.g., rahat-project-aa)'
+        required: true
+        default: 'rahat-project-aa'
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'stage'
+      manifest_file:
+        description: 'Path to Kubernetes manifest file'
+        required: true
+        type: choice
+        options:
+          - 'K8s-Manifest/Rahat/AA-Stage/Argo-Rollout/project-trigger.yaml'
+          - 'K8s-Manifest/Rahat/AA-EVM-Unicef-Stage/Argo-Rollout/project-trigger.yaml'
+
+env:
+  CI: false
+  ENVIRONMENT: ${{ github.event.inputs.environment }}
+
+jobs:
+  deploy:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get short SHA & Run ID
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "run_id_short=${GITHUB_RUN_ID:0:3}" >> $GITHUB_OUTPUT
+
+      - name: Import Docker Secrets from Vault
+        uses: hashicorp/vault-action@v2.4.0
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            github/data/general/docker/esatya username | DOCKERHUB_USERNAME ;
+            github/data/general/docker/esatya password | DOCKERHUB_TOKEN ;
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20.10.0
+
+      - name: Install Dependencies & Build
+        run: |
+          npm install -g pnpm@8.14.1 only-allow
+          pnpm install
+          npx nx reset
+          pnpm prisma:generate
+          pnpm build:all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Image
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.${{ github.event.inputs.project_name }}
+          push: true
+          tags: |
+            esatya/${{ github.event.inputs.project_name }}:${{ env.ENVIRONMENT }}
+            esatya/${{ github.event.inputs.project_name }}:${{ env.ENVIRONMENT }}-${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.run_id_short }}
+
+    outputs:
+      sha_short: ${{ steps.vars.outputs.sha_short }}
+      run_id_short: ${{ steps.vars.outputs.run_id_short }}
+
+  update-manifest:
+    name: Update Kubernetes Manifest
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import Manifest Repo Secrets
+        uses: hashicorp/vault-action@v2.4.0
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            github/data/general/Stage-Manifest repo | MANIFEST_REPO ;
+            github/data/general/Stage-Manifest ssh-key | SSH_KEY ;
+
+      - name: Checkout Manifest Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MANIFEST_REPO }}
+          ssh-key: ${{ env.SSH_KEY }}
+
+      - name: Update Image Tag in Manifest
+        run: |
+          TAG="${{ env.ENVIRONMENT }}-${{ needs.deploy.outputs.sha_short }}-${{ needs.deploy.outputs.run_id_short }}"
+          sed -i "s|image: esatya/${{ github.event.inputs.project_name }}:.*|image: esatya/${{ github.event.inputs.project_name }}:${TAG}|" ${{ github.event.inputs.manifest_file }}
+
+      - name: Commit & Push Manifest Changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add ${{ github.event.inputs.manifest_file }}
+          git commit -m "ci: Update ${{ github.event.inputs.project_name }} image tag to ${TAG}"
+          git push origin main
