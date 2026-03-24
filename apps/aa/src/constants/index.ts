@@ -273,7 +273,8 @@ export const JOBS = {
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
     GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
       'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
-    REDEEM_BENEFICIARY_INKIND: 'aa.jobs.groupInkinds.redeemBeneficiaryInkind',
+    GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
+    BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',

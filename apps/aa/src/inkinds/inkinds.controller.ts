@@ -8,7 +8,8 @@ import {
   GetInkindDto,
   DeleteInkindDto,
   ListInkindDto,
-  RedeemInkindByBeneficiaryDto,
+  BeneficiaryInkindRedeemDto,
+  GetGroupInkindLogsDto,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -108,14 +109,22 @@ export class InkindsController {
   }
 
   @MessagePattern({
-    cmd: JOBS.INKINDS.REDEEM_BENEFICIARY_INKIND,
+    cmd: JOBS.INKINDS.BENEFICIARY_INKIND_REDEEM,
     uuid: process.env.PROJECT_ID,
   })
-  redeemBeneficiaryInkind(
-    @Payload() redeemInkindByBeneficiaryDto: RedeemInkindByBeneficiaryDto
+  beneficiaryInkindRedeem(
+    @Payload() redeemInkindByBeneficiaryDto: BeneficiaryInkindRedeemDto
   ) {
-    return this.inkindsService.redeemInkindByBeneficiary(
+    return this.inkindsService.beneficiaryInkindRedeem(
       redeemInkindByBeneficiaryDto
     );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsByGroupInkind(@Payload() payload: GetGroupInkindLogsDto) {
+    return this.inkindsService.getLogsByGroupInkind(payload);
   }
 }
