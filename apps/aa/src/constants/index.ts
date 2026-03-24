@@ -271,6 +271,8 @@ export const JOBS = {
     REMOVE_INKIND_STOCK: 'aa.jobs.inkindStock.remove',
     ASSIGN_GROUP_INKIND: 'aa.jobs.groupInkinds.assign',
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
+    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',

@@ -6,6 +6,7 @@ import {
   CreateInkindDto,
   UpdateInkindDto,
   ListInkindDto,
+  InkindType,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -230,6 +231,11 @@ export class InkindsService {
     this.logger.log(`Fetching all inkind stock movements`);
     try {
       return await this.prisma.inkindStockMovement.findMany({
+        where: {
+          type: {
+            not: InkindStockMovementType.REDEEM,
+          },
+        },
         include: {
           inkind: true,
           groupInkind: true,
@@ -303,6 +309,10 @@ export class InkindsService {
         where: { groupId },
       });
 
+    if (numberOfGroupBeneficiaries === 0) {
+      throw new RpcException(`No beneficiaries found in the group.`);
+    }
+
     const totalNeedInkindQuantity = newQuantity * numberOfGroupBeneficiaries;
 
     if (totalNeedInkindQuantity > availableStock) {
@@ -316,7 +326,7 @@ export class InkindsService {
           data: {
             groupId,
             inkindId,
-            quantityAllocated: newQuantity,
+            quantityAllocated: totalNeedInkindQuantity,
           },
         });
         await tx.inkindStockMovement.create({
@@ -355,6 +365,120 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkinds by group: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getAvailableInkindByBeneficiary(number: string) {
+    this.logger.log(
+      `Fetching available inkind details for beneficiary: ${number}`
+    );
+
+    if (!number) {
+      throw new RpcException('Beneficiary phone number is required');
+    }
+
+    const beneficiary = await this.prisma.beneficiary.findFirst({
+      where: {
+        extras: { path: ['phone'], equals: number },
+      },
+    });
+
+    if (!beneficiary) {
+      return {
+        isBeneficiaryExists: false,
+        beneficiary: null,
+        preDefinedInkinds: [],
+        walkInInkinds: [],
+      };
+    }
+
+    try {
+      const groups = await this.prisma.groupInkind.findMany({
+        where: {
+          group: {
+            beneficiaries: {
+              some: {
+                beneficiary: {
+                  uuid: beneficiary.uuid,
+                },
+              },
+            },
+          },
+          redemptions: {
+            none: {
+              beneficiaryWallet: beneficiary.walletAddress,
+            },
+          },
+        },
+        select: {
+          uuid: true,
+          quantityAllocated: true,
+          inkind: {
+            select: {
+              name: true,
+              type: true,
+            },
+          },
+          group: {
+            select: {
+              uuid: true,
+              _count: { select: { beneficiaries: true } },
+            },
+          },
+        },
+      });
+
+      const walkInInkinds = await this.prisma.inkind.findMany({
+        where: {
+          type: InkindType.WALK_IN,
+          availableStock: {
+            gt: 0,
+          },
+          groupInkinds: {
+            none: {
+              group: {
+                beneficiaries: {
+                  some: {
+                    beneficiary: {
+                      uuid: beneficiary.uuid,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        select: {
+          uuid: true,
+          name: true,
+          type: true,
+          availableStock: true,
+        },
+      });
+
+      const formattedGroups = groups.map((group) => {
+        const memberCount = group.group._count.beneficiaries;
+        return {
+          groupInkindId: group.uuid,
+          quantityAllocated: group.quantityAllocated / memberCount,
+          inkindName: group.inkind.name,
+          inkindType: group.inkind.type,
+          groupId: group.group.uuid,
+        };
+      });
+
+      return {
+        isBeneficiaryExists: true,
+        beneficiary,
+        preDefinedInkinds: formattedGroups,
+        walkInInkinds,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind details for beneficiary: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);

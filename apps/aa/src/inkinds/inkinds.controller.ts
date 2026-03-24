@@ -97,4 +97,12 @@ export class InkindsController {
   getByGroup() {
     return this.inkindsService.getByGroup();
   }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    uuid: process.env.PROJECT_ID,
+  })
+  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  }
 }
