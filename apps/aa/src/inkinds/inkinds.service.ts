@@ -10,6 +10,7 @@ import {
   BeneficiaryInkindRedeemDto,
   UserObject,
   GetGroupInkindLogsDto,
+  GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -523,7 +524,176 @@ export class InkindsService {
     }
   }
 
-  async getLogsByVendorId(vendorId: string) {}
+  async getLogsByGroupInkindForVendor(payload: GetVendorInkindLogsDto) {
+    const {
+      vendorId,
+      search,
+      sort = 'redeemedAt',
+      order = 'desc',
+      page = 1,
+      perPage = 10,
+    } = payload;
+
+    this.logger.log(`Fetching inkind redemption logs for vendor: ${vendorId}`);
+
+    if (!vendorId) {
+      throw new RpcException('vendorId is required');
+    }
+
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorId },
+        select: { uuid: true, name: true, walletAddress: true },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorId} not found`);
+      }
+
+      const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
+        vendorUid: vendorId,
+        ...(search && {
+          OR: [
+            { beneficiaryWallet: { contains: search, mode: 'insensitive' } },
+            {
+              beneficiary: {
+                extras: {
+                  path: ['name'],
+                  string_contains: search,
+                },
+              },
+            },
+            {
+              groupInkind: {
+                inkind: {
+                  name: { contains: search, mode: 'insensitive' },
+                },
+              },
+            },
+          ],
+        }),
+      };
+
+      // Build order by
+      const allowedSortFields = ['redeemedAt', 'quantity'];
+      const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
+      const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
+
+      const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput =
+        {
+          [safeSort]: safeOrder,
+        };
+
+      // Build query for paginate function
+      const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
+        where,
+        orderBy,
+        include: {
+          beneficiary: {
+            select: {
+              uuid: true,
+              walletAddress: true,
+              phone: true,
+              extras: true,
+            },
+          },
+          groupInkind: {
+            select: {
+              uuid: true,
+              inkind: {
+                select: {
+                  uuid: true,
+                  name: true,
+                  type: true,
+                },
+              },
+              group: {
+                select: {
+                  uuid: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      };
+
+      // Get stats for this vendor
+      const [totalRedemptions, totalQuantityRedeemed, todayRedemptions] =
+        await Promise.all([
+          this.prisma.beneficiaryInkindRedemption.count({
+            where: { vendorUid: vendorId },
+          }),
+          this.prisma.beneficiaryInkindRedemption.aggregate({
+            where: { vendorUid: vendorId },
+            _sum: { quantity: true },
+          }),
+          this.prisma.beneficiaryInkindRedemption.count({
+            where: {
+              vendorUid: vendorId,
+              redeemedAt: {
+                gte: new Date(new Date().setHours(0, 0, 0, 0)),
+              },
+            },
+          }),
+        ]);
+
+      // Use paginate function
+      const result = await paginate(
+        this.prisma.beneficiaryInkindRedemption,
+        query,
+        { page, perPage }
+      );
+
+      // Format the response
+      const formattedLogs = result.data.map((redemption: any) => ({
+        uuid: redemption.uuid,
+        quantity: redemption.quantity,
+        redeemedAt: redemption.redeemedAt,
+        txHash: redemption.txHash,
+        beneficiary: {
+          uuid: redemption.beneficiary.uuid,
+          walletAddress: redemption.beneficiary.walletAddress,
+          phone: redemption.beneficiary.phone,
+          name:
+            (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
+            null,
+        },
+        inkind: {
+          uuid: redemption.groupInkind.inkind.uuid,
+          name: redemption.groupInkind.inkind.name,
+          type: redemption.groupInkind.inkind.type,
+        },
+        group: {
+          uuid: redemption.groupInkind.group.uuid,
+          name: redemption.groupInkind.group.name,
+        },
+      }));
+
+      return {
+        data: {
+          vendor: {
+            uuid: vendor.uuid,
+            name: vendor.name,
+            walletAddress: vendor.walletAddress,
+          },
+          stats: {
+            totalRedemptions,
+            totalQuantityRedeemed: totalQuantityRedeemed._sum.quantity || 0,
+            todayRedemptions,
+          },
+          logs: formattedLogs,
+        },
+        meta: result.meta,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch logs for vendor ${vendorId}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
 
   async getLogsByGroupInkind(payload: GetGroupInkindLogsDto) {
     const {

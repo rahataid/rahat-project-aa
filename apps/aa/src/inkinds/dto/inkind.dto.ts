@@ -155,3 +155,34 @@ export class GetGroupInkindLogsDto {
   @IsIn(['redeemedAt', 'quantity'])
   sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
 }
+
+export class GetVendorInkindLogsDto {
+  @IsString()
+  vendorId: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc' = 'desc';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  perPage?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['redeemedAt', 'quantity'])
+  sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+}
