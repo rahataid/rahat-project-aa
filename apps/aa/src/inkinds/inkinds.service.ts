@@ -300,6 +300,14 @@ export class InkindsService {
       throw new RpcException('Missing required fields');
     }
 
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: user?.uuid },
+    });
+
+    if (!vendor) {
+      throw new RpcException(`Vendor with UUID ${user?.uuid} not found`);
+    }
+
     const inkind = await this.findOneOrThrow(inkindId);
 
     const existingAssignment = await this.prisma.groupInkind.findFirst({
