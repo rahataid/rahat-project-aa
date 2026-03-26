@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { InkindStockMovementType, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
@@ -17,9 +17,20 @@ import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
   WalkInRedemptionItem,
+  PreDefinedRedemptionResult,
+  WalkInRedemptionResult,
+  CreateGroupPayload,
+  CreateGroupResponse,
+  AssignBeneficiariesPayload,
+  AssignBeneficiariesResponse,
+  InkindRecord,
+  BeneficiaryRedemptionResponse,
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
+import { CORE_MODULE } from '../constants';
+import { lastValueFrom } from 'rxjs';
+import { ConfigService } from '@nestjs/config';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -29,7 +40,9 @@ export class InkindsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly otpService: OtpService
+    private readonly otpService: OtpService,
+    private configService: ConfigService,
+    @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
   async create(createInkindDto: CreateInkindDto) {
@@ -304,15 +317,6 @@ export class InkindsService {
     if (!inkindId || !groupId) {
       throw new RpcException('Missing required fields');
     }
-
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { uuid: user?.uuid },
-    });
-
-    if (!vendor) {
-      throw new RpcException(`Vendor with UUID ${user?.uuid} not found`);
-    }
-
     const inkind = await this.findOneOrThrow(inkindId);
 
     if (inkind.type === InkindType.WALK_IN) {
@@ -933,9 +937,10 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
+  async beneficiaryInkindRedeem(
+    payload: BeneficiaryInkindRedeemDto
+  ): Promise<BeneficiaryRedemptionResponse> {
     const { walletAddress, inkinds, user } = payload;
-    console.log('Received redemption request:', payload);
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
       throw new RpcException('Missing required fields');
@@ -946,6 +951,18 @@ export class InkindsService {
     );
 
     try {
+      const vendor = await this.prisma.vendor.findFirst({
+        where: {
+          uuid: user?.uuid,
+        },
+      });
+
+      if (!vendor) {
+        throw new RpcException(
+          `User '${user.name}' is not registered as a vendor`
+        );
+      }
+
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
       const inkindRecords = await this.prisma.inkind.findMany({
@@ -965,7 +982,7 @@ export class InkindsService {
       }
 
       // ===== STEP 2: Categorize inkinds by type =====
-      const inkindRecordMap = new Map(
+      const inkindRecordMap = new Map<string, InkindRecord>(
         inkindRecords.map((r) => [
           r.uuid,
           { uuid: r.uuid, name: r.name, type: r.type },
@@ -1074,7 +1091,7 @@ export class InkindsService {
   // ==================== VALIDATION HELPERS ====================
   private async validatePreDefinedInkinds(
     preDefinedPayload: Array<{ uuid: string; groupInkindUuid: string }>,
-    inkindRecordMap: Map<string, { uuid: string; name: string; type: string }>,
+    inkindRecordMap: Map<string, InkindRecord>,
     beneficiaryUuid: string,
     walletAddress: string
   ): Promise<PreDefinedRedemptionItem[]> {
@@ -1167,7 +1184,7 @@ export class InkindsService {
 
   private async validateWalkInInkinds(
     walkInPayload: Array<{ uuid: string }>,
-    inkindRecordMap: Map<string, { uuid: string; name: string; type: string }>,
+    inkindRecordMap: Map<string, InkindRecord>,
     walletAddress: string
   ): Promise<WalkInRedemptionItem[]> {
     if (walkInPayload.length === 0) return [];
@@ -1233,8 +1250,8 @@ export class InkindsService {
     items: PreDefinedRedemptionItem[],
     walletAddress: string,
     vendor: UserObject
-  ) {
-    const results = [];
+  ): Promise<PreDefinedRedemptionResult[]> {
+    const results: PreDefinedRedemptionResult[] = [];
 
     for (const item of items) {
       const quantityPerBeneficiary = Math.floor(
@@ -1281,8 +1298,8 @@ export class InkindsService {
     walletAddress: string,
     beneficiaryUuid: string,
     vendor: UserObject
-  ) {
-    const results = [];
+  ): Promise<WalkInRedemptionResult[]> {
+    const results: WalkInRedemptionResult[] = [];
 
     for (const item of items) {
       let groupInkindUuid: string;
@@ -1299,6 +1316,16 @@ export class InkindsService {
         });
 
         if (!existingMembership) {
+          // Sync with CORE to add beneficiary to group
+          const res = await this.assignBeneficiariesToGroup(groupId, [
+            beneficiaryUuid,
+          ]);
+          if (!res || !res.success) {
+            throw new RpcException(
+              'Failed to assign beneficiary to existing walk-in group'
+            );
+          }
+
           // Add beneficiary to the walk-in group
           await tx.beneficiaryToGroup.create({
             data: { beneficiaryId: beneficiaryUuid, groupId },
@@ -1324,16 +1351,17 @@ export class InkindsService {
         // First time redemption - create group, group inkind, and add beneficiary
         const groupName = `Walk-in Group - ${item.inkindName}`;
 
-        // Create the walk-in group
-        const newGroup = await tx.beneficiaryGroups.create({
-          data: { name: groupName },
-        });
-        groupId = newGroup.uuid;
+        const res = await this.createGroupAndAssignBeneficiary(groupName, [
+          beneficiaryUuid,
+        ]);
 
-        // Assign beneficiary to the new group
-        await tx.beneficiaryToGroup.create({
-          data: { beneficiaryId: beneficiaryUuid, groupId },
-        });
+        if (!res) {
+          throw new RpcException(
+            'Failed to create group and assign beneficiary for walk-in redemption'
+          );
+        }
+
+        groupId = res.group.uuid;
 
         // Create group inkind with quantity 1
         const newGroupInkind = await tx.groupInkind.create({
@@ -1389,5 +1417,68 @@ export class InkindsService {
     }
 
     return results;
+  }
+
+  /**
+   * Creates a new group in CORE and assigns beneficiaries to it.
+   * Used for WALK_IN inkind first-time redemptions.
+   */
+  private async createGroupAndAssignBeneficiary(
+    groupName: string,
+    beneficiaryUuids: string[]
+  ): Promise<CreateGroupResponse | null> {
+    const projectId = this.configService.get('PROJECT_ID');
+    const payload: CreateGroupPayload = {
+      name: groupName,
+      beneficiaries: beneficiaryUuids.map((uuid) => ({ uuid })),
+      groupPurpose: 'MOBILE_MONEY',
+      projectId: process.env.PROJECT_ID,
+    };
+
+    try {
+      const response = await lastValueFrom(
+        this.client.send<CreateGroupResponse>(
+          { cmd: 'rahat.jobs.beneficiary.add_group' },
+          payload
+        )
+      );
+      return response;
+    } catch (error) {
+      this.logger.error(
+        'Error creating group and assigning beneficiaries via CORE:',
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Assigns beneficiaries to an existing group in CORE.
+   * Used when a WALK_IN group already exists.
+   */
+  private async assignBeneficiariesToGroup(
+    groupUuid: string,
+    beneficiaryUuids: string[]
+  ): Promise<AssignBeneficiariesResponse | null> {
+    const payload: AssignBeneficiariesPayload = {
+      groupUuid,
+      beneficiaries: beneficiaryUuids.map((uuid) => ({ uuid })),
+    };
+
+    try {
+      const response = await lastValueFrom(
+        this.client.send<AssignBeneficiariesResponse>(
+          { cmd: 'rahat.jobs.beneficiary.add_beneficiaries_to_group' },
+          payload
+        )
+      );
+      return response;
+    } catch (error) {
+      this.logger.error(
+        'Error assigning beneficiaries to group via CORE:',
+        error
+      );
+      return null;
+    }
   }
 }

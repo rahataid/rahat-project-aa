@@ -217,7 +217,7 @@ export class BeneficiaryService {
     res.data = res.data.map((group) => {
       let updatedGroup = group;
       benfGroups.data.forEach((benfGroup: any) => {
-        if (group.uuid === benfGroup.uuid) {
+        if (group?.uuid === benfGroup?.uuid) {
           updatedGroup = {
             ...group,
             tokensReserved: benfGroup.tokensReserved,
@@ -390,6 +390,10 @@ export class BeneficiaryService {
         })),
       });
 
+    this.logger.debug(
+      `New Beneficiary group ${group.name} added to project with ${groupedBeneficiaries.count} beneficiaries.`
+    );
+
     return {
       group,
       groupedBeneficiaries,
@@ -519,7 +523,7 @@ export class BeneficiaryService {
 
       return {
         status: 'success',
-        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`
+        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
       };
     });
   }
