@@ -15,14 +15,12 @@ const PROVIDERS = [
 ];
 
 @Module({
-  imports: [
-
-  ],
+  imports: [],
   controllers: [CvaCommunicationController],
   providers: [
     ...PROVIDERS,
     {
-      provide: 'COMMS_CLIENT',
+      provide: 'COMMS_CLIENT_LIB',
       useFactory: async (commsService: ConnectCommunicationService) => {
         await commsService.init();
         return commsService.getClient();
@@ -30,6 +28,6 @@ const PROVIDERS = [
       inject: [ConnectCommunicationService],
     },
   ],
-  exports: ['COMMS_CLIENT'],
+  exports: ['COMMS_CLIENT_LIB'],
 })
 export class CvaCommunicationModule {}

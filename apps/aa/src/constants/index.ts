@@ -276,10 +276,15 @@ export const JOBS = {
     GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
     GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
     BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
+    SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
+    VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
+  },
+  SMS: {
+    SEND_SMS: 'aa.jobs.sms.sendSms',
   },
 };
 

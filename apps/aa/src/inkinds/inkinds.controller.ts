@@ -110,6 +110,25 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.SEND_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendBeneficiaryOtp(@Payload() Payload: { number: string }) {
+    return this.inkindsService.sendBeneficiaryOtp(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.VALIDATE_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  validateBeneficiaryOtp(@Payload() Payload: { number: string; otp: string }) {
+    return this.inkindsService.validateBeneficiaryOtp(
+      Payload.number,
+      Payload.otp
+    );
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.BENEFICIARY_INKIND_REDEEM,
     uuid: process.env.PROJECT_ID,
   })

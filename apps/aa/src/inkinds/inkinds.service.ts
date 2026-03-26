@@ -18,6 +18,8 @@ import {
   PreDefinedRedemptionItem,
   WalkInRedemptionItem,
 } from './dto/inkind.type';
+import { OtpService } from '../otp/otp.service';
+import bcrypt from 'bcryptjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -25,7 +27,10 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly otpService: OtpService
+  ) {}
 
   async create(createInkindDto: CreateInkindDto) {
     const { quantity, ...inkindData } = createInkindDto;
@@ -310,6 +315,10 @@ export class InkindsService {
 
     const inkind = await this.findOneOrThrow(inkindId);
 
+    if (inkind.type === InkindType.WALK_IN) {
+      throw new RpcException('Walk-in inkinds cannot be assigned to groups');
+    }
+
     const existingAssignment = await this.prisma.groupInkind.findFirst({
       where: { groupId, inkindId },
     });
@@ -317,8 +326,6 @@ export class InkindsService {
     if (existingAssignment) {
       throw new RpcException(`Inkind is already assigned to this group.`);
     }
-
-    const availableStock = inkind.availableStock || 0;
 
     const numberOfGroupBeneficiaries =
       await this.prisma.beneficiaryToGroup.count({
@@ -330,6 +337,7 @@ export class InkindsService {
     }
 
     const totalNeedInkindQuantity = newQuantity * numberOfGroupBeneficiaries;
+    const availableStock = inkind.availableStock || 0;
 
     if (totalNeedInkindQuantity > availableStock) {
       throw new RpcException(
@@ -848,6 +856,81 @@ export class InkindsService {
       );
       throw new RpcException(error.message);
     }
+  }
+
+  async sendBeneficiaryOtp(number: string) {
+    this.logger.log(`Sending OTP to beneficiary phone number: ${number}`);
+    if (!number) {
+      throw new RpcException('Missing phone number');
+    }
+    const benf = await this.prisma.beneficiary.findFirst({
+      where: {
+        extras: { path: ['phone'], equals: number },
+      },
+    });
+    if (!benf) {
+      throw new RpcException('Beneficiary not found');
+    }
+
+    const { otp } = await this.otpService.sendSms(
+      number,
+      'Your OTP for inkind redemption is:'
+    );
+
+    const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
+    const hashOpt = await bcrypt.hash(otp, 10);
+    await this.prisma.otp.upsert({
+      where: { phoneNumber: number },
+      update: {
+        otpHash: hashOpt,
+        expiresAt: expiry,
+        amount: 0,
+        isVerified: false,
+      },
+      create: {
+        otpHash: hashOpt,
+        expiresAt: expiry,
+        phoneNumber: number,
+        amount: 0,
+      },
+    });
+
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  async validateBeneficiaryOtp(number: string, otp: string) {
+    this.logger.log(`Validating OTP for beneficiary phone number: ${number}`);
+    if (!number || !otp) {
+      throw new RpcException('Missing phone number or OTP');
+    }
+
+    const otpRecord = await this.prisma.otp.findUnique({
+      where: { phoneNumber: number },
+    });
+
+    if (!otpRecord) {
+      throw new RpcException('OTP record not found');
+    }
+
+    if (otpRecord.isVerified) {
+      throw new RpcException('OTP already verified');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    if (!isValid) {
+      throw new RpcException('Invalid OTP');
+    }
+
+    await this.prisma.otp.update({
+      where: { phoneNumber: number },
+      data: { isVerified: true },
+    });
+
+    return { success: true, message: 'OTP verified successfully' };
   }
 
   async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {

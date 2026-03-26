@@ -23,6 +23,7 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { ChainModule } from '../chain/chain.module';
     CashTrackerModule,
     GrievancesModule,
     InkindsModule,
+    OtpModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
