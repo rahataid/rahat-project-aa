@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { InkindsService } from './inkinds.service';
@@ -608,6 +607,16 @@ describe('InkindsService', () => {
   });
 
   describe('assignGroupInkind', () => {
+    const mockUser = {
+      id: 1,
+      userId: 1,
+      uuid: 'user-uuid',
+      name: 'Test User',
+      email: 'test@example.com',
+      phone: null,
+      wallet: '0x123',
+    };
+
     const mockInkind = {
       uuid: 'inkind-uuid',
       name: 'Test Inkind',
@@ -635,6 +644,7 @@ describe('InkindsService', () => {
         inkindId: 'inkind-uuid',
         groupId: 'group-uuid',
         quantity: 2,
+        user: mockUser,
       };
 
       const result = await service.assignGroupInkind(assignDto);
@@ -673,6 +683,7 @@ describe('InkindsService', () => {
       const assignDto: AssignGroupInkindDto = {
         inkindId: 'inkind-uuid',
         groupId: 'group-uuid',
+        user: mockUser,
       };
 
       await service.assignGroupInkind(assignDto);
@@ -690,6 +701,7 @@ describe('InkindsService', () => {
       const assignDto: AssignGroupInkindDto = {
         inkindId: '',
         groupId: 'group-uuid',
+        user: mockUser,
       };
 
       await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
@@ -703,6 +715,7 @@ describe('InkindsService', () => {
       const assignDto: AssignGroupInkindDto = {
         inkindId: 'invalid-uuid',
         groupId: 'group-uuid',
+        user: mockUser,
       };
 
       await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
@@ -718,6 +731,7 @@ describe('InkindsService', () => {
       const assignDto: AssignGroupInkindDto = {
         inkindId: 'inkind-uuid',
         groupId: 'group-uuid',
+        user: mockUser,
       };
 
       await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
@@ -733,6 +747,7 @@ describe('InkindsService', () => {
         inkindId: 'inkind-uuid',
         groupId: 'group-uuid',
         quantity: 2,
+        user: mockUser,
       };
 
       await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
@@ -749,6 +764,7 @@ describe('InkindsService', () => {
         inkindId: 'inkind-uuid',
         groupId: 'group-uuid',
         quantity: 1,
+        user: mockUser,
       };
 
       await expect(service.assignGroupInkind(assignDto)).rejects.toThrow(
@@ -773,6 +789,7 @@ describe('InkindsService', () => {
         group: {
           uuid: 'group-1',
           name: 'Group A',
+          _count: { beneficiaries: 10 },
         },
       },
       {
@@ -789,6 +806,7 @@ describe('InkindsService', () => {
         group: {
           uuid: 'group-2',
           name: 'Group B',
+          _count: { beneficiaries: 0 },
         },
       },
     ];
@@ -803,10 +821,30 @@ describe('InkindsService', () => {
       expect(mockPrismaService.groupInkind.findMany).toHaveBeenCalledWith({
         include: {
           inkind: true,
-          group: true,
+          group: {
+            include: {
+              _count: {
+                select: { beneficiaries: true },
+              },
+            },
+          },
         },
       });
       expect(result).toEqual(mockGroupInkinds);
+    });
+
+    it('should include beneficiary count in group data', async () => {
+      const withCount = [
+        {
+          ...mockGroupInkinds[0],
+          group: { ...mockGroupInkinds[0].group, _count: { beneficiaries: 5 } },
+        },
+      ];
+      mockPrismaService.groupInkind.findMany.mockResolvedValue(withCount);
+
+      const result = await service.getByGroup();
+
+      expect(result[0].group._count.beneficiaries).toBe(5);
     });
 
     it('should return empty array when no group inkinds exist', async () => {
