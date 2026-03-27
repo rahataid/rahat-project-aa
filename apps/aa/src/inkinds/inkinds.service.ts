@@ -386,7 +386,13 @@ export class InkindsService {
       const groupInkinds = await this.prisma.groupInkind.findMany({
         include: {
           inkind: true,
-          group: true,
+          group: {
+            include: {
+              _count: {
+                select: { beneficiaries: true },
+              },
+            },
+          },
         },
       });
 
