@@ -1024,4 +1024,92 @@ export class BeneficiaryService {
       throw new Error('Failed to fetch balances');
     }
   }
+
+  async createBeneficiaryWithDbTransaction(dto: {
+    action: string;
+    dbTxId: string;
+    payload: any;
+  }) {
+    this.logger.log('Creating beneficiary with database transaction', dto);
+
+    const { action, dbTxId, payload } = dto;
+
+    let message = '';
+
+    try {
+      switch (action) {
+        case 'BEGIN':
+          await this.prisma.$executeRawUnsafe('BEGIN;');
+          message = 'Transaction started';
+          break;
+
+        case 'CREATE':
+          await this.prisma.beneficiary.create({
+            data: payload,
+          });
+          message = 'Beneficiary created';
+          break;
+
+        case 'PREPARE':
+          await this.prisma.$executeRawUnsafe(
+            `PREPARE TRANSACTION '${dbTxId}';`
+          );
+          message = 'Transaction prepared';
+          break;
+
+        case 'COMMIT':
+          await this.prisma.$executeRawUnsafe(`COMMIT PREPARED '${dbTxId}';`);
+          message = 'Transaction committed';
+          break;
+
+        case 'ROLLBACK':
+          try {
+            await this.prisma.$executeRawUnsafe(
+              `ROLLBACK PREPARED '${dbTxId}';`
+            );
+          } catch {
+            await this.prisma.$executeRawUnsafe('ROLLBACK;');
+          }
+          message = 'Transaction rolled back';
+          break;
+
+        default:
+          throw new Error('Invalid action');
+      }
+
+      return { isSuccess: true, message };
+    } catch (error) {
+      throw new Error(`Database transaction failed: ${error.message}`);
+    }
+  }
+
+  async cleanupOrphanedTransactions() {
+    console.log('Checking for orphaned transactions...');
+    try {
+      const result = await this.prisma.$queryRawUnsafe(
+        'SELECT gid FROM pg_prepared_xacts;'
+      );
+
+      if (Array.isArray(result) && result.length > 0) {
+        console.log(`Found ${result.length} orphaned transactions in DB`);
+        for (const row of result) {
+          const gid = row.gid;
+          console.log(`Rolling back orphaned transaction: ${gid}`);
+          try {
+            await this.prisma.$executeRawUnsafe(`ROLLBACK PREPARED '${gid}';`);
+            console.log(`Successfully rolled back transaction: ${gid}`);
+          } catch (rollbackError) {
+            console.error(
+              `Failed to rollback transaction ${gid}:`,
+              rollbackError
+            );
+          }
+        }
+      } else {
+        console.log('No orphaned transactions found in DB');
+      }
+    } catch (error) {
+      console.error('Error checking for orphaned transactions in DB:', error);
+    }
+  }
 }
