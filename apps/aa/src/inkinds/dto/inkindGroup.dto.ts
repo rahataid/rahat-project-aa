@@ -1,4 +1,5 @@
-import { IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsNumber, IsObject, IsOptional, IsUUID, Min } from 'class-validator';
+import { UserObject } from './inkind.dto';
 
 export class AssignGroupInkindDto {
   @IsUUID()
@@ -11,4 +12,7 @@ export class AssignGroupInkindDto {
   @IsNumber()
   @Min(1)
   quantity?: number;
+
+  @IsObject()
+  user: UserObject;
 }

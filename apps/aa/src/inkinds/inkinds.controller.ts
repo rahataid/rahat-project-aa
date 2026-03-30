@@ -8,6 +8,9 @@ import {
   GetInkindDto,
   DeleteInkindDto,
   ListInkindDto,
+  BeneficiaryInkindRedeemDto,
+  GetGroupInkindLogsDto,
+  GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -96,5 +99,60 @@ export class InkindsController {
   })
   getByGroup() {
     return this.inkindsService.getByGroup();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    uuid: process.env.PROJECT_ID,
+  })
+  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.SEND_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendBeneficiaryOtp(@Payload() Payload: { number: string }) {
+    return this.inkindsService.sendBeneficiaryOtp(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.VALIDATE_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  validateBeneficiaryOtp(@Payload() Payload: { number: string; otp: string }) {
+    return this.inkindsService.validateBeneficiaryOtp(
+      Payload.number,
+      Payload.otp
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.BENEFICIARY_INKIND_REDEEM,
+    uuid: process.env.PROJECT_ID,
+  })
+  beneficiaryInkindRedeem(
+    @Payload() redeemInkindByBeneficiaryDto: BeneficiaryInkindRedeemDto
+  ) {
+    return this.inkindsService.beneficiaryInkindRedeem(
+      redeemInkindByBeneficiaryDto
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsByGroupInkind(@Payload() payload: GetGroupInkindLogsDto) {
+    return this.inkindsService.getLogsByGroupInkind(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS_BY_VENDOR,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsByGroupInkindForVendor(@Payload() payload: GetVendorInkindLogsDto) {
+    return this.inkindsService.getLogsByGroupInkindForVendor(payload);
   }
 }
