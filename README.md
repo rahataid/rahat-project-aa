@@ -16,6 +16,19 @@ A decentralized platform for managing anticipatory action projects to enhance co
 - [Testing](#testing)
 - [API Documentation](#api-documentation)
 
+## Documentation
+
+- [Seed Scripts](./docs/seed-scripts.md) — All `prisma/` seed scripts: settings keys, environment variables, and run commands
+- [Environment Configuration](./docs/env-configuration.md)
+- [Introduction](./docs/Introduction.md)
+- [Supported Blockchains](./docs/Supported-Blockchains.md)
+- [Pluggable Disbursement](./docs/pluggable-disbursement.md)
+- [Pluggable Fund Management](./docs/pluggable-fund-management.md)
+- [Financial Payout Services](./docs/Financial-Payout-Services.md)
+- [Chain Queue Registry](./docs/chain-queue-registry.md)
+- [Vendor Flow](./docs/vendorFlow.md)
+- [Vendor Offline Flow](./docs/vendor-offline-flow.md)
+
 ## Project Overview
 
 Rahat Anticipatory Action is part of the Rahat ecosystem that focuses on:
@@ -189,11 +202,12 @@ FUNDING_AMOUNT=
    ```bash
    # Seed all data
    pnpm seed:all
-   
+
    # Or seed specific components
    pnpm seed:aa
    pnpm seed:stellar
    ```
+   See [docs/seed-scripts.md](./docs/seed-scripts.md) for a full list of seed scripts, their settings keys, and required environment variables.
 
 ## Running the Application
 
