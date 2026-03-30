@@ -1,4 +1,4 @@
-name: ALL-IN-ONE CICD
+name: ALL DEV CI/CD
 
 on:
   workflow_dispatch:
@@ -14,9 +14,9 @@ on:
         default: 'Dockerfile.aa'
         type: string
       tag_prefix:
-        description: 'Tag prefix (e.g., test-load)'
+        description: 'Tag prefix (e.g., Img tag)'
         required: true
-        default: 'test-load'
+        default: 'dev'
         type: string
 
 env:
@@ -90,14 +90,14 @@ jobs:
             ${{ runner.os }}-node-modules-
 
       # Cache Nx build cache
-      # - name: Cache Nx
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: .nx/cache
-      #     key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
-      #       ${{ runner.os }}-nx-
+      - name: Cache Nx
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nx-
 
       # Install dependencies with lockfile handling
       - name: Install dependencies

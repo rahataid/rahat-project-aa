@@ -79,6 +79,8 @@ export const JOBS = {
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
+    CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
+      'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',

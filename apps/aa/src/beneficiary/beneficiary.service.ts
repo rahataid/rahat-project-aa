@@ -1024,4 +1024,59 @@ export class BeneficiaryService {
       throw new Error('Failed to fetch balances');
     }
   }
+
+  async createBeneficiaryWithDbTransaction(dto: {
+    action: string;
+    dbTxId: string;
+    payload: any;
+  }) {
+    this.logger.log(
+      `Creating beneficiary with database transaction - Action: ${dto.action}`
+    );
+
+    const { action, dbTxId, payload } = dto;
+    const aaDbTxId = `aa_tx_${dbTxId}`;
+
+    const actionHandlers: Record<string, () => Promise<string>> = {
+      BEGIN: async () => {
+        await this.prisma.$executeRawUnsafe('BEGIN;');
+        return 'Transaction started';
+      },
+      CREATE: async () => {
+        await this.prisma.beneficiary.create({ data: payload });
+        return 'Beneficiary created';
+      },
+      PREPARE: async () => {
+        await this.prisma.$executeRawUnsafe(
+          `PREPARE TRANSACTION '${aaDbTxId}';`
+        );
+        return 'Transaction prepared';
+      },
+      COMMIT: async () => {
+        await this.prisma.$executeRawUnsafe(`COMMIT PREPARED '${aaDbTxId}';`);
+        return 'Transaction committed';
+      },
+      ROLLBACK: async () => {
+        try {
+          await this.prisma.$executeRawUnsafe(
+            `ROLLBACK PREPARED '${aaDbTxId}';`
+          );
+        } catch {
+          await this.prisma.$executeRawUnsafe('ROLLBACK;');
+        }
+        return 'Transaction rolled back';
+      },
+    };
+
+    const handler = actionHandlers[action];
+    if (!handler) throw new Error('Invalid action');
+
+    try {
+      const message = await handler();
+      this.logger.log(message);
+      return { isSuccess: true, message };
+    } catch (error) {
+      throw new Error(`Database transaction failed: ${error.message}`);
+    }
+  }
 }
