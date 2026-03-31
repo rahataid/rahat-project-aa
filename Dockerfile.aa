@@ -1,13 +1,12 @@
-# Install dependencies only when needed
-FROM node:18-alpine3.17 AS deps
+FROM node:20-alpine AS deps
 WORKDIR /usr/src/app
 COPY ./dist/apps/aa/package.json ./
-RUN npm install -g pnpm && pnpm install
+RUN npm install -g pnpm && pnpm install --frozen-lockfile && pnpm store prune
 
-FROM node:18-alpine3.17 AS builder
+FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 COPY ./dist/apps/aa/ ./
 COPY ./prisma ./prisma
 COPY --from=deps /usr/src/app/node_modules ./node_modules
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 CMD [ "node", "main.js" ]
