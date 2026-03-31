@@ -79,6 +79,8 @@ export const JOBS = {
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
+    CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
+      'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -271,10 +273,20 @@ export const JOBS = {
     REMOVE_INKIND_STOCK: 'aa.jobs.inkindStock.remove',
     ASSIGN_GROUP_INKIND: 'aa.jobs.groupInkinds.assign',
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
+    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
+    GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
+    GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
+    BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
+    SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
+    VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
+  },
+  SMS: {
+    SEND_SMS: 'aa.jobs.sms.sendSms',
   },
 };
 

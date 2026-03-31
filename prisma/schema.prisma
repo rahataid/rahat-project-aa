@@ -409,13 +409,14 @@ model Vendor {
   location      String?
   extras        Json?
 
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime?               @updatedAt()
-  deletedAt             DateTime?
-  VendorReimbursment    VendorReimbursment[]
-  VendorTokenRedemption VendorTokenRedemption[]
-  BeneficiaryRedeem     BeneficiaryRedeem[]
-  OfflineBeneficiary    OfflineBeneficiary[]
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime?                     @updatedAt()
+  deletedAt                    DateTime?
+  VendorReimbursment           VendorReimbursment[]
+  VendorTokenRedemption        VendorTokenRedemption[]
+  BeneficiaryRedeem            BeneficiaryRedeem[]
+  OfflineBeneficiary           OfflineBeneficiary[]
+  beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
 
   @@map("tbl_vendors")
 }
@@ -752,6 +753,7 @@ model GroupInkind {
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
+  createdBy String?
 
   @@unique([groupId, inkindId]) // A group can’t get the same inkind twice accidentally.
   @@index([groupId])
@@ -775,8 +777,14 @@ model BeneficiaryInkindRedemption {
 
   redeemedAt DateTime @default(now())
 
+  txHash String?
+
+  vendorUid String? @db.Uuid()
+  Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])
+
   @@index([groupInkindId])
   @@index([beneficiaryWallet])
+  @@index([vendorUid])
   @@index([redeemedAt(sort: Desc)])
   @@map("tbl_beneficiary_inkind_redemptions")
 }

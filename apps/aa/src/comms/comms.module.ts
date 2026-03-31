@@ -1,6 +1,7 @@
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import { CommsService } from './comms.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Global()
 @Module({})
@@ -10,15 +11,19 @@ export class CommsModule {
       module: CommsModule,
       global: true,
       imports: [
-        ClientsModule.register([
+        ClientsModule.registerAsync([
           {
             name: 'CORE_CLIENT',
-            transport: Transport.REDIS,
-            options: {
-              host: process.env.REDIS_HOST,
-              port: +process.env.REDIS_PORT,
-              password: process.env.REDIS_PASSWORD,
-            },
+            imports: [ConfigModule],
+            useFactory: async (configService: ConfigService) => ({
+              transport: Transport.REDIS,
+              options: {
+                host: configService.get('REDIS_HOST'),
+                port: configService.get('REDIS_PORT'),
+                password: configService.get('REDIS_PASSWORD'),
+              },
+            }),
+            inject: [ConfigService],
           },
         ]),
       ],
