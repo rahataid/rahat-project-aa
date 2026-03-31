@@ -183,7 +183,21 @@ export class InkindsService {
 
       return paginate(
         this.prisma.inkind,
-        { where, orderBy },
+        {
+          where,
+          orderBy,
+          include: {
+            groupInkinds: {
+              select: {
+                group: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         { page, perPage }
       );
     } catch (error) {
@@ -264,7 +278,15 @@ export class InkindsService {
         },
         include: {
           inkind: true,
-          groupInkind: true,
+          groupInkind: {
+            select: {
+              group: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
           redemption: true,
         },
         orderBy: { createdAt: 'desc' },
