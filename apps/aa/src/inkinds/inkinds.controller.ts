@@ -52,6 +52,14 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.GET_SUMMARY,
+    uuid: process.env.PROJECT_ID,
+  })
+  getInkindSummary() {
+    return this.inkindsService.getInkindSummary();
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_ONE,
     uuid: process.env.PROJECT_ID,
   })

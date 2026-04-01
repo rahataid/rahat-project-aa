@@ -267,6 +267,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.inkinds.update',
     DELETE: 'aa.jobs.inkinds.delete',
     GET: 'aa.jobs.inkinds.get',
+    GET_SUMMARY: 'aa.jobs.inkinds.getSummary',
     GET_ONE: 'aa.jobs.inkinds.getOne',
     ADD_INKIND_STOCK: 'aa.jobs.inkindStock.add',
     GET_ALL_STOCK_MOVEMENTS: 'aa.jobs.inkindStock.getAllMovements',

@@ -209,6 +209,52 @@ export class InkindsService {
     }
   }
 
+  async getInkindSummary() {
+    try {
+      this.logger.log(`Fetching inkind summary`);
+
+      const summary = await this.prisma.inkind.aggregate({
+        where: { deletedAt: null },
+        _count: {
+          id: true,
+        },
+        _sum: {
+          availableStock: true,
+        },
+      });
+
+      const totalAssignedStock = await this.prisma.groupInkind.aggregate({
+        _sum: {
+          quantityAllocated: true,
+        },
+      });
+
+      const totalRedeemedStock =
+        await this.prisma.beneficiaryInkindRedemption.aggregate({
+          _sum: {
+            quantity: true,
+          },
+        });
+
+      this.logger.log(`Inkind summary fetched successfully`);
+      return {
+        totalInkindTypes: summary._count.id,
+        totalStock: summary._sum.availableStock,
+        totalAvailableStock:
+          summary._sum.availableStock -
+          (totalAssignedStock._sum.quantityAllocated || 0),
+        totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
+        totalRedeemedStock: totalRedeemedStock._sum.quantity,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind summary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   async getOne(uuid: string) {
     try {
       this.logger.log(`Fetching inkind: ${uuid}`);
@@ -541,6 +587,7 @@ export class InkindsService {
           availableStock: {
             gt: 0,
           },
+          deletedAt: null,
           groupInkinds: {
             none: {
               group: {
