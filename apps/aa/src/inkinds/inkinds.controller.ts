@@ -110,6 +110,14 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.GET_UNASSIGNED_GROUP_INKIND,
+    uuid: process.env.PROJECT_ID,
+  })
+  getUnassignedGroupInkind(@Payload() payload: { uuid: string }) {
+    return this.inkindsService.getUnassignedInkindGroups(payload.uuid);
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
     uuid: process.env.PROJECT_ID,
   })

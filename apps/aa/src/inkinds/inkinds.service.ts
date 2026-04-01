@@ -374,6 +374,30 @@ export class InkindsService {
   }
 
   // Group inkinds management
+  async getUnassignedInkindGroups(uuid: string) {
+    this.logger.log(`Fetching unassigned groups for inkind: ${uuid}`);
+    try {
+      return await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          groupInkinds: {
+            none: {
+              inkindId: uuid,
+            },
+          },
+          NOT: {
+            name: { startsWith: 'Walk-in' },
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch unassigned groups for inkind ${uuid}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   async assignGroupInkind(payload: AssignGroupInkindDto) {
     const { inkindId, groupId, quantity, user } = payload;
     const newQuantity = quantity || 1;
