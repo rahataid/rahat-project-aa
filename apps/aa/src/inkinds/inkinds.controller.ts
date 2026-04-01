@@ -12,7 +12,7 @@ import {
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 @Controller()
@@ -80,8 +80,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_ALL_STOCK_MOVEMENTS,
     uuid: process.env.PROJECT_ID,
   })
-  getAllStockMovements() {
-    return this.inkindsService.getAllStockMovements();
+  getAllStockMovements(@Payload() payload: ListStockMovementsDto) {
+    return this.inkindsService.getAllStockMovements(payload);
   }
 
   @MessagePattern({

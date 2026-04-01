@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { InkindStockMovementType, Prisma } from '@prisma/client';
@@ -12,7 +12,7 @@ import {
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
@@ -313,30 +313,37 @@ export class InkindsService {
     }
   }
 
-  async getAllStockMovements() {
+  async getAllStockMovements(payload: ListStockMovementsDto) {
+    const { page, perPage, order = 'desc', type } = payload;
     this.logger.log(`Fetching all inkind stock movements`);
     try {
-      return await this.prisma.inkindStockMovement.findMany({
-        where: {
-          type: {
-            not: InkindStockMovementType.REDEEM,
-          },
-        },
-        include: {
-          inkind: true,
-          groupInkind: {
-            select: {
-              group: {
-                select: {
-                  name: true,
+      const where: Prisma.InkindStockMovementWhereInput = {
+        type: type
+          ? type
+          : { not: InkindStockMovementType.REDEEM },
+      };
+
+      return paginate(
+        this.prisma.inkindStockMovement,
+        {
+          where,
+          include: {
+            inkind: true,
+            groupInkind: {
+              select: {
+                group: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
+            redemption: true,
           },
-          redemption: true,
+          orderBy: { createdAt: order },
         },
-        orderBy: { createdAt: 'desc' },
-      });
+        { page, perPage }
+      );
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkind stock movements: ${error.message}`,
