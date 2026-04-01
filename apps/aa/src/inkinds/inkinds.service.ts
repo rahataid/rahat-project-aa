@@ -12,7 +12,11 @@ import {
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import {
+  AddInkindStockDto,
+  ListStockMovementsDto,
+  RemoveInkindStockDto,
+} from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
@@ -258,7 +262,28 @@ export class InkindsService {
   async getOne(uuid: string) {
     try {
       this.logger.log(`Fetching inkind: ${uuid}`);
-      return await this.findOneOrThrow(uuid);
+      const data = await this.findOneOrThrow(uuid);
+
+      const totalAssignedInkind = await this.prisma.groupInkind.aggregate({
+        where: { inkindId: uuid },
+        _sum: {
+          quantityAllocated: true,
+        },
+      });
+
+      const totalRedeemedInkind =
+        await this.prisma.beneficiaryInkindRedemption.aggregate({
+          where: { groupInkind: { inkindId: uuid } },
+          _sum: {
+            quantity: true,
+          },
+        });
+
+      return {
+        ...data,
+        totalAssigned: totalAssignedInkind._sum.quantityAllocated || 0,
+        totalRedeemed: totalRedeemedInkind._sum.quantity || 0,
+      };
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkind: ${error.message}`,
@@ -318,9 +343,7 @@ export class InkindsService {
     this.logger.log(`Fetching all inkind stock movements`);
     try {
       const where: Prisma.InkindStockMovementWhereInput = {
-        type: type
-          ? type
-          : { not: InkindStockMovementType.REDEEM },
+        type: type ? type : { not: InkindStockMovementType.REDEEM },
       };
 
       return paginate(
