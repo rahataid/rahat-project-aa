@@ -185,7 +185,7 @@ export class InkindsService {
         [safeSort]: safeOrder,
       };
 
-      return paginate(
+      const result = await paginate(
         this.prisma.inkind,
         {
           where,
@@ -204,6 +204,29 @@ export class InkindsService {
         },
         { page, perPage }
       );
+
+      const uuids = result.data.map((item: { uuid: string }) => item.uuid);
+
+      const assignments = await this.prisma.groupInkind.groupBy({
+        by: ['inkindId'],
+        where: { inkindId: { in: uuids } },
+        _sum: {
+          quantityAllocated: true,
+          quantityRedeemed: true,
+        },
+      });
+
+      const assignmentMap = new Map(
+        assignments.map((a) => [a.inkindId, a._sum])
+      );
+
+      result.data = result.data.map((item: { uuid: string }) => ({
+        ...item,
+        totalAssigned: assignmentMap.get(item.uuid)?.quantityAllocated ?? 0,
+        totalRedeemed: assignmentMap.get(item.uuid)?.quantityRedeemed ?? 0,
+      }));
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkinds: ${error.message}`,
@@ -217,28 +240,23 @@ export class InkindsService {
     try {
       this.logger.log(`Fetching inkind summary`);
 
-      const summary = await this.prisma.inkind.aggregate({
-        where: { deletedAt: null },
-        _count: {
-          id: true,
-        },
-        _sum: {
-          availableStock: true,
-        },
-      });
-
-      const totalAssignedStock = await this.prisma.groupInkind.aggregate({
-        _sum: {
-          quantityAllocated: true,
-        },
-      });
-
-      const totalRedeemedStock =
-        await this.prisma.beneficiaryInkindRedemption.aggregate({
-          _sum: {
-            quantity: true,
+      const [summary, totalAssignedStock] = await Promise.all([
+        this.prisma.inkind.aggregate({
+          where: { deletedAt: null },
+          _count: {
+            id: true,
           },
-        });
+          _sum: {
+            availableStock: true,
+          },
+        }),
+        this.prisma.groupInkind.aggregate({
+          _sum: {
+            quantityAllocated: true,
+            quantityRedeemed: true,
+          },
+        }),
+      ]);
 
       this.logger.log(`Inkind summary fetched successfully`);
       return {
@@ -248,7 +266,7 @@ export class InkindsService {
           summary._sum.availableStock -
           (totalAssignedStock._sum.quantityAllocated || 0),
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
-        totalRedeemedStock: totalRedeemedStock._sum.quantity,
+        totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
       };
     } catch (error) {
       this.logger.error(
@@ -268,21 +286,13 @@ export class InkindsService {
         where: { inkindId: uuid },
         _sum: {
           quantityAllocated: true,
+          quantityRedeemed: true,
         },
       });
-
-      const totalRedeemedInkind =
-        await this.prisma.beneficiaryInkindRedemption.aggregate({
-          where: { groupInkind: { inkindId: uuid } },
-          _sum: {
-            quantity: true,
-          },
-        });
-
       return {
         ...data,
         totalAssigned: totalAssignedInkind._sum.quantityAllocated || 0,
-        totalRedeemed: totalRedeemedInkind._sum.quantity || 0,
+        totalRedeemed: totalAssignedInkind._sum.quantityRedeemed || 0,
       };
     } catch (error) {
       this.logger.error(
@@ -502,10 +512,19 @@ export class InkindsService {
     }
   }
 
-  async getByGroup() {
+  async getByGroup(inkindType?: string) {
+    const where = inkindType
+      ? {
+          inkind: {
+            type: inkindType,
+          },
+        }
+      : undefined;
+
     try {
       this.logger.log(`Fetching inkinds by group`);
       const groupInkinds = await this.prisma.groupInkind.findMany({
+        where,
         include: {
           inkind: true,
           group: {

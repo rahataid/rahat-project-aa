@@ -12,7 +12,11 @@ import {
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import {
+  AddInkindStockDto,
+  ListStockMovementsDto,
+  RemoveInkindStockDto,
+} from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 @Controller()
@@ -105,8 +109,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_BY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  getByGroup() {
-    return this.inkindsService.getByGroup();
+  getByGroup(@Payload() payload: { inkindType: string }) {
+    return this.inkindsService.getByGroup(payload.inkindType);
   }
 
   @MessagePattern({
