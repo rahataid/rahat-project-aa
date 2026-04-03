@@ -175,4 +175,17 @@ export class InkindsController {
   getLogsByGroupInkindForVendor(@Payload() payload: GetVendorInkindLogsDto) {
     return this.inkindsService.getLogsByGroupInkindForVendor(payload);
   }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_LOGS_DETAILS_BY_TX_HASH,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsDetailsByTxHash(
+    @Payload() payload: { txHash: string; vendorUid: string }
+  ) {
+    return this.inkindsService.getLogsDetailsByTxHash(
+      payload.txHash,
+      payload.vendorUid
+    );
+  }
 }

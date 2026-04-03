@@ -700,6 +700,8 @@ export class InkindsService {
       order = 'desc',
       page = 1,
       perPage = 10,
+      fromDate,
+      toDate,
     } = payload;
 
     this.logger.log(`Fetching inkind redemption logs for vendor: ${vendorId}`);
@@ -740,6 +742,13 @@ export class InkindsService {
             },
           ],
         }),
+        ...(fromDate &&
+          toDate && {
+            redeemedAt: {
+              gte: fromDate,
+              lte: toDate,
+            },
+          }),
       };
 
       // Build order by
@@ -813,30 +822,20 @@ export class InkindsService {
         { page, perPage }
       );
 
-      // Format the response
-      const formattedLogs = result.data.map((redemption: any) => ({
-        uuid: redemption.uuid,
-        quantity: redemption.quantity,
-        redeemedAt: redemption.redeemedAt,
-        txHash: redemption.txHash,
-        beneficiary: {
-          uuid: redemption.beneficiary.uuid,
-          walletAddress: redemption.beneficiary.walletAddress,
-          phone: redemption.beneficiary.phone,
-          name:
-            (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
-            null,
-        },
-        inkind: {
-          uuid: redemption.groupInkind.inkind.uuid,
-          name: redemption.groupInkind.inkind.name,
-          type: redemption.groupInkind.inkind.type,
-        },
-        group: {
-          uuid: redemption.groupInkind.group.uuid,
-          name: redemption.groupInkind.group.name,
-        },
-      }));
+      const groupedMap = new Map<
+        string,
+        { txHash: string | null; date: Date }
+      >();
+      for (const redemption of result.data as any[]) {
+        const key = redemption.txHash ?? '__no_txhash__';
+        if (!groupedMap.has(key)) {
+          groupedMap.set(key, {
+            txHash: redemption.txHash ?? null,
+            date: redemption.redeemedAt,
+          });
+        }
+      }
+      const formattedLogs = Array.from(groupedMap.values());
 
       return {
         data: {
@@ -857,6 +856,65 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch logs for vendor ${vendorId}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getLogsDetailsByTxHash(txHash: string, vendorUid: string) {
+    this.logger.log(`Fetching redemption details for txHash: ${txHash}`);
+
+    if (!vendorUid) {
+      throw new RpcException('vendorUid is required');
+    }
+
+    try {
+      const redemptions =
+        await this.prisma.beneficiaryInkindRedemption.findMany({
+          where: { txHash: txHash ?? null, vendorUid },
+          include: {
+            beneficiary: {
+              select: {
+                walletAddress: true,
+                extras: true,
+              },
+            },
+            groupInkind: {
+              select: {
+                inkind: {
+                  select: {
+                    name: true,
+                    type: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      if (redemptions.length === 0) {
+        throw new RpcException(`No redemptions found for txHash: ${txHash}`);
+      }
+
+      const first = redemptions[0];
+      const extras = first.beneficiary.extras as Record<string, unknown>;
+
+      return {
+        beneficiaryWalletAddress: first.beneficiary.walletAddress,
+        phone: (extras?.phone as string) ?? null,
+        txHash: first.txHash,
+        status: first.txHash ? 'Completed' : 'Pending',
+        timestamp: first.redeemedAt,
+        claimedInkinds: redemptions.map((r) => ({
+          quantity: r.quantity,
+          name: r.groupInkind.inkind.name,
+          type: r.groupInkind.inkind.type,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch redemption details for txHash ${txHash}: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
