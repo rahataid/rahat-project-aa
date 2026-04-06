@@ -217,7 +217,7 @@ export class BeneficiaryService {
     res.data = res.data.map((group) => {
       let updatedGroup = group;
       benfGroups.data.forEach((benfGroup: any) => {
-        if (group.uuid === benfGroup.uuid) {
+        if (group?.uuid === benfGroup?.uuid) {
           updatedGroup = {
             ...group,
             tokensReserved: benfGroup.tokensReserved,
@@ -390,6 +390,10 @@ export class BeneficiaryService {
         })),
       });
 
+    this.logger.debug(
+      `New Beneficiary group ${group.name} added to project with ${groupedBeneficiaries.count} beneficiaries.`
+    );
+
     return {
       group,
       groupedBeneficiaries,
@@ -519,7 +523,7 @@ export class BeneficiaryService {
 
       return {
         status: 'success',
-        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`
+        message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
       };
     });
   }
@@ -1018,6 +1022,61 @@ export class BeneficiaryService {
         error.response?.data || error.message
       );
       throw new Error('Failed to fetch balances');
+    }
+  }
+
+  async createBeneficiaryWithDbTransaction(dto: {
+    action: string;
+    dbTxId: string;
+    payload: any;
+  }) {
+    this.logger.log(
+      `Creating beneficiary with database transaction - Action: ${dto.action}`
+    );
+
+    const { action, dbTxId, payload } = dto;
+    const aaDbTxId = `aa_tx_${dbTxId}`;
+
+    const actionHandlers: Record<string, () => Promise<string>> = {
+      BEGIN: async () => {
+        await this.prisma.$executeRawUnsafe('BEGIN;');
+        return 'Transaction started';
+      },
+      CREATE: async () => {
+        await this.prisma.beneficiary.create({ data: payload });
+        return 'Beneficiary created';
+      },
+      PREPARE: async () => {
+        await this.prisma.$executeRawUnsafe(
+          `PREPARE TRANSACTION '${aaDbTxId}';`
+        );
+        return 'Transaction prepared';
+      },
+      COMMIT: async () => {
+        await this.prisma.$executeRawUnsafe(`COMMIT PREPARED '${aaDbTxId}';`);
+        return 'Transaction committed';
+      },
+      ROLLBACK: async () => {
+        try {
+          await this.prisma.$executeRawUnsafe(
+            `ROLLBACK PREPARED '${aaDbTxId}';`
+          );
+        } catch {
+          await this.prisma.$executeRawUnsafe('ROLLBACK;');
+        }
+        return 'Transaction rolled back';
+      },
+    };
+
+    const handler = actionHandlers[action];
+    if (!handler) throw new Error('Invalid action');
+
+    try {
+      const message = await handler();
+      this.logger.log(message);
+      return { isSuccess: true, message };
+    } catch (error) {
+      throw new Error(`Database transaction failed: ${error.message}`);
     }
   }
 }

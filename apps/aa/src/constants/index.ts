@@ -79,6 +79,8 @@ export const JOBS = {
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
+    CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
+      'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -265,16 +267,30 @@ export const JOBS = {
     UPDATE: 'aa.jobs.inkinds.update',
     DELETE: 'aa.jobs.inkinds.delete',
     GET: 'aa.jobs.inkinds.get',
+    GET_SUMMARY: 'aa.jobs.inkinds.getSummary',
     GET_ONE: 'aa.jobs.inkinds.getOne',
     ADD_INKIND_STOCK: 'aa.jobs.inkindStock.add',
     GET_ALL_STOCK_MOVEMENTS: 'aa.jobs.inkindStock.getAllMovements',
     REMOVE_INKIND_STOCK: 'aa.jobs.inkindStock.remove',
     ASSIGN_GROUP_INKIND: 'aa.jobs.groupInkinds.assign',
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
+    GET_UNASSIGNED_GROUP_INKIND:
+      'aa.jobs.groupInkinds.getUnassignedGroupInkind',
+    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
+    GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
+    GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
+    GET_LOGS_DETAILS_BY_TX_HASH: 'aa.jobs.groupInkinds.getLogsDetailsByTxHash',
+    BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
+    SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
+    VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
+  },
+  SMS: {
+    SEND_SMS: 'aa.jobs.sms.sendSms',
   },
 };
 

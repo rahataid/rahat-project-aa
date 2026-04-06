@@ -8,8 +8,15 @@ import {
   GetInkindDto,
   DeleteInkindDto,
   ListInkindDto,
+  BeneficiaryInkindRedeemDto,
+  GetGroupInkindLogsDto,
+  GetVendorInkindLogsDto,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import {
+  AddInkindStockDto,
+  ListStockMovementsDto,
+  RemoveInkindStockDto,
+} from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 
 @Controller()
@@ -49,6 +56,14 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.GET_SUMMARY,
+    uuid: process.env.PROJECT_ID,
+  })
+  getInkindSummary() {
+    return this.inkindsService.getInkindSummary();
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_ONE,
     uuid: process.env.PROJECT_ID,
   })
@@ -69,8 +84,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_ALL_STOCK_MOVEMENTS,
     uuid: process.env.PROJECT_ID,
   })
-  getAllStockMovements() {
-    return this.inkindsService.getAllStockMovements();
+  getAllStockMovements(@Payload() payload: ListStockMovementsDto) {
+    return this.inkindsService.getAllStockMovements(payload);
   }
 
   @MessagePattern({
@@ -94,7 +109,83 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_BY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  getByGroup() {
-    return this.inkindsService.getByGroup();
+  getByGroup(@Payload() payload: { inkindType: string }) {
+    return this.inkindsService.getByGroup(payload.inkindType);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_UNASSIGNED_GROUP_INKIND,
+    uuid: process.env.PROJECT_ID,
+  })
+  getUnassignedGroupInkind(@Payload() payload: { uuid: string }) {
+    return this.inkindsService.getUnassignedInkindGroups(payload.uuid);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    uuid: process.env.PROJECT_ID,
+  })
+  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.SEND_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendBeneficiaryOtp(@Payload() Payload: { number: string }) {
+    return this.inkindsService.sendBeneficiaryOtp(Payload.number);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.VALIDATE_BENEFICIARY_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  validateBeneficiaryOtp(@Payload() Payload: { number: string; otp: string }) {
+    return this.inkindsService.validateBeneficiaryOtp(
+      Payload.number,
+      Payload.otp
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.BENEFICIARY_INKIND_REDEEM,
+    uuid: process.env.PROJECT_ID,
+  })
+  beneficiaryInkindRedeem(
+    @Payload() redeemInkindByBeneficiaryDto: BeneficiaryInkindRedeemDto
+  ) {
+    return this.inkindsService.beneficiaryInkindRedeem(
+      redeemInkindByBeneficiaryDto
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsByGroupInkind(@Payload() payload: GetGroupInkindLogsDto) {
+    return this.inkindsService.getLogsByGroupInkind(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS_BY_VENDOR,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsByGroupInkindForVendor(@Payload() payload: GetVendorInkindLogsDto) {
+    return this.inkindsService.getLogsByGroupInkindForVendor(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_LOGS_DETAILS_BY_TX_HASH,
+    uuid: process.env.PROJECT_ID,
+  })
+  getLogsDetailsByTxHash(
+    @Payload() payload: { txHash: string; vendorUid: string }
+  ) {
+    return this.inkindsService.getLogsDetailsByTxHash(
+      payload.txHash,
+      payload.vendorUid
+    );
   }
 }

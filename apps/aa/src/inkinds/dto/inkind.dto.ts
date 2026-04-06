@@ -6,12 +6,24 @@ import {
   IsUUID,
   Min,
   IsIn,
+  IsArray,
+  IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum InkindType {
   WALK_IN = 'WALK_IN',
   PRE_DEFINED = 'PRE_DEFINED',
+}
+
+export interface UserObject {
+  id: number;
+  userId: number;
+  uuid: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  wallet: string;
 }
 
 export class CreateInkindDto {
@@ -97,4 +109,88 @@ export class ListInkindDto {
   @IsOptional()
   @IsString()
   name?: string;
+}
+
+export class BeneficiaryInkindRedeemDto {
+  @IsString()
+  walletAddress: string;
+
+  @IsArray()
+  inkinds: {
+    uuid: string;
+    groupInkindUuid?: string;
+  }[];
+
+  @IsObject()
+  user: UserObject;
+}
+
+export class GetGroupInkindLogsDto {
+  @IsString()
+  groupInkindId: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc' = 'desc';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  perPage?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['redeemedAt', 'quantity'])
+  sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+}
+
+export class GetVendorInkindLogsDto {
+  @IsString()
+  vendorId: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc' = 'desc';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  perPage?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['redeemedAt', 'quantity'])
+  sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
 }
