@@ -12,6 +12,7 @@ import { AddTriggerDto } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { lowerCaseObjectKeys } from '../utils/utility';
+import { InkindsService } from '../inkinds';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -56,6 +57,7 @@ export class EVMProcessor {
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly beneficiaryService: BeneficiaryService,
+    private readonly inkindService: InkindsService,
     private readonly settingService: SettingsService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
@@ -694,6 +696,42 @@ export class EVMProcessor {
     }
   }
 
+  @Process({name: JOBS.EVM.REDEEM_INKIND, concurrency: 1 })
+  async redeemInKind(job: Job<{ beneficiaryAddress: string; vendorAddress: string; inkind: string[] }>) {
+    try {
+      this.logger.log('Processing EVM redeem inkind...', EVMProcessor.name);
+      await this.ensureInitialized();
+
+      const {inkind, beneficiaryAddress, vendorAddress} = job.data;
+      let txHash;
+      const inkindContract = await this.createContractInstanceSign('INKIND', null, this.signer);
+
+      const convertedInkindUuid = inkind.map((uuid) => ethers.encodeBytes32String(uuid));
+
+      try{
+        const redeemInkind = await inkindContract.redeemInkind(convertedInkindUuid, vendorAddress, beneficiaryAddress);
+        console.log('Inkind redeemed with tx hash:', redeemInkind.hash);
+        txHash = redeemInkind.hash;
+
+        await this.inkindService.updateRedeemInkindTxHash(inkind, txHash, beneficiaryAddress);
+      } catch (error) {
+        this.logger.error(
+          `Error in EVM redeem inkind: ${error.message}`,
+          error.stack,
+          EVMProcessor.name
+        );
+        throw error;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error in EVM redeem inkind: ${error.message}`,
+        error.stack,
+        EVMProcessor.name
+      );
+      throw error;
+    }
+  }
+
   private async getFromSettings(key: string): Promise<any> {
     try {
       const settings = await this.prismaService.setting.findUnique({
@@ -766,6 +804,11 @@ export class EVMProcessor {
       contractABI = this.convertABI(contract.RAHATTOKEN.ABI);
       console.log('RAHATTOKEN address:', contractAddress);
       console.log('RAHATTOKEN ABI length:', contractABI?.length);
+    } else if (contractName === 'INKIND') {
+      contractAddress = contract.INKIND.ADDRESS;
+      contractABI = this.convertABI(contract.INKIND.ABI);
+      console.log('INKIND address:', contractAddress);
+      console.log('INKIND ABI length:', contractABI?.length);
     } else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }

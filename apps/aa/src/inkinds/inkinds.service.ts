@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, Prisma } from '@prisma/client';
+import { InkindStockMovementType, InkindTxStatus, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -1116,6 +1116,42 @@ export class InkindsService {
     }
   }
 
+  async updateRedeemInkindTxHash(
+    inkindUuid: string[],
+    txHash: string,
+    beneficiaryWallet: string
+  ){
+    try {
+      this.logger.log(
+        `Updating redemption txHash for beneficiary: ${beneficiaryWallet}, inkindUuids: ${inkindUuid.join(', ')}`
+      );
+
+      await this.prisma.beneficiaryInkindRedemption.updateMany({
+        where: {
+          beneficiaryWallet,
+          groupInkind: {
+            inkindId: { in: inkindUuid },
+          }
+        },
+        data: { txHash, status: InkindTxStatus.COMPLETED },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for redemptions of beneficiary: ${beneficiaryWallet}`
+      );
+
+      return { success: true, message: 'Redemption txHash updated successfully' };
+    }
+    catch (error) {
+      this.logger.error(
+        `Failed to update redemption txHash for beneficiary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+
   // ==================== VALIDATION HELPERS ====================
   private async validatePreDefinedInkinds(
     preDefinedPayload: Array<{ uuid: string; groupInkindUuid: string }>,
@@ -1293,6 +1329,7 @@ export class InkindsService {
           groupInkindId: item.groupInkindUuid,
           quantity: quantityPerBeneficiary,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 
@@ -1419,6 +1456,7 @@ export class InkindsService {
           groupInkindId: groupInkindUuid,
           quantity: 1,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 

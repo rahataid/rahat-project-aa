@@ -256,6 +256,7 @@ export const JOBS = {
     CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
