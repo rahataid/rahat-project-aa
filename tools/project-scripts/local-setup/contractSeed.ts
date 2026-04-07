@@ -15,7 +15,13 @@ const corePrisma = new PrismaClient({
 const prisma = new PrismaService();
 const settings = new SettingsService(prisma);
 
-const contractName = ['AAProject', 'RahatDonor', 'RahatToken'];
+const contractName = [
+  'AAProject',
+  'RahatDonor',
+  'RahatToken',
+  'InkindToken',
+  'Inkind',
+];
 
 class ContractSeed extends ContractLib {
   projectUUID: string;
@@ -193,6 +199,15 @@ class ContractSeed extends ContractLib {
       'grantRole',
       [0, deployerAccount, 0],
       RahatAccessManagerAddress,
+      deployerAccount
+    );
+
+    console.log('Adding inkind address as owner in Inkind Token Contract ');
+    await this.callContractMethod(
+      'InkindToken',
+      'addOwner',
+      [InkindRedeemContract.contract.target],
+      InkindToken.contract.target.toString(),
       deployerAccount
     );
   }

@@ -23,7 +23,7 @@ import { BullModule } from '@nestjs/bull';
       },
     ]),
     BullModule.registerQueue({
-      name: BQUEUE.CONTRACT,
+      name: BQUEUE.EVM,
     }),
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,

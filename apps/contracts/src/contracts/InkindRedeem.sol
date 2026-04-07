@@ -12,7 +12,7 @@ import '@openzeppelin/contracts/access/manager/AccessManaged.sol';
 
 contract Inkind is IInkind, AccessManaged {
     address public defaultToken;
-    
+
     //constructor - tokenaddress set
     constructor(
         address _defaultToken,
@@ -37,7 +37,8 @@ contract Inkind is IInkind, AccessManaged {
     function redeemInkind(
         bytes16[] calldata _inkind,
         address _vendor,
-        address _beneficiary
+        address _beneficiary,
+        uint256 _inkindsValue
     ) external restricted {
         for (uint i = 0; i < _inkind.length; i++) {
             redeemedInkind[_inkind[i]] = _beneficiary; // Store the redeemed inkind tokens for the beneficiary
@@ -45,6 +46,6 @@ contract Inkind is IInkind, AccessManaged {
         }
 
         beneficiaryVendors[_beneficiary] = _vendor; // Associate the beneficiary with the vendor
-        IRahatToken(defaultToken).mint(_vendor, _inkind.length); // Mint tokens for the beneficiary
+        IRahatToken(defaultToken).mint(_vendor, _inkindsValue); // Mint tokens for the beneficiary
     }
 }

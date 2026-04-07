@@ -49,7 +49,7 @@ export class InkindsService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private configService: ConfigService,
-    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -1281,18 +1281,33 @@ export class InkindsService {
         return [...preDefinedResults, ...walkInResults];
       });
 
-      const batchedInkinds = inkinds.map((inkind) => {inkind.uuid});
-      
-      try{
-        this.contractQueue.add(JOBS.EVM.REDEEM_INKIND, { beneficiaryAddress: walletAddress,vendorAddress: user.wallet,inkinds: batchedInkinds,  },{
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-           },
-        })
-      } catch(error){
+      const batchedInkinds = inkinds.map((inkind) => inkind.uuid);
+
+      try {
+        this.logger.log(
+          `Enqueuing contract job for inkind redemption: beneficiary=${walletAddress}, vendor=${
+            user.wallet
+          }, inkinds=${batchedInkinds.join(
+            ', '
+          )}`
+        );
+        this.contractQueue.add(
+          JOBS.EVM.REDEEM_INKIND,
+          {
+            beneficiaryAddress: walletAddress,
+            vendorAddress: user.wallet,
+            inkinds: batchedInkinds
+          },
+          {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          }
+        );
+      } catch (error) {
         this.logger.error(
           `Failed to enqueue contract job for inkind redemption: ${error.message}`,
           error.stack
@@ -1320,10 +1335,12 @@ export class InkindsService {
     inkindUuid: string[],
     txHash: string,
     beneficiaryWallet: string
-  ){
+  ) {
     try {
       this.logger.log(
-        `Updating redemption txHash for beneficiary: ${beneficiaryWallet}, inkindUuids: ${inkindUuid.join(', ')}`
+        `Updating redemption txHash for beneficiary: ${beneficiaryWallet}, inkindUuids: ${inkindUuid.join(
+          ', '
+        )}`
       );
 
       await this.prisma.beneficiaryInkindRedemption.updateMany({
@@ -1331,7 +1348,7 @@ export class InkindsService {
           beneficiaryWallet,
           groupInkind: {
             inkindId: { in: inkindUuid },
-          }
+          },
         },
         data: { txHash, status: InkindTxStatus.COMPLETED },
       });
@@ -1340,9 +1357,11 @@ export class InkindsService {
         `Successfully updated txHash for redemptions of beneficiary: ${beneficiaryWallet}`
       );
 
-      return { success: true, message: 'Redemption txHash updated successfully' };
-    }
-    catch (error) {
+      return {
+        success: true,
+        message: 'Redemption txHash updated successfully',
+      };
+    } catch (error) {
       this.logger.error(
         `Failed to update redemption txHash for beneficiary: ${error.message}`,
         error.stack
@@ -1350,7 +1369,6 @@ export class InkindsService {
       throw new RpcException(error.message);
     }
   }
-
 
   // ==================== VALIDATION HELPERS ====================
   private async validatePreDefinedInkinds(

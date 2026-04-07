@@ -74,7 +74,7 @@ describe('----- InkindToken Contract -----', function () {
     it('Should be allowed to redeem inkind', async function () {
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind1], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1);
     });
 
     it('Should be allowed to redeem multiple inkinds', async function () {
@@ -83,14 +83,15 @@ describe('----- InkindToken Contract -----', function () {
         .redeemInkind(
           [inkind2, inkind3],
           vendor1.address,
-          beneficiary1.address
+          beneficiary1.address,
+          2
         );
     });
 
     it('Should update redeemedInkind mapping', async function () {
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind1], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1);
       const redeemed = await inkindTokenContract.redeemedInkind(inkind1);
       expect(redeemed).to.equal(beneficiary1.address);
     });
@@ -99,7 +100,7 @@ describe('----- InkindToken Contract -----', function () {
       await expect(
         inkindTokenContract
           .connect(newAdmin)
-          .redeemInkind([inkind1], vendor1.address, beneficiary1.address)
+          .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1)
       )
         .to.emit(inkindTokenContract, 'InkindRedeemed')
         .withArgs(inkind1, vendor1.address, beneficiary1.address);
@@ -108,7 +109,7 @@ describe('----- InkindToken Contract -----', function () {
     it('Should map each inkind to beneficiary', async function () {
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind1], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1);
       const redeemed = await inkindTokenContract.redeemedInkind(inkind1);
       expect(redeemed).to.equal(beneficiary1.address);
     });
@@ -116,10 +117,10 @@ describe('----- InkindToken Contract -----', function () {
     it('Should handle multiple inkind mappings', async function () {
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind1], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1);
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind2], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind2], vendor1.address, beneficiary1.address, 1);
 
       expect(await inkindTokenContract.redeemedInkind(inkind1)).to.equal(
         beneficiary1.address
@@ -132,7 +133,7 @@ describe('----- InkindToken Contract -----', function () {
     it('Should update beneficiaryVendors', async function () {
       await inkindTokenContract
         .connect(newAdmin)
-        .redeemInkind([inkind1], vendor1.address, beneficiary1.address);
+        .redeemInkind([inkind1], vendor1.address, beneficiary1.address, 1);
       const vendor = await inkindTokenContract.beneficiaryVendors(
         beneficiary1.address
       );

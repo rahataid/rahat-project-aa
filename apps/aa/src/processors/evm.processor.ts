@@ -701,14 +701,46 @@ export class EVMProcessor {
     job: Job<{
       beneficiaryAddress: string;
       vendorAddress: string;
-      inkind: string[];
+      inkinds: string[];
     }>
   ) {
     try {
       this.logger.log('Processing EVM redeem inkind...', EVMProcessor.name);
       await this.ensureInitialized();
 
-      const { inkind, beneficiaryAddress, vendorAddress } = job.data;
+      const inkindTokenContract = await this.createContractInstanceSign(
+        'INKINDTOKEN',
+        null,
+        this.signer
+      );
+
+      const currentDecimalValue = await inkindTokenContract.decimals
+        .staticCall()
+        .then((decimals) => {
+          console.log('INKINDTOKEN decimals:', decimals);
+          return decimals;
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Error fetching INKINDTOKEN decimals: ${error.message}`,
+            error.stack,
+            EVMProcessor.name
+          );
+          return 18; 
+        });
+
+      console.log(
+        'Current decimal value for INKINDTOKEN:',
+        currentDecimalValue
+      );
+
+      const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
+
+      const inkindsValue = ethers.parseUnits(
+        `${inkinds.length}`,
+        currentDecimalValue
+      );
+
       let txHash;
       const inkindContract = await this.createContractInstanceSign(
         'INKIND',
@@ -716,22 +748,23 @@ export class EVMProcessor {
         this.signer
       );
 
-      const convertedInkindUuid = inkind.map((uuid) =>
-        ethers.encodeBytes32String(uuid)
+      const convertedInkindUuid = inkinds.map((uuid) =>
+        ethers.hexlify(ethers.toBeArray('0x' + uuid.replace(/-/g, '')))
       );
 
       try {
         const redeemInkind = await inkindContract.redeemInkind(
           convertedInkindUuid,
           vendorAddress,
-          beneficiaryAddress
+          beneficiaryAddress,
+          inkindsValue
         );
         const inkindTxHash = await redeemInkind.wait();
         console.log('Inkind redeemed with tx hash:', inkindTxHash);
         txHash = inkindTxHash.hash;
 
         await this.inkindService.updateRedeemInkindTxHash(
-          inkind,
+          inkinds,
           txHash,
           beneficiaryAddress
         );
@@ -830,7 +863,13 @@ export class EVMProcessor {
       contractABI = this.convertABI(contract.INKIND.ABI);
       console.log('INKIND address:', contractAddress);
       console.log('INKIND ABI length:', contractABI?.length);
-    } else {
+    } else if (contractName === 'INKINDTOKEN') {
+      contractAddress = contract.INKINDTOKEN.ADDRESS;
+      contractABI = this.convertABI(contract.INKINDTOKEN.ABI);
+      console.log('INKINDTOKEN address:', contractAddress);
+      console.log('INKINDTOKEN ABI length:', contractABI?.length);
+     } 
+    else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }
 
