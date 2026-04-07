@@ -193,4 +193,12 @@ export class GetVendorInkindLogsDto {
   @IsString()
   @IsIn(['redeemedAt', 'quantity'])
   sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
 }
