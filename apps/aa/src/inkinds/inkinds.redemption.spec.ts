@@ -3,7 +3,11 @@ import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { getQueueToken } from '@nestjs/bull';
 import { InkindsService } from './inkinds.service';
-import { InkindType, InkindTxStatus, InkindStockMovementType } from '@prisma/client';
+import {
+  InkindType,
+  InkindTxStatus,
+  InkindStockMovementType,
+} from '@prisma/client';
 import { BeneficiaryInkindRedeemDto } from './dto/beneficiaryInkindRedeem.dto';
 import { BQUEUE, JOBS } from '../constants';
 
@@ -185,7 +189,9 @@ describe('InkindsService - Inkind Redemption', () => {
     it('should successfully redeem pre-defined inkinds for beneficiary', async () => {
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
-      mockPrismaService.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findFirst.mockResolvedValue(
+        mockBeneficiary
+      );
 
       mockTx.vendor.findFirst.mockResolvedValue(mockVendor);
       mockTx.inkind.findMany.mockResolvedValue([mockInkind1]);
@@ -236,7 +242,9 @@ describe('InkindsService - Inkind Redemption', () => {
 
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind2]);
-      mockPrismaService.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findFirst.mockResolvedValue(
+        mockBeneficiary
+      );
 
       mockTx.vendor.findFirst.mockResolvedValue(mockVendor);
       mockTx.inkind.findMany.mockResolvedValue([mockInkind2]);
@@ -264,9 +272,9 @@ describe('InkindsService - Inkind Redemption', () => {
     it('should throw error when vendor not found', async () => {
       mockPrismaService.vendor.findFirst.mockResolvedValue(null);
 
-      await expect(service.beneficiaryInkindRedeem(redeemPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(redeemPayload)
+      ).rejects.toThrow(RpcException);
       expect(mockPrismaService.vendor.findFirst).toHaveBeenCalledWith({
         where: {
           uuid: vendorUuid,
@@ -279,18 +287,18 @@ describe('InkindsService - Inkind Redemption', () => {
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
       mockPrismaService.beneficiary.findFirst.mockResolvedValue(null);
 
-      await expect(service.beneficiaryInkindRedeem(redeemPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(redeemPayload)
+      ).rejects.toThrow(RpcException);
     });
 
     it('should throw error when one or more inkinds not found', async () => {
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([]);
 
-      await expect(service.beneficiaryInkindRedeem(redeemPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(redeemPayload)
+      ).rejects.toThrow(RpcException);
     });
 
     it('should throw error when beneficiary not member of group for pre-defined inkind', async () => {
@@ -304,16 +312,18 @@ describe('InkindsService - Inkind Redemption', () => {
 
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
-      mockPrismaService.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findFirst.mockResolvedValue(
+        mockBeneficiary
+      );
 
       mockTx.vendor.findFirst.mockResolvedValue(mockVendor);
       mockTx.inkind.findMany.mockResolvedValue([mockInkind1]);
       mockTx.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
       mockTx.groupInkind.findMany.mockResolvedValue([groupInkindNoMember]);
 
-      await expect(service.beneficiaryInkindRedeem(redeemPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(redeemPayload)
+      ).rejects.toThrow(RpcException);
     });
 
     it('should throw error when beneficiary has already redeemed pre-defined inkind', async () => {
@@ -330,7 +340,9 @@ describe('InkindsService - Inkind Redemption', () => {
 
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
-      mockPrismaService.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findFirst.mockResolvedValue(
+        mockBeneficiary
+      );
 
       mockTx.vendor.findFirst.mockResolvedValue(mockVendor);
       mockTx.inkind.findMany.mockResolvedValue([mockInkind1]);
@@ -340,9 +352,9 @@ describe('InkindsService - Inkind Redemption', () => {
         existingRedemption,
       ]);
 
-      await expect(service.beneficiaryInkindRedeem(redeemPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(redeemPayload)
+      ).rejects.toThrow(RpcException);
     });
 
     it('should throw error when missing required fields', async () => {
@@ -372,15 +384,17 @@ describe('InkindsService - Inkind Redemption', () => {
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
 
-      await expect(service.beneficiaryInkindRedeem(invalidPayload)).rejects.toThrow(
-        RpcException
-      );
+      await expect(
+        service.beneficiaryInkindRedeem(invalidPayload)
+      ).rejects.toThrow(RpcException);
     });
 
     it('should handle contract queue enqueue failure gracefully', async () => {
       mockPrismaService.vendor.findFirst.mockResolvedValue(mockVendor);
       mockPrismaService.inkind.findMany.mockResolvedValue([mockInkind1]);
-      mockPrismaService.beneficiary.findFirst.mockResolvedValue(mockBeneficiary);
+      mockPrismaService.beneficiary.findFirst.mockResolvedValue(
+        mockBeneficiary
+      );
 
       mockTx.vendor.findFirst.mockResolvedValue(mockVendor);
       mockTx.inkind.findMany.mockResolvedValue([mockInkind1]);
@@ -411,9 +425,11 @@ describe('InkindsService - Inkind Redemption', () => {
     const inkindUuids = ['inkind-uuid-1', 'inkind-uuid-2'];
 
     it('should successfully update redemption txHash', async () => {
-      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue({
-        count: 2,
-      });
+      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue(
+        {
+          count: 2,
+        }
+      );
 
       const result = await service.updateRedeemInkindTxHash(
         inkindUuids,
@@ -447,9 +463,11 @@ describe('InkindsService - Inkind Redemption', () => {
     });
 
     it('should handle empty inkindUuids array', async () => {
-      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue({
-        count: 0,
-      });
+      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue(
+        {
+          count: 0,
+        }
+      );
 
       const result = await service.updateRedeemInkindTxHash(
         [],
@@ -479,9 +497,11 @@ describe('InkindsService - Inkind Redemption', () => {
         'inkind-uuid-4',
       ];
 
-      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue({
-        count: 4,
-      });
+      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue(
+        {
+          count: 4,
+        }
+      );
 
       const result = await service.updateRedeemInkindTxHash(
         multipleUuids,
@@ -504,9 +524,11 @@ describe('InkindsService - Inkind Redemption', () => {
     });
 
     it('should correctly format txHash parameter', async () => {
-      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue({
-        count: 1,
-      });
+      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue(
+        {
+          count: 1,
+        }
+      );
 
       const testTxHash = '0x' + 'a'.repeat(64);
       await service.updateRedeemInkindTxHash(
@@ -527,9 +549,11 @@ describe('InkindsService - Inkind Redemption', () => {
     });
 
     it('should set status to COMPLETED', async () => {
-      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue({
-        count: 1,
-      });
+      mockPrismaService.beneficiaryInkindRedemption.updateMany.mockResolvedValue(
+        {
+          count: 1,
+        }
+      );
 
       await service.updateRedeemInkindTxHash(
         inkindUuids,

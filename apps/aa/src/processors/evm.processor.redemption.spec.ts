@@ -107,7 +107,9 @@ describe('EVMProcessor - Inkind Redemption', () => {
     processor = module.get<EVMProcessor>(EVMProcessor);
 
     // Mock the private methods
-    jest.spyOn(processor, 'ensureInitialized' as any).mockResolvedValue(undefined);
+    jest
+      .spyOn(processor, 'ensureInitialized' as any)
+      .mockResolvedValue(undefined);
     jest
       .spyOn(processor, 'createContractInstanceSign' as any)
       .mockResolvedValue(mockContractInstance);
@@ -141,7 +143,10 @@ describe('EVMProcessor - Inkind Redemption', () => {
     const jobData = {
       beneficiaryAddress: benificiaryAddress,
       vendorAddress: vendorAddress,
-      inkinds: ['550e8400-e29b-41d4-a716-446655440000', '6ba7b810-9dad-11d1-80b4-00c04fd430c8'],
+      inkinds: [
+        '550e8400-e29b-41d4-a716-446655440000',
+        '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+      ],
       inkindsValue: 2,
     };
 
@@ -331,9 +336,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       jest
         .spyOn(processor, 'ensureInitialized' as any)
-        .mockRejectedValue(
-          new RpcException('EVM provider not initialized')
-        );
+        .mockRejectedValue(new RpcException('EVM provider not initialized'));
 
       await expect(processor.redeemInKind(mockJob as any)).rejects.toThrow(
         RpcException
@@ -345,9 +348,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       jest
         .spyOn(processor, 'getFromSettings' as any)
-        .mockRejectedValue(
-          new Error('CONTRACT configuration not found')
-        );
+        .mockRejectedValue(new Error('CONTRACT configuration not found'));
 
       await expect(processor.redeemInKind(mockJob as any)).rejects.toThrow();
     });
@@ -430,9 +431,9 @@ describe('EVMProcessor - Inkind Redemption', () => {
         benificiaryAddress
       );
 
-      expect(
-        mockInkindService.updateRedeemInkindTxHash
-      ).toHaveBeenCalledTimes(1);
+      expect(mockInkindService.updateRedeemInkindTxHash).toHaveBeenCalledTimes(
+        1
+      );
     });
   });
 });
