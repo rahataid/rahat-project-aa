@@ -696,24 +696,45 @@ export class EVMProcessor {
     }
   }
 
-  @Process({name: JOBS.EVM.REDEEM_INKIND, concurrency: 1 })
-  async redeemInKind(job: Job<{ beneficiaryAddress: string; vendorAddress: string; inkind: string[] }>) {
+  @Process({ name: JOBS.EVM.REDEEM_INKIND, concurrency: 1 })
+  async redeemInKind(
+    job: Job<{
+      beneficiaryAddress: string;
+      vendorAddress: string;
+      inkind: string[];
+    }>
+  ) {
     try {
       this.logger.log('Processing EVM redeem inkind...', EVMProcessor.name);
       await this.ensureInitialized();
 
-      const {inkind, beneficiaryAddress, vendorAddress} = job.data;
+      const { inkind, beneficiaryAddress, vendorAddress } = job.data;
       let txHash;
-      const inkindContract = await this.createContractInstanceSign('INKIND', null, this.signer);
+      const inkindContract = await this.createContractInstanceSign(
+        'INKIND',
+        null,
+        this.signer
+      );
 
-      const convertedInkindUuid = inkind.map((uuid) => ethers.encodeBytes32String(uuid));
+      const convertedInkindUuid = inkind.map((uuid) =>
+        ethers.encodeBytes32String(uuid)
+      );
 
-      try{
-        const redeemInkind = await inkindContract.redeemInkind(convertedInkindUuid, vendorAddress, beneficiaryAddress);
-        console.log('Inkind redeemed with tx hash:', redeemInkind.hash);
-        txHash = redeemInkind.hash;
+      try {
+        const redeemInkind = await inkindContract.redeemInkind(
+          convertedInkindUuid,
+          vendorAddress,
+          beneficiaryAddress
+        );
+        const inkindTxHash = await redeemInkind.wait();
+        console.log('Inkind redeemed with tx hash:', inkindTxHash);
+        txHash = inkindTxHash.hash;
 
-        await this.inkindService.updateRedeemInkindTxHash(inkind, txHash, beneficiaryAddress);
+        await this.inkindService.updateRedeemInkindTxHash(
+          inkind,
+          txHash,
+          beneficiaryAddress
+        );
       } catch (error) {
         this.logger.error(
           `Error in EVM redeem inkind: ${error.message}`,

@@ -18,11 +18,13 @@ import { SettingsService } from '@rumsan/settings';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
 import { EVMProcessor } from './evm.processor';
+import { InkindsModule } from '../inkinds';
 
 @Module({
   imports: [
     StellarModule,
     BeneficiaryModule,
+    InkindsModule,
     PayoutsModule,
     StakeholdersModule,
     ClientsModule.register([

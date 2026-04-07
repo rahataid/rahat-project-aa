@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, InkindTxStatus, Prisma } from '@prisma/client';
+import { InkindStockMovementType, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -11,6 +11,7 @@ import {
   UserObject,
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
+  InkindTxStatus,
 } from './dto/inkind.dto';
 import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
@@ -28,9 +29,11 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -42,6 +45,7 @@ export class InkindsService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private configService: ConfigService,
+    @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -1098,6 +1102,24 @@ export class InkindsService {
 
         return [...preDefinedResults, ...walkInResults];
       });
+
+      const batchedInkinds = inkinds.map((inkind) => {inkind.uuid});
+      
+      try{
+        this.contractQueue.add(JOBS.EVM.REDEEM_INKIND, { beneficiaryAddress: walletAddress,vendorAddress: user.wallet,inkinds: batchedInkinds,  },{
+          attempts: 3,
+          removeOnComplete: true,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+           },
+        })
+      } catch(error){
+        this.logger.error(
+          `Failed to enqueue contract job for inkind redemption: ${error.message}`,
+          error.stack
+        );
+      }
 
       this.logger.log(
         `Successfully redeemed ${redemptionResults.length} inkinds for beneficiary: ${walletAddress}`

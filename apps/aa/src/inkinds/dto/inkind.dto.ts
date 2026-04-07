@@ -16,6 +16,14 @@ export enum InkindType {
   PRE_DEFINED = 'PRE_DEFINED',
 }
 
+export enum InkindTxStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
 export interface UserObject {
   id: number;
   userId: number;

@@ -4,7 +4,8 @@ import { InkindsController } from './inkinds.controller';
 import { InkindsService } from './inkinds.service';
 import { OtpModule } from '../otp/otp.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
@@ -21,6 +22,12 @@ import { CORE_MODULE } from '../constants';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.CONTRACT,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
   ],
   controllers: [InkindsController],
   providers: [InkindsService],
