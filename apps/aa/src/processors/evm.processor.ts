@@ -717,7 +717,6 @@ export class EVMProcessor {
       const currentDecimalValue = await inkindTokenContract.decimals
         .staticCall()
         .then((decimals) => {
-          console.log('INKINDTOKEN decimals:', decimals);
           return decimals;
         })
         .catch((error) => {
@@ -728,11 +727,6 @@ export class EVMProcessor {
           );
           return 18; 
         });
-
-      console.log(
-        'Current decimal value for INKINDTOKEN:',
-        currentDecimalValue
-      );
 
       const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
 
@@ -760,7 +754,10 @@ export class EVMProcessor {
           inkindsValue
         );
         const inkindTxHash = await redeemInkind.wait();
-        console.log('Inkind redeemed with tx hash:', inkindTxHash);
+        this.logger.log(
+          `Inkind redeemed successfully. Transaction: ${inkindTxHash.transactionHash}`,
+          EVMProcessor.name
+        ); 
         txHash = inkindTxHash.hash;
 
         await this.inkindService.updateRedeemInkindTxHash(
