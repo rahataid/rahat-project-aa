@@ -28,4 +28,8 @@ export class ChainService {
   getDisbursementStats() {
     return this.chainQueueService.getDisbursementStats();
   }
+
+  redeemInkind(redeemDto: any) {
+    return this.chainQueueService.redeemInkind(redeemDto);
+  }
 }

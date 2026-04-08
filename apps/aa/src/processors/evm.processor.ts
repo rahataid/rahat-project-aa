@@ -1,6 +1,6 @@
 // apps/aa/src/processors/evm.processor.ts
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger} from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -13,6 +13,7 @@ import { lastValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { lowerCaseObjectKeys } from '../utils/utility';
 import { InkindsService } from '../inkinds';
+import { ModuleRef } from '@nestjs/core';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -53,17 +54,25 @@ export class EVMProcessor {
   private provider: ethers.Provider;
   private signer: ethers.Signer;
   private isInitialized = false;
+  private _inkindService: InkindsService | null = null;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly inkindService: InkindsService,
     private readonly settingService: SettingsService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
-    private readonly prismaService: PrismaService
+    private readonly prismaService: PrismaService,
+    private readonly moduleRef: ModuleRef
   ) {
     this.initializeProvider();
+  }
+
+  private get inkindService(): InkindsService {
+    if (!this._inkindService) {
+      this._inkindService = this.moduleRef.get(InkindsService, { strict: false });
+    }
+    return this._inkindService!;
   }
 
   private async initializeProvider() {

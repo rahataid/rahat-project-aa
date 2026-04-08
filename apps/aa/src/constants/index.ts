@@ -4,6 +4,7 @@ export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
+export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
 export const STELLER_UID = 'stellar';
 

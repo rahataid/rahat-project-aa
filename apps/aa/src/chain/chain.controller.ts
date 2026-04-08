@@ -1,6 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { ChainService } from './chain.service';
 import { MessagePattern } from '@nestjs/microservices';
+import { RedeemInkindDto } from './interfaces/chain-service.interface';
 
 @Controller('chain')
 export class ChainController {
@@ -52,5 +53,13 @@ export class ChainController {
   })
   getDisbursementStats() {
     return this.chainService.getDisbursementStats();
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.redeemInkind',
+    uuid: process.env.PROJECT_ID,
+  })
+  redeemInkind(data: RedeemInkindDto) {
+    return this.chainService.redeemInkind(data); 
   }
 }

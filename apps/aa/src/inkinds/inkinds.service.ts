@@ -33,11 +33,12 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
+import { ChainService } from '../chain/chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -49,7 +50,9 @@ export class InkindsService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private configService: ConfigService,
-    @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
+    @Inject(CHAIN_SERVICE)
+    private readonly chainService: ChainService,
+    // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -1287,26 +1290,13 @@ export class InkindsService {
         this.logger.log(
           `Enqueuing contract job for inkind redemption: beneficiary=${walletAddress}, vendor=${
             user.wallet
-          }, inkinds=${batchedInkinds.join(
-            ', '
-          )}`
+          }, inkinds=${batchedInkinds.join(', ')}`
         );
-        this.contractQueue.add(
-          JOBS.EVM.REDEEM_INKIND,
-          {
-            beneficiaryAddress: walletAddress,
-            vendorAddress: user.wallet,
-            inkinds: batchedInkinds
-          },
-          {
-            attempts: 3,
-            removeOnComplete: true,
-            backoff: {
-              type: 'exponential',
-              delay: 1000,
-            },
-          }
-        );
+        this.chainService.redeemInkind({
+          beneficiaryAddress: walletAddress,
+          vendorAddress: user.wallet,
+          inkinds: batchedInkinds,
+        });
       } catch (error) {
         this.logger.error(
           `Failed to enqueue contract job for inkind redemption: ${error.message}`,

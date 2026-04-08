@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { PrismaService } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
@@ -24,7 +24,7 @@ import { InkindsModule } from '../inkinds';
   imports: [
     StellarModule,
     BeneficiaryModule,
-    InkindsModule,
+    forwardRef(() => InkindsModule),
     PayoutsModule,
     StakeholdersModule,
     ClientsModule.register([
