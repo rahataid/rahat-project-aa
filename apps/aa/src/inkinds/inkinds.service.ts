@@ -692,6 +692,88 @@ export class InkindsService {
     }
   }
 
+  async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
+    const { vendorId, search, inkindType, page, perPage } = payload;
+
+    this.logger.log(
+      `Fetching inkind redemption logs details for vendor: ${vendorId}`
+    );
+
+    if (!vendorId) {
+      throw new RpcException('vendorId is required');
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: vendorId },
+      select: { uuid: true, name: true, walletAddress: true },
+    });
+
+    if (!vendor) {
+      throw new RpcException(`Vendor with UUID ${vendorId} not found`);
+    }
+
+    const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
+      vendorUid: vendorId,
+      ...(search && {
+        beneficiaryWallet: { contains: search, mode: 'insensitive' },
+      }),
+      ...(inkindType && {
+        groupInkind: {
+          inkind: {
+            type: inkindType,
+          },
+        },
+      }),
+    };
+
+    const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
+      where,
+      include: {
+        beneficiary: {
+          select: {
+            uuid: true,
+            walletAddress: true,
+            phone: true,
+            extras: true,
+          },
+        },
+        groupInkind: {
+          select: {
+            uuid: true,
+            inkind: {
+              select: {
+                uuid: true,
+                name: true,
+                type: true,
+              },
+            },
+            group: {
+              select: {
+                uuid: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    try {
+      const result = await paginate(
+        this.prisma.beneficiaryInkindRedemption,
+        query,
+        { page, perPage }
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind redemption logs details for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException('Failed to fetch inkind redemption logs details');
+    }
+  }
+
   async getLogsByGroupInkindForVendor(payload: GetVendorInkindLogsDto) {
     const {
       vendorId,

@@ -169,6 +169,14 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.GET_LOGS_DETAILS_BY_VENDOR,
+    uuid: process.env.PROJECT_ID,
+  })
+  getInkindLogsDetailsByVendor(@Payload() payload: GetVendorInkindLogsDto) {
+    return this.inkindsService.getInkindLogsDetailsByVendor(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_GROUP_INKIND_LOGS_BY_VENDOR,
     uuid: process.env.PROJECT_ID,
   })

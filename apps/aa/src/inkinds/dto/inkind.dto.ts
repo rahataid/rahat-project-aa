@@ -193,4 +193,8 @@ export class GetVendorInkindLogsDto {
   @IsOptional()
   @IsString()
   toDate?: string;
+
+  @IsOptional()
+  @IsEnum(InkindType)
+  inkindType?: InkindType;
 }
