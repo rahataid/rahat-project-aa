@@ -71,8 +71,6 @@ class ContractSeed extends ContractLib {
 
     const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
 
-    console.log('------DEPLOYER ACCOUNT-----', deployerAccount);
-
     console.log(deployerAccount);
 
     console.log('----------Depolying Trigger Contract -------------------');

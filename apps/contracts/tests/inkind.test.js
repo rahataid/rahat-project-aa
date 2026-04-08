@@ -3,6 +3,7 @@ const { expect } = require('chai');
 describe('----- InkindToken Contract -----', function () {
   let inkindTokenContract;
   let admin;
+  let newAdmin;
   let vendor1;
   let rahatDonorContract;
   let forwarderContract;

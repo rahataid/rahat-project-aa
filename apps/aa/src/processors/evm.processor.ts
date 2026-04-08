@@ -755,7 +755,7 @@ export class EVMProcessor {
         );
         const inkindTxHash = await redeemInkind.wait();
         this.logger.log(
-          `Inkind redeemed successfully. Transaction: ${inkindTxHash.transactionHash}`,
+          `Inkind redeemed successfully. Transaction: ${inkindTxHash.hash}`,
           EVMProcessor.name
         ); 
         txHash = inkindTxHash.hash;

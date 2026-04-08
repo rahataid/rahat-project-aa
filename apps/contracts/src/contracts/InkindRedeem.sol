@@ -31,7 +31,7 @@ contract Inkind is IInkind, AccessManaged {
     mapping(address => address) public beneficiaryVendors; // Mapping to track the vendor associated with each beneficiary
 
     /// @notice Function to redeem inkind tokens for a beneficiary from a vendor
-    /// @param _inkind The address of the inkind token being redeemed
+    /// @param _inkind The byte16 array of the inkind token being redeemed
     /// @param _vendor The address of the vendor from which the inkind token is being redeemed
     /// @param _beneficiary The address of the beneficiary redeeming the inkind token
     function redeemInkind(
@@ -46,6 +46,6 @@ contract Inkind is IInkind, AccessManaged {
         }
 
         beneficiaryVendors[_beneficiary] = _vendor; // Associate the beneficiary with the vendor
-        IRahatToken(defaultToken).mint(_vendor, _inkindsValue); // Mint tokens for the beneficiary
+        IRahatToken(defaultToken).mint(_vendor, _inkindsValue); // Mint tokens for the vendor
     }
 }

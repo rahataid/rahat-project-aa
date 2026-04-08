@@ -5,11 +5,13 @@ import { getQueueToken } from '@nestjs/bull';
 import { InkindsService } from './inkinds.service';
 import {
   InkindType,
-  InkindTxStatus,
   InkindStockMovementType,
 } from '@prisma/client';
 import { BeneficiaryInkindRedeemDto } from './dto/beneficiaryInkindRedeem.dto';
 import { BQUEUE, JOBS } from '../constants';
+import {
+  InkindTxStatus,
+} from './dto/inkind.dto';
 
 describe('InkindsService - Inkind Redemption', () => {
   let service: InkindsService;
