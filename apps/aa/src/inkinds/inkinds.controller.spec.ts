@@ -347,7 +347,7 @@ describe('InkindsController', () => {
 
       mockInkindsService.getAllStockMovements.mockResolvedValue(expectedResult);
 
-      const result = await controller.getAllStockMovements();
+      const result = await controller.getAllStockMovements({ page: 1, perPage: 10 });
 
       expect(result).toEqual(expectedResult);
       expect(mockInkindsService.getAllStockMovements).toHaveBeenCalled();
@@ -357,7 +357,7 @@ describe('InkindsController', () => {
       const error = new Error('Database connection failed');
       mockInkindsService.getAllStockMovements.mockRejectedValue(error);
 
-      await expect(controller.getAllStockMovements()).rejects.toThrow(
+      await expect(controller.getAllStockMovements({ page: 1, perPage: 10 })).rejects.toThrow(
         'Database connection failed'
       );
     });
@@ -365,7 +365,7 @@ describe('InkindsController', () => {
     it('should return empty array when no stock movements exist', async () => {
       mockInkindsService.getAllStockMovements.mockResolvedValue([]);
 
-      const result = await controller.getAllStockMovements();
+      const result = await controller.getAllStockMovements({ page: 1, perPage: 10 });
 
       expect(result).toEqual([]);
       expect(mockInkindsService.getAllStockMovements).toHaveBeenCalled();
@@ -413,11 +413,14 @@ describe('InkindsController', () => {
   });
 
   describe('assignGroupInkind', () => {
+    const mockUser = { id: 1, userId: 1, uuid: 'user-uuid', name: 'Admin', email: 'a@b.com', phone: null, wallet: '0xabc' };
+
     it('should assign group inkind successfully', async () => {
       const assignGroupInkindDto: AssignGroupInkindDto = {
         inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         groupId: 'group-uuid-123',
         quantity: 2,
+        user: mockUser,
       };
 
       const expectedResult = {
@@ -439,6 +442,7 @@ describe('InkindsController', () => {
       const assignGroupInkindDto: AssignGroupInkindDto = {
         inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         groupId: 'group-uuid-123',
+        user: mockUser,
       };
 
       const expectedResult = {
@@ -461,6 +465,7 @@ describe('InkindsController', () => {
         inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         groupId: 'group-uuid-123',
         quantity: 100,
+        user: mockUser,
       };
 
       const error = new Error('Not enough stock available');
@@ -476,6 +481,7 @@ describe('InkindsController', () => {
         inkindId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         groupId: 'group-uuid-123',
         quantity: 1,
+        user: mockUser,
       };
 
       const error = new Error('Inkind is already assigned to this group');
