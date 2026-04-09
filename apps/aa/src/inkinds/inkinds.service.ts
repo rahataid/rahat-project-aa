@@ -11,6 +11,7 @@ import {
   UserObject,
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
+  InkindTxStatus,
 } from './dto/inkind.dto';
 import {
   AddInkindStockDto,
@@ -32,9 +33,12 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
+import { ChainService } from '../chain/chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -46,6 +50,9 @@ export class InkindsService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private configService: ConfigService,
+    @Inject(CHAIN_SERVICE)
+    private readonly chainService: ChainService,
+    // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -1277,6 +1284,26 @@ export class InkindsService {
         return [...preDefinedResults, ...walkInResults];
       });
 
+      const batchedInkinds = inkinds.map((inkind) => inkind.uuid);
+
+      try {
+        this.logger.log(
+          `Enqueuing contract job for inkind redemption: beneficiary=${walletAddress}, vendor=${
+            user.wallet
+          }, inkinds=${batchedInkinds.join(', ')}`
+        );
+        this.chainService.redeemInkind({
+          beneficiaryAddress: walletAddress,
+          vendorAddress: user.wallet,
+          inkinds: batchedInkinds,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue contract job for inkind redemption: ${error.message}`,
+          error.stack
+        );
+      }
+
       this.logger.log(
         `Successfully redeemed ${redemptionResults.length} inkinds for beneficiary: ${walletAddress}`
       );
@@ -1288,6 +1315,45 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to redeem inkinds for beneficiary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateRedeemInkindTxHash(
+    inkindUuid: string[],
+    txHash: string,
+    beneficiaryWallet: string
+  ) {
+    try {
+      this.logger.log(
+        `Updating redemption txHash for beneficiary: ${beneficiaryWallet}, inkindUuids: ${inkindUuid.join(
+          ', '
+        )}`
+      );
+
+      await this.prisma.beneficiaryInkindRedemption.updateMany({
+        where: {
+          beneficiaryWallet,
+          groupInkind: {
+            inkindId: { in: inkindUuid },
+          },
+        },
+        data: { txHash, status: InkindTxStatus.COMPLETED },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for redemptions of beneficiary: ${beneficiaryWallet}`
+      );
+
+      return {
+        success: true,
+        message: 'Redemption txHash updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update redemption txHash for beneficiary: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
@@ -1471,6 +1537,7 @@ export class InkindsService {
           groupInkindId: item.groupInkindUuid,
           quantity: quantityPerBeneficiary,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 
@@ -1597,6 +1664,7 @@ export class InkindsService {
           groupInkindId: groupInkindUuid,
           quantity: 1,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 
