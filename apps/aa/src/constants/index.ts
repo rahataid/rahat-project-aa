@@ -294,6 +294,9 @@ export const JOBS = {
   SMS: {
     SEND_SMS: 'aa.jobs.sms.sendSms',
   },
+  CHAIN: {
+    REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+  }
 };
 
 export const EVENTS = {
