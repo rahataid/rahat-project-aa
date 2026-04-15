@@ -4,7 +4,7 @@ import { RpcException } from '@nestjs/microservices';
 import { AppService } from '../app/app.service';
 import { IPaymentProvider } from '../payouts/dto/types';
 import { CipsApiResponse, CipsResponseData } from './dto/types';
-import { FSPOfframpDetails, FSPPayoutDetails, FSPManualPayoutDetails } from '../processors/types';
+import { FSPOfframpDetails, FSPPayoutDetails } from '../processors/types';
 import { InjectQueue } from '@nestjs/bull';
 import { BQUEUE, JOBS } from '../constants';
 import { Queue } from 'bull';
@@ -67,19 +67,19 @@ export class OfframpService {
         data: IPaymentProvider[];
       }>(`${offrampSettings.url}/payment-provider`, {
         headers: {
-          'APP_ID': offrampSettings.appId,
+          APP_ID: offrampSettings.appId,
         },
       });
 
       return [
         ...paymentProviders,
-          {
-            "id": "manual-bank-transfer",
-            "name": "Manual Bank Transfer", 
-            "type": "manual_bank_transfer",
-            "createdAt": "2025-01-27T10:00:00.000Z",
-            "updatedAt": "2025-01-27T10:00:00.000Z"
-        }
+        {
+          id: 'manual-bank-transfer',
+          name: 'Manual Bank Transfer',
+          type: 'manual_bank_transfer',
+          createdAt: '2025-01-27T10:00:00.000Z',
+          updatedAt: '2025-01-27T10:00:00.000Z',
+        },
       ];
     } catch (error) {
       throw new RpcException(
@@ -101,8 +101,8 @@ export class OfframpService {
         data;
       }>(`${url}/app/${appId}`, {
         headers: {
-            'APP_ID': appId,
-        }
+          APP_ID: appId,
+        },
       });
       console.log(data);
 
@@ -120,7 +120,7 @@ export class OfframpService {
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
     console.log('#'.repeat(100));
-    console.log("Starting to instantiate offramp service");
+    console.log('Starting to instantiate offramp service');
     console.log('#'.repeat(100));
     this.logger.log(
       `Initiating instant offramp to ${url}/offramp-request/instant`
@@ -133,13 +133,13 @@ export class OfframpService {
         offrampPayload,
         {
           headers: {
-            'APP_ID': appId,
+            APP_ID: appId,
           },
         }
       );
 
       console.log('#'.repeat(100));
-      console.log("Offramp service instantiated successfully");
+      console.log('Offramp service instantiated successfully');
       console.log('#'.repeat(100));
       return data;
     } catch (error) {
@@ -151,12 +151,14 @@ export class OfframpService {
     }
   }
 
-  async addBulkToOfframpQueue(payload: (FSPOfframpDetails | FSPPayoutDetails)[]) {
+  async addBulkToOfframpQueue(
+    payload: (FSPOfframpDetails | FSPPayoutDetails)[]
+  ) {
     const result = await this.offrampQueue.addBulk(
       payload.map((payload) => ({
         name: JOBS.OFFRAMP.INSTANT_OFFRAMP,
         data: payload,
-        opts: { ...this.offrampQueueOpts},
+        opts: { ...this.offrampQueueOpts },
       }))
     );
 
@@ -183,19 +185,17 @@ export class OfframpService {
     );
   }
 
-  async addBulkToManualPayoutQueue(payload: FSPManualPayoutDetails[]) {
+  async addBulkToManualPayoutQueue(payload: { payoutUUID: string }) {
     const result = await this.offrampQueue.add(
       JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT,
       payload,
-      { ...this.offrampQueueOpts }
+      { ...this.offrampQueueOpts, delay: 2000 }
     );
-
-    this.logger.log(`Added ${payload.length} manual payout jobs to offramp queue`);
 
     return result;
   }
 
-  async addToManualPayoutQueue(payload: FSPManualPayoutDetails[]) {
+  async addToManualPayoutQueue(payload: { payoutUUID: string }) {
     return await this.addBulkToManualPayoutQueue(payload);
   }
 }

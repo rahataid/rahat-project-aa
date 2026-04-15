@@ -141,6 +141,10 @@ describe('VendorsModule', () => {
           provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
           useValue: mockBatchTransferQueue,
         },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
+        },
       ],
     }).compile();
 
@@ -258,6 +262,10 @@ describe('VendorsModule', () => {
           provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
           useValue: mockBatchTransferQueue,
         },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
+        },
       ],
     }).compile();
 
@@ -314,6 +322,10 @@ describe('VendorsModule', () => {
         {
           provide: getQueueToken(BQUEUE.BATCH_TRANSFER),
           useValue: mockBatchTransferQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.VENDOR_CVA),
+          useValue: mockVendorCVAPayoutQueue,
         },
       ],
     }).compile();

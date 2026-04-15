@@ -7,6 +7,10 @@ import {
 } from 'class-validator';
 import { PayoutType, PayoutMode } from '@prisma/client';
 
+export interface PayoutCreatedByUser {
+  name: string;
+}
+
 export class CreatePayoutDto {
   @IsEnum(PayoutType)
   @IsNotEmpty()
@@ -32,5 +36,5 @@ export class CreatePayoutDto {
   payoutProcessorId?: string;
 
   @IsOptional()
-  user?: any;
+  user?: PayoutCreatedByUser;
 }

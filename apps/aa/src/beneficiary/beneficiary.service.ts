@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
@@ -20,6 +20,7 @@ import { GroupPurpose, Prisma } from '@prisma/client';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
+import { PayoutsService } from '../payouts/payouts.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -42,7 +43,9 @@ export class BeneficiaryService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => PayoutsService))
+    private readonly payoutService: PayoutsService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -214,7 +217,7 @@ export class BeneficiaryService {
     res.data = res.data.map((group) => {
       let updatedGroup = group;
       benfGroups.data.forEach((benfGroup: any) => {
-        if (group.uuid === benfGroup.uuid) {
+        if (group?.uuid === benfGroup?.uuid) {
           updatedGroup = {
             ...group,
             tokensReserved: benfGroup.tokensReserved,
@@ -387,19 +390,70 @@ export class BeneficiaryService {
         })),
       });
 
+    this.logger.debug(
+      `New Beneficiary group ${group.name} added to project with ${groupedBeneficiaries.count} beneficiaries.`
+    );
+
     return {
       group,
       groupedBeneficiaries,
     };
   }
 
+  async checkIsTokenAlreadyAssigned(groupId: UUID) {
+    const group = await this.getOneGroup(groupId);
+
+    const benfIdsAndWalletAddress = group.groupedBeneficiaries.map(
+      (d: any) => ({
+        uuid: d?.Beneficiary?.uuid,
+        walletAddress: d?.Beneficiary?.walletAddress,
+      })
+    );
+
+    const tokenAssignedBenfWallet: string[] = [];
+
+    for (const benf of benfIdsAndWalletAddress) {
+      const tokenAssignedGroups = await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          tokensReserved: { isNot: null },
+          beneficiaries: {
+            some: { beneficiaryId: { equals: benf.uuid } },
+          },
+        },
+      });
+
+      if (tokenAssignedGroups.length > 0) {
+        tokenAssignedBenfWallet.push(benf.walletAddress);
+      }
+    }
+
+    if (tokenAssignedBenfWallet.length > 0) {
+      return {
+        isAssignable: false,
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        wallets: tokenAssignedBenfWallet,
+        groupName: group.name,
+      };
+    }
+
+    return {
+      isAssignable: true,
+      status: 'success',
+      message: 'No tokens have been assigned yet. Tokens can be assigned.',
+      groupName: group.name,
+    };
+  }
+
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const {
       beneficiaryGroupId,
-      numberOfTokens,
       title,
       totalTokensReserved,
       user,
+      isPayoutIntegrated,
+      params,
     } = payload;
 
     const isAlreadyReserved =
@@ -430,72 +484,18 @@ export class BeneficiaryService {
       );
     }
 
-    return this.prisma.$transaction(async () => {
-      const group = await this.getOneGroup(beneficiaryGroupId as UUID);
+    const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
+      beneficiaryGroupId as UUID
+    );
 
-      if (!group || !group?.groupedBeneficiaries) {
-        throw new RpcException(
-          'No beneficiaries found in the specified group.'
-        );
-      }
+    if (!tokenAssignmentCheck.isAssignable) {
+      return tokenAssignmentCheck;
+    }
 
-      const benfIdsAndWalletAddress = group?.groupedBeneficiaries?.map(
-        (d: any) => {
-          return {
-            uuid: d?.Beneficiary?.uuid,
-            walletAddress: d?.Beneficiary?.walletAddress,
-          };
-        }
-      );
-
-      const tokenAssignedBenfWallet = [];
-
-      for (const benf of benfIdsAndWalletAddress) {
-        const tokenAssignedGroup = await this.prisma.beneficiaryGroups.findMany(
-          {
-            where: {
-              tokensReserved: {
-                isNot: null,
-              },
-              beneficiaries: {
-                some: {
-                  beneficiaryId: { equals: benf.uuid },
-                },
-              },
-            },
-          }
-        );
-        if (tokenAssignedGroup.length > 0) {
-          tokenAssignedBenfWallet.push(benf.walletAddress);
-        }
-      }
-
-      if (tokenAssignedBenfWallet.length > 0) {
-        // Handle the case where tokens are already assigned to some beneficiaries
-        return {
-          status: 'error',
-          message:
-            'Tokens have already been assigned to the following beneficiaries wallet addresses',
-          wallets: tokenAssignedBenfWallet,
-          groupName: benfGroup.name,
-        };
-      }
-
-      // await this.prisma.beneficiary.updateMany({
-      //   where: {
-      //     uuid: {
-      //       in: benfIds,
-      //     },
-      //   },
-      //   data: {
-      //     benTokens: {
-      //       increment: numberOfTokens,
-      //     },
-      //   },
-      // });
-      // when disbursement is successful, we will update the benTokens not now
-
-      await this.prisma.beneficiaryGroupTokens.create({
+    // Tx definies a single transaction with a number of operations that either all succeed or all fail together
+    // Which is crucial for maintaining data integrity when reserving tokens and creating payouts.
+    return this.prisma.$transaction(async (tx) => {
+      const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
           groupId: beneficiaryGroupId,
@@ -504,12 +504,26 @@ export class BeneficiaryService {
         },
       });
 
+      if (isPayoutIntegrated && params) {
+        await this.payoutService.create(
+          {
+            type: params.type,
+            groupId: data.uuid,
+            mode: params.mode,
+            extras: params.extras,
+            payoutProcessorId: params.payoutProcessorId,
+            status: params.status,
+            user: user,
+          },
+          tx as any
+        );
+      }
+
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
 
       return {
         status: 'success',
         message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
-        group,
       };
     });
   }
@@ -1008,6 +1022,61 @@ export class BeneficiaryService {
         error.response?.data || error.message
       );
       throw new Error('Failed to fetch balances');
+    }
+  }
+
+  async createBeneficiaryWithDbTransaction(dto: {
+    action: string;
+    dbTxId: string;
+    payload: any;
+  }) {
+    this.logger.log(
+      `Creating beneficiary with database transaction - Action: ${dto.action}`
+    );
+
+    const { action, dbTxId, payload } = dto;
+    const aaDbTxId = `aa_tx_${dbTxId}`;
+
+    const actionHandlers: Record<string, () => Promise<string>> = {
+      BEGIN: async () => {
+        await this.prisma.$executeRawUnsafe('BEGIN;');
+        return 'Transaction started';
+      },
+      CREATE: async () => {
+        await this.prisma.beneficiary.create({ data: payload });
+        return 'Beneficiary created';
+      },
+      PREPARE: async () => {
+        await this.prisma.$executeRawUnsafe(
+          `PREPARE TRANSACTION '${aaDbTxId}';`
+        );
+        return 'Transaction prepared';
+      },
+      COMMIT: async () => {
+        await this.prisma.$executeRawUnsafe(`COMMIT PREPARED '${aaDbTxId}';`);
+        return 'Transaction committed';
+      },
+      ROLLBACK: async () => {
+        try {
+          await this.prisma.$executeRawUnsafe(
+            `ROLLBACK PREPARED '${aaDbTxId}';`
+          );
+        } catch {
+          await this.prisma.$executeRawUnsafe('ROLLBACK;');
+        }
+        return 'Transaction rolled back';
+      },
+    };
+
+    const handler = actionHandlers[action];
+    if (!handler) throw new Error('Invalid action');
+
+    try {
+      const message = await handler();
+      this.logger.log(message);
+      return { isSuccess: true, message };
+    } catch (error) {
+      throw new Error(`Database transaction failed: ${error.message}`);
     }
   }
 }

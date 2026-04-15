@@ -70,6 +70,7 @@ describe('PayoutsService', () => {
       count: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
       create: jest.fn(),
@@ -999,6 +1000,1370 @@ describe('PayoutsService', () => {
       await expect(service.downloadPayoutLogs(payoutUUID)).rejects.toThrow(
         'Database error'
       );
+    });
+  });
+
+  describe('syncPayoutStatus', () => {
+    it('should update payout status when status changes', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        status: 'PENDING',
+        beneficiaryRedeem: [],
+      } as any;
+
+      mockPrismaService.payouts.update.mockResolvedValue({
+        ...mockPayout,
+        status: 'COMPLETED',
+      });
+
+      await service.syncPayoutStatus(mockPayout, 'COMPLETED');
+
+      expect(mockPrismaService.payouts.update).toHaveBeenCalledWith({
+        where: { uuid: 'payout-123' },
+        data: { status: 'COMPLETED' },
+      });
+      expect(mockPayout.status).toBe('COMPLETED');
+    });
+
+    it('should not update payout status when status is same', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        status: 'COMPLETED',
+        beneficiaryRedeem: [],
+      } as any;
+
+      await service.syncPayoutStatus(mockPayout, 'COMPLETED');
+
+      expect(mockPrismaService.payouts.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPayoutCompletedStatus', () => {
+    it('should return true for completed VENDOR payout', async () => {
+      const mockPayout = {
+        type: 'VENDOR',
+        beneficiaryRedeem: [{ isCompleted: true }, { isCompleted: true }],
+        beneficiaryGroupToken: {
+          beneficiaryGroup: {
+            beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+          },
+        },
+      } as any;
+
+      const result = await service.getPayoutCompletedStatus(mockPayout);
+      expect(result).toBe(true);
+    });
+
+    it('should return false for incomplete VENDOR payout', async () => {
+      const mockPayout = {
+        type: 'VENDOR',
+        beneficiaryRedeem: [{ isCompleted: true }],
+        beneficiaryGroupToken: {
+          beneficiaryGroup: {
+            beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+          },
+        },
+      } as any;
+
+      const result = await service.getPayoutCompletedStatus(mockPayout);
+      expect(result).toBe(false);
+    });
+
+    it('should return true for completed FSP payout (2x redeems)', async () => {
+      const mockPayout = {
+        type: 'FSP',
+        beneficiaryRedeem: [
+          { isCompleted: true },
+          { isCompleted: true },
+          { isCompleted: true },
+          { isCompleted: true },
+        ],
+        beneficiaryGroupToken: {
+          beneficiaryGroup: {
+            beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+          },
+        },
+      } as any;
+
+      const result = await service.getPayoutCompletedStatus(mockPayout);
+      expect(result).toBe(true);
+    });
+
+    it('should return false for incomplete FSP payout', async () => {
+      const mockPayout = {
+        type: 'FSP',
+        beneficiaryRedeem: [{ isCompleted: true }, { isCompleted: false }],
+        beneficiaryGroupToken: {
+          beneficiaryGroup: {
+            beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+          },
+        },
+      } as any;
+
+      const result = await service.getPayoutCompletedStatus(mockPayout);
+      expect(result).toBe(false);
+    });
+
+    it('should return false when no redeems exist', async () => {
+      const mockPayout = {
+        type: 'FSP',
+        beneficiaryRedeem: [],
+        beneficiaryGroupToken: {
+          beneficiaryGroup: {
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      } as any;
+
+      const result = await service.getPayoutCompletedStatus(mockPayout);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('fetchBeneficiaryPayoutDetails', () => {
+    it('should return beneficiary payout details successfully', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'FSP',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          beneficiaryGroup: {
+            _count: { beneficiaries: 2 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0xWallet1',
+                  phone: '1234567890',
+                  extras: {
+                    bank_ac_name: 'John Doe',
+                    bank_ac_number: '12345',
+                    bank_name: 'Bank A',
+                  },
+                },
+              },
+              {
+                beneficiary: {
+                  uuid: 'ben-2',
+                  walletAddress: '0xWallet2',
+                  phone: null,
+                  extras: {
+                    phone: '0987654321',
+                    bank_ac_name: 'Jane Doe',
+                    bank_ac_number: '67890',
+                    bank_name: 'Bank B',
+                  },
+                },
+              },
+            ],
+          },
+        },
+        beneficiaryRedeem: [],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      const result = await service.fetchBeneficiaryPayoutDetails('payout-123');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].walletAddress).toBe('0xWallet1');
+      expect(result[0].amount).toBe(50);
+      expect(result[0].bankDetails.accountName).toBe('John Doe');
+    });
+
+    it('should return empty array when no beneficiaries found', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        beneficiaryGroupToken: null,
+        beneficiaryRedeem: [],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      const result = await service.fetchBeneficiaryPayoutDetails('payout-123');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should throw error when some beneficiaries have missing wallet addresses', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'FSP',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          beneficiaryGroup: {
+            _count: { beneficiaries: 2 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0xWallet1',
+                  extras: {},
+                },
+              },
+              {
+                beneficiary: {
+                  uuid: 'ben-2',
+                  walletAddress: null, // missing wallet
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+        beneficiaryRedeem: [],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(
+        service.fetchBeneficiaryPayoutDetails('payout-123')
+      ).rejects.toThrow('Some beneficiaries have missing wallet addresses');
+    });
+  });
+
+  describe('registerTokenTransferRequest', () => {
+    it('should register token transfer request successfully', async () => {
+      const payload = {
+        uuid: 'payout-123',
+        offrampWalletAddress: '0xOfframp',
+        BeneficiaryPayoutDetails: [
+          {
+            amount: 50,
+            walletAddress: '0xWallet1',
+            phoneNumber: '123',
+            bankDetails: {
+              accountName: 'John',
+              accountNumber: '12345',
+              bankName: 'Bank A',
+            },
+          },
+        ],
+        payoutProcessorId: 'processor-1',
+        offrampType: 'bank_transfer',
+      };
+
+      mockStellarService.addBulkToTokenTransferQueue.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.registerTokenTransferRequest(payload);
+
+      expect(
+        mockStellarService.addBulkToTokenTransferQueue
+      ).toHaveBeenCalledWith([
+        {
+          amount: 50,
+          beneficiaryWalletAddress: '0xWallet1',
+          beneficiaryBankDetails:
+            payload.BeneficiaryPayoutDetails[0].bankDetails,
+          payoutUUID: 'payout-123',
+          payoutProcessorId: 'processor-1',
+          offrampWalletAddress: '0xOfframp',
+          offrampType: 'bank_transfer',
+        },
+      ]);
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('triggerPayout', () => {
+    it('should trigger payout successfully', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'FSP',
+        isPayoutTriggered: false,
+        payoutProcessorId: 'processor-1',
+        extras: {
+          paymentProviderType: 'bank_transfer',
+          paymentProviderName: 'Bank Transfer',
+        },
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            _count: { beneficiaries: 2 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0xWallet1',
+                  phone: '123',
+                  extras: {
+                    bank_ac_name: 'John',
+                    bank_ac_number: '12345',
+                    bank_name: 'Bank A',
+                  },
+                },
+              },
+              {
+                beneficiary: {
+                  uuid: 'ben-2',
+                  walletAddress: '0xWallet2',
+                  phone: '456',
+                  extras: {
+                    bank_ac_name: 'Jane',
+                    bank_ac_number: '67890',
+                    bank_name: 'Bank B',
+                  },
+                },
+              },
+            ],
+          },
+        },
+        beneficiaryRedeem: [],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+      mockOfframpService.getOfframpWalletAddress.mockResolvedValue('0xOfframp');
+      mockStellarService.addBulkToTokenTransferQueue.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.triggerPayout('payout-123', {
+        name: 'Admin',
+      });
+
+      expect(result).toBe(
+        'Payout verification initiated successfully. It may take some time to complete. If a payout verification fails, you can retry it by re-clicking "Verify Manual Payout" button.'
+      );
+      expect(mockStellarService.addBulkToTokenTransferQueue).toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        EVENTS.NOTIFICATION.CREATE,
+        expect.any(Object)
+      );
+    });
+
+    it('should throw error when payout already triggered', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        isPayoutTriggered: true,
+        type: 'FSP',
+        status: 'PENDING',
+        beneficiaryRedeem: [{ id: 1, status: 'PENDING', isCompleted: false }],
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 100,
+          beneficiaryGroup: {
+            _count: { beneficiaries: 1 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(service.triggerPayout('payout-123')).rejects.toThrow(
+        "Payout with UUID 'payout-123' has already been triggered"
+      );
+    });
+
+    it('should throw error when tokens have not been disbursed to the beneficiary group', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        isPayoutTriggered: false,
+        type: 'FSP',
+        status: 'PENDING',
+        payoutProcessorId: 'processor-1',
+        beneficiaryRedeem: [],
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 100,
+          isDisbursed: false,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            _count: { beneficiaries: 1 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(service.triggerPayout('payout-123')).rejects.toThrow(
+        `Payout cannot be triggered as tokens have not been disbursed to the beneficiary group "Test Group" yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    });
+
+    it('should throw error for manual-bank-transfer payout', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        isPayoutTriggered: false,
+        type: 'FSP',
+        status: 'PENDING',
+        payoutProcessorId: 'manual-bank-transfer',
+        beneficiaryRedeem: [],
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            _count: { beneficiaries: 1 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(service.triggerPayout('payout-123')).rejects.toThrow(
+        'Manual bank transfer payouts cannot be triggered'
+      );
+    });
+  });
+
+  describe('triggerOneFailedPayoutRequest', () => {
+    it('should process failed token transfer request', async () => {
+      const mockRedeemRequest = {
+        uuid: 'redeem-123',
+        isCompleted: false,
+        transactionType: 'TOKEN_TRANSFER',
+        status: 'TOKEN_TRANSACTION_FAILED',
+        amount: 50,
+        beneficiaryWalletAddress: '0xWallet1',
+        payoutId: 'payout-123',
+        fspId: 'fsp-123',
+        Beneficiary: {
+          phone: '123',
+          extras: {
+            bank_ac_name: 'John',
+            bank_ac_number: '12345',
+            bank_name: 'Bank A',
+          },
+        },
+        info: {
+          offrampWalletAddress: '0xOfframp',
+          offrampType: 'bank_transfer',
+        },
+      };
+
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(
+        mockRedeemRequest
+      );
+      mockStellarService.addToTokenTransferQueue.mockResolvedValue({
+        success: true,
+      });
+      mockBeneficiaryService.updateBeneficiaryRedeem.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.triggerOneFailedPayoutRequest({
+        beneficiaryRedeemUuid: 'redeem-123',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Token transfer triggered successfully');
+    });
+
+    it('should process failed fiat transfer request', async () => {
+      const mockRedeemRequest = {
+        uuid: 'redeem-123',
+        isCompleted: false,
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_FAILED',
+        amount: 50,
+        beneficiaryWalletAddress: '0xWallet1',
+        payoutId: 'payout-123',
+        fspId: 'fsp-123',
+        Beneficiary: {
+          phone: '123',
+          extras: {
+            bank_ac_name: 'John',
+            bank_ac_number: '12345',
+            bank_name: 'Bank A',
+          },
+        },
+        info: {
+          offrampWalletAddress: '0xOfframp',
+          offrampType: 'bank_transfer',
+        },
+      };
+
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(
+        mockRedeemRequest
+      );
+      mockOfframpService.addToOfframpQueue.mockResolvedValue({ success: true });
+      mockBeneficiaryService.updateBeneficiaryRedeem.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.triggerOneFailedPayoutRequest({
+        beneficiaryRedeemUuid: 'redeem-123',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Fiat payout triggered successfully');
+    });
+
+    it('should throw error when redeem request not found', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(null);
+
+      await expect(
+        service.triggerOneFailedPayoutRequest({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' not found"
+      );
+    });
+
+    it('should throw error when redeem is already completed', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue({
+        uuid: 'redeem-123',
+        isCompleted: true,
+      });
+
+      await expect(
+        service.triggerOneFailedPayoutRequest({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' is already completed"
+      );
+    });
+
+    it('should throw error for VENDOR_REIMBURSEMENT type', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue({
+        uuid: 'redeem-123',
+        isCompleted: false,
+        transactionType: 'VENDOR_REIMBURSEMENT',
+      });
+
+      await expect(
+        service.triggerOneFailedPayoutRequest({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' is not a FSP Payout request"
+      );
+    });
+
+    it('should throw error when token transfer is already initiated', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue({
+        uuid: 'redeem-123',
+        isCompleted: false,
+        transactionType: 'TOKEN_TRANSFER',
+        status: 'TOKEN_TRANSACTION_INITIATED',
+      });
+
+      await expect(
+        service.triggerOneFailedPayoutRequest({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' is already initiated"
+      );
+    });
+
+    it('should throw error when fiat transfer is already initiated', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue({
+        uuid: 'redeem-123',
+        isCompleted: false,
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_INITIATED',
+      });
+
+      await expect(
+        service.triggerOneFailedPayoutRequest({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' is already initiated"
+      );
+    });
+  });
+
+  describe('triggerFailedPayoutRequest', () => {
+    it('should throw error when payoutUUID is not provided', async () => {
+      await expect(
+        service.triggerFailedPayoutRequest({ payoutUUID: '' })
+      ).rejects.toThrow('Payout UUID is required for failed payout request');
+    });
+
+    it('should throw error when payout is not triggered yet', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'FSP',
+        isPayoutTriggered: false,
+        beneficiaryRedeem: [],
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          beneficiaryGroup: { _count: { beneficiaries: 1 } },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      await expect(
+        service.triggerFailedPayoutRequest({ payoutUUID: 'payout-123' })
+      ).rejects.toThrow("Payout with UUID 'payout-123' has not been triggered");
+    });
+  });
+
+  describe('getPayoutLog', () => {
+    it('should return payout log successfully', async () => {
+      const mockLog = {
+        uuid: 'redeem-123',
+        beneficiaryWalletAddress: '0xWallet1',
+        Beneficiary: { uuid: 'ben-1' },
+        payout: { uuid: 'payout-123' },
+        Vendor: null,
+      };
+
+      mockPrismaService.beneficiaryRedeem.findUnique.mockResolvedValue(mockLog);
+
+      const result = await service.getPayoutLog('redeem-123');
+
+      expect(result).toEqual(mockLog);
+      expect(
+        mockPrismaService.beneficiaryRedeem.findUnique
+      ).toHaveBeenCalledWith({
+        where: { uuid: 'redeem-123' },
+        include: {
+          Beneficiary: true,
+          payout: true,
+          Vendor: true,
+        },
+      });
+    });
+
+    it('should throw error when log not found', async () => {
+      mockPrismaService.beneficiaryRedeem.findUnique.mockResolvedValue(null);
+
+      await expect(service.getPayoutLog('redeem-123')).rejects.toThrow(
+        "Beneficiary redeem log with UUID 'redeem-123' not found"
+      );
+    });
+  });
+
+  describe('getPayoutLogs - VENDOR type', () => {
+    it('should return paginated vendor payout logs', async () => {
+      const mockPayout = { uuid: 'payout-123', type: 'VENDOR' };
+
+      mockPrismaService.payouts.findFirst.mockResolvedValue(mockPayout);
+      mockPrismaService.beneficiaryRedeem.count.mockResolvedValue(1);
+      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([
+        {
+          uuid: 'redeem-1',
+          beneficiaryWalletAddress: '0xWallet1',
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'COMPLETED',
+        },
+      ]);
+
+      const result = await service.getPayoutLogs({
+        payoutUUID: 'payout-123',
+        page: 1,
+        perPage: 10,
+        sort: 'createdAt',
+        order: 'desc',
+      });
+
+      expect(result.data).toBeDefined();
+    });
+  });
+
+  describe('update - edge cases', () => {
+    it('should throw error when payout not found for update', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.update('non-existent', { status: 'COMPLETED' })
+      ).rejects.toThrow("Payout with UUID 'non-existent' not found");
+    });
+  });
+
+  describe('calculatePayoutCompletionGap - edge cases', () => {
+    it('should return N/A when active year or river basin missing', async () => {
+      mockAppService.getSettings.mockResolvedValue({
+        value: { project_name: 'Test' }, // missing active_year and river_basin
+      });
+
+      const result = await service.calculatePayoutCompletionGap('payout-123');
+
+      expect(result).toBe('N/A');
+    });
+
+    it('should return N/A when activation phase not found', async () => {
+      mockAppService.getSettings.mockResolvedValue({
+        value: { active_year: '2024', river_basin: 'test-basin' },
+      });
+
+      mockClientProxy.send.mockReturnValue(of({ data: [] }));
+
+      const result = await service.calculatePayoutCompletionGap('payout-123');
+
+      expect(result).toBe('N/A');
+    });
+
+    it('should return N/A when activation phase is not active', async () => {
+      mockAppService.getSettings.mockResolvedValue({
+        value: { active_year: '2024', river_basin: 'test-basin' },
+      });
+
+      mockClientProxy.send.mockReturnValue(
+        of({ data: [{ name: 'ACTIVATION', isActive: false }] })
+      );
+
+      const result = await service.calculatePayoutCompletionGap('payout-123');
+
+      expect(result).toBe('N/A');
+    });
+  });
+
+  describe('create - additional scenarios', () => {
+    it('should create VENDOR ONLINE payout successfully', async () => {
+      const vendorOnlinePayoutDto = {
+        groupId: 'group-uuid-123',
+        type: PayoutType.VENDOR,
+        mode: PayoutMode.ONLINE,
+        status: 'PENDING',
+        user: { name: 'Admin User' },
+      };
+
+      const mockBeneficiaryGroup = {
+        uuid: 'group-uuid-123',
+        groupId: 'group-uuid-123',
+        numberOfTokens: 1000,
+        beneficiaryGroup: {
+          name: 'Test Group',
+          beneficiaries: [{ id: 'ben-1' }, { id: 'ben-2' }],
+        },
+      };
+
+      const mockCreatedPayout = {
+        uuid: 'payout-uuid-123',
+        type: PayoutType.VENDOR,
+        mode: PayoutMode.ONLINE,
+      };
+
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
+      mockPrismaService.payouts.findFirst.mockResolvedValue(null);
+      mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
+      mockVendorsService.processVendorOnlinePayout.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.create(vendorOnlinePayoutDto);
+
+      expect(result).toEqual(mockCreatedPayout);
+      expect(mockVendorsService.processVendorOnlinePayout).toHaveBeenCalledWith(
+        {
+          beneficiaryGroupUuid: 'group-uuid-123',
+          amount: '1000',
+        }
+      );
+    });
+
+    it('should create manual-bank-transfer payout successfully', async () => {
+      const manualPayoutDto = {
+        groupId: 'group-uuid-123',
+        type: PayoutType.FSP,
+        mode: PayoutMode.ONLINE,
+        payoutProcessorId: 'manual-bank-transfer',
+        status: 'PENDING',
+        user: { name: 'Admin User' },
+      };
+
+      const mockBeneficiaryGroup = {
+        uuid: 'group-uuid-123',
+        groupId: 'group-uuid-123',
+        numberOfTokens: 1000,
+        beneficiaryGroup: {
+          name: 'Test Group',
+          _count: { beneficiaries: 2 },
+          beneficiaries: [
+            {
+              beneficiary: {
+                uuid: 'ben-1',
+                walletAddress: '0xWallet1',
+                phone: '123',
+                extras: {
+                  bank_ac_name: 'John',
+                  bank_ac_number: '12345',
+                  bank_name: 'Bank A',
+                },
+              },
+            },
+            {
+              beneficiary: {
+                uuid: 'ben-2',
+                walletAddress: '0xWallet2',
+                phone: '456',
+                extras: {
+                  bank_ac_name: 'Jane',
+                  bank_ac_number: '67890',
+                  bank_name: 'Bank B',
+                },
+              },
+            },
+          ],
+        },
+      };
+
+      const mockCreatedPayout = {
+        uuid: 'payout-uuid-123',
+        type: PayoutType.FSP,
+        payoutProcessorId: 'manual-bank-transfer',
+      };
+
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        mockBeneficiaryGroup
+      );
+      mockPrismaService.payouts.findFirst.mockResolvedValue(null);
+      mockPrismaService.payouts.create.mockResolvedValue(mockCreatedPayout);
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        ...mockCreatedPayout,
+        beneficiaryGroupToken: mockBeneficiaryGroup,
+        beneficiaryRedeem: [],
+      });
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+      mockOfframpService.addToManualPayoutQueue.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.create(manualPayoutDto);
+
+      expect(result).toEqual(mockCreatedPayout);
+      expect(mockOfframpService.addToManualPayoutQueue).toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyManualPayout', () => {
+    it('should throw error when payoutUUID is empty', async () => {
+      await expect(service.verifyManualPayout('')).rejects.toThrow(
+        'Payout verification failed: Payout UUID is required but was not provided'
+      );
+    });
+
+    it('should throw error when payoutUUID is invalid', async () => {
+      await expect(service.verifyManualPayout('invalid-uuid')).rejects.toThrow(
+        "Payout verification failed: Invalid UUID format provided: 'invalid-uuid'"
+      );
+    });
+
+    it('should throw error when payout not found', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000')
+      ).rejects.toThrow(
+        "Payout verification failed: Payout with UUID '123e4567-e89b-12d3-a456-426614174000' not found"
+      );
+    });
+
+    it('should throw error when tokens have not been disbursed to the beneficiary group', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: false,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000')
+      ).rejects.toThrow(
+        `Payout cannot be verified as tokens have not been disbursed to the beneficiary group "Test Group" yet. Please wait until the fund disbursement is completed and try again later.`
+      );
+    });
+
+    it('should throw error when no beneficiaries found', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: null,
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000')
+      ).rejects.toThrow('Payout verification failed: No beneficiaries found');
+    });
+
+    it('should throw error when data is invalid', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000', null)
+      ).rejects.toThrow(
+        'Payout verification failed: Invalid or missing payout data provided'
+      );
+    });
+
+    it('should throw error when data is empty object', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000', {})
+      ).rejects.toThrow('Payout verification failed: No payout records found');
+    });
+
+    it('should throw error when bank account number missing in row', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000', {
+          row1: {
+            'Bank Account Holder Name ': 'John Doe',
+            'Transaction Status': 'completed',
+            'Bank Account Number': '',
+            Amount: 100,
+            Remark: '',
+            'Bank Name': '',
+            'Approval Date': '',
+            Date: '',
+          } as any,
+        })
+      ).rejects.toThrow(
+        'Payout verification failed: Missing bank account number in row 1'
+      );
+    });
+
+    it('should throw error when bank account holder name missing in row', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000', {
+          row1: {
+            'Bank Account Number': '12345',
+            'Transaction Status': 'completed',
+            'Bank Account Holder Name ': '',
+            Amount: 100,
+            Remark: '',
+            'Bank Name': '',
+            'Approval Date': '',
+            Date: '',
+          } as any,
+        })
+      ).rejects.toThrow(
+        'Payout verification failed: Missing bank account holder name in row 1'
+      );
+    });
+
+    it('should throw error when no beneficiaries matched', async () => {
+      mockPrismaService.payouts.findUnique.mockResolvedValue({
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [{ id: 'ben-1' }],
+          },
+        },
+      });
+
+      mockPrismaService.beneficiary.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.verifyManualPayout('123e4567-e89b-12d3-a456-426614174000', {
+          row1: {
+            'Bank Account Number': '12345',
+            'Bank Account Holder Name ': 'John Doe',
+            'Transaction Status': 'completed',
+            Amount: 100,
+            Remark: '',
+            'Bank Name': 'Test Bank',
+            'Approval Date': '2024-01-01',
+            Date: '2024-01-01',
+          },
+        })
+      ).rejects.toThrow(
+        'Payout verification failed: No beneficiary bank accounts matched'
+      );
+    });
+
+    it('should verify manual payout successfully', async () => {
+      const mockPayout = {
+        uuid: '123e4567-e89b-12d3-a456-426614174000',
+        beneficiaryGroupToken: {
+          numberOfTokens: 100,
+          isDisbursed: true,
+          beneficiaryGroup: {
+            name: 'Test Group',
+            beneficiaries: [
+              {
+                beneficiary: {
+                  walletAddress: '0xWallet1',
+                  extras: { bank_ac_number: '12345' },
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockPrismaService.beneficiary.findMany.mockResolvedValue([
+        {
+          uuid: 'ben-1',
+          walletAddress: '0xWallet1',
+          phone: '123',
+          extras: {
+            bank_ac_number: '12345',
+            bank_ac_name: 'John',
+            bank_name: 'Bank A',
+          },
+          BeneficiaryRedeem: [{ uuid: 'redeem-1' }],
+        },
+      ]);
+      mockStellarQueue.add.mockResolvedValue({ id: 'job-1' });
+
+      const result = await service.verifyManualPayout(
+        '123e4567-e89b-12d3-a456-426614174000',
+        {
+          row1: {
+            'Bank Account Number': '12345',
+            'Bank Account Holder Name ': 'John Doe',
+            'Transaction Status': 'completed',
+            Date: '2024-01-01',
+            'Approval Date': '2024-01-02',
+            Amount: 100,
+            Remark: '',
+            'Bank Name': 'Test Bank',
+          },
+        }
+      );
+
+      expect(result.matched).toHaveLength(1);
+      expect(result.unmatched).toHaveLength(0);
+    });
+  });
+
+  describe('processOneFailedFiatPayout', () => {
+    it('should process one failed fiat payout successfully', async () => {
+      const mockRedeemRequest = {
+        uuid: 'redeem-123',
+        amount: 50,
+        beneficiaryWalletAddress: '0xWallet1',
+        payoutId: 'payout-123',
+        fspId: 'fsp-123',
+        Beneficiary: {
+          phone: '123',
+          extras: {
+            bank_ac_name: 'John',
+            bank_ac_number: '12345',
+            bank_name: 'Bank A',
+          },
+        },
+        info: {
+          offrampWalletAddress: '0xOfframp',
+          offrampType: 'bank_transfer',
+        },
+      };
+
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(
+        mockRedeemRequest
+      );
+      mockOfframpService.addToOfframpQueue.mockResolvedValue({ success: true });
+      mockBeneficiaryService.updateBeneficiaryRedeem.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.processOneFailedFiatPayout({
+        beneficiaryRedeemUuid: 'redeem-123',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Fiat payout triggered successfully');
+    });
+
+    it('should throw error when redeem request not found', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(null);
+
+      await expect(
+        service.processOneFailedFiatPayout({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        "Beneficiary redeem request with UUID 'redeem-123' not found"
+      );
+    });
+
+    it('should throw error when offramp wallet address missing', async () => {
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue({
+        uuid: 'redeem-123',
+        amount: 50,
+        beneficiaryWalletAddress: '0xWallet1',
+        Beneficiary: { extras: {} },
+        info: {},
+      });
+
+      await expect(
+        service.processOneFailedFiatPayout({
+          beneficiaryRedeemUuid: 'redeem-123',
+        })
+      ).rejects.toThrow(
+        'Offramp wallet address not found for beneficiary redeem request'
+      );
+    });
+  });
+
+  describe('processOneFailedTokenTransferPayout', () => {
+    it('should process one failed token transfer payout successfully', async () => {
+      const mockRedeemRequest = {
+        uuid: 'redeem-123',
+        amount: 50,
+        beneficiaryWalletAddress: '0xWallet1',
+        payoutId: 'payout-123',
+        fspId: 'fsp-123',
+        Beneficiary: {
+          phone: '123',
+          extras: {
+            bank_ac_name: 'John',
+            bank_ac_number: '12345',
+            bank_name: 'Bank A',
+          },
+        },
+        info: {
+          offrampWalletAddress: '0xOfframp',
+          offrampType: 'bank_transfer',
+        },
+      };
+
+      mockBeneficiaryService.getBeneficiaryRedeem.mockResolvedValue(
+        mockRedeemRequest
+      );
+      mockStellarService.addToTokenTransferQueue.mockResolvedValue({
+        success: true,
+      });
+      mockBeneficiaryService.updateBeneficiaryRedeem.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await service.processOneFailedTokenTransferPayout({
+        beneficiaryRedeemUuid: 'redeem-123',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Token transfer triggered successfully');
+    });
+  });
+
+  describe('findAll - edge cases', () => {
+    it('should handle findAll with COMPLETED status payouts', async () => {
+      const mockPayouts = [
+        {
+          uuid: 'payout-1',
+          type: PayoutType.FSP,
+          status: 'COMPLETED',
+          beneficiaryGroupToken: {
+            numberOfTokens: 1000,
+            groupId: 'group-1',
+            beneficiaryGroup: {
+              _count: { beneficiaries: 10 },
+            },
+          },
+          beneficiaryRedeem: [{ status: 'FIAT_TRANSACTION_COMPLETED' }],
+        },
+      ];
+
+      Object.assign(mockPrismaService.payouts, {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue(mockPayouts),
+      });
+
+      const result = await service.findAll({ page: 1, perPage: 10 });
+
+      expect(result.data).toBeDefined();
+      expect(result.data.length).toBe(1);
+    });
+
+    it('should handle findAll errors gracefully', async () => {
+      Object.assign(mockPrismaService.payouts, {
+        findMany: jest.fn().mockRejectedValue(new Error('Database error')),
+      });
+
+      await expect(service.findAll({ page: 1, perPage: 10 })).rejects.toThrow(
+        'Database error'
+      );
+    });
+  });
+
+  describe('findOne - edge cases', () => {
+    it('should calculate totalSuccessRequests for VENDOR type', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'VENDOR',
+        status: 'PENDING',
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 1000,
+          beneficiaryGroup: {
+            _count: { beneficiaries: 2 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+              {
+                beneficiary: {
+                  uuid: 'ben-2',
+                  walletAddress: '0x2',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+        beneficiaryRedeem: [
+          { status: 'COMPLETED', isCompleted: true },
+          { status: 'PENDING', isCompleted: false },
+        ],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      const result = await service.findOne('payout-123');
+
+      expect(result.totalSuccessRequests).toBe(1);
+    });
+
+    it('should calculate totalSuccessRequests for FSP type', async () => {
+      const mockPayout = {
+        uuid: 'payout-123',
+        type: 'FSP',
+        status: 'PENDING',
+        beneficiaryGroupToken: {
+          groupId: 'group-123',
+          numberOfTokens: 1000,
+          beneficiaryGroup: {
+            _count: { beneficiaries: 2 },
+            beneficiaries: [
+              {
+                beneficiary: {
+                  uuid: 'ben-1',
+                  walletAddress: '0x1',
+                  extras: {},
+                },
+              },
+              {
+                beneficiary: {
+                  uuid: 'ben-2',
+                  walletAddress: '0x2',
+                  extras: {},
+                },
+              },
+            ],
+          },
+        },
+        beneficiaryRedeem: [
+          { status: 'FIAT_TRANSACTION_COMPLETED', isCompleted: true },
+          { status: 'PENDING', isCompleted: false },
+        ],
+      };
+
+      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
+      mockBeneficiaryService.getFailedBeneficiaryRedeemByPayoutUUID.mockResolvedValue(
+        []
+      );
+
+      const result = await service.findOne('payout-123');
+
+      expect(result.totalSuccessRequests).toBe(1);
     });
   });
 });

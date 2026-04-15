@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -18,6 +19,7 @@ import {
   DisburseDto,
   FundAccountDto,
   IChainService,
+  RedeemInkindDto,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
@@ -41,18 +43,32 @@ export interface EVMChainConfig {
 export class EvmChainService implements IChainService {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
+  private _evmProcessor: EVMProcessor | null = null;
+  private _contractProcessor: ContractProcessor | null = null;
   name = 'evm';
+
   constructor(
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => EVMProcessor))
-    private readonly evmProcessor: EVMProcessor,
-    @Inject(forwardRef(() => ContractProcessor))
-    private readonly contractProcessor: ContractProcessor
+    private readonly moduleRef: ModuleRef
   ) {
     this.initializeProvider();
+  }
+
+  private get evmProcessor(): EVMProcessor {
+    if (!this._evmProcessor) {
+      this._evmProcessor = this.moduleRef.get(EVMProcessor, { strict: false });
+    }
+    return this._evmProcessor!;
+  }
+
+  private get contractProcessor(): ContractProcessor {
+    if (!this._contractProcessor) {
+      this._contractProcessor = this.moduleRef.get(ContractProcessor, { strict: false });
+    }
+    return this._contractProcessor!;
   }
 
   getChainType(): ChainType {
@@ -859,11 +875,6 @@ export class EvmChainService implements IChainService {
             },
           },
           { isDisbursed: false },
-          {
-            payout: {
-              is: null,
-            },
-          },
         ],
       },
       select: { uuid: true, groupId: true },
@@ -1153,7 +1164,7 @@ export class EvmChainService implements IChainService {
           { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
           {
             phone,
-            projectUUID: process.env.PROJECT_UUID,
+            projectUUID: process.env.PROJECT_ID,
           }
         )
       );
@@ -1180,6 +1191,17 @@ export class EvmChainService implements IChainService {
         );
       }
 
+      if (payoutEligibleGroups.length > 1) {
+        this.logger.warn(
+          `Multiple payout-eligible groups found for beneficiary. Using the first one: ${payoutEligibleGroups
+            .map((g) => g.beneficiaryGroupId)
+            .join(', ')}`
+        );
+        throw new RpcException(
+          'Multiple payout-eligible groups found for beneficiary. Please contact support.'
+        );
+      }
+
       // Use the first payout-eligible group for the lookup
       const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
         where: {
@@ -1195,7 +1217,9 @@ export class EvmChainService implements IChainService {
       });
 
       if (!beneficiaryGroups) {
-        this.logger.error('Beneficiary group not found');
+        this.logger.error(
+          `Beneficiary group not found for ID: ${payoutEligibleGroups[0].beneficiaryGroupId}`
+        );
         throw new RpcException('Beneficiary group not found');
       }
 
@@ -1242,5 +1266,16 @@ export class EvmChainService implements IChainService {
     delete otpRes.otpHash;
 
     return otpRes;
+  }
+
+  async redeemInkind(redeemDto: RedeemInkindDto) {
+    return this.evmQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+    });
   }
 }

@@ -1,11 +1,28 @@
 import { CreateStakeholderDto } from '.';
 
 export type StakeholderValidationError = {
-  rowNumber: number;
-  rowData: CreateStakeholderDto;
-  errors: string[];
+  phone?: string;
+  email?: string;
+  field: string;
+  message: string;
 };
 
 export type ValidateStakeholdersResponse = {
-  validStakeholders: CreateStakeholderDto[];
+  errors: StakeholderValidationError[];
+};
+
+export type CleanedStakeholder = Omit<
+  CreateStakeholderDto,
+  'phone' | 'email'
+> & {
+  phone: string | null;
+  email: string | null;
+};
+
+export type ValidateBulkStakeholdersResponse = {
+  newStakeholders: string[];
+  updateStakeholders: string[];
+  cleanedPayloads: CleanedStakeholder[];
+  isValid: boolean;
+  errors: StakeholderValidationError[];
 };

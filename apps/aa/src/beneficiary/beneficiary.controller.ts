@@ -129,6 +129,16 @@ export class BeneficiaryController {
 
   // ***** groups fund mgmt ********** //
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.VALIDATE_TOKEN_ASSIGNMENT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async validateTokenAssignment(payload: { groupId: UUID }) {
+    return this.beneficiaryService.checkIsTokenAlreadyAssigned(
+      payload.groupId as UUID
+    );
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.RESERVE_TOKEN_TO_GROUP,
     uuid: process.env.PROJECT_ID,
   })
@@ -194,4 +204,19 @@ export class BeneficiaryController {
     return this.beneficiaryMultisigService.createSafeTransaction(payload);
   }
   // ***** multisig ends ********** //
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.CREATE_BENEFICIARY_WITH_DB_TRANSACTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  async createBeneficiaryWithDbTransaction(
+    @Payload()
+    dto: {
+      action: string;
+      dbTxId: string;
+      payload: any;
+    }
+  ) {
+    return this.beneficiaryService.createBeneficiaryWithDbTransaction(dto);
+  }
 }

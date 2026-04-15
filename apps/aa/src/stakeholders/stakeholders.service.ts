@@ -1,9 +1,10 @@
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import {
   AddStakeholdersData,
   AddStakeholdersGroups,
+  BulkAddStakeholdersPayload,
   CreateStakeholderDto,
   FindStakeholdersGroup,
   GetAllGroups,
@@ -15,14 +16,31 @@ import {
   UpdateStakeholdersData,
   UpdateStakeholdersGroups,
 } from './dto';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { CommunicationService } from '@rumsan/communication';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
-import { ValidateStakeholdersResponse } from './dto/type';
+import {
+  ValidateStakeholdersResponse,
+  StakeholderValidationError,
+  CleanedStakeholder,
+  ValidateBulkStakeholdersResponse,
+} from './dto/type';
 import { StatsService } from '../stats';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EVENTS } from '../constants';
+import { EVENTS, JOBS, TRIGGGERS_MODULE } from '../constants';
+import { firstValueFrom } from 'rxjs';
+
+type StakeholderImportRow = {
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  designation?: string;
+  organization?: string;
+  district?: string;
+  municipality?: string;
+  supportArea?: string[];
+};
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 @Injectable()
@@ -34,6 +52,7 @@ export class StakeholdersService {
     private prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly statsService: StatsService,
+    @Inject(TRIGGGERS_MODULE) private readonly client: ClientProxy,
     private eventEmitter: EventEmitter2
   ) {
     this.communicationService = new CommunicationService({
@@ -72,90 +91,181 @@ export class StakeholdersService {
     return rData;
   }
 
-  async bulkAdd(payloads: any) {
-    this.logger.log('Adding bulk stakeholders...');
+  async validateBulkStakeholders(
+    payload: any
+  ): Promise<ValidateBulkStakeholdersResponse> {
+    this.logger.log('Validating bulk stakeholders...');
 
-    // validate the  parseddata with the stakeholder class
-    const rData = await this.validateStakeholders(payloads);
+    if (!payload || !payload.length) {
+      throw new RpcException('No stakeholder data provided for bulk add');
+    }
 
-    // Step 1: Clean and normalize input
-
-    const cleanedPayloads = rData.validStakeholders.map(
-      ({ phone, email, ...rest }) => {
-        let cleanedPhone = phone?.trim() || null;
-
-        // Normalize if it's a 10-digit number
-        if (/^\d{10}$/.test(cleanedPhone)) {
-          cleanedPhone = `+977${cleanedPhone}`;
-        }
-        let cleanedEmail = email?.trim().toLowerCase() || null;
-        return {
-          ...rest,
-          email: cleanedEmail,
-          phone: cleanedPhone,
-        };
-      }
-    );
-
-    // Step 2: Extract non-null phones
-    const phonesToCheck = cleanedPayloads
-      .map((p) => p.phone)
-      .filter((phone): phone is string => !!phone);
-
-    // Extract non-null email
-    const emailsToCheck = cleanedPayloads
-      .map((p) => p.email)
-      .filter((email): email is string => !!email);
-
-    // Step 3: Check for existing phones in DB
-    const existingPhones = await this.prisma.stakeholders.findMany({
-      where: {
-        phone: { in: phonesToCheck },
-      },
-      select: { phone: true },
-    });
-
-    // Step 4: Check for existing emails if provided
-    const existingEmails = emailsToCheck.length
-      ? await this.prisma.stakeholders.findMany({
-          where: {
-            email: { in: emailsToCheck },
-          },
-          select: { email: true },
-        })
-      : [];
-    const duplicates = {
-      phones: existingPhones.map((e) => e.phone),
-      emails: existingEmails.map((e) => e.email),
+    const errorsMap = new Map<string, StakeholderValidationError>();
+    const addError = (error: StakeholderValidationError) => {
+      const key = `${error.field}:${error.phone ?? ''}:${error.email ?? ''}:${
+        error.message
+      }`;
+      errorsMap.set(key, error);
     };
 
-    const duplicateMessages = [];
+    // Step 1: Parse raw rows, then validate — two separate responsibilities
+    const parsed = this.parseStakeholderPayload(payload);
+    const { errors: dtoErrors } = await this.validateParsedStakeholders(parsed);
+    dtoErrors.forEach((e) => addError(e));
 
-    if (duplicates.phones.length > 0) {
-      duplicateMessages.push(`Phone(s): ${duplicates.phones.join(', ')}`);
-    }
-    if (duplicates.emails.length > 0) {
-      duplicateMessages.push(`Email(s): ${duplicates.emails.join(', ')}`);
+    // Step 2: Normalize phones and emails on all parsed rows
+    const cleanedPayloads = this.normalizeStakeholders(parsed);
+
+    // Step 3: Intra-payload dedup check
+    this.checkIntraPayloadDuplicates(cleanedPayloads, addError);
+
+    // Step 4 & 5: DB lookups
+    const { existingByPhone, existingPhoneSet } =
+      await this.fetchExistingByPhone(cleanedPayloads);
+
+    // Step 6: Classify into new vs update (unique phones)
+    const { newStakeholders, updateStakeholders } = this.classifyStakeholders(
+      cleanedPayloads,
+      existingPhoneSet
+    );
+
+    // Step 7: Check email conflicts in DB
+    await this.checkEmailConflicts(cleanedPayloads, existingByPhone, addError);
+
+    const errors = Array.from(errorsMap.values());
+
+    return {
+      newStakeholders,
+      updateStakeholders,
+      cleanedPayloads,
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  async bulkAdd(payload: BulkAddStakeholdersPayload) {
+    this.logger.log('Adding bulk stakeholders...');
+
+    if (!payload.data || !payload.data.length) {
+      throw new RpcException('No stakeholder data provided for bulk add');
     }
 
-    if (duplicateMessages.length > 0) {
-      this.logger.warn(
-        `Found duplicate entries: ${duplicateMessages.join(' | ')}`
-      );
-      throw new RpcException(
-        `Duplicate(s) found: ${duplicateMessages.join(' | ')}`
-      );
+    if (payload?.isGroupCreate) {
+      if (!payload?.groupName?.trim()) {
+        throw new RpcException(
+          'Group name is required when isGroupCreate is true'
+        );
+      }
+
+      const existingGroup = await this.prisma.stakeholdersGroups.findFirst({
+        where: { name: payload.groupName },
+      });
+      if (existingGroup) {
+        throw new RpcException('Group name must be unique');
+      }
     }
 
-    // Step 4: Insert all if no duplicates
-    const result = await this.prisma.stakeholders.createMany({
-      data: cleanedPayloads,
+    // Step 1: Validate using validateBulkStakeholders
+    const {
+      isValid,
+      cleanedPayloads,
+      newStakeholders,
+      updateStakeholders,
+      errors,
+    } = await this.validateBulkStakeholders(payload?.data);
+
+    // Step 2: If invalid return structured errors immediately
+    if (!isValid) {
+      return {
+        success: false,
+        errors: errors,
+      };
+    }
+
+    // Step 3: Reuse cleanedPayloads from rData — no redundant validate/normalize call
+    // Split using Set.has() O(1) instead of Array.includes() O(n²)
+    const newPhoneSet = new Set(newStakeholders);
+    const updatePhoneSet = new Set(updateStakeholders);
+
+    const toCreate = cleanedPayloads.filter(
+      (p) => p.phone && newPhoneSet.has(p.phone)
+    );
+    const toUpdate = cleanedPayloads.filter(
+      (p) => p.phone && updatePhoneSet.has(p.phone)
+    );
+
+    // Step 6: All DB operations inside a single transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Step 6a: If isGroupCreate, create group first
+      let groupUuid: string | null = null;
+
+      if (payload?.isGroupCreate) {
+        const group = await tx.stakeholdersGroups.create({
+          data: { name: payload?.groupName },
+        });
+        groupUuid = group.uuid;
+      }
+
+      // Step 6b: createMany for new stakeholders
+      if (toCreate.length) {
+        await tx.stakeholders.createMany({
+          data: toCreate.map((s) => this.removeEmptyFields(s)) as any[],
+          skipDuplicates: true,
+        });
+
+        if (groupUuid) {
+          const newPhones = toCreate
+            .map((s) => s.phone)
+            .filter((p): p is string => !!p);
+
+          const newlyCreated = await tx.stakeholders.findMany({
+            where: { phone: { in: newPhones } },
+            select: { uuid: true },
+          });
+
+          await tx.stakeholdersGroups.update({
+            where: { uuid: groupUuid },
+            data: {
+              stakeholders: {
+                connect: newlyCreated.map((s) => ({ uuid: s.uuid })),
+              },
+            },
+          });
+        }
+      }
+
+      // Step 6d: Update existing stakeholders
+      if (toUpdate.length) {
+        await Promise.all(
+          toUpdate.map((stakeholder) =>
+            tx.stakeholders.update({
+              where: { phone: stakeholder.phone },
+              data: {
+                ...this.removeEmptyFields(stakeholder),
+                updatedAt: new Date(),
+                ...(groupUuid
+                  ? { stakeholdersGroups: { connect: { uuid: groupUuid } } }
+                  : {}),
+              },
+            })
+          )
+        );
+      }
     });
+
+    this.logger.log(
+      `Bulk import complete: ${toCreate.length} created, ${toUpdate.length} updated`
+    );
 
     await this.eventEmitter.emit(EVENTS.STAKEHOLDER_CREATED);
 
+    // build this response so that frontend is not breaking
     return {
-      successCount: result.count,
+      success: true,
+      result: {
+        createdCount: toCreate.length,
+        updatedCount: toUpdate.length,
+      },
       message: 'All stakeholders successfully added.',
     };
   }
@@ -316,18 +426,19 @@ export class StakeholdersService {
 
     if (!existingGroup) throw new RpcException('Group not found!');
 
-    const updatedGroup = await this.prisma.stakeholdersGroups.update({
-      where: { uuid: uuid },
-      data: {
-        name: name || existingGroup.name,
+    const data = {
+      ...(name && { name }),
+      ...(stakeholders && {
         stakeholders: {
-          // disconnect all current stakeholders
           set: [],
-          // connect new stakeholders
           connect: stakeholders,
         },
-        updatedAt: new Date(),
-      },
+      }),
+    };
+
+    const updatedGroup = await this.prisma.stakeholdersGroups.update({
+      where: { uuid: uuid },
+      data,
     });
     return updatedGroup;
   }
@@ -401,6 +512,33 @@ export class StakeholdersService {
     }
   }
 
+  async getGroupDetailsByUuids(payload: { uuids: string[] }) {
+    this.logger.log('Fetching all stakeholders group details by group uuids');
+    const { uuids } = payload;
+    try {
+      const groups = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          uuid: {
+            in: uuids,
+          },
+          isDeleted: false,
+        },
+        include: {
+          stakeholders: {
+            where: {
+              isDeleted: false,
+            },
+          },
+        },
+      });
+      return groups;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching stakeholders groups by uuids. ${err.message}`
+      );
+    }
+  }
+
   async getOneGroup(payload: GetOneGroup) {
     const { uuid } = payload;
     return this.prisma.stakeholdersGroups.findUnique({
@@ -418,8 +556,28 @@ export class StakeholdersService {
   }
 
   async removeGroup(payload: RemoveStakeholdersGroup) {
+    this.logger.log('Removing stakeholder group...', payload);
     const { uuid } = payload;
-    return await this.prisma.stakeholdersGroups.update({
+
+    const existingGroup = await this.prisma.stakeholdersGroups.findUnique({
+      where: {
+        uuid: uuid,
+      },
+    });
+
+    if (!existingGroup) throw new RpcException('Group not found!');
+
+    const activities = await this.getActivitiesByStakeholderGroupUuid(uuid);
+
+    if (activities && activities?.length > 0) {
+      const activitiesNames = activities.map((a) => a.title);
+      return {
+        isSuccess: false,
+        activities: activitiesNames,
+      };
+    }
+
+    await this.prisma.stakeholdersGroups.update({
       where: {
         uuid: uuid,
       },
@@ -427,7 +585,29 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
+
+    return {
+      isSuccess: true,
+      activities: [],
+    };
   }
+
+  async getActivitiesByStakeholderGroupUuid(uuid: string) {
+    try {
+      const activities = await firstValueFrom(
+        this.client.send(
+          { cmd: JOBS.ACTIVITIES.GET_BY_STAKEHOLDER_UUID },
+          { stakeholderGroupUuid: uuid }
+        )
+      );
+      return activities;
+    } catch (err) {
+      throw new RpcException(
+        `Error while fetching related activities. ${err.message}`
+      );
+    }
+  }
+
   async findOneGroup(payload: FindStakeholdersGroup) {
     const { uuid } = payload;
     return await this.prisma.stakeholdersGroups.findUnique({
@@ -440,10 +620,9 @@ export class StakeholdersService {
     });
   }
 
-  async validateStakeholders(
-    payload: any[]
-  ): Promise<ValidateStakeholdersResponse> {
-    const data = payload.map((item) => {
+  // Maps raw Excel rows → CreateStakeholderDto shape — no validation
+  private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
+    return payload.map((item) => {
       // Find the first valid supportArea string value
       const rawSupportArea =
         typeof item['Support Area'] === 'string'
@@ -473,53 +652,174 @@ export class StakeholdersService {
         email: item['Email ID']?.trim() || item['Email']?.trim() || '',
       };
     });
-
-    const validationErrors = [];
-    const stakeholders = [];
-    for (const row of data) {
-      const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
-
-      const errors = await validate(stakeholdersDto);
-      console.log(errors);
-
-      if (errors.length > 0) {
-        validationErrors.push({
-          row,
-          errors: errors.map((error) => Object.values(error.constraints)),
-        });
-      } else {
-        stakeholders.push(row);
-      }
-    }
-    // If any validation errors, throw exception
-
-    if (validationErrors.length > 0) {
-      console.log(validationErrors);
-
-      const errorMessages = validationErrors.map((e, i) => {
-        const flattenedErrors = e.errors.flat().join(', ');
-        return {
-          row: i + 1,
-          errors: flattenedErrors,
-        };
-      });
-
-      throw new RpcException({
-        success: false,
-        message: 'Validation failed',
-        meta: {
-          statusCode: 400,
-          message: 'Bad Request',
-          details: errorMessages,
-        },
-      });
-    }
-
-    return {
-      validStakeholders: stakeholders,
-    };
   }
 
+  // Runs class-validator on already-parsed rows — no raw Excel mapping
+  private async validateParsedStakeholders(
+    data: CreateStakeholderDto[]
+  ): Promise<ValidateStakeholdersResponse> {
+    const perRowErrors = await Promise.all(
+      data.map(async (row) => {
+        const stakeholdersDto = plainToClass(CreateStakeholderDto, row);
+        const validationErrors = await validate(stakeholdersDto);
+
+        return validationErrors.flatMap((error) =>
+          Object.values(error.constraints || {}).map((msg) => ({
+            ...(error.property === 'phone'
+              ? { phone: row.phone }
+              : { email: row.email }),
+            field: error.property,
+            message: msg,
+          }))
+        );
+      })
+    );
+
+    return { errors: perRowErrors.flat() };
+  }
+
+  private normalizeStakeholders(
+    stakeholders: CreateStakeholderDto[]
+  ): CleanedStakeholder[] {
+    return stakeholders.map(({ phone, email, ...rest }) => {
+      let cleanedPhone = phone?.trim() || null;
+      if (cleanedPhone && /^\d{10}$/.test(cleanedPhone)) {
+        cleanedPhone = `+977${cleanedPhone}`;
+      }
+      return {
+        ...rest,
+        phone: cleanedPhone,
+        email: email?.trim().toLowerCase() || null,
+      };
+    });
+  }
+
+  private checkIntraPayloadDuplicates(
+    payloads: CleanedStakeholder[],
+    addError: (e: StakeholderValidationError) => void
+  ): void {
+    const seenPhones = new Map<string, number>();
+    const seenEmails = new Map<string, number>();
+
+    payloads.forEach((p, index) => {
+      if (p.phone) {
+        if (seenPhones.has(p.phone)) {
+          addError({
+            phone: p.phone,
+            field: 'phone',
+            message: 'Duplicate phone number in upload',
+          });
+        } else {
+          seenPhones.set(p.phone, index);
+        }
+      }
+      if (p.email) {
+        if (seenEmails.has(p.email)) {
+          addError({
+            email: p.email,
+            phone: p.phone ?? undefined,
+            field: 'email',
+            message: 'Duplicate email in upload',
+          });
+        } else {
+          seenEmails.set(p.email, index);
+        }
+      }
+    });
+  }
+
+  private async fetchExistingByPhone(payloads: CleanedStakeholder[]) {
+    const phonesToCheck = payloads
+      .map((p) => p.phone)
+      .filter((phone): phone is string => !!phone);
+
+    const existingByPhone = phonesToCheck.length
+      ? await this.prisma.stakeholders.findMany({
+          where: { phone: { in: phonesToCheck } },
+          select: { phone: true, email: true, uuid: true },
+        })
+      : [];
+
+    const existingPhoneSet = new Set(existingByPhone.map((s) => s.phone));
+    return { existingByPhone, existingPhoneSet };
+  }
+
+  private classifyStakeholders(
+    payloads: CleanedStakeholder[],
+    existingPhoneSet: Set<string>
+  ): { newStakeholders: string[]; updateStakeholders: string[] } {
+    const newStakeholders: string[] = [];
+    const updateStakeholders: string[] = [];
+    const seenNew = new Set<string>();
+    const seenUpdate = new Set<string>();
+
+    for (const p of payloads) {
+      if (!p.phone) continue;
+      if (existingPhoneSet.has(p.phone)) {
+        if (!seenUpdate.has(p.phone)) {
+          seenUpdate.add(p.phone);
+          updateStakeholders.push(p.phone);
+        }
+      } else {
+        if (!seenNew.has(p.phone)) {
+          seenNew.add(p.phone);
+          newStakeholders.push(p.phone);
+        }
+      }
+    }
+
+    return { newStakeholders, updateStakeholders };
+  }
+
+  private async checkEmailConflicts(
+    payloads: CleanedStakeholder[],
+    existingByPhone: { phone: string; email: string | null; uuid: string }[],
+    addError: (e: StakeholderValidationError) => void
+  ): Promise<void> {
+    const emailsToCheck = payloads
+      .map((p) => p.email)
+      .filter((email): email is string => !!email);
+
+    if (!emailsToCheck.length) return;
+
+    const existingByEmail = await this.prisma.stakeholders.findMany({
+      where: { email: { in: emailsToCheck } },
+      select: { email: true, uuid: true, phone: true },
+    });
+
+    const emailToExistingUuid = new Map(
+      existingByEmail.map((s) => [s.email, s.uuid])
+    );
+    const existingPhoneToUuid = new Map(
+      existingByPhone.map((s) => [s.phone, s.uuid])
+    );
+
+    for (const p of payloads) {
+      if (!p.email) continue;
+
+      const existingUuidForEmail = emailToExistingUuid.get(p.email);
+      if (!existingUuidForEmail) continue; // email not in DB — no conflict
+
+      const currentUuid = p.phone ? existingPhoneToUuid.get(p.phone) : null;
+
+      if (!currentUuid || currentUuid !== existingUuidForEmail) {
+        addError({
+          email: p.email,
+          phone: p.phone ?? undefined,
+          field: 'email',
+          message: 'Email already used by another stakeholder',
+        });
+      }
+    }
+  }
+
+  removeEmptyFields(obj: Record<string, any>): Record<string, any> {
+    return Object.fromEntries(
+      Object.entries(obj).filter(
+        ([_, value]) => value != null && value !== undefined && value !== ''
+      )
+    );
+  }
   // ***** stakeholders groups end ********** //
 
   // stakeholders count

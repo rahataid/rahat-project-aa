@@ -37,20 +37,14 @@ export class GrievancesService {
 
   async create(data: CreateGrievanceDto) {
     return this.prisma.$transaction(async (tx) => {
-      // Convert CreatedByUserDto to plain object for Prisma
-      const { createdByUser, ...restData } = data;
-      const prismaData = {
-        ...restData,
-        createdByUser: createdByUser
-          ? {
-              id: createdByUser.id,
-              name: createdByUser.name,
-              email: createdByUser.email,
-            }
-          : null,
-      };
-
-      const grievance = await tx.grievance.create({ data: prismaData });
+      const { user, ...rest } = data;
+      const grievance = await tx.grievance.create({
+        data: {
+          ...rest,
+          // Spread converts typed interface to plain object, satisfying Prisma's InputJsonValue index signature
+          createdByUser: user ? { ...user } : Prisma.JsonNull,
+        },
+      });
       console.log(
         'Grievance created successfully in project, now payload for core:',
         grievance
@@ -191,7 +185,7 @@ export class GrievancesService {
   }
 
   async update(dto: UpdateGrievanceDto) {
-    const { uuid, ...updateDto } = dto;
+    const { uuid, user: createdByUser, ...updateDto } = dto;
 
     const existingGrievance = await this.prisma.grievance.findUnique({
       where: { uuid },
@@ -201,22 +195,18 @@ export class GrievancesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Convert CreatedByUserDto to plain object for Prisma
-      const { createdByUser, ...restUpdateData } = updateDto;
-      const prismaUpdateData = {
-        ...restUpdateData,
-        ...(createdByUser && {
-          createdByUser: {
-            id: createdByUser.id,
-            name: createdByUser.name,
-            email: createdByUser.email,
-          },
-        }),
-      };
-
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: prismaUpdateData,
+        data: {
+          ...updateDto,
+          createdByUser: createdByUser
+            ? {
+                id: createdByUser.id,
+                name: createdByUser.name,
+                email: createdByUser.email,
+              }
+            : Prisma.JsonNull,
+        },
       });
       await handleMicroserviceCall({
         client: this.client.send(
@@ -231,7 +221,16 @@ export class GrievancesService {
           console.error('Error updating grievance:', error);
           tx.grievance.update({
             where: { uuid },
-            data: prismaUpdateData,
+            data: {
+              ...updateDto,
+              createdByUser: createdByUser
+                ? {
+                    id: createdByUser.id,
+                    name: createdByUser.name,
+                    email: createdByUser.email,
+                  }
+                : Prisma.JsonNull,
+            },
           });
           throw new RpcException(error);
         },

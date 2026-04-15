@@ -6,9 +6,8 @@ import { ChainQueueService } from './chain-queue.service';
 import { ChainServiceRegistry } from './registries/chain-service.registry';
 import { StellarChainService } from './chain-services/stellar-chain.service';
 import { EvmChainService } from './chain-services/evm-chain.service';
-import { BQUEUE } from '../constants';
+import { BQUEUE, CHAIN_SERVICE } from '../constants';
 import { StellarModule } from '../stellar/stellar.module';
-import { ProcessorsModule } from '../processors/processors.module';
 import { ClientsModule } from '@nestjs/microservices';
 import { Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
@@ -39,11 +38,11 @@ import { SettingsService } from '@rumsan/settings';
       name: BQUEUE.EVM,
     }),
     StellarModule,
-    ProcessorsModule,
   ],
   controllers: [ChainController],
   providers: [
     ChainService,
+    { provide: CHAIN_SERVICE, useExisting: ChainService },
     ChainQueueService,
     ChainServiceRegistry,
     StellarChainService,
@@ -65,5 +64,6 @@ import { SettingsService } from '@rumsan/settings';
       inject: [SettingsService],
     },
   ],
+  exports: [ChainService, CHAIN_SERVICE],
 })
 export class ChainModule {}

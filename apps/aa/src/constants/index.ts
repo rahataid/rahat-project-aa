@@ -4,6 +4,7 @@ export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
+export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
 export const STELLER_UID = 'stellar';
 
@@ -68,6 +69,7 @@ export const JOBS = {
     BULK_ASSIGN_TO_PROJECT: 'rahat.jobs.beneficiary.bulk_assign',
     REMOVE: 'rahat.jobs.beneficiary.remove',
     ADD_GROUP: 'aa.jobs.beneficiary.addGroup',
+    VALIDATE_TOKEN_ASSIGNMENT: 'aa.jobs.beneficiary.validate_token_assignment',
     RESERVE_TOKEN_TO_GROUP: 'aa.jobs.beneficiary.reserve_token_to_group',
     GET_ALL_GROUPS: 'aa.jobs.beneficiary.getAllGroups',
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
@@ -78,6 +80,8 @@ export const JOBS = {
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
+    CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
+      'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -138,15 +142,20 @@ export const JOBS = {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
     GET_ONE: 'aa.jobs.stakeholders.getOne',
     ADD: 'aa.jobs.stakeholders.add',
+    VALIDATE_BULK_STAKEHOLDERS: 'aa.jobs.stakeholders.validateBulkStakeholders',
     BULK_ADD: 'aa.jobs.stakeholders.bulkAdd',
     REMOVE: 'aa.jobs.stakeholders.remove',
     UPDATE: 'aa.jobs.stakeholders.update',
     GET_ALL_GROUPS: 'aa.jobs.stakeholders.getAllGroups',
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.stakeholders.getAllGroupsByUuids',
+    GET_GROUP_DETAILS_BY_UUIDS: 'aa.jobs.stakeholders.getGroupDetailsByUuids',
     GET_ONE_GROUP: 'aa.jobs.stakeholders.getOneGroup',
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
+  },
+  ACTIVITIES: {
+    GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
   },
   SETTINGS: {
     CREATE: 'rahat.jobs.settings.create',
@@ -248,20 +257,46 @@ export const JOBS = {
     CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
     GET_TRANSACTIONS: 'aa.jobs.cash-tracker.getTransactions',
     CREATE_BUDGET: 'aa.jobs.cash-tracker.createBudget',
   },
-  INKIND_TRACKER: {
-    EXECUTE_ACTION: 'aa.jobs.inkind-tracker.executeAction',
-    GET_TRANSACTIONS: 'aa.jobs.inkind-tracker.getTransactions',
+  INKINDS: {
+    CREATE: 'aa.jobs.inkinds.create',
+    UPDATE: 'aa.jobs.inkinds.update',
+    DELETE: 'aa.jobs.inkinds.delete',
+    GET: 'aa.jobs.inkinds.get',
+    GET_SUMMARY: 'aa.jobs.inkinds.getSummary',
+    GET_ONE: 'aa.jobs.inkinds.getOne',
+    ADD_INKIND_STOCK: 'aa.jobs.inkindStock.add',
+    GET_ALL_STOCK_MOVEMENTS: 'aa.jobs.inkindStock.getAllMovements',
+    REMOVE_INKIND_STOCK: 'aa.jobs.inkindStock.remove',
+    ASSIGN_GROUP_INKIND: 'aa.jobs.groupInkinds.assign',
+    GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
+    GET_UNASSIGNED_GROUP_INKIND:
+      'aa.jobs.groupInkinds.getUnassignedGroupInkind',
+    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
+    GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
+    GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
+    GET_LOGS_DETAILS_BY_TX_HASH: 'aa.jobs.groupInkinds.getLogsDetailsByTxHash',
+    BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
+    SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
+    VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
   },
+  SMS: {
+    SEND_SMS: 'aa.jobs.sms.sendSms',
+  },
+  CHAIN: {
+    REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+  }
 };
 
 export const EVENTS = {

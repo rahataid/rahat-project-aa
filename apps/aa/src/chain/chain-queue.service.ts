@@ -11,6 +11,7 @@ import {
   VerifyOtpDto,
   AddTriggerDto,
   UpdateTriggerDto,
+  RedeemInkindDto,
 } from './interfaces/chain-service.interface';
 import { SendAssetDto } from '../stellar/dto/send-otp.dto';
 
@@ -257,4 +258,13 @@ export class ChainQueueService {
     };
     return this.transferTokens(data, chainType);
   }
+
+  async redeemInkind(redeemDto: RedeemInkindDto, chainType?: ChainType): Promise<any> {
+    this.logger.log(`Redeeming inkind for ${redeemDto.beneficiaryAddress}`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.redeemInkind(redeemDto);
+  }
+
 }

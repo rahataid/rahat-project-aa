@@ -1,0 +1,26 @@
+{
+  "CONTRACTS": {
+    "TriggerManager": {
+      "address": "0x79551f9E58e6eF44F88D8DaC7BDDf9405475774D",
+      "startBlock": 36006145
+    },
+    "RahatDonor": {
+      "address": "0xcc1BF3eFc850641e01FaD33a63F4A194709c22BA",
+      "startBlock": 36006145
+    },
+    "RahatToken": {
+      "address": "0x237c7fF8f02b50a3f6dcD247A97A8462aC64f792",
+      "startBlock": 36006145
+    },
+    "AAProject": {
+      "address": "0xCedc482de816A0eDBA5367de33fDb44d18d6F91b",
+      "startBlock": 36006145
+    },
+    "CashToken": {
+      "address": "0x4E990060D512e47F786A0FFCF6811aA80dD687A5",
+      "startBlock": 36006145
+    }
+  },
+  "deployedAt": "2026-01-07T10:09:48.446Z",
+  "network": "base-sepolia"
+}

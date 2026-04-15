@@ -37,24 +37,24 @@
   },
   "base-sepolia": {
     "TriggerManager": {
-      "address": "0x7B9bA4ee1b283bEf4efe265638c026F71c737B46",
-      "startBlock": 35055042
+      "address": "0x758fe7593860eDD7B55c86df3439f38c207EDb77",
+      "startBlock": 36392691
     },
     "RahatDonor": {
-      "address": "0xf567B4e80C678912e2fAFdD5462fd9642c910522",
-      "startBlock": 35055042
+      "address": "0x478e185AFd99c9910b9A15C1d0413EE748cD9B28",
+      "startBlock": 36392691
     },
     "RahatToken": {
-      "address": "0x13Da8d1463d616481B0fDa4B2C6D98F63117c32E",
-      "startBlock": 35055042
+      "address": "0xB8a022a89dfd4cf87B1c0f83a39961795a88d553",
+      "startBlock": 36392691
     },
     "AAProject": {
-      "address": "0xD4fFB546aA4711e6667eEe8cfc9E106A26668839",
-      "startBlock": 35055042
+      "address": "0xB0083Ec3e65d897BC3e9c9FD0C91e98065bb5eDF",
+      "startBlock": 36392691
     },
     "CashToken": {
-      "address": "0x308F718c44205D54804F4dE2614DCbD3C1d7d168",
-      "startBlock": 35055042
+      "address": "0xcCf34bdC1B635C241910298Ed91517628bD6f85E",
+      "startBlock": 36392691
     }
   },
   "Base Sepolia": {

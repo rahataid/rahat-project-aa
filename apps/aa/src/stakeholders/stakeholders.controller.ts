@@ -5,6 +5,7 @@ import { StakeholdersService } from './stakeholders.service';
 import {
   AddStakeholdersData,
   AddStakeholdersGroups,
+  BulkAddStakeholdersPayload,
   GetAllGroups,
   getGroupByUuidDto,
   GetOneGroup,
@@ -29,16 +30,39 @@ export class StakeholdersController {
   }
 
   @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.VALIDATE_BULK_STAKEHOLDERS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async validateBulkStakeholders(payload: any) {
+    if (!payload) {
+      throw new Error('No data provided for validation');
+    }
+
+    const normalizedData = Array.isArray(payload)
+      ? payload
+      : Object.values(payload);
+    return this.stakeholdersService.validateBulkStakeholders(normalizedData);
+  }
+
+  @MessagePattern({
     cmd: JOBS.STAKEHOLDERS.BULK_ADD,
     uuid: process.env.PROJECT_ID,
   })
-  async bulkAdd(payloads: any) {
-    const normalizedData = Array.isArray(payloads)
-      ? payloads
-      : Object.values(payloads);
+  async bulkAdd(payloads: BulkAddStakeholdersPayload) {
+    if (!payloads || !payloads?.data) {
+      throw new Error('Missing data in bulkAdd payload');
+    }
 
-    return this.stakeholdersService.bulkAdd(normalizedData);
+    const normalizedData = Array.isArray(payloads?.data)
+      ? payloads.data
+      : Object.values(payloads.data);
+    return this.stakeholdersService.bulkAdd({
+      data: normalizedData,
+      isGroupCreate: payloads?.isGroupCreate,
+      groupName: payloads?.groupName,
+    });
   }
+
   @MessagePattern({
     cmd: JOBS.STAKEHOLDERS.GET_ALL,
     uuid: process.env.PROJECT_ID,
@@ -112,6 +136,14 @@ export class StakeholdersController {
   })
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
     return this.stakeholdersService.getAllGroupsByUuids(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.GET_GROUP_DETAILS_BY_UUIDS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getGroupDetailsByUuids(payload: { uuids: string[] }) {
+    return this.stakeholdersService.getGroupDetailsByUuids(payload);
   }
 
   @MessagePattern({

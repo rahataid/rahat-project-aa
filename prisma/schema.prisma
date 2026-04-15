@@ -87,13 +87,14 @@ model Beneficiary {
 
   isVerified Boolean @default(false)
 
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime?            @updatedAt()
-  deletedAt          DateTime?
-  BeneficiaryRedeem  BeneficiaryRedeem[]
-  BeneficiaryGroup   BeneficiaryGroup[]
-  BeneficiaryToGroup BeneficiaryToGroup[]
-  DisbursementLogs   DisbursementLogs[]
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime?                     @updatedAt()
+  deletedAt                    DateTime?
+  BeneficiaryRedeem            BeneficiaryRedeem[]
+  BeneficiaryGroup             BeneficiaryGroup[]
+  BeneficiaryToGroup           BeneficiaryToGroup[]
+  DisbursementLogs             DisbursementLogs[]
+  beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
 
   @@map("tbl_beneficiaries")
 }
@@ -109,9 +110,10 @@ model BeneficiaryGroups {
   tokensReserved BeneficiaryGroupTokens?
   beneficiaries  BeneficiaryToGroup[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt()
-  deletedAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime?     @updatedAt()
+  deletedAt    DateTime?
+  groupInkinds GroupInkind[]
 
   @@map("tbl_beneficiaries_groups")
 }
@@ -163,13 +165,13 @@ model DisbursementLogs {
   id   Int    @id @default(autoincrement()) @db.Integer()
   uuid String @unique @default(uuid())
 
-  txnHash String 
+  txnHash String
 
   beneficiaryGroupTokenId String
-  beneficiaryGroupToken   BeneficiaryGroupTokens    @relation(fields: [beneficiaryGroupTokenId], references: [uuid])
+  beneficiaryGroupToken   BeneficiaryGroupTokens @relation(fields: [beneficiaryGroupTokenId], references: [uuid])
 
   beneficiaryWalletAddress String?
-  beneficiary               Beneficiary? @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
+  beneficiary              Beneficiary? @relation(fields: [beneficiaryWalletAddress], references: [walletAddress])
 
   createdAt DateTime @default(now())
 
@@ -407,13 +409,14 @@ model Vendor {
   location      String?
   extras        Json?
 
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime?            @updatedAt()
-  deletedAt          DateTime?
-  VendorReimbursment VendorReimbursment[]
-  VendorTokenRedemption VendorTokenRedemption[]
-  BeneficiaryRedeem  BeneficiaryRedeem[]
-  OfflineBeneficiary OfflineBeneficiary[]
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime?                     @updatedAt()
+  deletedAt                    DateTime?
+  VendorReimbursment           VendorReimbursment[]
+  VendorTokenRedemption        VendorTokenRedemption[]
+  BeneficiaryRedeem            BeneficiaryRedeem[]
+  OfflineBeneficiary           OfflineBeneficiary[]
+  beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
 
   @@map("tbl_vendors")
 }
@@ -525,18 +528,18 @@ model VendorReimbursment {
 }
 
 model VendorTokenRedemption {
-  id                Int                    @id @default(autoincrement())
-  uuid              String                 @unique @default(uuid()) @db.Uuid()
-  vendorUuid        String                 @db.Uuid()
-  redemptionStatus  TokenRedemptionStatus @default(REQUESTED)
-  tokenAmount       Int                    @default(0)
-  
-  // Additional fields for better tracking
-  transactionHash   String?
-  approvedBy        String?
-  approvedAt        DateTime?
+  id               Int                   @id @default(autoincrement())
+  uuid             String                @unique @default(uuid()) @db.Uuid()
+  vendorUuid       String                @db.Uuid()
+  redemptionStatus TokenRedemptionStatus @default(REQUESTED)
+  tokenAmount      Int                   @default(0)
 
-  vendor            Vendor                 @relation(fields: [vendorUuid], references: [uuid])
+  // Additional fields for better tracking
+  transactionHash String?
+  approvedBy      String?
+  approvedAt      DateTime?
+
+  vendor Vendor @relation(fields: [vendorUuid], references: [uuid])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -634,23 +637,22 @@ enum Gender {
 
 // ============== Start Grievance SCHEMAS ================
 model Grievance {
-  id              Int             @id @default(autoincrement())
-  uuid            String          @unique @default(uuid()) @db.Uuid()
+  id              Int               @id @default(autoincrement())
+  uuid            String            @unique @default(uuid()) @db.Uuid()
   reportedBy      String
   reporterContact String
   tags            String[]
   title           String
   type            GrievanceType
   description     String
-  status          GrievanceStatus @default(NEW)
+  status          GrievanceStatus   @default(NEW)
   priority        GrievancePriority @default(LOW)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   deletedAt       DateTime?
-  createdByUser       Json
+  createdByUser   Json
   resolvedAt      DateTime?
   closedAt        DateTime?
-
 
   @@map("tbl_grievances")
 }
@@ -673,4 +675,119 @@ enum GrievancePriority {
   MEDIUM
   HIGH
 }
+
 // ============== End Grievance SCHEMAS ================
+
+// ============== Start Inkind SCHEMAS ================
+enum InkindStockMovementType {
+  ADD
+  REMOVE
+  LOCK
+  UNLOCK
+  REDEEM
+}
+
+model Inkind {
+  id          Int     @id @default(autoincrement())
+  uuid        String  @unique @default(uuid())
+  name        String
+  type        String
+  description String?
+  image       String?
+
+  // Optional cached fields (recommended for performance)
+  availableStock Int @default(0)
+
+  stockMovements InkindStockMovement[]
+  groupInkinds   GroupInkind[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  @@map("tbl_inkinds")
+}
+
+model InkindStockMovement {
+  id       Int                     @id @default(autoincrement())
+  uuid     String                  @unique @default(uuid())
+  inkindId String
+  quantity Int
+  type     InkindStockMovementType
+
+  // Optional reference fields
+  groupInkindId String?
+  redemptionId  String?
+
+  inkind      Inkind                       @relation(fields: [inkindId], references: [uuid])
+  groupInkind GroupInkind?                 @relation(fields: [groupInkindId], references: [uuid])
+  redemption  BeneficiaryInkindRedemption? @relation(fields: [redemptionId], references: [uuid])
+
+  createdAt DateTime @default(now())
+
+  @@unique([redemptionId], name: "unique_redemption_movement")
+  // ===== INDEXES =====
+  @@index([inkindId]) // trigger + filtering
+  @@index([inkindId, createdAt(sort: Desc)]) // timeline per inkind
+  @@index([groupInkindId])
+  @@index([redemptionId])
+  @@index([type])
+  @@map("tbl_inkind_stock_movements")
+}
+
+model GroupInkind {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  groupId  String
+  inkindId String
+
+  quantityAllocated Int
+  quantityRedeemed  Int @default(0)
+
+  group  BeneficiaryGroups @relation(fields: [groupId], references: [uuid])
+  inkind Inkind            @relation(fields: [inkindId], references: [uuid])
+
+  redemptions    BeneficiaryInkindRedemption[]
+  stockMovements InkindStockMovement[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  createdBy String?
+
+  @@unique([groupId, inkindId]) // A group can’t get the same inkind twice accidentally.
+  @@index([groupId])
+  @@index([inkindId])
+  @@map("tbl_group_inkinds")
+}
+
+model BeneficiaryInkindRedemption {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  beneficiaryWallet String
+  groupInkindId     String
+
+  quantity Int @default(1)
+
+  beneficiary Beneficiary @relation(fields: [beneficiaryWallet], references: [walletAddress])
+  groupInkind GroupInkind @relation(fields: [groupInkindId], references: [uuid])
+
+  stockMovement InkindStockMovement?
+
+  redeemedAt DateTime @default(now())
+
+  txHash String?
+  status String @default("PENDING")
+
+  vendorUid String? @db.Uuid()
+  Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])
+
+  @@index([groupInkindId])
+  @@index([beneficiaryWallet])
+  @@index([vendorUid])
+  @@index([redeemedAt(sort: Desc)])
+  @@map("tbl_beneficiary_inkind_redemptions")
+}
+
+// ============== End Inkind SCHEMAS ================

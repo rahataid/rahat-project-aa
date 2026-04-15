@@ -8,7 +8,7 @@ import { SettingsModule } from '@rumsan/settings';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { CashTrackerModule } from '../cash-tracker';
 import { GrievancesModule } from '../grievances/grievances.module';
-import { InkindTrackerModule } from '../inkind-tracker';
+import { InkindsModule } from '../inkinds';
 import { ListenersModule } from '../listeners/listeners.module';
 import { ProcessorsModule } from '../processors/processors.module';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
@@ -23,6 +23,7 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
@@ -94,7 +95,8 @@ import { ChainModule } from '../chain/chain.module';
     ChainModule,
     CashTrackerModule,
     GrievancesModule,
-    InkindTrackerModule,
+    InkindsModule,
+    OtpModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
