@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -18,6 +19,7 @@ import {
   DisburseDto,
   FundAccountDto,
   IChainService,
+  RedeemInkindDto,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
@@ -41,18 +43,32 @@ export interface EVMChainConfig {
 export class EvmChainService implements IChainService {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
+  private _evmProcessor: EVMProcessor | null = null;
+  private _contractProcessor: ContractProcessor | null = null;
   name = 'evm';
+
   constructor(
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => EVMProcessor))
-    private readonly evmProcessor: EVMProcessor,
-    @Inject(forwardRef(() => ContractProcessor))
-    private readonly contractProcessor: ContractProcessor
+    private readonly moduleRef: ModuleRef
   ) {
     this.initializeProvider();
+  }
+
+  private get evmProcessor(): EVMProcessor {
+    if (!this._evmProcessor) {
+      this._evmProcessor = this.moduleRef.get(EVMProcessor, { strict: false });
+    }
+    return this._evmProcessor!;
+  }
+
+  private get contractProcessor(): ContractProcessor {
+    if (!this._contractProcessor) {
+      this._contractProcessor = this.moduleRef.get(ContractProcessor, { strict: false });
+    }
+    return this._contractProcessor!;
   }
 
   getChainType(): ChainType {
@@ -1250,5 +1266,16 @@ export class EvmChainService implements IChainService {
     delete otpRes.otpHash;
 
     return otpRes;
+  }
+
+  async redeemInkind(redeemDto: RedeemInkindDto) {
+    return this.evmQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
+      attempts: 3,
+      removeOnComplete: true,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+    });
   }
 }

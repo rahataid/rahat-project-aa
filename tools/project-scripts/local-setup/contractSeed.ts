@@ -15,7 +15,13 @@ const corePrisma = new PrismaClient({
 const prisma = new PrismaService();
 const settings = new SettingsService(prisma);
 
-const contractName = ['AAProject', 'RahatDonor', 'RahatToken'];
+const contractName = [
+  'AAProject',
+  'RahatDonor',
+  'RahatToken',
+  'InkindToken',
+  'Inkind',
+];
 
 class ContractSeed extends ContractLib {
   projectUUID: string;
@@ -62,7 +68,6 @@ class ContractSeed extends ContractLib {
     // const deployerKey = process.env.DEPLOYER_PRIVATE_KEY as string;
 
     console.log('------DEPLOYER KEY-----');
-    console.log(deployerKey);
 
     const deployerAccount = this.getWalletFromPrivateKey(deployerKey);
 
@@ -106,6 +111,17 @@ class ContractSeed extends ContractLib {
       address: RahatToken.contract.target,
       startBlock: RahatToken.blockNumber,
     };
+
+    const InkindToken = await this.deployContract(
+      'RahatToken',
+      [forwarderAddress, 'InkindToken', 'INKIND', deployerAccount, 1],
+      deployerKey
+    );
+    this.contracts['InkindToken'] = {
+      address: InkindToken.contract.target,
+      startBlock: InkindToken.blockNumber,
+    };
+
     console.log('----------Depolying AA Project Contract-------------------');
     const AAProjectContract = await this.deployContract(
       'AAProject',
@@ -121,6 +137,19 @@ class ContractSeed extends ContractLib {
     this.contracts['AAProject'] = {
       address: AAProjectContract.contract.target,
       startBlock: AAProjectContract.blockNumber,
+    };
+
+    console.log(
+      '----------Deploying Inkind token redeem contract-------------------'
+    );
+    const InkindRedeemContract = await this.deployContract(
+      'Inkind',
+      [await InkindToken.contract.getAddress(), RahatAccessManagerAddress],
+      deployerKey
+    );
+    this.contracts['Inkind'] = {
+      address: InkindRedeemContract.contract.target,
+      startBlock: InkindRedeemContract.blockNumber,
     };
 
     console.log("----------Deploying CashToken Contract-------------------'");
@@ -168,6 +197,15 @@ class ContractSeed extends ContractLib {
       'grantRole',
       [0, deployerAccount, 0],
       RahatAccessManagerAddress,
+      deployerAccount
+    );
+
+    console.log('Adding inkind address as owner in Inkind Token Contract ');
+    await this.callContractMethod(
+      'InkindToken',
+      'addOwner',
+      [InkindRedeemContract.contract.target],
+      InkindToken.contract.target.toString(),
       deployerAccount
     );
   }

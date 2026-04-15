@@ -4,6 +4,7 @@ export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
+export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
 export const STELLER_UID = 'stellar';
 
@@ -256,6 +257,7 @@ export const JOBS = {
     CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
@@ -292,6 +294,9 @@ export const JOBS = {
   SMS: {
     SEND_SMS: 'aa.jobs.sms.sendSms',
   },
+  CHAIN: {
+    REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+  }
 };
 
 export const EVENTS = {
