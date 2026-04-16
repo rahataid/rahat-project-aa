@@ -39,16 +39,17 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
+import { AppService } from '../app/app.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 @Injectable()
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
+    private readonly appService: AppService,
     private configService: ConfigService,
     @Inject(CHAIN_SERVICE)
     private readonly chainService: ChainService,
@@ -1150,9 +1151,7 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async beneficiaryInkindRedeem(
-    payload: BeneficiaryInkindRedeemDto
-  ): Promise<BeneficiaryRedemptionResponse> {
+  async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
     const { walletAddress, inkinds, user } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
@@ -1173,6 +1172,29 @@ export class InkindsService {
       if (!vendor) {
         throw new RpcException(
           `User '${user.name}' is not registered as a vendor`
+        );
+      }
+
+      const { value } = await this.appService.getSettings({
+        name: 'PROJECTINFO',
+      });
+
+      const isPhasePayoutActivate = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+          {
+            activeYear: value.active_year,
+            riverBasin: value.river_basin,
+          }
+        )
+      );
+
+      if (!isPhasePayoutActivate) {
+        this.logger.log(
+          'Payout phase not active. In-kind redemption is unavailable.'
+        );
+        throw new RpcException(
+          'Payout phase not active. In-kind redemption is unavailable.'
         );
       }
 
