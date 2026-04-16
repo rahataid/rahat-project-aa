@@ -916,6 +916,7 @@ export class BeneficiaryService {
               inkind: {
                 select: {
                   name: true,
+                  type: true,
                 },
               },
             },
