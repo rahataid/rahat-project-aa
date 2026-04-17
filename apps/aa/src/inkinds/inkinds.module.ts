@@ -1,10 +1,13 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
 import { InkindsController } from './inkinds.controller';
 import { InkindsService } from './inkinds.service';
 import { OtpModule } from '../otp/otp.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { BullModule } from '@nestjs/bull';
+import { ChainModule } from '../chain/chain.module';
+import { AppService } from '../app/app.service';
 
 @Module({
   imports: [
@@ -21,9 +24,22 @@ import { CORE_MODULE } from '../constants';
         },
       },
     ]),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR,
+    }),
+    forwardRef(() => ChainModule),
   ],
   controllers: [InkindsController],
-  providers: [InkindsService],
+  providers: [InkindsService, AppService],
   exports: [InkindsService],
 })
 export class InkindsModule {}
+/*
+A circular dependency has been detected inside ProcessorsModule. 
+Please, make sure that each side of a bidirectional relationships are decorated with "forwardRef()". 
+Note that circular relationships between custom providers (e.g., factories) are not supported since 
+functions cannot be called more than once.
+*/

@@ -35,6 +35,9 @@ export interface IChainService {
 
   // Stats
   getDisbursementStats?(): Promise<any>;
+
+  // Inkind redemption
+  redeemInkind?(redeemDto: RedeemInkindDto): Promise<any>;
 }
 
 export type ChainType = 'stellar' | 'evm';
@@ -90,4 +93,10 @@ export interface UpdateTriggerDto {
   params?: any;
   source?: string;
   isTriggered?: boolean;
+}
+
+export interface RedeemInkindDto {
+  beneficiaryAddress: string;
+  inkindId: string[];
+  vendorAddress: string;
 }

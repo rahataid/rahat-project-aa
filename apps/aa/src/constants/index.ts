@@ -4,6 +4,7 @@ export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
+export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
 export const STELLER_UID = 'stellar';
 
@@ -256,6 +257,7 @@ export const JOBS = {
     CHECK_BALANCE: `aa.jobs.evm.checkBalance_${process.env.PROJECT_ID}`,
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
@@ -267,16 +269,20 @@ export const JOBS = {
     UPDATE: 'aa.jobs.inkinds.update',
     DELETE: 'aa.jobs.inkinds.delete',
     GET: 'aa.jobs.inkinds.get',
+    GET_SUMMARY: 'aa.jobs.inkinds.getSummary',
     GET_ONE: 'aa.jobs.inkinds.getOne',
     ADD_INKIND_STOCK: 'aa.jobs.inkindStock.add',
     GET_ALL_STOCK_MOVEMENTS: 'aa.jobs.inkindStock.getAllMovements',
     REMOVE_INKIND_STOCK: 'aa.jobs.inkindStock.remove',
     ASSIGN_GROUP_INKIND: 'aa.jobs.groupInkinds.assign',
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
+    GET_UNASSIGNED_GROUP_INKIND:
+      'aa.jobs.groupInkinds.getUnassignedGroupInkind',
     GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
       'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
     GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
     GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
+    GET_LOGS_DETAILS_BY_TX_HASH: 'aa.jobs.groupInkinds.getLogsDetailsByTxHash',
     BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
@@ -288,6 +294,9 @@ export const JOBS = {
   SMS: {
     SEND_SMS: 'aa.jobs.sms.sendSms',
   },
+  CHAIN: {
+    REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+  }
 };
 
 export const EVENTS = {

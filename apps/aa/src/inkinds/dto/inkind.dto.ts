@@ -16,6 +16,14 @@ export enum InkindType {
   PRE_DEFINED = 'PRE_DEFINED',
 }
 
+export enum InkindTxStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
 export interface UserObject {
   id: number;
   userId: number;
@@ -185,4 +193,12 @@ export class GetVendorInkindLogsDto {
   @IsString()
   @IsIn(['redeemedAt', 'quantity'])
   sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { InkindStockMovementType, Prisma } from '@prisma/client';
@@ -11,8 +11,13 @@ import {
   UserObject,
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
+  InkindTxStatus,
 } from './dto/inkind.dto';
-import { AddInkindStockDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
+import {
+  AddInkindStockDto,
+  ListStockMovementsDto,
+  RemoveInkindStockDto,
+} from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
@@ -28,20 +33,27 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { CORE_MODULE } from '../constants';
+import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
+import { ChainService } from '../chain/chain.service';
+import { AppService } from '../app/app.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 @Injectable()
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
+    private readonly appService: AppService,
     private configService: ConfigService,
+    @Inject(CHAIN_SERVICE)
+    private readonly chainService: ChainService,
+    // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -181,7 +193,7 @@ export class InkindsService {
         [safeSort]: safeOrder,
       };
 
-      return paginate(
+      const result = await paginate(
         this.prisma.inkind,
         {
           where,
@@ -200,6 +212,29 @@ export class InkindsService {
         },
         { page, perPage }
       );
+
+      const uuids = result.data.map((item: { uuid: string }) => item.uuid);
+
+      const assignments = await this.prisma.groupInkind.groupBy({
+        by: ['inkindId'],
+        where: { inkindId: { in: uuids } },
+        _sum: {
+          quantityAllocated: true,
+          quantityRedeemed: true,
+        },
+      });
+
+      const assignmentMap = new Map(
+        assignments.map((a) => [a.inkindId, a._sum])
+      );
+
+      result.data = result.data.map((item: { uuid: string }) => ({
+        ...item,
+        totalAssigned: assignmentMap.get(item.uuid)?.quantityAllocated ?? 0,
+        totalRedeemed: assignmentMap.get(item.uuid)?.quantityRedeemed ?? 0,
+      }));
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkinds: ${error.message}`,
@@ -209,10 +244,64 @@ export class InkindsService {
     }
   }
 
+  async getInkindSummary() {
+    try {
+      this.logger.log(`Fetching inkind summary`);
+
+      const [summary, totalAssignedStock] = await Promise.all([
+        this.prisma.inkind.aggregate({
+          where: { deletedAt: null },
+          _count: {
+            id: true,
+          },
+          _sum: {
+            availableStock: true,
+          },
+        }),
+        this.prisma.groupInkind.aggregate({
+          _sum: {
+            quantityAllocated: true,
+            quantityRedeemed: true,
+          },
+        }),
+      ]);
+
+      this.logger.log(`Inkind summary fetched successfully`);
+      return {
+        totalInkindTypes: summary._count.id,
+        totalStock: summary._sum.availableStock,
+        totalAvailableStock:
+          summary._sum.availableStock -
+          (totalAssignedStock._sum.quantityAllocated || 0),
+        totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
+        totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind summary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   async getOne(uuid: string) {
     try {
       this.logger.log(`Fetching inkind: ${uuid}`);
-      return await this.findOneOrThrow(uuid);
+      const data = await this.findOneOrThrow(uuid);
+
+      const totalAssignedInkind = await this.prisma.groupInkind.aggregate({
+        where: { inkindId: uuid },
+        _sum: {
+          quantityAllocated: true,
+          quantityRedeemed: true,
+        },
+      });
+      return {
+        ...data,
+        totalAssigned: totalAssignedInkind._sum.quantityAllocated || 0,
+        totalRedeemed: totalAssignedInkind._sum.quantityRedeemed || 0,
+      };
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkind: ${error.message}`,
@@ -267,30 +356,35 @@ export class InkindsService {
     }
   }
 
-  async getAllStockMovements() {
+  async getAllStockMovements(payload: ListStockMovementsDto) {
+    const { page, perPage, order = 'desc', type } = payload;
     this.logger.log(`Fetching all inkind stock movements`);
     try {
-      return await this.prisma.inkindStockMovement.findMany({
-        where: {
-          type: {
-            not: InkindStockMovementType.REDEEM,
-          },
-        },
-        include: {
-          inkind: true,
-          groupInkind: {
-            select: {
-              group: {
-                select: {
-                  name: true,
+      const where: Prisma.InkindStockMovementWhereInput = {
+        type: type ? type : { not: InkindStockMovementType.REDEEM },
+      };
+
+      return paginate(
+        this.prisma.inkindStockMovement,
+        {
+          where,
+          include: {
+            inkind: true,
+            groupInkind: {
+              select: {
+                group: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
+            redemption: true,
           },
-          redemption: true,
+          orderBy: { createdAt: order },
         },
-        orderBy: { createdAt: 'desc' },
-      });
+        { page, perPage }
+      );
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkind stock movements: ${error.message}`,
@@ -328,6 +422,30 @@ export class InkindsService {
   }
 
   // Group inkinds management
+  async getUnassignedInkindGroups(uuid: string) {
+    this.logger.log(`Fetching unassigned groups for inkind: ${uuid}`);
+    try {
+      return await this.prisma.beneficiaryGroups.findMany({
+        where: {
+          groupInkinds: {
+            none: {
+              inkindId: uuid,
+            },
+          },
+          NOT: {
+            name: { startsWith: 'Walk-in' },
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch unassigned groups for inkind ${uuid}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   async assignGroupInkind(payload: AssignGroupInkindDto) {
     const { inkindId, groupId, quantity, user } = payload;
     const newQuantity = quantity || 1;
@@ -402,10 +520,19 @@ export class InkindsService {
     }
   }
 
-  async getByGroup() {
+  async getByGroup(inkindType?: string) {
+    const where = inkindType
+      ? {
+          inkind: {
+            type: inkindType,
+          },
+        }
+      : undefined;
+
     try {
       this.logger.log(`Fetching inkinds by group`);
       const groupInkinds = await this.prisma.groupInkind.findMany({
+        where,
         include: {
           inkind: true,
           group: {
@@ -541,6 +668,7 @@ export class InkindsService {
           availableStock: {
             gt: 0,
           },
+          deletedAt: null,
           groupInkinds: {
             none: {
               group: {
@@ -580,6 +708,8 @@ export class InkindsService {
       order = 'desc',
       page = 1,
       perPage = 10,
+      fromDate,
+      toDate,
     } = payload;
 
     this.logger.log(`Fetching inkind redemption logs for vendor: ${vendorId}`);
@@ -620,6 +750,13 @@ export class InkindsService {
             },
           ],
         }),
+        ...(fromDate &&
+          toDate && {
+            redeemedAt: {
+              gte: fromDate,
+              lte: toDate,
+            },
+          }),
       };
 
       // Build order by
@@ -693,30 +830,20 @@ export class InkindsService {
         { page, perPage }
       );
 
-      // Format the response
-      const formattedLogs = result.data.map((redemption: any) => ({
-        uuid: redemption.uuid,
-        quantity: redemption.quantity,
-        redeemedAt: redemption.redeemedAt,
-        txHash: redemption.txHash,
-        beneficiary: {
-          uuid: redemption.beneficiary.uuid,
-          walletAddress: redemption.beneficiary.walletAddress,
-          phone: redemption.beneficiary.phone,
-          name:
-            (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
-            null,
-        },
-        inkind: {
-          uuid: redemption.groupInkind.inkind.uuid,
-          name: redemption.groupInkind.inkind.name,
-          type: redemption.groupInkind.inkind.type,
-        },
-        group: {
-          uuid: redemption.groupInkind.group.uuid,
-          name: redemption.groupInkind.group.name,
-        },
-      }));
+      const groupedMap = new Map<
+        string,
+        { txHash: string | null; date: Date }
+      >();
+      for (const redemption of result.data as any[]) {
+        const key = redemption.txHash ?? '__no_txhash__';
+        if (!groupedMap.has(key)) {
+          groupedMap.set(key, {
+            txHash: redemption.txHash ?? null,
+            date: redemption.redeemedAt,
+          });
+        }
+      }
+      const formattedLogs = Array.from(groupedMap.values());
 
       return {
         data: {
@@ -737,6 +864,65 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch logs for vendor ${vendorId}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getLogsDetailsByTxHash(txHash: string, vendorUid: string) {
+    this.logger.log(`Fetching redemption details for txHash: ${txHash}`);
+
+    if (!vendorUid) {
+      throw new RpcException('vendorUid is required');
+    }
+
+    try {
+      const redemptions =
+        await this.prisma.beneficiaryInkindRedemption.findMany({
+          where: { txHash: txHash ?? null, vendorUid },
+          include: {
+            beneficiary: {
+              select: {
+                walletAddress: true,
+                extras: true,
+              },
+            },
+            groupInkind: {
+              select: {
+                inkind: {
+                  select: {
+                    name: true,
+                    type: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      if (redemptions.length === 0) {
+        throw new RpcException(`No redemptions found for txHash: ${txHash}`);
+      }
+
+      const first = redemptions[0];
+      const extras = first.beneficiary.extras as Record<string, unknown>;
+
+      return {
+        beneficiaryWalletAddress: first.beneficiary.walletAddress,
+        phone: (extras?.phone as string) ?? null,
+        txHash: first.txHash,
+        status: first.txHash ? 'Completed' : 'Pending',
+        timestamp: first.redeemedAt,
+        claimedInkinds: redemptions.map((r) => ({
+          quantity: r.quantity,
+          name: r.groupInkind.inkind.name,
+          type: r.groupInkind.inkind.type,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch redemption details for txHash ${txHash}: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
@@ -965,9 +1151,7 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async beneficiaryInkindRedeem(
-    payload: BeneficiaryInkindRedeemDto
-  ): Promise<BeneficiaryRedemptionResponse> {
+  async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
     const { walletAddress, inkinds, user } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
@@ -988,6 +1172,29 @@ export class InkindsService {
       if (!vendor) {
         throw new RpcException(
           `User '${user.name}' is not registered as a vendor`
+        );
+      }
+
+      const { value } = await this.appService.getSettings({
+        name: 'PROJECTINFO',
+      });
+
+      const isPhasePayoutActivate = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+          {
+            activeYear: value.active_year,
+            riverBasin: value.river_basin,
+          }
+        )
+      );
+
+      if (!isPhasePayoutActivate) {
+        this.logger.log(
+          'Payout phase not active. In-kind redemption is unavailable.'
+        );
+        throw new RpcException(
+          'Payout phase not active. In-kind redemption is unavailable.'
         );
       }
 
@@ -1099,6 +1306,26 @@ export class InkindsService {
         return [...preDefinedResults, ...walkInResults];
       });
 
+      const batchedInkinds = inkinds.map((inkind) => inkind.uuid);
+
+      try {
+        this.logger.log(
+          `Enqueuing contract job for inkind redemption: beneficiary=${walletAddress}, vendor=${
+            user.wallet
+          }, inkinds=${batchedInkinds.join(', ')}`
+        );
+        this.chainService.redeemInkind({
+          beneficiaryAddress: walletAddress,
+          vendorAddress: user.wallet,
+          inkinds: batchedInkinds,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue contract job for inkind redemption: ${error.message}`,
+          error.stack
+        );
+      }
+
       this.logger.log(
         `Successfully redeemed ${redemptionResults.length} inkinds for beneficiary: ${walletAddress}`
       );
@@ -1110,6 +1337,45 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to redeem inkinds for beneficiary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateRedeemInkindTxHash(
+    inkindUuid: string[],
+    txHash: string,
+    beneficiaryWallet: string
+  ) {
+    try {
+      this.logger.log(
+        `Updating redemption txHash for beneficiary: ${beneficiaryWallet}, inkindUuids: ${inkindUuid.join(
+          ', '
+        )}`
+      );
+
+      await this.prisma.beneficiaryInkindRedemption.updateMany({
+        where: {
+          beneficiaryWallet,
+          groupInkind: {
+            inkindId: { in: inkindUuid },
+          },
+        },
+        data: { txHash, status: InkindTxStatus.COMPLETED },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for redemptions of beneficiary: ${beneficiaryWallet}`
+      );
+
+      return {
+        success: true,
+        message: 'Redemption txHash updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update redemption txHash for beneficiary: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
@@ -1293,6 +1559,7 @@ export class InkindsService {
           groupInkindId: item.groupInkindUuid,
           quantity: quantityPerBeneficiary,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 
@@ -1419,6 +1686,7 @@ export class InkindsService {
           groupInkindId: groupInkindUuid,
           quantity: 1,
           vendorUid: vendor.uuid,
+          status: InkindTxStatus.PENDING,
         },
       });
 

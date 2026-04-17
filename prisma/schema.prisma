@@ -778,6 +778,7 @@ model BeneficiaryInkindRedemption {
   redeemedAt DateTime @default(now())
 
   txHash String?
+  status String @default("PENDING")
 
   vendorUid String? @db.Uuid()
   Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])

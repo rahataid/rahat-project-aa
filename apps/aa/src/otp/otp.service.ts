@@ -17,6 +17,13 @@ export class OtpService {
   ) {}
 
   async sendSms(number: string, message: string) {
+    const otp = await this.getOtp();
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(`[DEV] OTP for ${number}: ${otp}`);
+      return { otp };
+    }
+
     this.logger.log(`Sending SMS to ${number} with message: ${message}`);
     try {
       const { data } = await this.commsClient.transport.list();
@@ -28,9 +35,6 @@ export class OtpService {
       if (!transportId || !appId || !url) {
         throw new RpcException('SMS_TRANSPORT_ID, APP_ID, URL are required');
       }
-
-      const otp = await this.getOtp();
-      this.logger.log(`Generated OTP: ${otp} for phone number: ${number}`);
 
       const finalMessage = `${message} ${otp}`;
       const sms = await this.loadSmsModule('prabhu');
@@ -49,6 +53,9 @@ export class OtpService {
   }
 
   async getOtp() {
+    if (process.env.NODE_ENV !== 'production') {
+      return '1234';
+    }
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
