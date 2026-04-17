@@ -276,8 +276,7 @@ async function seedTriggers(
     for (const phase of phases) {
       const checkPhaseQuery = Prisma.sql`
       SELECT count(*) FROM tbl_phases
-      WHERE "riverBasin" = ${riverBasin} AND "activeYear" = ${activeYear} AND name = ${phase}";
-    `;
+      WHERE "riverBasin" = ${riverBasin} AND "activeYear" = ${activeYear} AND name = ${phase}`;
 
       const [phaseExists] = (await txManager.queryRaw(
         2,
