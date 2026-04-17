@@ -46,7 +46,7 @@ export class VendorsService {
 
   // Update vendor details
   async updateVendorDetails(dto: UpdateVendorDetailsDto) {
-    const {uuid, ...updateData } = dto;
+    const { uuid, ...updateData } = dto;
 
     this.logger.log(`Updating vendor details for ${uuid}`);
 
@@ -56,7 +56,7 @@ export class VendorsService {
 
     try {
       const vendorDetails = await this.prisma.vendor.findFirst({
-        where: {uuid},
+        where: { uuid },
       });
 
       if (!vendorDetails) {
@@ -65,7 +65,7 @@ export class VendorsService {
 
       return this.prisma.vendor.update({
         where: { uuid },
-        data: updateData,
+        data: { ...updateData, updatedAt: new Date() },
       });
     } catch (error) {
       this.logger.error(error.message);
