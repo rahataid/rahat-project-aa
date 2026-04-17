@@ -26,6 +26,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { BatchTransferDto } from '../processors/types';
+import { UpdateVendorDetailsDto } from './dto/vendor-details.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -42,6 +43,35 @@ export class VendorsService {
     @InjectQueue(BQUEUE.VENDOR_CVA)
     private readonly vendorCVAPayoutQueue: Queue
   ) {}
+
+  // Update vendor details
+  async updateVendorDetails(dto: UpdateVendorDetailsDto) {
+    const {uuid, ...updateData } = dto;
+
+    this.logger.log(`Updating vendor details for ${uuid}`);
+
+    if (!uuid) {
+      throw new RpcException('Either id or uuid must be provided');
+    }
+
+    try {
+      const vendorDetails = await this.prisma.vendor.findFirst({
+        where: {uuid},
+      });
+
+      if (!vendorDetails) {
+        throw new RpcException('Vendor not found');
+      }
+
+      return this.prisma.vendor.update({
+        where: { uuid },
+        data: updateData,
+      });
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new RpcException(error.message);
+    }
+  }
 
   async listWithProjectData(query: PaginationBaseDto) {
     const { page, perPage, sort, order, search } = query;
