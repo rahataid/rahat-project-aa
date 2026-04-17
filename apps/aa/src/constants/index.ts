@@ -209,6 +209,7 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    UPDATE_DETAILS: 'rahat.jobs.vendor.update',
     CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
     GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
     UPDATE_TOKEN_REDEMPTION_STATUS:
@@ -296,7 +297,7 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
-  }
+  },
 };
 
 export const EVENTS = {
