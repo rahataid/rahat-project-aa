@@ -79,6 +79,7 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
+    GET_REDEEM_INFO_INKIND: 'aa.jobs.beneficiary.getRedeemInfoInkind',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
