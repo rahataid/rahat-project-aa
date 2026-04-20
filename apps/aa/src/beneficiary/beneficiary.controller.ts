@@ -125,6 +125,16 @@ export class BeneficiaryController {
       payload.beneficiaryUUID
     );
   }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO_INKIND,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryRedeemInfoInkind(payload: { beneficiaryUUID: string }) {
+    return this.beneficiaryService.getBeneficiaryRedeemInfoInkind(
+      payload.beneficiaryUUID
+    );
+  }
   // ***** groups end ********** //
 
   // ***** groups fund mgmt ********** //

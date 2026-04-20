@@ -22,6 +22,7 @@ import {
   GetVendorTokenRedemptionStatsDto,
 } from './dto/vendorTokenRedemption.dto';
 import { BatchTransferDto } from '../processors/types';
+import { UpdateVendorDetailsDto } from './dto/vendor-details.dto';
 
 @Controller()
 export class VendorsController {
@@ -167,5 +168,15 @@ export class VendorsController {
   })
   async processBatchTransfer(data: BatchTransferDto) {
     return this.vendorService.processBatchTransfer(data);
+  }
+
+  // Update vendor details
+  @MessagePattern({
+    cmd: JOBS.VENDOR.UPDATE_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  async updateVendorDetails(dto: UpdateVendorDetailsDto) {
+    console.log('Updating vendor details with data:', dto);
+    return this.vendorService.updateVendorDetails(dto);
   }
 }
