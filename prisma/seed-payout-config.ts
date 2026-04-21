@@ -1,4 +1,3 @@
-// NOTE: THIS SETTINGS IS NOT USED ANYMORE
 import { SettingDataType } from '@prisma/client';
 import { PrismaService } from '@rumsan/prisma';
 
