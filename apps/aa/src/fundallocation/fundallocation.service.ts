@@ -3,6 +3,7 @@ import { SettingsService } from '@rumsan/settings';
 import { createContractInstanceSign } from '../utils/web3';
 import { PrismaService } from '@rumsan/prisma';
 import { ethers } from 'ethers';
+import { AddFund } from './dto/fundallocation.dto';
 
 @Injectable()
 export class FundService {
@@ -11,7 +12,7 @@ export class FundService {
     private readonly prisma: PrismaService
   ) {}
 
-  async addFundToProject(payload: any) {
+  async addFundToProject(payload: AddFund) {
     try {
       const { amount } = payload;
       const contractSettings = await this.settingService.getPublic('CONTRACTS');
