@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
-import { createContractInstanceSign } from '../utils/web3';
+import {
+  createContractInstance,
+  createContractInstanceSign,
+} from '../utils/web3';
 import { PrismaService } from '@rumsan/prisma';
 import { ethers } from 'ethers';
 import { AddFund } from './dto/fundallocation.dto';
@@ -20,12 +23,19 @@ export class FundService {
       const rahatTokenAddress = contractValue?.RAHATTOKEN?.ADDRESS;
       const cashTokenAddress = contractValue?.CASHTOKEN?.ADDRESS;
       const projectAddress = contractValue?.AAPROJECT?.ADDRESS;
-      const amountWei = ethers.parseUnits(amount, 2);
 
       const donorContract = await createContractInstanceSign(
         'RAHATDONOR',
         this.prisma.setting
       );
+
+      const tokenContract = await createContractInstance(
+        'RAHATTOKEN',
+        this.prisma.setting
+      );
+
+      const decimal = await tokenContract.decimals.staticCall();
+      const amountWei = ethers.parseUnits(amount, decimal);
 
       const tx = await donorContract?.mintTokens(
         rahatTokenAddress,

@@ -71,8 +71,6 @@ export async function createContractInstanceSign(
     },
   });
 
-  console.log(deployerPrivateKey);
-
   //  Get RPC URL
   const res = await model.findFirstOrThrow({
     where: {
