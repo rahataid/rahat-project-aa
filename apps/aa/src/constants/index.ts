@@ -82,6 +82,7 @@ export const JOBS = {
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
+    GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -296,7 +297,10 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
-  }
+  },
+  FUND_MANAGEMENT: {
+    ADD_FUND: 'aa.jobs.fundManagement.add',
+  },
 };
 
 export const EVENTS = {

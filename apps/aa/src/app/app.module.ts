@@ -24,6 +24,7 @@ import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
+import { FundallocationModule } from '../fundallocation/fundallocation.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { OtpModule } from '../otp/otp.module';
     GrievancesModule,
     InkindsModule,
     OtpModule,
+    FundallocationModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
