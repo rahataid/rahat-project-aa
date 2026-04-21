@@ -296,7 +296,10 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
-  }
+  },
+  FUND_MANAGEMENT: {
+    ADD_FUND: 'aa.jobs.fundManagement.add',
+  },
 };
 
 export const EVENTS = {
