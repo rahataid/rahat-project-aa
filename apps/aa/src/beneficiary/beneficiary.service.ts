@@ -1030,12 +1030,12 @@ export class BeneficiaryService {
       );
       const tokenAddress = cashTokenSetting.value;
 
-      const alchemyApiUrl = (await this.settingsService.getPublic('API_URL'))
-        .value as { URL: string };
+      const alchemyApiUrl = (await this.settingsService.getPublic('CHAIN_SETTINGS'))
+        .value as any;
 
       // Initialize total balance
       let totalBalance = 0n;
-      const metadataResponse = await axios.post(alchemyApiUrl.URL, {
+      const metadataResponse = await axios.post(alchemyApiUrl.rpcUrl, {
         jsonrpc: '2.0',
         id: 1,
         method: 'alchemy_getTokenMetadata',
@@ -1046,7 +1046,7 @@ export class BeneficiaryService {
       // Fetch balances for each wallet
       await Promise.all(
         wallets.map(async (wallet) => {
-          const response = await axios.post(alchemyApiUrl.URL, {
+          const response = await axios.post(alchemyApiUrl.rpcUrl, {
             jsonrpc: '2.0',
             id: 1,
             method: 'alchemy_getTokenBalances',
