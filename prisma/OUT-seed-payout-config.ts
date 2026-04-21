@@ -1,4 +1,4 @@
-// prisma/seedForecastTabConfig.ts
+// NOTE: THIS SETTINGS IS NOT USED ANYMORE
 import { SettingDataType } from '@prisma/client';
 import { PrismaService } from '@rumsan/prisma';
 
@@ -7,7 +7,7 @@ const prismaService = new PrismaService();
 export const seedPayoutTypeConfig = async () => {
   // Types configuration
   const typesConfig = {
-    name: 'PAYOUT_TYPE_CONFIG',
+',
     value: {
       types: [
         {
