@@ -60,10 +60,10 @@ export class AppService {
     }
 
     // Process chainSettings
-    if (payload.BLOCKCHAIN) {
+    if (payload.CHAIN_SETTINGS) {
       settings.push({
-        name: 'BLOCKCHAIN',
-        value: payload.BLOCKCHAIN,
+        name: 'CHAIN_SETTINGS',
+        value: payload.CHAIN_SETTINGS,
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,

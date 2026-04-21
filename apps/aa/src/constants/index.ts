@@ -24,7 +24,6 @@ export const CONTROLLERS = {
     LIST: NAMESPACE + '.vendor.list',
     LISTONE: NAMESPACE + '.vendor.listone',
     UPDATE: NAMESPACE + '.vendor.update',
-    BLOCKCHAIN: NAMESPACE + '.vendor.blockchain',
   },
   BENEFICIARY: {
     CREATE: NAMESPACE + '.beneficiary.create',
