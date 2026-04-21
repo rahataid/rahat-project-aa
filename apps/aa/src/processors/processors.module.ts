@@ -55,6 +55,11 @@ import { InkindsModule } from '../inkinds';
     }),
     BullModule.registerQueue({
       name: BQUEUE.EVM,
+      settings: {
+        lockDuration: 300000, // 5 minutes
+        lockRenewTime: 100000, // 1.67 minutes
+        stalledInterval: 60000 // 1 minute
+      }
     }),
   ],
   providers: [

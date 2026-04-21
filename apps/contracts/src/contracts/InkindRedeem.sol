@@ -22,30 +22,26 @@ contract Inkind is IInkind, AccessManaged {
     }
 
     event InkindRedeemed(
-        bytes16 indexed inkind,
+        InkindDetails[] inkindDetails,
         address indexed vendor,
         address indexed beneficiary
     );
 
-    mapping(bytes16 => address) public redeemedInkind; // Mapping to track redeemed inkind tokens
-    mapping(address => address) public beneficiaryVendors; // Mapping to track the vendor associated with each beneficiary
+    mapping(address => mapping(address => InkindDetails[]))
+        public beneficiaryInkinds; // Mapping to track inkind tokens for each beneficiary
 
     /// @notice Function to redeem inkind tokens for a beneficiary from a vendor
-    /// @param _inkind The byte16 array of the inkind token being redeemed
+    /// @param _inkinds The array of InkindDetails for the inkind tokens being redeemed
     /// @param _vendor The address of the vendor from which the inkind token is being redeemed
     /// @param _beneficiary The address of the beneficiary redeeming the inkind token
     function redeemInkind(
-        bytes16[] calldata _inkind,
         address _vendor,
         address _beneficiary,
-        uint256 _inkindsValue
+        uint256 _inkindsValue,
+        InkindDetails[] calldata _inkinds
     ) external restricted {
-        for (uint i = 0; i < _inkind.length; i++) {
-            redeemedInkind[_inkind[i]] = _beneficiary; // Store the redeemed inkind tokens for the beneficiary
-            emit InkindRedeemed(_inkind[i], _vendor, _beneficiary); // Emit an event for the redemption of the inkind token
-        }
-
-        beneficiaryVendors[_beneficiary] = _vendor; // Associate the beneficiary with the vendor
+        beneficiaryInkinds[_beneficiary][_vendor] = _inkinds; // Store the inkind details for the beneficiary and vendor
+        emit InkindRedeemed(_inkinds, _vendor, _beneficiary); // Emit an event for the redemption of the inkind token
         IRahatToken(defaultToken).mint(_vendor, _inkindsValue); // Mint tokens for the vendor
     }
 }

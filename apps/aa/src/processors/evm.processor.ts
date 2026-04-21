@@ -754,7 +754,7 @@ export class EVMProcessor {
       const convertedInkindUuid = inkinds.map((uuid) =>
         ethers.hexlify(ethers.toBeArray('0x' + uuid.replace(/-/g, '')))
       );
-
+      
       try {
         const redeemInkind = await inkindContract.redeemInkind(
           convertedInkindUuid,
