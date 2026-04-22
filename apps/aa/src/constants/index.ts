@@ -287,6 +287,7 @@ export const JOBS = {
     BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
+    BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -300,6 +301,7 @@ export const JOBS = {
   },
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',
+    TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
   },
 };
 

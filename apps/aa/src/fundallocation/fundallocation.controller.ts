@@ -15,4 +15,12 @@ export class FundAllocationController {
   addFund(@Payload() payload: AddFund) {
     return this.fundService.addFundToProject(payload);
   }
+
+  @MessagePattern({
+    cmd: JOBS.FUND_MANAGEMENT.TOKEN_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  findTokenDetails() {
+    return this.fundService.getTokenDetails();
+  }
 }

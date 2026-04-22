@@ -50,4 +50,38 @@ export class FundService {
       throw err;
     }
   }
+
+  async getTokenDetails() {
+    try {
+      const contractSettings = await this.settingService.getPublic('CONTRACT');
+      const contractValue = contractSettings?.value as any;
+      const projectAddress = contractValue?.AAPROJECT?.ADDRESS;
+      console.log({ projectAddress });
+
+      const tokenContract = await createContractInstance(
+        'RAHATTOKEN',
+        this.prisma.setting
+      );
+
+      const decimal = await tokenContract.decimals.staticCall();
+      const name = await tokenContract.name.staticCall();
+      const symbol = await tokenContract.symbol.staticCall();
+      const totalSupply = await tokenContract.totalSupply.staticCall();
+      const projectBalance = await tokenContract.balanceOf.staticCall(
+        projectAddress
+      );
+
+      return {
+        decimal: Number(decimal),
+        name,
+        symbol,
+        totalSupply: ethers.formatUnits(totalSupply, Number(decimal)),
+        projectBalance: ethers.formatUnits(projectBalance, Number(decimal)),
+        projectAddress,
+        tokenAddress: await tokenContract.getAddress(),
+      };
+    } catch (err) {
+      throw err;
+    }
+  }
 }
