@@ -1360,6 +1360,225 @@ export class InkindsService {
     }
   }
 
+  async getBeneficiaryInkindDetails(payload: {
+    beneficiaryUuid?: string;
+    walletAddress?: string;
+  }) {
+    const { beneficiaryUuid, walletAddress } = payload || {};
+
+    this.logger.log(
+      `Fetching assigned, redeemed, and available inkind details for beneficiary: uuid=${
+        beneficiaryUuid || 'N/A'
+      }, wallet=${walletAddress || 'N/A'}`
+    );
+
+    try {
+      if (!beneficiaryUuid && !walletAddress) {
+        throw new RpcException(
+          'Either beneficiaryUuid or walletAddress is required'
+        );
+      }
+
+      const beneficiary = await this.prisma.beneficiary.findFirst({
+        where: {
+          ...(beneficiaryUuid && { uuid: beneficiaryUuid }),
+          ...(walletAddress && { walletAddress }),
+        },
+        select: {
+          uuid: true,
+          walletAddress: true,
+          phone: true,
+          extras: true,
+        },
+      });
+
+      if (!beneficiary) {
+        throw new RpcException('Beneficiary not found');
+      }
+
+      const [groupInkinds, redemptions, walkInInkinds] = await Promise.all([
+        this.prisma.groupInkind.findMany({
+          where: {
+            group: {
+              beneficiaries: {
+                some: {
+                  beneficiaryId: beneficiary.uuid,
+                },
+              },
+            },
+          },
+          select: {
+            uuid: true,
+            quantityAllocated: true,
+            inkind: {
+              select: {
+                uuid: true,
+                name: true,
+                type: true,
+              },
+            },
+            group: {
+              select: {
+                _count: {
+                  select: {
+                    beneficiaries: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        this.prisma.beneficiaryInkindRedemption.findMany({
+          where: {
+            beneficiaryWallet: beneficiary.walletAddress,
+          },
+          select: {
+            quantity: true,
+            groupInkind: {
+              select: {
+                inkind: {
+                  select: {
+                    uuid: true,
+                    name: true,
+                    type: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        this.prisma.inkind.findMany({
+          where: {
+            type: InkindType.WALK_IN,
+            availableStock: { gt: 0 },
+            deletedAt: null,
+          },
+          select: {
+            uuid: true,
+            name: true,
+            type: true,
+            availableStock: true,
+          },
+        }),
+      ]);
+
+      type InkindDetailRow = {
+        inkindUuid: string;
+        inkindName: string;
+        inkindType: string;
+        assignedAmount?: number;
+        redeemedAmount: number;
+        availableAmount: number;
+        status: 'REDEEMED' | 'PARTIALLY_REDEEMED' | 'AVAILABLE';
+      };
+
+      const inkindMap = new Map<string, InkindDetailRow>();
+
+      const getOrInit = (
+        inkindUuid: string,
+        inkindName: string,
+        inkindType: string
+      ) => {
+        const existing = inkindMap.get(inkindUuid);
+        if (existing) return existing;
+
+        const created: InkindDetailRow = {
+          inkindUuid,
+          inkindName,
+          inkindType,
+          assignedAmount: 0,
+          redeemedAmount: 0,
+          availableAmount: 0,
+          status: 'AVAILABLE',
+        };
+        inkindMap.set(inkindUuid, created);
+        return created;
+      };
+
+      for (const groupInkind of groupInkinds) {
+        const memberCount = groupInkind.group._count.beneficiaries;
+        if (!memberCount) continue;
+
+        const quantityPerBeneficiary = Math.floor(
+          groupInkind.quantityAllocated / memberCount
+        );
+
+        const row = getOrInit(
+          groupInkind.inkind.uuid,
+          groupInkind.inkind.name,
+          groupInkind.inkind.type
+        );
+        if (row.assignedAmount) row.assignedAmount += quantityPerBeneficiary;
+      }
+
+      const redeemedWalkInSet = new Set<string>();
+
+      for (const redemption of redemptions) {
+        const row = getOrInit(
+          redemption.groupInkind.inkind.uuid,
+          redemption.groupInkind.inkind.name,
+          redemption.groupInkind.inkind.type
+        );
+        row.redeemedAmount += redemption.quantity;
+
+        if (redemption.groupInkind.inkind.type === InkindType.WALK_IN) {
+          redeemedWalkInSet.add(redemption.groupInkind.inkind.uuid);
+        }
+      }
+
+      for (const row of inkindMap.values()) {
+        if (row.assignedAmount)
+          row.availableAmount = Math.max(
+            row.assignedAmount - row.redeemedAmount,
+            0
+          );
+      }
+
+      for (const item of walkInInkinds) {
+        if (redeemedWalkInSet.has(item.uuid)) continue;
+        const row = getOrInit(item.uuid, item.name, item.type);
+        row.availableAmount += 1;
+      }
+
+      for (const row of inkindMap.values()) {
+        if (row.inkindType === InkindType.WALK_IN) {
+          delete row.assignedAmount;
+        }
+
+        if (row.availableAmount <= 0 && row.redeemedAmount > 0) {
+          row.status = 'REDEEMED';
+        } else if (row.redeemedAmount > 0 && row.availableAmount > 0) {
+          row.status = 'PARTIALLY_REDEEMED';
+        } else {
+          row.status = 'AVAILABLE';
+        }
+      }
+
+      const inkinds = Array.from(inkindMap.values());
+
+      return {
+        inkinds,
+        summary: {
+          totalAssigned: inkinds.reduce(
+            (sum, i) => sum + (i.assignedAmount || 0),
+            0
+          ),
+          totalRedeemed: inkinds.reduce((sum, i) => sum + i.redeemedAmount, 0),
+          totalAvailable: inkinds.reduce(
+            (sum, i) => sum + i.availableAmount,
+            0
+          ),
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch beneficiary inkind details: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   // ==================== VALIDATION HELPERS ====================
   private async validatePreDefinedInkinds(
     preDefinedPayload: Array<{ uuid: string; groupInkindUuid: string }>,
