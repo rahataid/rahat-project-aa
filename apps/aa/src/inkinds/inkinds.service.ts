@@ -1508,7 +1508,7 @@ export class InkindsService {
           groupInkind.inkind.name,
           groupInkind.inkind.type
         );
-        if (row.assignedAmount) row.assignedAmount += quantityPerBeneficiary;
+        row.assignedAmount = (row.assignedAmount || 0) + quantityPerBeneficiary;
       }
 
       const redeemedWalkInSet = new Set<string>();
@@ -1527,17 +1527,17 @@ export class InkindsService {
       }
 
       for (const row of inkindMap.values()) {
-        if (row.assignedAmount)
-          row.availableAmount = Math.max(
-            row.assignedAmount - row.redeemedAmount,
-            0
-          );
+        row.availableAmount = Math.max(
+          (row.assignedAmount || 0) - row.redeemedAmount,
+          0
+        );
       }
 
       for (const item of walkInInkinds) {
         if (redeemedWalkInSet.has(item.uuid)) continue;
         const row = getOrInit(item.uuid, item.name, item.type);
-        row.availableAmount += 1;
+        // For walk-in items, keep allocated availability when present; otherwise expose one-time availability when stock exists.
+        row.availableAmount = Math.max(row.availableAmount, 1);
       }
 
       for (const row of inkindMap.values()) {
