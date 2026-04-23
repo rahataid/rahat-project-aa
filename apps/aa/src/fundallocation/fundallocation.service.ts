@@ -74,6 +74,9 @@ export class FundService {
         projectAddress
       );
 
+      const transfer = await this.gettransferHistory(projectAddress);
+      console.log(transfer);
+
       return {
         decimal: Number(decimal),
         name,
@@ -84,6 +87,54 @@ export class FundService {
         tokenAddress: await tokenContract.getAddress(),
       };
     } catch (err) {
+      throw err;
+    }
+  }
+
+  private async gettransferHistory(projectAddress: string) {
+    try {
+      const graphSettings = await this.settingService.getPublic('SUBGRAPH_URL');
+      const settingsValue = graphSettings?.value as any;
+      const query = `
+      query GetTransfers($projectAddress: [String!]!) {
+        transfers(
+          where: {
+            or: [
+              { from_in: $projectAddress },
+              { to_in: $projectAddress }
+            ]
+          }
+          orderBy: blockTimestamp
+          orderDirection: desc
+          first: 1000
+        ) {
+          id
+          from
+          to
+          transactionHash
+          blockNumber
+          value
+          blockTimestamp
+        }
+      }
+    `;
+
+      const response = await fetch(settingsValue?.URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: { projectAddress },
+        }),
+      });
+      console.log(response);
+      const result = await response.json();
+
+      return result?.data;
+    } catch (err) {
+      console.log(err);
       throw err;
     }
   }
