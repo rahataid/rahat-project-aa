@@ -14,6 +14,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { lowerCaseObjectKeys } from '../utils/utility';
 import { InkindsService } from '../inkinds';
 import { ModuleRef } from '@nestjs/core';
+import { RedlockService } from '../shared/services/redlock.service';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -55,24 +56,6 @@ export class EVMProcessor {
   private signer: ethers.Signer;
   private isInitialized = false;
   private _inkindService: InkindsService | null = null;
-  // Mutex to serialize nonce fetch + tx submission across concurrent Bull jobs
-  private _sendMutex: Promise<void> = Promise.resolve();
-
-  private withSendMutex<T>(fn: () => Promise<T>): Promise<T> {
-    let release: () => void;
-    const next = new Promise<void>((r) => {
-      release = r;
-    });
-    const current = this._sendMutex;
-    this._sendMutex = next;
-    return current.then(async () => {
-      try {
-        return await fn();
-      } finally {
-        release();
-      }
-    });
-  }
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -81,7 +64,8 @@ export class EVMProcessor {
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
     private readonly prismaService: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly redlockService: RedlockService
   ) {
     this.initializeProvider();
   }
@@ -789,35 +773,30 @@ export class EVMProcessor {
       try {
         const signerAddress = await this.signer.getAddress();
 
-        // Serialize nonce fetch + tx submission to prevent collisions across
-        // concurrent Bull jobs (concurrency:1 is per-type but retries bypass it)
-        const redeemInkind = await this.withSendMutex(async () => {
-          const [pendingNonce, confirmedNonce] = await Promise.all([
-            this.provider.getTransactionCount(signerAddress, 'pending'),
-            this.provider.getTransactionCount(signerAddress, 'latest'),
-          ]);
-          // this.logger.log(
-          //   `[Job ${
-          //     job.id
-          //   }] Nonce — confirmed: ${confirmedNonce}, pending: ${pendingNonce}, in-flight: ${
-          //     pendingNonce - confirmedNonce
-          //   }`,
-          //   EVMProcessor.name
-          // );
+        // Use Redis Redlock for distributed lock across concurrent job workers
+        const redeemInkind = await this.redlockService.acquireLock(
+          `evm:nonce:${signerAddress}`,
+          async () => {
+            const [pendingNonce, confirmedNonce] = await Promise.all([
+              this.provider.getTransactionCount(signerAddress, 'pending'),
+              this.provider.getTransactionCount(signerAddress, 'latest'),
+            ]);
 
-          this.logger.log(
-            `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce}`,
-            EVMProcessor.name
-          );
+            this.logger.log(
+              `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce} (confirmed: ${confirmedNonce}, pending: ${pendingNonce})`,
+              EVMProcessor.name
+            );
 
-          return inkindContract.redeemInkind(
-            convertedInkindUuid,
-            vendorAddress,
-            beneficiaryAddress,
-            inkindsValue,
-            { nonce: pendingNonce }
-          );
-        });
+            return inkindContract.redeemInkind(
+              convertedInkindUuid,
+              vendorAddress,
+              beneficiaryAddress,
+              inkindsValue,
+              { nonce: pendingNonce }
+            );
+          },
+          30000 // 30 second lock duration
+        );
 
         // this.logger.log(
         //   `[Job ${job.id}] Transaction submitted: ${redeemInkind.hash}, waiting for confirmation...`,
@@ -846,7 +825,7 @@ export class EVMProcessor {
 
         if (isNonceError) {
           this.logger.warn(
-            `[Job ${job.id}] Nonce collision on attempt ${attemptNumber} (${code}). ` +
+            `[Job ${job.id}] Nonce collision on (${code}). ` +
               `A previous tx for this job may still be pending or already mined. ` +
               `Bull will retry with backoff.`,
             EVMProcessor.name
@@ -945,8 +924,8 @@ export class EVMProcessor {
     } else if (contractName === 'INKIND') {
       contractAddress = contract.INKIND.ADDRESS;
       contractABI = this.convertABI(contract.INKIND.ABI);
-      console.log('INKIND address:', contractAddress);
-      console.log('INKIND ABI length:', contractABI?.length);
+      // console.log('INKIND address:', contractAddress);
+      // console.log('INKIND ABI length:', contractABI?.length);
     } else if (contractName === 'INKINDTOKEN') {
       contractAddress = contract.INKINDTOKEN.ADDRESS;
       contractABI = this.convertABI(contract.INKINDTOKEN.ABI);

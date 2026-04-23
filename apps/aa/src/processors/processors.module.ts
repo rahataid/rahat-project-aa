@@ -19,6 +19,7 @@ import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
 import { EVMProcessor } from './evm.processor';
 import { InkindsModule } from '../inkinds';
+import { RedlockService } from '../shared/services/redlock.service';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { InkindsModule } from '../inkinds';
   ],
   providers: [
     PrismaService,
+    RedlockService,
     ContractProcessor,
     StatsProcessor,
     StellarProcessor,
@@ -86,6 +88,6 @@ import { InkindsModule } from '../inkinds';
       inject: [SettingsService],
     },
   ],
-  exports: [EVMProcessor, ContractProcessor],
+  exports: [EVMProcessor, ContractProcessor, RedlockService],
 })
 export class ProcessorsModule {}
