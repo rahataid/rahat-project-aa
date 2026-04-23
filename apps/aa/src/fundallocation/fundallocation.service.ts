@@ -18,7 +18,7 @@ export class FundService {
   async addFundToProject(payload: AddFund) {
     try {
       const { amount } = payload;
-      const contractSettings = await this.settingService.getPublic('CONTRACTS');
+      const contractSettings = await this.settingService.getPublic('CONTRACT');
       const contractValue = contractSettings?.value as any;
       const cashTokenValue = await this.settingService.getPublic(
         'CASH_TOKEN_CONTRACT'
@@ -48,7 +48,37 @@ export class FundService {
         amountWei
       );
       const receipt = await tx.wait();
-      return receipt;
+      const provider = donorContract.runner?.provider;
+      const block = receipt?.blockNumber
+        ? await provider?.getBlock(receipt.blockNumber)
+        : null;
+      const blockTimeStamp = block?.timestamp?.toString() || '';
+      const status = receipt?.status === 1 ? 'sucess' : 'failed';
+      let transfer;
+      if (receipt) {
+        transfer = await this.prisma.transfer.create({
+          data: {
+            transactionId: receipt?.hash,
+            from: ethers.getAddress(
+              ethers.dataSlice(receipt?.logs[0]?.topics[1], 12)
+            ),
+            to: ethers.getAddress(
+              ethers.dataSlice(receipt?.logs[0]?.topics[2], 12)
+            ),
+            transactionHash: receipt?.hash,
+            blockNumber: (receipt?.blockNumber).toString(),
+            status: status,
+            blockTimeStamp,
+            value: ethers.formatUnits(BigInt(receipt?.logs[0]?.data), decimal),
+            transactionType: 'TREASURY',
+          },
+        });
+      }
+      return {
+        receipt,
+        transactionTimestamp: blockTimeStamp,
+        transfer,
+      };
     } catch (err) {
       throw err;
     }
@@ -59,8 +89,6 @@ export class FundService {
       const contractSettings = await this.settingService.getPublic('CONTRACT');
       const contractValue = contractSettings?.value as any;
       const projectAddress = contractValue?.AAPROJECT?.ADDRESS;
-      console.log({ projectAddress });
-
       const tokenContract = await createContractInstance(
         'RAHATTOKEN',
         this.prisma.setting
@@ -74,9 +102,19 @@ export class FundService {
         projectAddress
       );
 
-      const transfer = await this.gettransferHistory(projectAddress);
-      console.log(transfer);
-
+      const transfer = await this.prisma.transfer.findMany({
+        select: {
+          transactionId: true,
+          transactionHash: true,
+          from: true,
+          to: true,
+          value: true,
+          blockNumber: true,
+          blockTimeStamp: true,
+          status: true,
+          transactionType: true,
+        },
+      });
       return {
         decimal: Number(decimal),
         name,
@@ -85,6 +123,7 @@ export class FundService {
         projectBalance: ethers.formatUnits(projectBalance, Number(decimal)),
         projectAddress,
         tokenAddress: await tokenContract.getAddress(),
+        transfer,
       };
     } catch (err) {
       throw err;

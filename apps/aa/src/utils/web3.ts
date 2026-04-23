@@ -44,7 +44,7 @@ export async function createContractInstance(contractName: any, model: any) {
 
 export async function getContractByName(contractName: string, modal: any) {
   const abis = await modal.findMany({
-    where: { name: 'CONTRACTS' },
+    where: { name: 'CONTRACT' },
   });
   const contractABI = abis[0].value[contractName];
 
