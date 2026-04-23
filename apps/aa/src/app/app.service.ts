@@ -83,18 +83,6 @@ export class AppService {
       });
     }
 
-    //process ADMIN
-    if (payload.RAHAT_ADMIN_PRIVATE_KEY) {
-      settings.push({
-        name: 'RAHAT_ADMIN_PRIVATE_KEY',
-        value: payload.RAHAT_ADMIN_PRIVATE_KEY,
-        dataType: 'STRING',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: true,
-      });
-    }
-
     if (payload.DEPLOYER_PRIVATE_KEY) {
       settings.push({
         name: 'DEPLOYER_PRIVATE_KEY',

@@ -446,7 +446,7 @@ export class CashTrackerService {
         'CHAIN_SETTINGS'
       );
       const signerPrivateKey = await this.settingsService.getPublic(
-        'RAHAT_ADMIN_PRIVATE_KEY'
+        'DEPLOYER_PRIVATE_KEY'
       );
 
       const rpcUrl = (chainSettings?.value as any)?.rpcUrl;

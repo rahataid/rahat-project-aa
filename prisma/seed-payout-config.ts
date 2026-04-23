@@ -6,7 +6,7 @@ const prismaService = new PrismaService();
 export const seedPayoutTypeConfig = async () => {
   // Types configuration
   const typesConfig = {
-',
+    name: 'PAYOUT_TYPE_CONFIG',
     value: {
       types: [
         {

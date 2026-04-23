@@ -366,22 +366,6 @@ async function modifyEnvAndSettings(
       },
     });
 
-    await projectPrisma.setting.upsert({
-      where: {
-        name: 'RAHAT_ADMIN_PRIVATE_KEY',
-      },
-      create: {
-        name: 'RAHAT_ADMIN_PRIVATE_KEY',
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
-      },
-      update: {
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
-      },
-    });
 
     await seedProject();
     console.log('ProjectInfo seeded successfully.');
