@@ -1272,9 +1272,10 @@ export class EvmChainService implements IChainService {
     return this.evmQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
       attempts: 3,
       removeOnComplete: true,
+      removeOnFail: false,
       backoff: {
         type: 'exponential',
-        delay: 2000,
+        delay: 5000,
       },
     });
   }

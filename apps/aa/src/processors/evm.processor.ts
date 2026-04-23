@@ -1,6 +1,6 @@
 // apps/aa/src/processors/evm.processor.ts
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
-import { Inject, Injectable, Logger} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -55,6 +55,24 @@ export class EVMProcessor {
   private signer: ethers.Signer;
   private isInitialized = false;
   private _inkindService: InkindsService | null = null;
+  // Mutex to serialize nonce fetch + tx submission across concurrent Bull jobs
+  private _sendMutex: Promise<void> = Promise.resolve();
+
+  private withSendMutex<T>(fn: () => Promise<T>): Promise<T> {
+    let release: () => void;
+    const next = new Promise<void>((r) => {
+      release = r;
+    });
+    const current = this._sendMutex;
+    this._sendMutex = next;
+    return current.then(async () => {
+      try {
+        return await fn();
+      } finally {
+        release();
+      }
+    });
+  }
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -70,7 +88,9 @@ export class EVMProcessor {
 
   private get inkindService(): InkindsService {
     if (!this._inkindService) {
-      this._inkindService = this.moduleRef.get(InkindsService, { strict: false });
+      this._inkindService = this.moduleRef.get(InkindsService, {
+        strict: false,
+      });
     }
     return this._inkindService!;
   }
@@ -713,9 +733,22 @@ export class EVMProcessor {
       inkinds: string[];
     }>
   ) {
+    // const attemptNumber = job.attemptsMade + 1;
+    // const maxAttempts = job.opts?.attempts ?? 1;
+    // this.logger.log(
+    //   `[Job ${job.id}] Processing EVM redeem inkind (attempt ${attemptNumber}/${maxAttempts})...`,
+    //   EVMProcessor.name
+    // );
+
     try {
-      this.logger.log('Processing EVM redeem inkind...', EVMProcessor.name);
       await this.ensureInitialized();
+
+      const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
+
+      // this.logger.log(
+      //   `[Job ${job.id}] Redeeming ${inkinds.length} inkind(s) for beneficiary ${beneficiaryAddress} via vendor ${vendorAddress}`,
+      //   EVMProcessor.name
+      // );
 
       const inkindTokenContract = await this.createContractInstanceSign(
         'INKINDTOKEN',
@@ -730,14 +763,12 @@ export class EVMProcessor {
         })
         .catch((error) => {
           this.logger.error(
-            `Error fetching INKINDTOKEN decimals: ${error.message}`,
+            `[Job ${job.id}] Error fetching INKINDTOKEN decimals: ${error.message}`,
             error.stack,
             EVMProcessor.name
           );
-          return 18; 
+          return 18;
         });
-
-      const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
 
       const inkindsValue = ethers.parseUnits(
         `${inkinds.length}`,
@@ -756,17 +787,48 @@ export class EVMProcessor {
       );
 
       try {
-        const redeemInkind = await inkindContract.redeemInkind(
-          convertedInkindUuid,
-          vendorAddress,
-          beneficiaryAddress,
-          inkindsValue
-        );
+        const signerAddress = await this.signer.getAddress();
+
+        // Serialize nonce fetch + tx submission to prevent collisions across
+        // concurrent Bull jobs (concurrency:1 is per-type but retries bypass it)
+        const redeemInkind = await this.withSendMutex(async () => {
+          const [pendingNonce, confirmedNonce] = await Promise.all([
+            this.provider.getTransactionCount(signerAddress, 'pending'),
+            this.provider.getTransactionCount(signerAddress, 'latest'),
+          ]);
+          // this.logger.log(
+          //   `[Job ${
+          //     job.id
+          //   }] Nonce — confirmed: ${confirmedNonce}, pending: ${pendingNonce}, in-flight: ${
+          //     pendingNonce - confirmedNonce
+          //   }`,
+          //   EVMProcessor.name
+          // );
+
+          this.logger.log(
+            `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce}`,
+            EVMProcessor.name
+          );
+
+          return inkindContract.redeemInkind(
+            convertedInkindUuid,
+            vendorAddress,
+            beneficiaryAddress,
+            inkindsValue,
+            { nonce: pendingNonce }
+          );
+        });
+
+        // this.logger.log(
+        //   `[Job ${job.id}] Transaction submitted: ${redeemInkind.hash}, waiting for confirmation...`,
+        //   EVMProcessor.name
+        // );
+
         const inkindTxHash = await redeemInkind.wait();
         this.logger.log(
-          `Inkind redeemed successfully. Transaction: ${inkindTxHash.hash}`,
+          `[Job ${job.id}] Inkind redeemed successfully. Transaction: ${inkindTxHash.hash} (block ${inkindTxHash.blockNumber})`,
           EVMProcessor.name
-        ); 
+        );
         txHash = inkindTxHash.hash;
 
         await this.inkindService.updateRedeemInkindTxHash(
@@ -775,16 +837,32 @@ export class EVMProcessor {
           beneficiaryAddress
         );
       } catch (error) {
-        this.logger.error(
-          `Error in EVM redeem inkind: ${error.message}`,
-          error.stack,
-          EVMProcessor.name
-        );
+        const code: string = error?.code ?? '';
+        const isNonceError =
+          code === 'REPLACEMENT_UNDERPRICED' ||
+          code === 'NONCE_EXPIRED' ||
+          error?.message?.includes('replacement transaction underpriced') ||
+          error?.message?.includes('nonce has already been used');
+
+        if (isNonceError) {
+          this.logger.warn(
+            `[Job ${job.id}] Nonce collision on attempt ${attemptNumber} (${code}). ` +
+              `A previous tx for this job may still be pending or already mined. ` +
+              `Bull will retry with backoff.`,
+            EVMProcessor.name
+          );
+        } else {
+          this.logger.error(
+            `[Job ${job.id}] Unexpected error in EVM redeem inkind: ${error.message}`,
+            error.stack,
+            EVMProcessor.name
+          );
+        }
         throw error;
       }
     } catch (error) {
       this.logger.error(
-        `Error in EVM redeem inkind: ${error.message}`,
+        `[Job ${job.id}] Error in EVM redeem inkind: ${error.message}`,
         error.stack,
         EVMProcessor.name
       );
@@ -874,8 +952,7 @@ export class EVMProcessor {
       contractABI = this.convertABI(contract.INKINDTOKEN.ABI);
       console.log('INKINDTOKEN address:', contractAddress);
       console.log('INKINDTOKEN ABI length:', contractABI?.length);
-     } 
-    else {
+    } else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }
 
@@ -1311,7 +1388,7 @@ export class EVMProcessor {
       // Deduplicate beneficiaries within this group by beneficiary UUID
       const uniqueBeneficiaries = new Map<
         string,
-        typeof group.groupedBeneficiaries[0]
+        (typeof group.groupedBeneficiaries)[0]
       >();
       group.groupedBeneficiaries.forEach((item) => {
         const beneficiaryId = item.Beneficiary.uuid;

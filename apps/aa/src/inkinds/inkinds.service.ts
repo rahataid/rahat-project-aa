@@ -1179,6 +1179,9 @@ export class InkindsService {
         name: 'PROJECTINFO',
       });
 
+      this.logger.log(
+        `Checking if payout phase is active for year ${value.active_year} and river basin ${value.river_basin}`
+      );
       const isPhasePayoutActivate = await lastValueFrom(
         this.client.send(
           { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
