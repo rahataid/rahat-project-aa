@@ -49,6 +49,7 @@ export class EvmChainService implements IChainService {
 
   constructor(
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
+    @InjectQueue(BQUEUE.EVM_REDEEM_INKIND) private readonly evmRedeemInkindQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
@@ -1269,7 +1270,7 @@ export class EvmChainService implements IChainService {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
-    return this.evmQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
+    return this.evmRedeemInkindQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
       attempts: 3,
       removeOnComplete: true,
       removeOnFail: false,

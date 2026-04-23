@@ -12,9 +12,6 @@ import { AddTriggerDto } from '../stellar/dto/trigger.dto';
 import { lastValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { lowerCaseObjectKeys } from '../utils/utility';
-import { InkindsService } from '../inkinds';
-import { ModuleRef } from '@nestjs/core';
-import { RedlockService } from '../shared/services/redlock.service';
 
 // Contract ABIs (you'll need to generate these from your Solidity contracts)
 // Contract ABIs - importing as require to avoid JSON module resolution issues
@@ -55,7 +52,6 @@ export class EVMProcessor {
   private provider: ethers.Provider;
   private signer: ethers.Signer;
   private isInitialized = false;
-  private _inkindService: InkindsService | null = null;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -63,20 +59,9 @@ export class EVMProcessor {
     private readonly settingService: SettingsService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
-    private readonly prismaService: PrismaService,
-    private readonly moduleRef: ModuleRef,
-    private readonly redlockService: RedlockService
+    private readonly prismaService: PrismaService
   ) {
     this.initializeProvider();
-  }
-
-  private get inkindService(): InkindsService {
-    if (!this._inkindService) {
-      this._inkindService = this.moduleRef.get(InkindsService, {
-        strict: false,
-      });
-    }
-    return this._inkindService!;
   }
 
   private async initializeProvider() {
@@ -709,145 +694,6 @@ export class EVMProcessor {
     }
   }
 
-  @Process({ name: JOBS.EVM.REDEEM_INKIND, concurrency: 1 })
-  async redeemInKind(
-    job: Job<{
-      beneficiaryAddress: string;
-      vendorAddress: string;
-      inkinds: string[];
-    }>
-  ) {
-    // const attemptNumber = job.attemptsMade + 1;
-    // const maxAttempts = job.opts?.attempts ?? 1;
-    // this.logger.log(
-    //   `[Job ${job.id}] Processing EVM redeem inkind (attempt ${attemptNumber}/${maxAttempts})...`,
-    //   EVMProcessor.name
-    // );
-
-    try {
-      await this.ensureInitialized();
-
-      const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
-
-      // this.logger.log(
-      //   `[Job ${job.id}] Redeeming ${inkinds.length} inkind(s) for beneficiary ${beneficiaryAddress} via vendor ${vendorAddress}`,
-      //   EVMProcessor.name
-      // );
-
-      const inkindTokenContract = await this.createContractInstanceSign(
-        'INKINDTOKEN',
-        null,
-        this.signer
-      );
-
-      const currentDecimalValue = await inkindTokenContract.decimals
-        .staticCall()
-        .then((decimals) => {
-          return decimals;
-        })
-        .catch((error) => {
-          this.logger.error(
-            `[Job ${job.id}] Error fetching INKINDTOKEN decimals: ${error.message}`,
-            error.stack,
-            EVMProcessor.name
-          );
-          return 18;
-        });
-
-      const inkindsValue = ethers.parseUnits(
-        `${inkinds.length}`,
-        currentDecimalValue
-      );
-
-      let txHash;
-      const inkindContract = await this.createContractInstanceSign(
-        'INKIND',
-        null,
-        this.signer
-      );
-
-      const convertedInkindUuid = inkinds.map((uuid) =>
-        ethers.hexlify(ethers.toBeArray('0x' + uuid.replace(/-/g, '')))
-      );
-
-      try {
-        const signerAddress = await this.signer.getAddress();
-
-        // Use Redis Redlock for distributed lock across concurrent job workers
-        const redeemInkind = await this.redlockService.acquireLock(
-          `evm:nonce:${signerAddress}`,
-          async () => {
-            const [pendingNonce, confirmedNonce] = await Promise.all([
-              this.provider.getTransactionCount(signerAddress, 'pending'),
-              this.provider.getTransactionCount(signerAddress, 'latest'),
-            ]);
-
-            this.logger.log(
-              `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce} (confirmed: ${confirmedNonce}, pending: ${pendingNonce})`,
-              EVMProcessor.name
-            );
-
-            return inkindContract.redeemInkind(
-              convertedInkindUuid,
-              vendorAddress,
-              beneficiaryAddress,
-              inkindsValue,
-              { nonce: pendingNonce }
-            );
-          },
-          30000 // 30 second lock duration
-        );
-
-        // this.logger.log(
-        //   `[Job ${job.id}] Transaction submitted: ${redeemInkind.hash}, waiting for confirmation...`,
-        //   EVMProcessor.name
-        // );
-
-        const inkindTxHash = await redeemInkind.wait();
-        this.logger.log(
-          `[Job ${job.id}] Inkind redeemed successfully. Transaction: ${inkindTxHash.hash} (block ${inkindTxHash.blockNumber})`,
-          EVMProcessor.name
-        );
-        txHash = inkindTxHash.hash;
-
-        await this.inkindService.updateRedeemInkindTxHash(
-          inkinds,
-          txHash,
-          beneficiaryAddress
-        );
-      } catch (error) {
-        const code: string = error?.code ?? '';
-        const isNonceError =
-          code === 'REPLACEMENT_UNDERPRICED' ||
-          code === 'NONCE_EXPIRED' ||
-          error?.message?.includes('replacement transaction underpriced') ||
-          error?.message?.includes('nonce has already been used');
-
-        if (isNonceError) {
-          this.logger.warn(
-            `[Job ${job.id}] Nonce collision on (${code}). ` +
-              `A previous tx for this job may still be pending or already mined. ` +
-              `Bull will retry with backoff.`,
-            EVMProcessor.name
-          );
-        } else {
-          this.logger.error(
-            `[Job ${job.id}] Unexpected error in EVM redeem inkind: ${error.message}`,
-            error.stack,
-            EVMProcessor.name
-          );
-        }
-        throw error;
-      }
-    } catch (error) {
-      this.logger.error(
-        `[Job ${job.id}] Error in EVM redeem inkind: ${error.message}`,
-        error.stack,
-        EVMProcessor.name
-      );
-      throw error;
-    }
-  }
 
   private async getFromSettings(key: string): Promise<any> {
     try {

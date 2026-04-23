@@ -18,6 +18,7 @@ import { SettingsService } from '@rumsan/settings';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
 import { EVMProcessor } from './evm.processor';
+import { EVMRedeemInkindProcessor } from './evm-redeem-inkind.processor';
 import { InkindsModule } from '../inkinds';
 import { RedlockService } from '../shared/services/redlock.service';
 
@@ -56,6 +57,19 @@ import { RedlockService } from '../shared/services/redlock.service';
     }),
     BullModule.registerQueue({
       name: BQUEUE.EVM,
+      settings: {
+        maxStalledCount: 3,
+        lockDuration: 600000,
+        lockRenewTime: 300000,
+      },
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.EVM_REDEEM_INKIND,
+      settings: {
+        maxStalledCount: 2,
+        lockDuration: 600000,
+        lockRenewTime: 300000,
+      },
     }),
   ],
   providers: [
@@ -70,6 +84,7 @@ import { RedlockService } from '../shared/services/redlock.service';
     VendorOfflinePayoutProcessor,
     BatchTokenTransferProcessor,
     EVMProcessor,
+    EVMRedeemInkindProcessor,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
