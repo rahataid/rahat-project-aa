@@ -1,15 +1,12 @@
 // apps/aa/src/processors/evm-redeem-inkind.processor.ts
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { Job, Queue } from 'bull';
 import { ethers } from 'ethers';
 import { BQUEUE, JOBS } from '../constants';
 import { InkindsService } from '../inkinds';
 import { ModuleRef } from '@nestjs/core';
-import { RedlockService } from '../shared/services/redlock.service';
-
-const AAProjectABI = require('../contracts/abis/AAProject.json');
 
 @Processor(BQUEUE.EVM_REDEEM_INKIND)
 @Injectable()
@@ -24,8 +21,7 @@ export class EVMRedeemInkindProcessor {
     @InjectQueue(BQUEUE.EVM_REDEEM_INKIND)
     private readonly redeemInkindQueue: Queue,
     private readonly prismaService: PrismaService,
-    private readonly moduleRef: ModuleRef,
-    private readonly redlockService: RedlockService
+    private readonly moduleRef: ModuleRef
   ) {
     this.initializeProvider();
   }
@@ -78,16 +74,18 @@ export class EVMRedeemInkindProcessor {
     }>
   ) {
     try {
+      // STEP 1: [INITIALIZE] Initialize provider for contract
       await this.ensureInitialized();
-
       const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
 
+      // STEP 1.1: Create contract instance
       const inkindTokenContract = await this.createContractInstanceSign(
         'INKINDTOKEN',
         null,
         this.signer
       );
 
+      // STEP 2: [SETUP] Setup transaction parameters (Ether value and gas limit)
       const currentDecimalValue = await inkindTokenContract.decimals
         .staticCall()
         .then((decimals) => {
@@ -102,11 +100,30 @@ export class EVMRedeemInkindProcessor {
           return 18;
         });
 
+      // STEP 2.2: Convert inkind UUIDs to bytes32 format and calculate total inkinds value
       const inkindsValue = ethers.parseUnits(
         `${inkinds.length}`,
         currentDecimalValue
       );
 
+      // STEP 2.3: Convert inkind UUIDs to bytes32 format
+      const convertedInkindUuid = inkinds.map((uuid) =>
+        ethers.hexlify(ethers.toBeArray('0x' + uuid.replace(/-/g, '')))
+      );
+
+      // STEP 2.4: Get current nonce for the transaction
+      const [pendingNonce, confirmedNonce] = await Promise.all([
+        this.provider.getTransactionCount(
+          await this.signer.getAddress(),
+          'pending'
+        ),
+        this.provider.getTransactionCount(
+          await this.signer.getAddress(),
+          'latest'
+        ),
+      ]);
+
+      // STEP 3: [SIGN] Sign the transaction and prepare for submission
       let txHash;
       const inkindContract = await this.createContractInstanceSign(
         'INKIND',
@@ -114,80 +131,42 @@ export class EVMRedeemInkindProcessor {
         this.signer
       );
 
-      const convertedInkindUuid = inkinds.map((uuid) =>
-        ethers.hexlify(ethers.toBeArray('0x' + uuid.replace(/-/g, '')))
+      this.logger.log(
+        `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce} (confirmed: ${confirmedNonce}, pending: ${pendingNonce})`,
+        EVMRedeemInkindProcessor.name
       );
 
-      try {
-        const signerAddress = await this.signer.getAddress();
+      // STEP 4: [REDEEM] Redeem the inkind by calling the contract method
+      const tx = await inkindContract.redeemInkind(
+        convertedInkindUuid,
+        vendorAddress,
+        beneficiaryAddress,
+        inkindsValue,
+        { nonce: pendingNonce }
+      );
 
-        // Use Redis Redlock for distributed lock across concurrent job workers
-        const inkindTxHash = await this.redlockService.acquireLock(
-          `evm:nonce:${signerAddress}`,
-          async () => {
-            const [pendingNonce, confirmedNonce] = await Promise.all([
-              this.provider.getTransactionCount(signerAddress, 'pending'),
-              this.provider.getTransactionCount(signerAddress, 'latest'),
-            ]);
+      this.logger.log(
+        `[Job ${job.id}] Transaction submitted: ${tx.hash}`,
+        EVMRedeemInkindProcessor.name
+      );
 
-            this.logger.log(
-              `[Job ${job.id}] Submitting transaction with nonce ${pendingNonce} (confirmed: ${confirmedNonce}, pending: ${pendingNonce})`,
-              EVMRedeemInkindProcessor.name
-            );
+      // STEP 5: [CONFIRM] Wait for the transaction to be confirmed on the blockchain
+      const inkindTxHash = await tx.wait();
 
-            const tx = await inkindContract.redeemInkind(
-              convertedInkindUuid,
-              vendorAddress,
-              beneficiaryAddress,
-              inkindsValue,
-              { nonce: pendingNonce }
-            );
+      this.logger.log(
+        `[Job ${job.id}] Inkind redeemed successfully. Transaction: ${inkindTxHash.hash} (block ${inkindTxHash.blockNumber})`,
+        EVMRedeemInkindProcessor.name
+      );
 
-            this.logger.log(
-              `[Job ${job.id}] Transaction submitted: ${tx.hash}, waiting for 2 confirmations...`,
-              EVMRedeemInkindProcessor.name
-            );
+      // STEP 6: [UPDATE] Update the inkind records in the database with the transaction hash
+      txHash = inkindTxHash.hash;
 
-            return await tx.wait(2);
-          },
-          600000 // 10 minute lock duration to accommodate blockchain confirmations
-        );
-
-        this.logger.log(
-          `[Job ${job.id}] Inkind redeemed successfully. Transaction: ${inkindTxHash.hash} (block ${inkindTxHash.blockNumber})`,
-          EVMRedeemInkindProcessor.name
-        );
-        txHash = inkindTxHash.hash;
-
-        await this.inkindService.updateRedeemInkindTxHash(
-          inkinds,
-          txHash,
-          beneficiaryAddress
-        );
-      } catch (error) {
-        const code: string = error?.code ?? '';
-        const isNonceError =
-          code === 'REPLACEMENT_UNDERPRICED' ||
-          code === 'NONCE_EXPIRED' ||
-          error?.message?.includes('replacement transaction underpriced') ||
-          error?.message?.includes('nonce has already been used');
-
-        if (isNonceError) {
-          this.logger.warn(
-            `[Job ${job.id}] Nonce collision on (${code}). ` +
-              `A previous tx for this job may still be pending or already mined. ` +
-              `Bull will retry with backoff.`,
-            EVMRedeemInkindProcessor.name
-          );
-        } else {
-          this.logger.error(
-            `[Job ${job.id}] Unexpected error in EVM redeem inkind: ${error.message}`,
-            error.stack,
-            EVMRedeemInkindProcessor.name
-          );
-        }
-        throw error;
-      }
+      // Update the inkind records in the database with the transaction hash
+      await this.inkindService.updateRedeemInkindTxHash(
+        inkinds,
+        txHash,
+        beneficiaryAddress
+      );
     } catch (error) {
       this.logger.error(
         `[Job ${job.id}] Error in EVM redeem inkind: ${error.message}`,

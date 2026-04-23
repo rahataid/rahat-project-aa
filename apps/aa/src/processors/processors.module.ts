@@ -20,7 +20,6 @@ import { NotificationProcessor } from './notification.processor';
 import { EVMProcessor } from './evm.processor';
 import { EVMRedeemInkindProcessor } from './evm-redeem-inkind.processor';
 import { InkindsModule } from '../inkinds';
-import { RedlockService } from '../shared/services/redlock.service';
 
 @Module({
   imports: [
@@ -74,7 +73,6 @@ import { RedlockService } from '../shared/services/redlock.service';
   ],
   providers: [
     PrismaService,
-    RedlockService,
     ContractProcessor,
     StatsProcessor,
     StellarProcessor,
@@ -103,6 +101,6 @@ import { RedlockService } from '../shared/services/redlock.service';
       inject: [SettingsService],
     },
   ],
-  exports: [EVMProcessor, ContractProcessor, RedlockService],
+  exports: [EVMProcessor, ContractProcessor],
 })
 export class ProcessorsModule {}
