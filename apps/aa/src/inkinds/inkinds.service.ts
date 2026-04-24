@@ -271,8 +271,7 @@ export class InkindsService {
         totalInkindTypes: summary._count.id,
         totalStock: summary._sum.availableStock,
         totalAvailableStock:
-          summary._sum.availableStock -
-          (totalAssignedStock._sum.quantityAllocated || 0),
+          summary._sum.availableStock, 
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
         totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
       };
