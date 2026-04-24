@@ -78,9 +78,8 @@ import { OtpModule } from '../otp/otp.module';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
-    BullModule.registerQueue({
-      name: BQUEUE.EVM,
-    }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     ProcessorsModule,
     BeneficiaryModule,
     StakeholdersModule,

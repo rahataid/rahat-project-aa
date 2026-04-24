@@ -34,12 +34,8 @@ import { SettingsService } from '@rumsan/settings';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
-    BullModule.registerQueue({
-      name: BQUEUE.EVM,
-    }),
-    BullModule.registerQueue({
-      name: BQUEUE.EVM_REDEEM_INKIND,
-    }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     StellarModule,
   ],
   controllers: [ChainController],

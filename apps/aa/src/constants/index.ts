@@ -251,6 +251,10 @@ export const JOBS = {
     GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
   },
   EVM: {
+    // Generic dispatcher job names — all EVM jobs route through one of these two
+    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`,       // write ops: serial (concurrency 1), signer required
+    QUERY_JOB: `aa.jobs.evm.query_${process.env.PROJECT_ID}`, // read ops:  concurrent (concurrency 5), no signer
+    // Original job-type identifiers — used as `type` field inside job.data
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
     DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
     DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
@@ -324,7 +328,8 @@ export const BQUEUE = {
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
-  EVM_REDEEM_INKIND: `EVM_REDEEM_INKIND_${process.env.PROJECT_ID}`,
+  EVM_TX: `EVM_TX_${process.env.PROJECT_ID}`,
+  EVM_QUERY: `EVM_QUERY_${process.env.PROJECT_ID}`,
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,

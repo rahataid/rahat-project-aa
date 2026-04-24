@@ -17,9 +17,9 @@ import { PayoutsModule } from '../payouts/payouts.module';
 import { SettingsService } from '@rumsan/settings';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
-import { EVMProcessor } from './evm.processor';
-import { EVMRedeemInkindProcessor } from './evm-redeem-inkind.processor';
+import { EVMCentralizedProcessor } from './evm-centralized.processor';
 import { InkindsModule } from '../inkinds';
+import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatcher';
 
 @Module({
   imports: [
@@ -55,7 +55,7 @@ import { InkindsModule } from '../inkinds';
       name: BQUEUE.BATCH_TRANSFER,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.EVM,
+      name: BQUEUE.EVM_TX,
       settings: {
         maxStalledCount: 3,
         lockDuration: 600000,
@@ -63,11 +63,11 @@ import { InkindsModule } from '../inkinds';
       },
     }),
     BullModule.registerQueue({
-      name: BQUEUE.EVM_REDEEM_INKIND,
+      name: BQUEUE.EVM_QUERY,
       settings: {
-        maxStalledCount: 2,
-        lockDuration: 600000,
-        lockRenewTime: 300000,
+        maxStalledCount: 3,
+        lockDuration: 60000,
+        lockRenewTime: 30000,
       },
     }),
   ],
@@ -81,8 +81,9 @@ import { InkindsModule } from '../inkinds';
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
     BatchTokenTransferProcessor,
-    EVMProcessor,
-    EVMRedeemInkindProcessor,
+    EVMCentralizedProcessor,
+    EVMTxDispatcher,
+    EVMQueryDispatcher,
     {
       provide: ReceiveService,
       useFactory: async (settingsService: SettingsService) => {
@@ -101,6 +102,6 @@ import { InkindsModule } from '../inkinds';
       inject: [SettingsService],
     },
   ],
-  exports: [EVMProcessor, ContractProcessor],
+  exports: [EVMCentralizedProcessor, EVMTxDispatcher, EVMQueryDispatcher, ContractProcessor],
 })
 export class ProcessorsModule {}
