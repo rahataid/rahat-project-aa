@@ -10,7 +10,7 @@ import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import { ContractProcessor } from '../../processors/contract.processor';
-import { EVMProcessor } from '../../processors/evm.processor';
+import { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
   AddTriggerDto,
@@ -43,7 +43,7 @@ export interface EVMChainConfig {
 export class EvmChainService implements IChainService {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
-  private _evmProcessor: EVMProcessor | null = null;
+  private _evmProcessor: EVMCentralizedProcessor | null = null;
   private _contractProcessor: ContractProcessor | null = null;
   name = 'evm';
 
@@ -58,9 +58,9 @@ export class EvmChainService implements IChainService {
     this.initializeProvider();
   }
 
-  private get evmProcessor(): EVMProcessor {
+  private get evmProcessor(): EVMCentralizedProcessor {
     if (!this._evmProcessor) {
-      this._evmProcessor = this.moduleRef.get(EVMProcessor, { strict: false });
+      this._evmProcessor = this.moduleRef.get(EVMCentralizedProcessor, { strict: false });
     }
     return this._evmProcessor!;
   }

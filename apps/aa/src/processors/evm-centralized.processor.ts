@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { Job, Queue } from 'bull';
@@ -25,13 +25,18 @@ interface EVMStatusUpdateJob {
 }
 
 @Injectable()
-export class EVMCentralizedProcessor {
+export class EVMCentralizedProcessor implements OnModuleInit {
   private readonly logger = new Logger(EVMCentralizedProcessor.name);
 
   private provider!: ethers.Provider;
   private signer!: ethers.Signer;
   private isInitialized = false;
   private _inkindService: InkindsService | null = null;
+
+  // Cache for settings to avoid repeated DB queries
+  private contractSettings: any = null;
+  private chainSettings: any = null;
+  private deployerPrivateKey: string | null = null;
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
@@ -41,25 +46,46 @@ export class EVMCentralizedProcessor {
     @InjectQueue(BQUEUE.EVM_QUERY) private readonly evmQueryQueue: Queue,
     private readonly prismaService: PrismaService,
     private readonly moduleRef: ModuleRef
-  ) {
-    this.initializeProvider();
+  ) {}
+
+  async onModuleInit() {
+    await this.initializeProvider();
   }
 
   private get inkindService(): InkindsService {
-    if (!this._inkindService) {
-      this._inkindService = this.moduleRef.get(InkindsService, {
-        strict: false,
-      });
+    return (this._inkindService ??= this.moduleRef.get(InkindsService, {
+      strict: false,
+    }));
+  }
+
+  private async getContractSettings() {
+    if (!this.contractSettings) {
+      this.contractSettings = await this.getFromSettings('CONTRACT');
+      this.logger.log('Cached CONTRACT settings');
     }
-    return this._inkindService!;
+    return this.contractSettings;
+  }
+
+  private async getChainSettings() {
+    if (!this.chainSettings) {
+      this.chainSettings = await this.getFromSettings('CHAIN_SETTINGS');
+      this.logger.log('Cached CHAIN_SETTINGS');
+    }
+    return this.chainSettings;
+  }
+
+  private async getDeployerPrivateKey() {
+    if (!this.deployerPrivateKey) {
+      this.deployerPrivateKey = await this.getFromSettings('DEPLOYER_PRIVATE_KEY');
+      this.logger.log('Cached DEPLOYER_PRIVATE_KEY');
+    }
+    return this.deployerPrivateKey;
   }
 
   private async initializeProvider() {
     try {
-      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
-      const deployerPrivateKey = await this.getFromSettings(
-        'DEPLOYER_PRIVATE_KEY'
-      );
+      const chainConfig = await this.getChainSettings();
+      const deployerPrivateKey = await this.getDeployerPrivateKey();
 
       this.provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
       this.signer = new ethers.Wallet(deployerPrivateKey, this.provider);
@@ -86,12 +112,15 @@ export class EVMCentralizedProcessor {
 
   // ===== JOB HANDLERS =====
 
-  async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
+  async handleAssignTokens(job: Job<{ groups: string[] }>): Promise<any> {
     const { groups } = job.data;
     const BATCH_SIZE = 10;
 
     try {
-      this.logger.log('Processing EVM assign tokens...', EVMCentralizedProcessor.name);
+      this.logger.log(
+        'Processing EVM assign tokens...',
+        EVMCentralizedProcessor.name
+      );
       await this.ensureInitialized();
 
       const aaContract = await this.createContractInstanceSign(
@@ -106,9 +135,7 @@ export class EVMCentralizedProcessor {
           : await this.getDisbursableGroupsUuids();
 
       this.logger.log('Token Disburse for: ', groups);
-      const bens = await this.getBeneficiaryTokenBalance([
-        benGroups,
-      ] as string[]);
+      const bens = await this.getBeneficiaryTokenBalance(benGroups);
 
       if (!bens || bens.length === 0) {
         throw new RpcException('Beneficiary Token Balance not found');
@@ -116,24 +143,18 @@ export class EVMCentralizedProcessor {
 
       const multicallTxnPayload = [];
 
-      const contract = await this.getFromSettings('CONTRACT');
+      const contract = await this.getContractSettings();
       const formatedAbi = this.lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
-
-      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
-
-      const rpcUrl = chainConfig.rpcUrl;
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
 
       const rahatTokenContract = new ethers.Contract(
         contract.RAHATTOKEN.ADDRESS,
         formatedAbi,
-        provider
+        this.provider
       );
 
       const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
-        console.log('benf', benf);
         if (benf.amount) {
           const formattedAmountBn = ethers.parseUnits(
             benf.amount.toString(),
@@ -147,7 +168,7 @@ export class EVMCentralizedProcessor {
       let totalTokens: number = 0;
       bens?.forEach((ben) => {
         this.logger.log(`Beneficiary: ${ben.walletAddress} has ${ben.amount}`);
-        totalTokens += parseInt(ben.amount);
+        totalTokens += parseFloat(ben.amount);
       });
 
       const transactionHashes: string[] = [];
@@ -301,7 +322,10 @@ export class EVMCentralizedProcessor {
         );
 
       if (!group) {
-        this.logger.error(`Group ${groupUuid} not found`, EVMCentralizedProcessor.name);
+        this.logger.error(
+          `Group ${groupUuid} not found`,
+          EVMCentralizedProcessor.name
+        );
         return;
       }
 
@@ -430,7 +454,10 @@ export class EVMCentralizedProcessor {
     job: Job<{ address: string; tokenAddress: string; projectContract: string }>
   ): Promise<any> {
     try {
-      this.logger.log('Processing EVM balance check...', EVMCentralizedProcessor.name);
+      this.logger.log(
+        'Processing EVM balance check...',
+        EVMCentralizedProcessor.name
+      );
       await this.ensureInitialized();
 
       const { address, tokenAddress, projectContract } = job.data;
@@ -492,7 +519,10 @@ export class EVMCentralizedProcessor {
     job: Job<{ walletAddress: string; amount: string }>
   ): Promise<any> {
     try {
-      this.logger.log('Processing EVM fund account...', EVMCentralizedProcessor.name);
+      this.logger.log(
+        'Processing EVM fund account...',
+        EVMCentralizedProcessor.name
+      );
       await this.ensureInitialized();
 
       const { walletAddress, amount } = job.data;
@@ -530,12 +560,15 @@ export class EVMCentralizedProcessor {
     job: Job<{ from: string; to: string; amount: string }>
   ): Promise<any> {
     try {
-      this.logger.log('Processing EVM transfer tokens...', EVMCentralizedProcessor.name);
+      this.logger.log(
+        'Processing EVM transfer tokens...',
+        EVMCentralizedProcessor.name
+      );
       await this.ensureInitialized();
 
       const { from, to, amount } = job.data;
 
-      const chainConfig = await this.getFromSettings('CHAIN_SETTINGS');
+      const chainConfig = await this.getChainSettings();
       const tokenContract = new ethers.Contract(
         chainConfig.tokenContractAddress,
         [
@@ -592,7 +625,10 @@ export class EVMCentralizedProcessor {
   ): Promise<any> {
     try {
       // Step 1: Initialize - Ensure the EVM provider and signer are ready before any contract calls
-      this.logger.log('Processing EVM redeem inkind...', EVMCentralizedProcessor.name);
+      this.logger.log(
+        'Processing EVM redeem inkind...',
+        EVMCentralizedProcessor.name
+      );
       await this.ensureInitialized();
 
       // Step 2: Connect - Get the INKINDTOKEN contract instance bound to the deployer signer
@@ -740,8 +776,6 @@ export class EVMCentralizedProcessor {
         where: { name: key },
       });
 
-      console.log('settings', settings);
-
       if (!settings?.value) {
         throw new Error(`${key} not found`);
       }
@@ -788,7 +822,7 @@ export class EVMCentralizedProcessor {
     abi?: any,
     signer?: ethers.Signer
   ) {
-    const contract = await this.getFromSettings('CONTRACT');
+    const contract = await this.getContractSettings();
     const contractSigner = signer || this.signer;
 
     let contractAddress: string;
@@ -800,18 +834,12 @@ export class EVMCentralizedProcessor {
     } else if (contractName === 'RAHATTOKEN') {
       contractAddress = contract.RAHATTOKEN.ADDRESS;
       contractABI = this.convertABI(contract.RAHATTOKEN.ABI);
-      console.log('RAHATTOKEN address:', contractAddress);
-      console.log('RAHATTOKEN ABI length:', contractABI?.length);
     } else if (contractName === 'INKIND') {
       contractAddress = contract.INKIND.ADDRESS;
       contractABI = this.convertABI(contract.INKIND.ABI);
-      console.log('INKIND address:', contractAddress);
-      console.log('INKIND ABI length:', contractABI?.length);
     } else if (contractName === 'INKINDTOKEN') {
       contractAddress = contract.INKINDTOKEN.ADDRESS;
       contractABI = this.convertABI(contract.INKINDTOKEN.ABI);
-      console.log('INKINDTOKEN address:', contractAddress);
-      console.log('INKINDTOKEN ABI length:', contractABI?.length);
     } else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }
@@ -915,7 +943,7 @@ export class EVMCentralizedProcessor {
 
       const uniqueBeneficiaries = new Map<
         string,
-        typeof group.groupedBeneficiaries[0]
+        (typeof group.groupedBeneficiaries)[0]
       >();
       group.groupedBeneficiaries.forEach((item) => {
         const beneficiaryId = item.Beneficiary.uuid;
@@ -953,5 +981,331 @@ export class EVMCentralizedProcessor {
     });
 
     return Object.values(csvData);
+  }
+
+  // ===== PUBLIC HELPER METHODS (Migrated from old EVMProcessor) =====
+
+  /**
+   * Create a read-only contract instance (using provider, not signer)
+   */
+  private async createContractInstance(contractName: string, abi: any) {
+    const contract = await this.getContractSettings();
+    const formatedAbi = this.convertABI(contract.AAPROJECT.ABI);
+
+    return new ethers.Contract(
+      contract.AAPROJECT.ADDRESS,
+      formatedAbi,
+      this.provider
+    );
+  }
+
+  /**
+   * Check if a beneficiary wallet has tokens in the benTokens mapping
+   * @param beneficiaryAddress - The wallet address to check
+   * @returns Promise<boolean> - True if beneficiary has tokens, false otherwise
+   */
+  async checkBeneficiaryHasTokens(
+    beneficiaryAddress: string
+  ): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Call the benTokens mapping to get the token balance
+      const tokenBalance = await aaContract.benTokens.staticCall(
+        beneficiaryAddress
+      );
+
+      this.logger.log(
+        `Beneficiary ${beneficiaryAddress} has ${tokenBalance.toString()} tokens`,
+        EVMCentralizedProcessor.name
+      );
+
+      // Return true if the beneficiary has more than 0 tokens
+      return tokenBalance > 0n;
+    } catch (error) {
+      this.logger.error(
+        `Error checking beneficiary tokens for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to check beneficiary tokens: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get the token balance for a beneficiary wallet from the benTokens mapping
+   * @param beneficiaryAddress - The wallet address to check
+   * @returns Promise<string> - The token balance as a string
+   */
+  async getBeneficiaryTokenBalanceFromContract(
+    beneficiaryAddress: string
+  ): Promise<string> {
+    try {
+      await this.ensureInitialized();
+
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Call the benTokens mapping to get the token balance
+      const tokenBalance = await aaContract.benTokens(beneficiaryAddress);
+
+      this.logger.log(
+        `Beneficiary ${beneficiaryAddress} token balance: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return tokenBalance.toString();
+    } catch (error) {
+      this.logger.error(
+        `Error getting beneficiary token balance for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get beneficiary token balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get the project contract balance from RahatToken contract
+   * @param projectAddress - The project contract address to check
+   * @returns Promise<string> - The project token balance as a string
+   */
+  async getProjectTokenBalance(projectAddress: string): Promise<string> {
+    try {
+      await this.ensureInitialized();
+
+      // Get contract settings to find RahatToken address and ABI
+      const contract = await this.getContractSettings();
+      const rahatTokenAddress = contract.RAHATTOKEN.ADDRESS;
+      const rahatTokenABI = this.convertABI(contract.RAHATTOKEN.ABI);
+
+      // Create RahatToken contract instance using the token address and ABI from settings
+      const rahatTokenContract = new ethers.Contract(
+        rahatTokenAddress,
+        rahatTokenABI,
+        this.provider
+      );
+
+      // Call the balanceOf function to get the project's token balance
+      const tokenBalance = await rahatTokenContract.balanceOf(projectAddress);
+
+      this.logger.log(
+        `Project ${projectAddress} token balance: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return tokenBalance.toString();
+    } catch (error) {
+      this.logger.error(
+        `Error getting project token balance for ${projectAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get project token balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Check if project has sufficient tokens for disbursement
+   * @param projectAddress - The project contract address to check
+   * @param requiredAmount - The amount of tokens required
+   * @returns Promise<boolean> - True if project has sufficient tokens, false otherwise
+   */
+  async checkProjectHasSufficientTokens(
+    projectAddress: string,
+    requiredAmount: string
+  ): Promise<boolean> {
+    try {
+      const currentBalance = await this.getProjectTokenBalance(projectAddress);
+      const hasSufficient = BigInt(currentBalance) >= BigInt(requiredAmount);
+
+      this.logger.log(
+        `Project ${projectAddress} has ${currentBalance} tokens, required: ${requiredAmount}, sufficient: ${hasSufficient}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return hasSufficient;
+    } catch (error) {
+      this.logger.error(
+        `Error checking project sufficient tokens for ${projectAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to check project sufficient tokens: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Transfer beneficiary tokens to vendor using AAProject contract
+   * @param beneficiaryAddress - The beneficiary wallet address
+   * @param vendorAddress - The vendor wallet address
+   * @param amount - The amount of tokens to transfer
+   * @returns Promise<any> - Transaction result with hash and status
+   */
+  async transferBeneficiaryTokenToVendor(
+    beneficiaryAddress: string,
+    vendorAddress: string,
+    amount: string
+  ): Promise<any> {
+    try {
+      await this.ensureInitialized();
+
+      // Create contract instance with signer for transactions
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      // Check beneficiary token balance first
+      const beneficiaryBalance = await aaContract.benTokens.staticCall(
+        beneficiaryAddress
+      );
+      const transferAmount = amount;
+
+      const aaContractSigner = await this.createContractInstanceSign(
+        'AAPROJECT',
+        AAProjectABI,
+        this.signer
+      );
+
+      const tx = await aaContractSigner.transferTokenToVendor(
+        beneficiaryAddress,
+        vendorAddress,
+        transferAmount
+      );
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully transferred ${amount} tokens from beneficiary ${beneficiaryAddress} to vendor ${vendorAddress} using AAProject contract. Transaction: ${receipt.hash}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from: beneficiaryAddress,
+        to: vendorAddress,
+        amount,
+        method: 'transferTokenToVendor',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error transferring beneficiary tokens to vendor for ${beneficiaryAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to transfer beneficiary tokens to vendor: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get wallet balance for a given address using the AA contract
+   * @param walletAddress - The wallet address to check balance for
+   * @returns Promise<{ balance: string; address: string }> - The token balance for the given address
+   */
+  async getWalletBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string }> {
+    try {
+      this.logger.log(
+        `Getting wallet balance for address: ${walletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+      await this.ensureInitialized();
+
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
+      );
+      const aaContract = await this.createContractInstance(
+        'AAPROJECT',
+        AAProjectABI
+      );
+
+      const decimals = await rahatTokenContract.decimals.staticCall();
+
+      // Get token balance using benTokens.staticCall
+      const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
+
+      this.logger.log(
+        `Token balance for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return {
+        balance: ethers.formatUnits(tokenBalance, decimals),
+        address: walletAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting wallet balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(`Failed to get wallet balance: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get RahatToken ERC20 balance for a given wallet address
+   * @param walletAddress - The wallet address to check RahatToken balance for
+   * @returns Promise<{ balance: string; address: string }> - The RahatToken balance and address
+   */
+  async getRahatTokenBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string }> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${walletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+      await this.ensureInitialized();
+
+      // Create RahatToken contract instance using the existing method
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
+      );
+
+      // Call the balanceOf function to get the wallet's RahatToken balance
+      const tokenBalance = await rahatTokenContract.balanceOf.staticCall(
+        walletAddress
+      );
+
+      this.logger.log(
+        `RahatToken balance for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return {
+        balance: tokenBalance.toString(),
+        address: walletAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get RahatToken balance: ${error.message}`
+      );
+    }
   }
 }
