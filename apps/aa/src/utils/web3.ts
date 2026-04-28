@@ -44,7 +44,7 @@ export async function createContractInstance(contractName: any, model: any) {
 
 export async function getContractByName(contractName: string, modal: any) {
   const abis = await modal.findMany({
-    where: { name: 'CONTRACTS' },
+    where: { name: 'CONTRACT' },
   });
   const contractABI = abis[0].value[contractName];
 
@@ -58,3 +58,52 @@ export async function getContractByName(contractName: string, modal: any) {
 export const getWalletFromPrivateKey = (privateKey: string, provider?: any) => {
   return new ethers.Wallet(privateKey, provider);
 };
+
+export async function createContractInstanceSign(
+  contractName: any,
+  model: any
+) {
+  //  Get Contract
+  const contract = await getContractByName(contractName, model);
+  const deployerPrivateKey = await model.findFirstOrThrow({
+    where: {
+      name: 'DEPLOYER_PRIVATE_KEY',
+    },
+  });
+
+  //  Get RPC URL
+  const res = await model.findFirstOrThrow({
+    where: {
+      name: 'CHAIN_SETTINGS',
+    },
+    select: {
+      name: true,
+      value: true,
+    },
+  });
+
+  //  Create Provider
+  const provider = new JsonRpcProvider(res?.value?.rpcUrl);
+  const signer = new ethers.Wallet(deployerPrivateKey?.value, provider);
+
+  const convertToLowerCase = (obj) => {
+    const newObj = {};
+    for (const key in obj) {
+      const newKey = key.toLowerCase();
+      const value = obj[key];
+      if (Array.isArray(value)) {
+        newObj[newKey] = value.map(convertToLowerCase);
+      } else if (typeof value === 'object') {
+        newObj[newKey] = convertToLowerCase(value);
+      } else {
+        newObj[newKey] = value;
+      }
+    }
+    return newObj;
+  };
+
+  const abi = contract.ABI.map(convertToLowerCase);
+
+  //  Create an instance of the contract
+  return new Contract(contract.ADDRESS, abi, signer);
+}

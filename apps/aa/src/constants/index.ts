@@ -82,6 +82,7 @@ export const JOBS = {
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
+    GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -291,6 +292,7 @@ export const JOBS = {
     BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
+    BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -301,6 +303,10 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+  },
+  FUND_MANAGEMENT: {
+    ADD_FUND: 'aa.jobs.fundManagement.add',
+    TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
   },
 };
 

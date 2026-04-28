@@ -67,7 +67,9 @@ export class EvmChainService implements IChainService {
 
   private get contractProcessor(): ContractProcessor {
     if (!this._contractProcessor) {
-      this._contractProcessor = this.moduleRef.get(ContractProcessor, { strict: false });
+      this._contractProcessor = this.moduleRef.get(ContractProcessor, {
+        strict: false,
+      });
     }
     return this._contractProcessor!;
   }
@@ -361,6 +363,7 @@ export class EvmChainService implements IChainService {
 
       let oneTokenPrice = 1;
       let tokenName = 'RAHAT';
+      let tokenBalance;
 
       try {
         const tokenPriceSetting = await this.settingsService.getPublic(
@@ -384,6 +387,18 @@ export class EvmChainService implements IChainService {
           'ASSETCODE setting not found, using default value: RAHAT',
           EvmChainService.name
         );
+      }
+
+      try {
+        const contract = await this.settingsService.getPublic('CONTRACT');
+        const tokenAddress = (contract?.value as any)?.RAHATTOKEN?.ADDRESS;
+        const projectAddress = (contract?.value as any)?.AAPROJECT?.ADDRESS;
+
+        tokenBalance = await this.evmProcessor.getRahatTokenBalance(
+          projectAddress
+        );
+      } catch (err) {
+        this.logger.warn('Contract details not found');
       }
 
       const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
@@ -465,6 +480,10 @@ export class EvmChainService implements IChainService {
         {
           name: 'Token Disbursed',
           value: totalDisbursedTokens,
+        },
+        {
+          name: 'Available balance',
+          value: tokenBalance?.balance,
         },
         {
           name: 'Budget Assigned',
