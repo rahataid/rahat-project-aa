@@ -791,3 +791,28 @@ model BeneficiaryInkindRedemption {
 }
 
 // ============== End Inkind SCHEMAS ================
+
+
+//===============Transfer SCHEMAS ===================
+model Transfer {
+  id                 Int @id @default(autoincrement())
+  transactionId      String @unique()
+  from               String 
+  to                 String
+  transactionHash    String 
+  blockNumber        String
+  value              String
+  blockTimeStamp     String
+  transactionType    TransactionType
+  status             String
+  createdAt          DateTime @default(now())
+
+  @@map("tbl_transfer")
+}
+
+enum TransactionType{
+  TREASURY
+  VENDOR
+  OFFRAMP
+}
+//==================End Transfer Schemas================

@@ -9,7 +9,8 @@ import * as readline from 'readline';
 import * as path from 'path';
 
 // running script example:
-// npx tsx tools/scripts/seed.aa.ts /path/to/.env
+// Interactive: npx tsx tools/scripts/seed.aa.ts /path/to/.env
+// Non-interactive: npx tsx tools/scripts/seed.aa.ts /path/to/.env "project name" "description" "private key"
 function askQuestion(query: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -25,10 +26,15 @@ function askQuestion(query: string): Promise<string> {
 }
 
 const envPath = process.argv[2];
+const argProjectName = process.argv[3];
+const argProjectDescription = process.argv[4];
+const argPrivateKey = process.argv[5];
 
 if (!envPath) {
   console.error('Environment file path is required as argument');
-  console.error('Usage: npx tsx tools/scripts/seed.aa.ts /path/to/.env');
+  console.error(
+    'Usage: npx tsx tools/scripts/seed.aa.ts /path/to/.env [name] [description] [privateKey]'
+  );
   process.exit(1);
 }
 
@@ -129,9 +135,13 @@ async function main() {
   try {
     const envVariables = await readEnvFile(envPath);
 
-    const name = await askQuestion('Enter project name: ');
-    const description = await askQuestion('Enter project description: ');
-    const privateKey = await askQuestion('Enter private key: ');
+    // Use CLI arguments if provided, otherwise prompt interactively
+    const name = argProjectName || (await askQuestion('Enter project name: '));
+    const description =
+      argProjectDescription ||
+      (await askQuestion('Enter project description: '));
+    const privateKey =
+      argPrivateKey || (await askQuestion('Enter private key: '));
 
     await txManager.cleanupOrphanedTransactions();
 

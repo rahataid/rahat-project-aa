@@ -47,6 +47,14 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_TOKEN_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  findTokenDetails(payload) {
+    return this.beneficiaryService.findTokenDetails(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
