@@ -4,20 +4,21 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { getQueueToken } from '@nestjs/bull';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '@rumsan/prisma';
-import { SettingsService } from '@rumsan/settings';
-import { EVMProcessor } from './evm.processor';
+import { ModuleRef } from '@nestjs/core';
+import { EVMCentralizedProcessor } from './evm-centralized.processor';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { InkindsService } from '../inkinds/inkinds.service';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import * as ethers from 'ethers';
 
-describe('EVMProcessor - Inkind Redemption', () => {
-  let processor: EVMProcessor;
+describe('EVMCentralizedProcessor - Inkind Redemption', () => {
+  let processor: EVMCentralizedProcessor;
   let mockPrismaService: any;
   let mockInkindService: any;
-  let mockSettingsService: any;
   let mockClientProxy: any;
   let mockEventEmitter: any;
+  let mockBeneficiaryService: any;
+  let mockModuleRef: any;
 
   const mockLogger = {
     log: jest.fn(),
@@ -60,8 +61,9 @@ describe('EVMProcessor - Inkind Redemption', () => {
       }),
     };
 
-    mockSettingsService = {
-      getPublic: jest.fn(),
+    mockBeneficiaryService = {
+      updateGroupToken: jest.fn(),
+      getOneTokenReservationByGroupId: jest.fn(),
     };
 
     mockClientProxy = {
@@ -72,20 +74,25 @@ describe('EVMProcessor - Inkind Redemption', () => {
       emit: jest.fn(),
     };
 
+    mockModuleRef = {
+      get: jest.fn((serviceClass) => {
+        if (serviceClass === InkindsService) {
+          return mockInkindService;
+        }
+        return null;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        EVMProcessor,
+        EVMCentralizedProcessor,
         {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
         {
-          provide: InkindsService,
-          useValue: mockInkindService,
-        },
-        {
-          provide: SettingsService,
-          useValue: mockSettingsService,
+          provide: BeneficiaryService,
+          useValue: mockBeneficiaryService,
         },
         {
           provide: CORE_MODULE,
@@ -96,15 +103,23 @@ describe('EVMProcessor - Inkind Redemption', () => {
           useValue: mockEventEmitter,
         },
         {
-          provide: getQueueToken(BQUEUE.EVM),
+          provide: getQueueToken(BQUEUE.EVM_TX),
           useValue: { add: jest.fn() },
+        },
+        {
+          provide: getQueueToken(BQUEUE.EVM_QUERY),
+          useValue: { add: jest.fn() },
+        },
+        {
+          provide: ModuleRef,
+          useValue: mockModuleRef,
         },
       ],
     })
       .setLogger(mockLogger)
       .compile();
 
-    processor = module.get<EVMProcessor>(EVMProcessor);
+    processor = module.get<EVMCentralizedProcessor>(EVMCentralizedProcessor);
 
     // Mock the private methods
     jest
@@ -114,26 +129,21 @@ describe('EVMProcessor - Inkind Redemption', () => {
       .spyOn(processor, 'createContractInstanceSign' as any)
       .mockResolvedValue(mockContractInstance);
     jest
-      .spyOn(processor, 'getFromSettings' as any)
-      .mockImplementation((key: string) => {
-        if (key === 'CHAIN_SETTINGS') {
-          return Promise.resolve({
-            rpcUrl: 'http://localhost:8545',
-          });
-        }
-        if (key === 'CONTRACT') {
-          return Promise.resolve({
-            INKINDTOKEN: {
-              ADDRESS: '0xinkindtoken123',
-              ABI: [],
-            },
-            INKIND: {
-              ADDRESS: '0xinkind123',
-              ABI: [],
-            },
-          });
-        }
-        return Promise.resolve({});
+      .spyOn(processor, 'getContractSettings' as any)
+      .mockResolvedValue({
+        INKINDTOKEN: {
+          ADDRESS: '0xinkindtoken123',
+          ABI: [],
+        },
+        INKIND: {
+          ADDRESS: '0xinkind123',
+          ABI: [],
+        },
+      });
+    jest
+      .spyOn(processor, 'getChainSettings' as any)
+      .mockResolvedValue({
+        rpcUrl: 'http://localhost:8545',
       });
 
     jest.clearAllMocks();
@@ -170,7 +180,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       expect(mockContractInstance.redeemInkind).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -203,7 +213,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       const callArgs = mockContractInstance.redeemInkind.mock.calls[0];
       const convertedInkinds = callArgs[0];
@@ -240,7 +250,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       expect(mockContractInstance.redeemInkind).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -275,7 +285,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       expect(mockContractInstance.redeemInkind).toHaveBeenCalled();
       expect(mockInkindService.updateRedeemInkindTxHash).toHaveBeenCalled();
@@ -295,7 +305,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       expect(mockLogger.log).toHaveBeenCalledWith(
         expect.stringContaining('Processing EVM redeem inkind'),
@@ -347,10 +357,10 @@ describe('EVMProcessor - Inkind Redemption', () => {
       const mockJob = createMockJob(jobData);
 
       jest
-        .spyOn(processor, 'getFromSettings' as any)
+        .spyOn(processor, 'getContractSettings' as any)
         .mockRejectedValue(new Error('CONTRACT configuration not found'));
 
-      await expect(processor.redeemInKind(mockJob as any)).rejects.toThrow();
+      await expect(processor.handleRedeemInkind(mockJob as any)).rejects.toThrow();
     });
 
     it('should pass correct contract call parameters', async () => {
@@ -367,7 +377,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       const callArgs = mockContractInstance.redeemInkind.mock.calls[0];
 
@@ -423,7 +433,7 @@ describe('EVMProcessor - Inkind Redemption', () => {
 
       mockContractInstance.redeemInkind.mockResolvedValue(mockRedeemInkindTx);
 
-      await processor.redeemInKind(mockJob as any);
+      await processor.handleRedeemInkind(mockJob as any);
 
       expect(mockInkindService.updateRedeemInkindTxHash).toHaveBeenCalledWith(
         jobData.inkinds,
