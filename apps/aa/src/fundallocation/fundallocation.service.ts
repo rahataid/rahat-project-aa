@@ -6,7 +6,7 @@ import {
 } from '../utils/web3';
 import { PrismaService } from '@rumsan/prisma';
 import { ethers } from 'ethers';
-import { AddFund } from './dto/fundallocation.dto';
+import { AddFund, TransferListQuery } from './dto/fundallocation.dto';
 
 @Injectable()
 export class FundService {
@@ -101,20 +101,8 @@ export class FundService {
       const projectBalance = await tokenContract.balanceOf.staticCall(
         projectAddress
       );
+      const transferList = await this.getTransferList();
 
-      const transfer = await this.prisma.transfer.findMany({
-        select: {
-          transactionId: true,
-          transactionHash: true,
-          from: true,
-          to: true,
-          value: true,
-          blockNumber: true,
-          blockTimeStamp: true,
-          status: true,
-          transactionType: true,
-        },
-      });
       return {
         decimal: Number(decimal),
         name,
@@ -123,11 +111,49 @@ export class FundService {
         projectBalance: ethers.formatUnits(projectBalance, Number(decimal)),
         projectAddress,
         tokenAddress: await tokenContract.getAddress(),
-        transfer,
+        transferList,
       };
     } catch (err) {
       throw err;
     }
+  }
+
+  async getTransferList(query: TransferListQuery = {}) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const perPage = Math.min(100, Math.max(1, Number(query.perPage) || 100));
+    const skip = (page - 1) * perPage;
+
+    const selectFields = {
+      transactionId: true,
+      transactionHash: true,
+      from: true,
+      to: true,
+      value: true,
+      blockNumber: true,
+      blockTimeStamp: true,
+      status: true,
+      transactionType: true,
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.transfer.findMany({
+        select: selectFields,
+        skip,
+        take: perPage,
+        orderBy: { blockTimeStamp: 'desc' },
+      }),
+      this.prisma.transfer.count(),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        perPage,
+        pageCount: Math.ceil(total / perPage),
+      },
+    };
   }
 
   private async gettransferHistory(projectAddress: string) {
