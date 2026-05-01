@@ -101,7 +101,6 @@ export class FundService {
       const projectBalance = await tokenContract.balanceOf.staticCall(
         projectAddress
       );
-      const transferList = await this.getTransferList();
 
       return {
         decimal: Number(decimal),
@@ -111,7 +110,6 @@ export class FundService {
         projectBalance: ethers.formatUnits(projectBalance, Number(decimal)),
         projectAddress,
         tokenAddress: await tokenContract.getAddress(),
-        transferList,
       };
     } catch (err) {
       throw err;
@@ -119,8 +117,8 @@ export class FundService {
   }
 
   async getTransferList(query: TransferListQuery = {}) {
-    const page = Math.max(1, Number(query.page) || 1);
-    const perPage = Math.min(100, Math.max(1, Number(query.perPage) || 100));
+    const page = Math.max(1, Number(query?.page) || 1);
+    const perPage = Math.min(100, Math.max(1, Number(query?.perPage) || 10));
     const skip = (page - 1) * perPage;
 
     const selectFields = {
@@ -145,13 +143,21 @@ export class FundService {
       this.prisma.transfer.count(),
     ]);
 
+    const totalPages = Math.ceil(total / perPage);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
     return {
       data,
       meta: {
         total,
         page,
         perPage,
-        pageCount: Math.ceil(total / perPage),
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        previousPage: hasPreviousPage ? page - 1 : null,
       },
     };
   }
