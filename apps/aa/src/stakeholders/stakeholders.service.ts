@@ -335,6 +335,45 @@ export class StakeholdersService {
     });
   }
   async remove(payload: RemoveStakeholdersData) {
+    this.logger.log(`Removing stakeholder with UUID: ${payload.uuid}`);
+
+    const groupsWithStakeholder = await this.prisma.stakeholdersGroups.findMany(
+      {
+        where: {
+          stakeholders: {
+            some: {
+              uuid: payload.uuid,
+            },
+          },
+        },
+      }
+    );
+
+    if (groupsWithStakeholder.length > 0) {
+      const activityAssignedGroupName = await Promise.all(
+        groupsWithStakeholder.map(async (group) => {
+          const activities = await this.getActivitiesByStakeholderGroupUuid(
+            group.uuid
+          );
+
+          if (activities && activities?.length > 0) {
+            return group.name;
+          }
+          return;
+        })
+      );
+
+      const filteredGroupNames = activityAssignedGroupName.filter(Boolean);
+
+      if (filteredGroupNames.length > 0) {
+        return {
+          isSuccess: false,
+          groupNames: filteredGroupNames,
+          message: `Stakeholder cannot be removed as it is part of stakeholder groups which are assigned to activities. Please remove the stakeholder from these groups before deleting.`,
+        };
+      }
+    }
+
     const rData = await this.prisma.stakeholders.update({
       where: {
         uuid: payload.uuid,
@@ -343,8 +382,12 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
-    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_REMOVED);
-    return rData;
+
+    this.eventEmitter.emit(EVENTS.STAKEHOLDER_REMOVED);
+    return {
+      isSuccess: true,
+      message: 'Stakeholder removed successfully',
+    };
   }
 
   async update(payload: UpdateStakeholdersData) {

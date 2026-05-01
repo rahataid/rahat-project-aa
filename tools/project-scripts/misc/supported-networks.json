@@ -1,0 +1,16 @@
+[
+    {
+        "key": "base-sepolia",
+        "name": "Base Sepolia",
+        "chainId": 84532,
+        "rpcUrl": "https://sepolia.base.org",
+        "nativeSymbol": "ETH"
+    },
+    {
+        "key": "polygon-amoy",
+        "name": "Polygon Amoy",
+        "chainId": 80002,
+        "rpcUrl": "https://rpc-amoy.polygon.technology",
+        "nativeSymbol": "POL"
+    }
+]

@@ -39,16 +39,17 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
+import { AppService } from '../app/app.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 @Injectable()
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
+    private readonly appService: AppService,
     private configService: ConfigService,
     @Inject(CHAIN_SERVICE)
     private readonly chainService: ChainService,
@@ -270,8 +271,7 @@ export class InkindsService {
         totalInkindTypes: summary._count.id,
         totalStock: summary._sum.availableStock,
         totalAvailableStock:
-          summary._sum.availableStock -
-          (totalAssignedStock._sum.quantityAllocated || 0),
+          summary._sum.availableStock, 
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
         totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
       };
@@ -696,6 +696,88 @@ export class InkindsService {
         error.stack
       );
       return [];
+    }
+  }
+
+  async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
+    const { vendorId, search, inkindType, page, perPage } = payload;
+
+    this.logger.log(
+      `Fetching inkind redemption logs details for vendor: ${vendorId}`
+    );
+
+    if (!vendorId) {
+      throw new RpcException('vendorId is required');
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: vendorId },
+      select: { uuid: true, name: true, walletAddress: true },
+    });
+
+    if (!vendor) {
+      throw new RpcException(`Vendor with UUID ${vendorId} not found`);
+    }
+
+    const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
+      vendorUid: vendorId,
+      ...(search && {
+        beneficiaryWallet: { contains: search, mode: 'insensitive' },
+      }),
+      ...(inkindType && {
+        groupInkind: {
+          inkind: {
+            type: inkindType,
+          },
+        },
+      }),
+    };
+
+    const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
+      where,
+      include: {
+        beneficiary: {
+          select: {
+            uuid: true,
+            walletAddress: true,
+            phone: true,
+            extras: true,
+          },
+        },
+        groupInkind: {
+          select: {
+            uuid: true,
+            inkind: {
+              select: {
+                uuid: true,
+                name: true,
+                type: true,
+              },
+            },
+            group: {
+              select: {
+                uuid: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    try {
+      const result = await paginate(
+        this.prisma.beneficiaryInkindRedemption,
+        query,
+        { page, perPage }
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind redemption logs details for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException('Failed to fetch inkind redemption logs details');
     }
   }
 
@@ -1150,9 +1232,7 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async beneficiaryInkindRedeem(
-    payload: BeneficiaryInkindRedeemDto
-  ): Promise<BeneficiaryRedemptionResponse> {
+  async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
     const { walletAddress, inkinds, user } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
@@ -1175,6 +1255,29 @@ export class InkindsService {
           `User '${user.name}' is not registered as a vendor`
         );
       }
+
+      const { value } = await this.appService.getSettings({
+        name: 'PROJECTINFO',
+      });
+
+      // const isPhasePayoutActivate = await lastValueFrom(
+      //   this.client.send(
+      //     { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+      //     {
+      //       activeYear: value.active_year,
+      //       riverBasin: value.river_basin,
+      //     }
+      //   )
+      // );
+
+      // if (!isPhasePayoutActivate) {
+      //   this.logger.log(
+      //     'Payout phase not active. In-kind redemption is unavailable.'
+      //   );
+      //   throw new RpcException(
+      //     'Payout phase not active. In-kind redemption is unavailable.'
+      //   );
+      // }
 
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
