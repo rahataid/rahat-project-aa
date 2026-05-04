@@ -151,13 +151,11 @@ export class FundService {
       data,
       meta: {
         total,
-        page,
+        lastPage: totalPages,
+        currentPage: page,
         perPage,
-        totalPages,
-        hasNextPage,
-        hasPreviousPage,
-        nextPage: hasNextPage ? page + 1 : null,
-        previousPage: hasPreviousPage ? page - 1 : null,
+        prev: hasPreviousPage ? page - 1 : null,
+        next: hasNextPage ? page + 1 : null,
       },
     };
   }
