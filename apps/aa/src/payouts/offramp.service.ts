@@ -57,6 +57,7 @@ export class OfframpService {
   }
 
   async getPaymentProvider(): Promise<IPaymentProvider[]> {
+    this.logger.log(`Fetching payment providers from offramp service`);
     const offrampSettings = await this.fetchOfframpSettings();
 
     try {
@@ -82,9 +83,19 @@ export class OfframpService {
         },
       ];
     } catch (error) {
-      throw new RpcException(
-        `Failed to fetch payment provider: ${error.message}`
+      this.logger.error(
+        `Failed to fetch payment providers: ${error.message}`,
+        error.stack
       );
+      return [
+        {
+          id: 'manual-bank-transfer',
+          name: 'Manual Bank Transfer',
+          type: 'manual_bank_transfer',
+          createdAt: '2025-01-27T10:00:00.000Z',
+          updatedAt: '2025-01-27T10:00:00.000Z',
+        },
+      ];
     }
   }
 
