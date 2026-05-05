@@ -10,7 +10,7 @@ import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import { ContractProcessor } from '../../processors/contract.processor';
-import { EVMProcessor } from '../../processors/evm.processor';
+import { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
 import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
   AddTriggerDto,
@@ -43,12 +43,13 @@ export interface EVMChainConfig {
 export class EvmChainService implements IChainService {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
-  private _evmProcessor: EVMProcessor | null = null;
+  private _evmProcessor: EVMCentralizedProcessor | null = null;
   private _contractProcessor: ContractProcessor | null = null;
   name = 'evm';
 
   constructor(
-    @InjectQueue(BQUEUE.EVM) private readonly evmQueue: Queue,
+    @InjectQueue(BQUEUE.EVM_TX) private readonly evmTxQueue: Queue,
+    @InjectQueue(BQUEUE.EVM_QUERY) private readonly evmQueryQueue: Queue,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
@@ -57,16 +58,18 @@ export class EvmChainService implements IChainService {
     this.initializeProvider();
   }
 
-  private get evmProcessor(): EVMProcessor {
+  private get evmProcessor(): EVMCentralizedProcessor {
     if (!this._evmProcessor) {
-      this._evmProcessor = this.moduleRef.get(EVMProcessor, { strict: false });
+      this._evmProcessor = this.moduleRef.get(EVMCentralizedProcessor, { strict: false });
     }
     return this._evmProcessor!;
   }
 
   private get contractProcessor(): ContractProcessor {
     if (!this._contractProcessor) {
-      this._contractProcessor = this.moduleRef.get(ContractProcessor, { strict: false });
+      this._contractProcessor = this.moduleRef.get(ContractProcessor, {
+        strict: false,
+      });
     }
     return this._contractProcessor!;
   }
@@ -93,9 +96,9 @@ export class EvmChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.DISBURSE_BATCH,
+      const job = await this.evmTxQueue.add(
         {
+          type: JOBS.CONTRACT.DISBURSE_BATCH,
           beneficiaries,
           amounts,
           groupUuid,
@@ -149,9 +152,9 @@ export class EvmChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.evmQueue.add(
-        JOBS.CONTRACT.ADD_BENEFICIARY,
+      const job = await this.evmTxQueue.add(
         {
+          type: JOBS.CONTRACT.ADD_BENEFICIARY,
           projectContract: chainConfig.projectContractAddress,
           beneficiaryAddress,
         },
@@ -191,7 +194,8 @@ export class EvmChainService implements IChainService {
     try {
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.evmQueue.add(JOBS.CONTRACT.CHECK_BALANCE, {
+      const job = await this.evmQueryQueue.add({
+        type: JOBS.CONTRACT.CHECK_BALANCE,
         address,
         tokenAddress: options?.tokenAddress || chainConfig.tokenContractAddress,
         projectContract:
@@ -291,7 +295,8 @@ export class EvmChainService implements IChainService {
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
     const chainConfig = await this.getChainConfig();
-    return this.evmQueue.add(JOBS.CONTRACT.ASSIGN_TOKENS, {
+    return this.evmTxQueue.add({
+      type: JOBS.CONTRACT.ASSIGN_TOKENS,
       beneficiaryAddress: data.beneficiaryAddress,
       amount: data.amount.toString(),
       projectContract: chainConfig.projectContractAddress,
@@ -318,10 +323,11 @@ export class EvmChainService implements IChainService {
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
-    this.evmQueue.addBulk(
+    this.evmTxQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
-        name: JOBS.EVM.ASSIGN_TOKENS,
+        name: JOBS.EVM.TX_JOB,
         data: {
+          type: JOBS.EVM.ASSIGN_TOKENS,
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
           groups: uuid,
         },
@@ -357,6 +363,7 @@ export class EvmChainService implements IChainService {
 
       let oneTokenPrice = 1;
       let tokenName = 'RAHAT';
+      let tokenBalance;
 
       try {
         const tokenPriceSetting = await this.settingsService.getPublic(
@@ -380,6 +387,18 @@ export class EvmChainService implements IChainService {
           'ASSETCODE setting not found, using default value: RAHAT',
           EvmChainService.name
         );
+      }
+
+      try {
+        const contract = await this.settingsService.getPublic('CONTRACT');
+        const tokenAddress = (contract?.value as any)?.RAHATTOKEN?.ADDRESS;
+        const projectAddress = (contract?.value as any)?.AAPROJECT?.ADDRESS;
+
+        tokenBalance = await this.evmProcessor.getRahatTokenBalance(
+          projectAddress
+        );
+      } catch (err) {
+        this.logger.warn('Contract details not found');
       }
 
       const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
@@ -461,6 +480,10 @@ export class EvmChainService implements IChainService {
         {
           name: 'Token Disbursed',
           value: totalDisbursedTokens,
+        },
+        {
+          name: 'Available balance',
+          value: tokenBalance?.balance,
         },
         {
           name: 'Budget Assigned',
@@ -731,7 +754,8 @@ export class EvmChainService implements IChainService {
 
   async fundAccount(data: FundAccountDto): Promise<any> {
     const chainConfig = await this.getChainConfig();
-    return this.evmQueue.add(JOBS.CONTRACT.FUND_ACCOUNT, {
+    return this.evmTxQueue.add({
+      type: JOBS.CONTRACT.FUND_ACCOUNT,
       walletAddress: data.walletAddress,
       amount: data.amount,
     });
@@ -1269,12 +1293,13 @@ export class EvmChainService implements IChainService {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
-    return this.evmQueue.add(JOBS.EVM.REDEEM_INKIND, redeemDto, {
+    return this.evmTxQueue.add({ type: JOBS.EVM.REDEEM_INKIND, ...redeemDto }, {
       attempts: 3,
       removeOnComplete: true,
+      removeOnFail: false,
       backoff: {
         type: 'exponential',
-        delay: 2000,
+        delay: 5000,
       },
     });
   }
