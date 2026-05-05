@@ -309,6 +309,7 @@ export const JOBS = {
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',
     TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
+    TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
 };
 
