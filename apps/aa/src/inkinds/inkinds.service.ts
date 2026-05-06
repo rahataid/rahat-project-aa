@@ -913,7 +913,7 @@ export class InkindsService {
 
       const groupedMap = new Map<
         string,
-        { txHash: string | null; date: Date; beneficiaryName: string | null }
+        { txHash: string | null; date: Date; phone: string | null }
       >();
       for (const redemption of result.data as any[]) {
         const key = redemption.txHash ?? '__no_txhash__';
@@ -922,7 +922,7 @@ export class InkindsService {
           groupedMap.set(key, {
             txHash: redemption.txHash ?? null,
             date: redemption.redeemedAt,
-            beneficiaryName: (extras?.name as string) ?? null,
+            phone: extras?.phone as string || null,
           });
         }
       }
@@ -993,7 +993,6 @@ export class InkindsService {
 
       return {
         beneficiaryWalletAddress: first.beneficiary.walletAddress,
-        beneficiaryName: (extras?.name as string) ?? null,
         phone: (extras?.phone as string) ?? null,
         txHash: first.txHash,
         status: first.txHash ? 'Completed' : 'Pending',
