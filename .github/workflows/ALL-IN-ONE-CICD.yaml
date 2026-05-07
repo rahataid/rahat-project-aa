@@ -16,7 +16,7 @@ on:
       tag_prefix:
         description: 'Tag prefix (e.g., Img tag)'
         required: true
-        default: 'dev'
+        default: 'release-v4.0.0-nrcs'
         type: string
 
 env:
