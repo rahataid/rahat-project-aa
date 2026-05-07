@@ -700,7 +700,7 @@ export class InkindsService {
   }
 
   async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
-    const { vendorId, search, inkindType, page, perPage } = payload;
+    const { vendorId, search, inkindType, page, perPage, order = 'desc' } = payload;
 
     this.logger.log(
       `Fetching inkind redemption logs details for vendor: ${vendorId}`
@@ -733,8 +733,15 @@ export class InkindsService {
       }),
     };
 
+    const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
+
+    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput = {
+      redeemedAt: safeOrder,
+    };
+
     const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
       where,
+      orderBy,
       include: {
         beneficiary: {
           select: {
