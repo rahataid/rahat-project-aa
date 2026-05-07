@@ -6,7 +6,7 @@ import {
 } from '../utils/web3';
 import { PrismaService } from '@rumsan/prisma';
 import { ethers } from 'ethers';
-import { AddFund } from './dto/fundallocation.dto';
+import { AddFund, TransferListQuery } from './dto/fundallocation.dto';
 
 @Injectable()
 export class FundService {
@@ -102,19 +102,6 @@ export class FundService {
         projectAddress
       );
 
-      const transfer = await this.prisma.transfer.findMany({
-        select: {
-          transactionId: true,
-          transactionHash: true,
-          from: true,
-          to: true,
-          value: true,
-          blockNumber: true,
-          blockTimeStamp: true,
-          status: true,
-          transactionType: true,
-        },
-      });
       return {
         decimal: Number(decimal),
         name,
@@ -123,11 +110,54 @@ export class FundService {
         projectBalance: ethers.formatUnits(projectBalance, Number(decimal)),
         projectAddress,
         tokenAddress: await tokenContract.getAddress(),
-        transfer,
       };
     } catch (err) {
       throw err;
     }
+  }
+
+  async getTransferList(query: TransferListQuery = {}) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const perPage = Math.min(100, Math.max(1, Number(query?.perPage) || 10));
+    const skip = (page - 1) * perPage;
+
+    const selectFields = {
+      transactionId: true,
+      transactionHash: true,
+      from: true,
+      to: true,
+      value: true,
+      blockNumber: true,
+      blockTimeStamp: true,
+      status: true,
+      transactionType: true,
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.transfer.findMany({
+        select: selectFields,
+        skip,
+        take: perPage,
+        orderBy: { blockTimeStamp: 'desc' },
+      }),
+      this.prisma.transfer.count(),
+    ]);
+
+    const totalPages = Math.ceil(total / perPage);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        lastPage: totalPages,
+        currentPage: page,
+        perPage,
+        prev: hasPreviousPage ? page - 1 : null,
+        next: hasNextPage ? page + 1 : null,
+      },
+    };
   }
 
   private async gettransferHistory(projectAddress: string) {

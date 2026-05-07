@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { FundService } from './fundallocation.service';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
-import { AddFund } from './dto/fundallocation.dto';
+import { AddFund, TransferListQuery } from './dto/fundallocation.dto';
 
 @Controller()
 export class FundAllocationController {
@@ -22,5 +22,13 @@ export class FundAllocationController {
   })
   findTokenDetails() {
     return this.fundService.getTokenDetails();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.FUND_MANAGEMENT.TRANSFER_LIST,
+    uuid: process.env.PROJECT_ID,
+  })
+  findTokenTransferList(@Payload() query: TransferListQuery) {
+    return this.fundService.getTransferList(query);
   }
 }
