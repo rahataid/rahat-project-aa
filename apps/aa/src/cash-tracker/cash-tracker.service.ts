@@ -16,7 +16,6 @@ import {
 import { ethers } from 'ethers';
 import { SettingsService } from '@rumsan/settings';
 import { MintTokenRequestDto } from './dto/mint-token.dto';
-import { EVMProcessor } from '../processors/evm.processor';
 import { RpcException } from '@nestjs/microservices';
 
 export interface CashTrackerConfig {
@@ -481,10 +480,10 @@ export class CashTrackerService {
 
       this.logger.log(
         `Minting ${amount} tokens to project ${projectAddress}`,
-        EVMProcessor.name
+        CashTrackerService.name
       );
 
-      console.log({ mintRequest });
+      console.log({ mintRequest});
       // Execute mint using generic EVMUtils
       const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
 
@@ -494,7 +493,7 @@ export class CashTrackerService {
 
       this.logger.log(
         `Successfully minted tokens. Transaction: ${result.transactionHash}`,
-        EVMProcessor.name
+        CashTrackerService.name
       );
 
       return {

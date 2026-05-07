@@ -21,6 +21,7 @@ import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
+import { createContractInstance } from '../utils/web3';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -272,6 +273,53 @@ export class BeneficiaryService {
     });
     if (data) return { ...data, ...projectBendata };
     return projectBendata;
+  }
+
+  async findTokenDetails(payload) {
+    const { uuid } = payload;
+    const contractSettings = await this.prisma.setting.findUnique({
+      where: {
+        name: 'CONTRACT',
+      },
+    });
+    const formattedValue = contractSettings?.value as any;
+    const rahatTokenAddress = formattedValue?.RAHATTOKEN?.ADDRESS;
+    const projectContract = await createContractInstance(
+      'AAPROJECT',
+      this.prisma.setting
+    );
+    const tokenContract = await createContractInstance(
+      'RAHATTOKEN',
+      this.prisma.setting
+    );
+
+    const tokenAllocation = await projectContract.benTokens.staticCall(
+      rahatTokenAddress
+    );
+    const decimal = await tokenContract?.decimals.staticCall();
+    const benDetails = await this.prisma.beneficiary.findUnique({
+      where: {
+        uuid,
+      },
+      select: {
+        benTokens: true,
+        BeneficiaryRedeem: {
+          select: {
+            amount: true,
+          },
+        },
+      },
+    });
+
+    const redemeedToken = benDetails?.BeneficiaryRedeem?.reduce(
+      (sum, item) => sum + Number(item.amount ?? item?.amount ?? 0),
+      0
+    );
+    return {
+      availableToken: ethers.formatUnits(tokenAllocation, decimal),
+      assignedToken: benDetails?.benTokens,
+      redemmedToken: redemeedToken,
+    };
   }
 
   async findOneBeneficiary(payload) {
@@ -790,30 +838,33 @@ export class BeneficiaryService {
       transactionType: string;
       status: string;
       txHash: string | null;
-      createdAt: Date;
-      updatedAt: Date;
+      createdAt: Date | null;
+      updatedAt: Date | null;
       payoutType?: string;
       mode?: string;
       vendorName?: string;
       extras?: any;
     }[]
   > {
+    this.logger.log(
+      `Getting beneficiary redeem information for beneficiary UUID: ${beneficiaryUUID}`
+    );
+
+    if (!beneficiaryUUID) {
+      throw new RpcException('Beneficiary UUID is required');
+    }
+
+    // First get the beneficiary to get their wallet address
+    const beneficiary = await this.prisma.beneficiary.findUnique({
+      where: { uuid: beneficiaryUUID },
+      select: { walletAddress: true },
+    });
+
+    if (!beneficiary) {
+      throw new RpcException('Beneficiary not found');
+    }
+
     try {
-      // Validate beneficiaryUUID
-      if (!beneficiaryUUID) {
-        throw new RpcException('Beneficiary UUID is required');
-      }
-
-      // First get the beneficiary to get their wallet address
-      const beneficiary = await this.prisma.beneficiary.findUnique({
-        where: { uuid: beneficiaryUUID },
-        select: { walletAddress: true },
-      });
-
-      if (!beneficiary) {
-        throw new RpcException('Beneficiary not found');
-      }
-
       // Get all beneficiary redeem records for this beneficiary
       const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
         where: {
@@ -851,15 +902,15 @@ export class BeneficiaryService {
       });
 
       if (!beneficiaryRedeems || beneficiaryRedeems.length === 0) {
-        throw new RpcException('No redeem records found for this beneficiary');
+        return [];
       }
 
       return beneficiaryRedeems.map((redeem) => ({
         uuid: redeem.uuid,
         beneficiaryWallet: redeem.beneficiaryWalletAddress,
         tokenAmount: redeem.amount,
-        transactionType: redeem.transactionType,
-        status: redeem.status,
+        transactionType: String(redeem.transactionType),
+        status: String(redeem.status),
         txHash: redeem.txHash,
         createdAt: redeem.createdAt,
         updatedAt: redeem.updatedAt,
@@ -870,6 +921,67 @@ export class BeneficiaryService {
       }));
     } catch (error) {
       this.logger.error(`Error getting beneficiary redeem info: ${error}`);
+      throw error;
+    }
+  }
+
+  async getBeneficiaryRedeemInfoInkind(beneficiaryUUID: string) {
+    this.logger.log(
+      `Getting beneficiary inkind redeem information for beneficiary UUID: ${beneficiaryUUID}`
+    );
+
+    if (!beneficiaryUUID) {
+      throw new RpcException('Beneficiary UUID is required');
+    }
+
+    // First get the beneficiary to get their wallet address
+    const beneficiary = await this.prisma.beneficiary.findUnique({
+      where: { uuid: beneficiaryUUID },
+      select: { walletAddress: true },
+    });
+
+    if (!beneficiary) {
+      throw new RpcException('Beneficiary not found');
+    }
+
+    try {
+      //fetch inkind redeems of the beneficiary
+      return await this.prisma.beneficiaryInkindRedemption.findMany({
+        where: {
+          beneficiaryWallet: beneficiary.walletAddress,
+          status: 'COMPLETED',
+        },
+        orderBy: {
+          redeemedAt: 'desc',
+        },
+        select: {
+          uuid: true,
+          beneficiaryWallet: true,
+          status: true,
+          quantity: true,
+          groupInkind: {
+            select: {
+              inkind: {
+                select: {
+                  name: true,
+                  type: true,
+                },
+              },
+            },
+          },
+          txHash: true,
+          redeemedAt: true,
+          Vendor: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error getting beneficiary inkind redeem info: ${error}`
+      );
       throw error;
     }
   }

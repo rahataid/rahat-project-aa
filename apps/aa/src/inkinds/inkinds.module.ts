@@ -7,6 +7,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { BullModule } from '@nestjs/bull';
 import { ChainModule } from '../chain/chain.module';
+import { AppService } from '../app/app.service';
 
 @Module({
   imports: [
@@ -23,16 +24,15 @@ import { ChainModule } from '../chain/chain.module';
         },
       },
     ]),
-    BullModule.registerQueue({
-      name: BQUEUE.EVM,
-    }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
-    forwardRef(() => ChainModule)
+    forwardRef(() => ChainModule),
   ],
   controllers: [InkindsController],
-  providers: [InkindsService],
+  providers: [InkindsService, AppService],
   exports: [InkindsService],
 })
 export class InkindsModule {}

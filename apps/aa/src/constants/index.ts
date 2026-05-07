@@ -79,9 +79,11 @@ export const JOBS = {
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
     GET_REDEEM_INFO: 'aa.jobs.beneficiary.getRedeemInfo',
+    GET_REDEEM_INFO_INKIND: 'aa.jobs.beneficiary.getRedeemInfoInkind',
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
+    GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -209,6 +211,7 @@ export const JOBS = {
       LIST: 'rahat.jobs.vendor.reimburse.list',
       GET: 'rahat.jobs.vendor.reimburse.get',
     },
+    UPDATE_DETAILS: 'rahat.jobs.vendor.update',
     CREATE_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.create',
     GET_TOKEN_REDEMPTION: 'aa.jobs.vendor.token_redemption.get',
     UPDATE_TOKEN_REDEMPTION_STATUS:
@@ -250,6 +253,10 @@ export const JOBS = {
     GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
   },
   EVM: {
+    // Generic dispatcher job names — all EVM jobs route through one of these two
+    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`,       // write ops: serial (concurrency 1), signer required
+    QUERY_JOB: `aa.jobs.evm.query_${process.env.PROJECT_ID}`, // read ops:  concurrent (concurrency 5), no signer
+    // Original job-type identifiers — used as `type` field inside job.data
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
     DISBURSE_BATCH: `aa.jobs.evm.disburseBatch_${process.env.PROJECT_ID}`,
     DISBURSEMENT_STATUS_UPDATE: `aa.jobs.evm.disbursementStatusUpdate_${process.env.PROJECT_ID}`,
@@ -281,11 +288,13 @@ export const JOBS = {
     GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
       'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
     GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
+    GET_LOGS_DETAILS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsDetailsByVendor',
     GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
     GET_LOGS_DETAILS_BY_TX_HASH: 'aa.jobs.groupInkinds.getLogsDetailsByTxHash',
     BENEFICIARY_INKIND_REDEEM: 'aa.jobs.beneficiaryInkinds.redeem',
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
+    BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -296,7 +305,12 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
-  }
+  },
+  FUND_MANAGEMENT: {
+    ADD_FUND: 'aa.jobs.fundManagement.add',
+    TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
+    TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
+  },
 };
 
 export const EVENTS = {
@@ -323,7 +337,8 @@ export const BQUEUE = {
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
-  // EVM:"EVM"
+  EVM_TX: `EVM_TX_${process.env.PROJECT_ID}`,
+  EVM_QUERY: `EVM_QUERY_${process.env.PROJECT_ID}`,
   VENDOR_OFFLINE: `VENDOR_OFFLINE_${process.env.PROJECT_ID}`,
   VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,

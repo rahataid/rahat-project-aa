@@ -47,6 +47,14 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_TOKEN_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  findTokenDetails(payload) {
+    return this.beneficiaryService.findTokenDetails(payload);
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ONE_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
@@ -122,6 +130,16 @@ export class BeneficiaryController {
   })
   async getBeneficiaryRedeemInfo(payload: { beneficiaryUUID: string }) {
     return this.beneficiaryService.getBeneficiaryRedeemInfo(
+      payload.beneficiaryUUID
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_REDEEM_INFO_INKIND,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryRedeemInfoInkind(payload: { beneficiaryUUID: string }) {
+    return this.beneficiaryService.getBeneficiaryRedeemInfoInkind(
       payload.beneficiaryUUID
     );
   }
