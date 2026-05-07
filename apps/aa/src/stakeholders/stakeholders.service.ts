@@ -325,14 +325,10 @@ export class StakeholdersService {
       },
       ...(order && sort
         ? {
-            orderBy: {
-              [sort]: order,
-            },
+            orderBy: [{ [sort]: order }, { id: 'desc' }],
           }
         : {
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           }),
     };
 
