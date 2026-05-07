@@ -7,7 +7,7 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml ./
 
 COPY apps ./apps
 COPY libs ./libs
