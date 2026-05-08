@@ -1,29 +1,57 @@
-# Install dependencies only when needed
-FROM node:18-alpine3.17 AS deps
+# -----------------------------
+# Dependencies
+# -----------------------------
+FROM node:20-alpine AS deps
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Lock pnpm v6
-RUN corepack enable && corepack prepare pnpm@6.35.1 --activate
+RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
 
-COPY ./dist/apps/aa/package.json ./
-COPY ./pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
+
+COPY apps ./apps
+COPY libs ./libs
+COPY prisma ./prisma
+COPY tsconfig.base.json ./
+COPY nx.json ./
 
 RUN pnpm install --frozen-lockfile
 
 
-# Builder stage
-FROM node:18-alpine3.17 AS builder
+# -----------------------------
+# Builder
+# -----------------------------
+FROM node:20-alpine AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Use same pnpm version
-RUN corepack enable && corepack prepare pnpm@6.35.1 --activate
+RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
 
-COPY ./dist/apps/aa/ ./
+COPY . .
 
-COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY --from=deps /app/node_modules ./node_modules
 
-RUN pnpm prisma generate
+RUN pnpm prisma:generate
+RUN pnpm nx build aa --skip-nx-cache
+
+# -----------------------------
+# Production Runner
+# -----------------------------
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy built app
+COPY --from=builder /app/dist/apps/aa ./
+
+# Copy production dependencies
+COPY --from=builder /app/node_modules ./node_modules
+
+# If Prisma schema/client is needed at runtime
+COPY --from=builder /app/prisma ./prisma
+
+EXPOSE 3000
 
 CMD ["node", "main.js"]
