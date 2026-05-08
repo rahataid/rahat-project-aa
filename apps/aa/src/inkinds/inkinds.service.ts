@@ -1130,7 +1130,7 @@ export class InkindsService {
         beneficiary: {
           uuid: redemption.beneficiary.uuid,
           walletAddress: redemption.beneficiary.walletAddress,
-          phone: redemption.beneficiary.phone,
+          phone: (redemption.beneficiary.extras as Record<string, unknown>)?.phone as string || null,
           name:
             (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
             null,
@@ -1271,24 +1271,24 @@ export class InkindsService {
         name: 'PROJECTINFO',
       });
 
-      const isPhasePayoutActivate = await lastValueFrom(
-        this.client.send(
-          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
-          {
-            activeYear: value.active_year,
-            riverBasin: value.river_basin,
-          }
-        )
-      );
+      // const isPhasePayoutActivate = await lastValueFrom(
+      //   this.client.send(
+      //     { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+      //     {
+      //       activeYear: value.active_year,
+      //       riverBasin: value.river_basin,
+      //     }
+      //   )
+      // );
 
-      if (!isPhasePayoutActivate) {
-        this.logger.log(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-        throw new RpcException(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-      }
+      // if (!isPhasePayoutActivate) {
+      //   this.logger.log(
+      //     'Payout phase not active. In-kind redemption is unavailable.'
+      //   );
+      //   throw new RpcException(
+      //     'Payout phase not active. In-kind redemption is unavailable.'
+      //   );
+      // }
 
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
