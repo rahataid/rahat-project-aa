@@ -1018,6 +1018,7 @@ export class InkindsService {
       order = 'desc',
       page = 1,
       perPage = 10,
+      getEntireLogs = false,
     } = payload;
 
     this.logger.log(`Fetching logs for groupInkindId: ${groupInkindId}`);
@@ -1056,36 +1057,26 @@ export class InkindsService {
             { beneficiaryWallet: { contains: search, mode: 'insensitive' } },
             {
               beneficiary: {
-                extras: {
-                  path: ['name'],
-                  string_contains: search,
-                },
+                extras: { path: ['name'], string_contains: search },
               },
             },
             {
               beneficiary: {
-                extras: {
-                  path: ['phone'],
-                  string_contains: search,
-                },
+                extras: { path: ['phone'], string_contains: search },
               },
             },
           ],
         }),
       };
 
+      // Whitelist sort fields to prevent injection via Prisma's orderBy
       const allowedSortFields = ['redeemedAt', 'quantity'];
       const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
       const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
 
-      const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput =
-        {
-          [safeSort]: safeOrder,
-        };
-
       const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
         where,
-        orderBy,
+        orderBy: { [safeSort]: safeOrder },
         include: {
           beneficiary: {
             select: {
@@ -1105,50 +1096,57 @@ export class InkindsService {
         },
       };
 
+      const groupInkindSummary = {
+        uuid: groupInkind.uuid,
+        inkindName: groupInkind.inkind.name,
+        inkindType: groupInkind.inkind.type,
+        groupName: groupInkind.group.name,
+        quantityAllocated: groupInkind.quantityAllocated,
+        quantityRedeemed: groupInkind.quantityRedeemed,
+        totalBeneficiaries: groupInkind.group._count.beneficiaries,
+      };
+
+      if (getEntireLogs) {
+        // Warn: unbounded query — ensure this is only used for exports/trusted callers
+        const total = await this.prisma.beneficiaryInkindRedemption.count({ where });
+        if (total > 10_000) {
+          this.logger.warn(
+            `getEntireLogs requested for groupInkindId ${groupInkindId} with ${total} records — this may be slow`
+          );
+        }
+
+        const redemptions = await this.prisma.beneficiaryInkindRedemption.findMany(query);
+
+        return {
+          data: {
+            groupInkind: groupInkindSummary,
+            logs: redemptions.map(this.formatRedemption),
+          },
+          meta: {
+            total: redemptions.length,
+            page: 1,
+            perPage: redemptions.length,
+            totalPages: redemptions.length > 0 ? 1 : 0,
+          },
+        };
+      }
+
       const result = await paginate(
         this.prisma.beneficiaryInkindRedemption,
         query,
         { page, perPage }
       );
 
-      const formattedLogs = result.data.map((redemption: any) => ({
-        uuid: redemption.uuid,
-        quantity: redemption.quantity,
-        redeemedAt: redemption.redeemedAt,
-        txHash: redemption.txHash,
-        beneficiary: {
-          uuid: redemption.beneficiary.uuid,
-          walletAddress: redemption.beneficiary.walletAddress,
-          phone: redemption.beneficiary.phone,
-          name:
-            (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
-            null,
-        },
-        vendor: redemption.Vendor
-          ? {
-              uuid: redemption.Vendor.uuid,
-              name: redemption.Vendor.name,
-              walletAddress: redemption.Vendor.walletAddress,
-            }
-          : null,
-      }));
-
       return {
         data: {
-          groupInkind: {
-            uuid: groupInkind.uuid,
-            inkindName: groupInkind.inkind.name,
-            inkindType: groupInkind.inkind.type,
-            groupName: groupInkind.group.name,
-            quantityAllocated: groupInkind.quantityAllocated,
-            quantityRedeemed: groupInkind.quantityRedeemed,
-            totalBeneficiaries: groupInkind.group._count.beneficiaries,
-          },
-          logs: formattedLogs,
+          groupInkind: groupInkindSummary,
+          logs: result.data.map(this.formatRedemption),
         },
         meta: result.meta,
       };
     } catch (error) {
+      // Re-throw RpcExceptions as-is; only wrap unexpected errors
+      if (error instanceof RpcException) throw error;
       this.logger.error(
         `Failed to fetch logs for groupInkindId ${groupInkindId}: ${error.message}`,
         error.stack
@@ -2076,5 +2074,27 @@ export class InkindsService {
       );
       return null;
     }
+  }
+
+  private formatRedemption(redemption: any) {
+    return {
+      uuid: redemption.uuid,
+      quantity: redemption.quantity,
+      redeemedAt: redemption.redeemedAt,
+      txHash: redemption.txHash,
+      beneficiary: {
+        uuid: redemption.beneficiary.uuid,
+        walletAddress: redemption.beneficiary.walletAddress,
+        phone: redemption.beneficiary.phone,
+        name: (redemption.beneficiary.extras as Record<string, unknown>)?.name ?? null,
+      },
+      vendor: redemption.Vendor
+        ? {
+            uuid: redemption.Vendor.uuid,
+            name: redemption.Vendor.name,
+            walletAddress: redemption.Vendor.walletAddress,
+          }
+        : null,
+    };
   }
 }
