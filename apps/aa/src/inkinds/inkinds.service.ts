@@ -1108,13 +1108,6 @@ export class InkindsService {
 
       if (getEntireLogs) {
         // Warn: unbounded query — ensure this is only used for exports/trusted callers
-        const total = await this.prisma.beneficiaryInkindRedemption.count({ where });
-        if (total > 10_000) {
-          this.logger.warn(
-            `getEntireLogs requested for groupInkindId ${groupInkindId} with ${total} records — this may be slow`
-          );
-        }
-
         const redemptions = await this.prisma.beneficiaryInkindRedemption.findMany(query);
 
         return {
