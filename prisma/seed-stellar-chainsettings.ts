@@ -8,14 +8,14 @@ const settings = new SettingsService(prismaService);
 
 export const seedStellarChainSetting = async () => {
   const setting = {
-    name: 'localhost',
+    name: 'stellar test chain',
     type: 'stellar',
     rpcUrl:
-      'https://arb-sepolia.g.alchemy.com/v2/3-Jf0_L-pBwwla0OYWjLZkEpDiG1xAg-',
+      'https://stellar.liquify.com/api=41EEWAH79Y5OCGI7/testnet',
     chainId: 'Test SDF Network ; September 2015',
     currency: {
-      name: 'stellar',
-      symbol: 'stellar',
+      name: 'xlm',
+      symbol: 'xlm',
     },
     explorerUrl: 'https://etherscan.io',
   };

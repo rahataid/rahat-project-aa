@@ -21,6 +21,7 @@ import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
+import { createContractInstance } from '../utils/web3';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -272,6 +273,53 @@ export class BeneficiaryService {
     });
     if (data) return { ...data, ...projectBendata };
     return projectBendata;
+  }
+
+  async findTokenDetails(payload) {
+    const { uuid } = payload;
+    const contractSettings = await this.prisma.setting.findUnique({
+      where: {
+        name: 'CONTRACT',
+      },
+    });
+    const formattedValue = contractSettings?.value as any;
+    const rahatTokenAddress = formattedValue?.RAHATTOKEN?.ADDRESS;
+    const projectContract = await createContractInstance(
+      'AAPROJECT',
+      this.prisma.setting
+    );
+    const tokenContract = await createContractInstance(
+      'RAHATTOKEN',
+      this.prisma.setting
+    );
+
+    const tokenAllocation = await projectContract.benTokens.staticCall(
+      rahatTokenAddress
+    );
+    const decimal = await tokenContract?.decimals.staticCall();
+    const benDetails = await this.prisma.beneficiary.findUnique({
+      where: {
+        uuid,
+      },
+      select: {
+        benTokens: true,
+        BeneficiaryRedeem: {
+          select: {
+            amount: true,
+          },
+        },
+      },
+    });
+
+    const redemeedToken = benDetails?.BeneficiaryRedeem?.reduce(
+      (sum, item) => sum + Number(item.amount ?? item?.amount ?? 0),
+      0
+    );
+    return {
+      availableToken: ethers.formatUnits(tokenAllocation, decimal),
+      assignedToken: benDetails?.benTokens,
+      redemmedToken: redemeedToken,
+    };
   }
 
   async findOneBeneficiary(payload) {

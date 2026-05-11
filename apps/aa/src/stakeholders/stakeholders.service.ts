@@ -284,6 +284,24 @@ export class StakeholdersService {
       supportArea,
     } = payload;
 
+    this.logger.log(
+      `Fetching stakeholders with filters - name: ${name}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
+    );
+
+    // Case-insensitive array search via raw SQL — Prisma hasSome is case-sensitive
+    let supportAreaUuids: string[] | null = null;
+    if (supportArea) {
+      const matches = await this.prisma.$queryRaw<{ uuid: string }[]>`
+      SELECT uuid FROM tbl_stakeholders
+      WHERE EXISTS (
+        SELECT 1 FROM unnest("supportArea") AS s
+        WHERE s ILIKE ${'%' + supportArea + '%'}
+      )
+      AND "isDeleted" = false
+    `;
+      supportAreaUuids = matches.map((m) => m.uuid);
+    }
+
     const query = {
       where: {
         isDeleted: false,
@@ -300,21 +318,17 @@ export class StakeholdersService {
         ...(organization && {
           organization: { contains: organization, mode: 'insensitive' },
         }),
-        ...(supportArea && { supportArea: { hasSome: [supportArea] } }),
+        ...(supportAreaUuids && { uuid: { in: supportAreaUuids } }),
       },
       include: {
         stakeholdersGroups: true,
       },
       ...(order && sort
         ? {
-            orderBy: {
-              [sort]: order,
-            },
+            orderBy: [{ [sort]: order }, { id: 'desc' }],
           }
         : {
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           }),
     };
 
@@ -335,6 +349,45 @@ export class StakeholdersService {
     });
   }
   async remove(payload: RemoveStakeholdersData) {
+    this.logger.log(`Removing stakeholder with UUID: ${payload.uuid}`);
+
+    const groupsWithStakeholder = await this.prisma.stakeholdersGroups.findMany(
+      {
+        where: {
+          stakeholders: {
+            some: {
+              uuid: payload.uuid,
+            },
+          },
+        },
+      }
+    );
+
+    if (groupsWithStakeholder.length > 0) {
+      const activityAssignedGroupName = await Promise.all(
+        groupsWithStakeholder.map(async (group) => {
+          const activities = await this.getActivitiesByStakeholderGroupUuid(
+            group.uuid
+          );
+
+          if (activities && activities?.length > 0) {
+            return group.name;
+          }
+          return;
+        })
+      );
+
+      const filteredGroupNames = activityAssignedGroupName.filter(Boolean);
+
+      if (filteredGroupNames.length > 0) {
+        return {
+          isSuccess: false,
+          groupNames: filteredGroupNames,
+          message: `Stakeholder cannot be removed as it is part of stakeholder groups which are assigned to activities. Please remove the stakeholder from these groups before deleting.`,
+        };
+      }
+    }
+
     const rData = await this.prisma.stakeholders.update({
       where: {
         uuid: payload.uuid,
@@ -343,8 +396,12 @@ export class StakeholdersService {
         isDeleted: true,
       },
     });
-    await this.eventEmitter.emit(EVENTS.STAKEHOLDER_REMOVED);
-    return rData;
+
+    this.eventEmitter.emit(EVENTS.STAKEHOLDER_REMOVED);
+    return {
+      isSuccess: true,
+      message: 'Stakeholder removed successfully',
+    };
   }
 
   async update(payload: UpdateStakeholdersData) {
