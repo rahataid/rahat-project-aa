@@ -700,7 +700,7 @@ export class InkindsService {
   }
 
   async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
-    const { vendorId, search, inkindType, page, perPage } = payload;
+    const { vendorId, search, inkindType, page, perPage, sort = 'redeemedAt', order = 'desc' } = payload;
 
     this.logger.log(
       `Fetching inkind redemption logs details for vendor: ${vendorId}`
@@ -733,8 +733,17 @@ export class InkindsService {
       }),
     };
 
+    const allowedSortFields = ['redeemedAt', 'quantity'];
+    const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
+    const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
+
+    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput = {
+      [safeSort]: safeOrder,
+    };
+
     const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
       where,
+      orderBy,
       include: {
         beneficiary: {
           select: {
@@ -769,7 +778,7 @@ export class InkindsService {
       const result = await paginate(
         this.prisma.beneficiaryInkindRedemption,
         query,
-        { page, perPage }
+        { page, perPage },
       );
       return result;
     } catch (error) {
@@ -913,14 +922,16 @@ export class InkindsService {
 
       const groupedMap = new Map<
         string,
-        { txHash: string | null; date: Date }
+        { txHash: string | null; date: Date; phone: string | null }
       >();
       for (const redemption of result.data as any[]) {
         const key = redemption.txHash ?? '__no_txhash__';
         if (!groupedMap.has(key)) {
+          const extras = redemption.beneficiary?.extras as Record<string, unknown> | null;
           groupedMap.set(key, {
             txHash: redemption.txHash ?? null,
             date: redemption.redeemedAt,
+            phone: extras?.phone as string || null,
           });
         }
       }
@@ -1260,7 +1271,24 @@ export class InkindsService {
           }
         )
       );
+      const isPhasePayoutActivate = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+          {
+            activeYear: value.active_year,
+            riverBasin: value.river_basin,
+          }
+        )
+      );
 
+      if (!isPhasePayoutActivate) {
+        this.logger.log(
+          'Payout phase not active. In-kind redemption is unavailable.'
+        );
+        throw new RpcException(
+          'Payout phase not active. In-kind redemption is unavailable.'
+        );
+      }
       if (!isPhasePayoutActivate) {
         this.logger.log(
           'Payout phase not active. In-kind redemption is unavailable.'
