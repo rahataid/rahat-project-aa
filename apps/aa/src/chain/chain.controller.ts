@@ -13,7 +13,6 @@ export class ChainController {
     uuid: process.env.PROJECT_ID,
   })
   disburse(data: any) {
-    console.log('[ChainController] disburse() called with data:', JSON.stringify(data));
     return this.chainService.disburse(data);
   }
 
