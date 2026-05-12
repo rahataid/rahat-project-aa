@@ -6,6 +6,7 @@ export class ChainService {
   constructor(private chainQueueService: ChainQueueService) {}
 
   disburse(disburseDto: any) {
+    console.log('[ChainService] disburse() called with:', JSON.stringify(disburseDto));
     return this.chainQueueService.disburse(disburseDto);
   }
 

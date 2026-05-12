@@ -61,10 +61,11 @@ export class ChainQueueService {
   }
 
   async disburse(data: DisburseDto, chainType?: ChainType): Promise<any> {
-    this.logger.log(`Disbursing to beneficiaries`);
+    this.logger.log(`[disburse] called with data: ${JSON.stringify(data)}`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
+    this.logger.log(`[disburse] resolved chain service: ${chainService.getChainType()}`);
     return chainService.disburse(data);
   }
 

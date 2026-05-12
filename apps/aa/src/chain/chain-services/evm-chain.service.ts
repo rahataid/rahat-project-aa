@@ -327,7 +327,7 @@ export class EvmChainService implements IChainService {
 
     this.logger.log(`Resolved groups to addresses for ${groups.length} groups`);
 
-    const jobs = await this.evmTxQueue.addBulk(
+    const jobs = await this.evmTxQueue.add(
       groups.map(({ uuid, tokensReserved }) => ({
         data: {
           type: JOBS.EVM.ASSIGN_TOKENS,
