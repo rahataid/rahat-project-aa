@@ -1,12 +1,58 @@
-# Install dependencies only when needed
-FROM node:18-alpine3.17 AS deps
-WORKDIR /usr/src/app
-COPY ./dist/apps/aa/package.json ./
-RUN npm install -g pnpm && pnpm install
+# -----------------------------
+# Dependencies
+# -----------------------------
+FROM node:20-alpine AS deps
 
-FROM node:18-alpine3.17 AS builder
-WORKDIR /usr/src/app
-COPY ./dist/apps/aa/ ./
-COPY --from=deps /usr/src/app/node_modules ./node_modules
-RUN npm install -g pnpm && pnpm prisma generate
-CMD [ "node", "main.js" ]
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
+
+COPY package.json pnpm-lock.yaml ./
+
+COPY apps ./apps
+COPY libs ./libs
+COPY prisma ./prisma
+COPY tsconfig.base.json ./
+COPY nx.json ./
+
+RUN pnpm install --frozen-lockfile
+
+
+# -----------------------------
+# Builder
+# -----------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
+
+COPY . .
+
+COPY --from=deps /app/node_modules ./node_modules
+
+RUN pnpm prisma:generate
+RUN pnpm nx build aa --skip-nx-cache
+
+# -----------------------------
+# Production Runner
+# -----------------------------
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+RUN apk add --no-cache openssl
+
+# Copy built app
+COPY --from=builder /app/dist/apps/aa ./
+
+# Copy production dependencies
+COPY --from=builder /app/node_modules ./node_modules
+
+# If Prisma schema/client is needed at runtime
+COPY --from=builder /app/prisma ./prisma
+
+EXPOSE 3000
+
+CMD ["node", "main.js"]

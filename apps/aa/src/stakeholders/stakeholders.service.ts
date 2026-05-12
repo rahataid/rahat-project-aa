@@ -284,6 +284,24 @@ export class StakeholdersService {
       supportArea,
     } = payload;
 
+    this.logger.log(
+      `Fetching stakeholders with filters - name: ${name}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
+    );
+
+    // Case-insensitive array search via raw SQL — Prisma hasSome is case-sensitive
+    let supportAreaUuids: string[] | null = null;
+    if (supportArea) {
+      const matches = await this.prisma.$queryRaw<{ uuid: string }[]>`
+      SELECT uuid FROM tbl_stakeholders
+      WHERE EXISTS (
+        SELECT 1 FROM unnest("supportArea") AS s
+        WHERE s ILIKE ${'%' + supportArea + '%'}
+      )
+      AND "isDeleted" = false
+    `;
+      supportAreaUuids = matches.map((m) => m.uuid);
+    }
+
     const query = {
       where: {
         isDeleted: false,
@@ -300,21 +318,17 @@ export class StakeholdersService {
         ...(organization && {
           organization: { contains: organization, mode: 'insensitive' },
         }),
-        ...(supportArea && { supportArea: { hasSome: [supportArea] } }),
+        ...(supportAreaUuids && { uuid: { in: supportAreaUuids } }),
       },
       include: {
         stakeholdersGroups: true,
       },
       ...(order && sort
         ? {
-            orderBy: {
-              [sort]: order,
-            },
+            orderBy: [{ [sort]: order }, { id: 'desc' }],
           }
         : {
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           }),
     };
 
