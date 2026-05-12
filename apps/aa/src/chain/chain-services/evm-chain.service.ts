@@ -327,9 +327,8 @@ export class EvmChainService implements IChainService {
 
     this.logger.log(`Resolved groups to addresses for ${groups.length} groups`);
 
-    this.evmTxQueue.addBulk(
+    const jobs = await this.evmTxQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
-        name: JOBS.EVM.TX_JOB,
         data: {
           type: JOBS.EVM.ASSIGN_TOKENS,
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
@@ -347,7 +346,9 @@ export class EvmChainService implements IChainService {
       }))
     );
 
-    this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+    this.logger.log(
+      `Added ${jobs.length} disbursement jobs to EVM TX queue for ${groups.length} groups`
+    );
 
     return {
       message: `Disbursement jobs added for ${groups.length} groups`,
