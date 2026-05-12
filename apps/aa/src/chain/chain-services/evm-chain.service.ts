@@ -347,7 +347,7 @@ export class EvmChainService implements IChainService {
     );
 
     this.logger.log(
-      `Added ${jobs.length} disbursement jobs to EVM TX queue for ${groups.length} groups`
+      `Added ${jobs} disbursement jobs to EVM TX queue for ${groups.length} groups`
     );
 
     return {
