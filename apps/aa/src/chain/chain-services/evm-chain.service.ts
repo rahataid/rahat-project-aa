@@ -60,7 +60,9 @@ export class EvmChainService implements IChainService {
 
   private get evmProcessor(): EVMCentralizedProcessor {
     if (!this._evmProcessor) {
-      this._evmProcessor = this.moduleRef.get(EVMCentralizedProcessor, { strict: false });
+      this._evmProcessor = this.moduleRef.get(EVMCentralizedProcessor, {
+        strict: false,
+      });
     }
     return this._evmProcessor!;
   }
@@ -308,7 +310,9 @@ export class EvmChainService implements IChainService {
   }
 
   async disburse(data: DisburseDto): Promise<any> {
-    this.logger.log(`Starting disbursement for ${data.dName} with groups: ${data.groups}`);
+    this.logger.log(
+      `Starting disbursement for ${data.dName} with groups: ${data.groups}`
+    );
     const groupUuids =
       (data?.groups && data?.groups.length) > 0
         ? data.groups
@@ -321,20 +325,43 @@ export class EvmChainService implements IChainService {
         groups: [],
       };
     }
-    this.logger.log(`Found ${groupUuids.length} groups for disbursement: ${groupUuids.join(', ')}`);
+    this.logger.log(
+      `Found ${groupUuids.length} groups for disbursement: ${groupUuids.join(
+        ', '
+      )}`
+    );
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
     this.logger.log(`Resolved groups to addresses for ${groups.length} groups`);
 
-    const jobs = await this.evmTxQueue.add(
-      groups.map(({ uuid, tokensReserved }) => ({
-        data: {
+    // const jobs = await this.evmTxQueue.add(
+    //   groups.map(({ uuid, tokensReserved }) => ({
+    //     data: {
+    //       type: JOBS.EVM.ASSIGN_TOKENS,
+    //       dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
+    //       groups: uuid,
+    //     },
+    //     opts: {
+    //       attempts: 3,
+    //       delay: 2000,
+    //       removeOnComplete: true,
+    //       backoff: {
+    //         type: 'exponential',
+    //         delay: 1000,
+    //       },
+    //     },
+    //   }))
+    // );
+
+    for (const { uuid, tokensReserved } of groups) {
+      await this.evmTxQueue.add(
+        {
           type: JOBS.EVM.ASSIGN_TOKENS,
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
           groups: uuid,
         },
-        opts: {
+        {
           attempts: 3,
           delay: 2000,
           removeOnComplete: true,
@@ -342,9 +369,9 @@ export class EvmChainService implements IChainService {
             type: 'exponential',
             delay: 1000,
           },
-        },
-      }))
-    );
+        }
+      );
+    }
 
     this.logger.log(
       `Added ${jobs} disbursement jobs to EVM TX queue for ${groups.length} groups`
@@ -1298,14 +1325,17 @@ export class EvmChainService implements IChainService {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
-    return this.evmTxQueue.add({ type: JOBS.EVM.REDEEM_INKIND, ...redeemDto }, {
-      attempts: 3,
-      removeOnComplete: true,
-      removeOnFail: false,
-      backoff: {
-        type: 'exponential',
-        delay: 5000,
-      },
-    });
+    return this.evmTxQueue.add(
+      { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        removeOnFail: false,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+      }
+    );
   }
 }
