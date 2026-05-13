@@ -308,6 +308,7 @@ export class EvmChainService implements IChainService {
   }
 
   async disburse(data: DisburseDto): Promise<any> {
+    this.logger.log(`Starting disbursement for ${data.dName} with groups: ${data.groups}`);
     const groupUuids =
       (data?.groups && data?.groups.length) > 0
         ? data.groups
@@ -320,12 +321,14 @@ export class EvmChainService implements IChainService {
         groups: [],
       };
     }
+    this.logger.log(`Found ${groupUuids.length} groups for disbursement: ${groupUuids.join(', ')}`);
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
-    this.evmTxQueue.addBulk(
+    this.logger.log(`Resolved groups to addresses for ${groups.length} groups`);
+
+    const jobs = await this.evmTxQueue.addBulk(
       groups.map(({ uuid, tokensReserved }) => ({
-        name: JOBS.EVM.TX_JOB,
         data: {
           type: JOBS.EVM.ASSIGN_TOKENS,
           dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
@@ -343,7 +346,9 @@ export class EvmChainService implements IChainService {
       }))
     );
 
-    this.logger.log(`Adding disbursement jobs ${groups.length} groups`);
+    this.logger.log(
+      `Added ${jobs.length} disbursement jobs to EVM TX queue for ${groups.length} groups`
+    );
 
     return {
       message: `Disbursement jobs added for ${groups.length} groups`,

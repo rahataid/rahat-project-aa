@@ -19,6 +19,8 @@ export class OtpService {
   async sendSms(number: string, message: string) {
     const otp = await this.getOtp();
 
+    this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
+
     if (process.env.NODE_ENV !== 'production') {
       this.logger.log(`[DEV] OTP for ${number}: ${otp}`);
       return { otp };
