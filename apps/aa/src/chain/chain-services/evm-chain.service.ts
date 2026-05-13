@@ -353,8 +353,11 @@ export class EvmChainService implements IChainService {
     //     },
     //   }))
     // );
-
+    
+    let count = 0;
     for (const { uuid, tokensReserved } of groups) {
+      this.logger.log(`loop counter: ${count++}`);  
+      this.logger.log(`Adding disbursement job for group ${uuid} with ${tokensReserved.numberOfTokens} tokens reserved`);
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
