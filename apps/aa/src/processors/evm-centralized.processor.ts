@@ -157,6 +157,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
+        this.logger.log(`Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`);
         if (benf.amount) {
           const formattedAmountBn = ethers.parseUnits(
             benf.amount.toString(),
