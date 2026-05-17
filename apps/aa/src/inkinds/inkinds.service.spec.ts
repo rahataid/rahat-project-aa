@@ -7,6 +7,7 @@ import { InkindStockMovementType } from '@prisma/client';
 import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import { CHAIN_SERVICE, CORE_MODULE } from '../constants';
+import { AppService } from '../app/app.service';
 
 // Mock @rumsan/prisma — expose the paginate fn so tests can control it
 jest.mock('@rumsan/prisma', () => {
@@ -91,6 +92,7 @@ describe('InkindsService', () => {
 
   const mockOtpService = { sendSms: jest.fn() };
   const mockConfigService = { get: jest.fn() };
+  const mockAppService = { getSettings: jest.fn() };
   const mockChainService = { redeemInkind: jest.fn() };
   const mockClient = { send: jest.fn(), emit: jest.fn() };
 
@@ -100,6 +102,7 @@ describe('InkindsService', () => {
         InkindsService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: 'OtpService', useValue: mockOtpService },
+        { provide: AppService, useValue: mockAppService },
         { provide: 'ConfigService', useValue: mockConfigService },
         { provide: CHAIN_SERVICE, useValue: mockChainService },
         { provide: CORE_MODULE, useValue: mockClient },
@@ -108,6 +111,7 @@ describe('InkindsService', () => {
       .useMocker((token) => {
         // catch remaining tokens (OtpService class, ConfigService class)
         if (typeof token === 'function' && token.name === 'OtpService') return mockOtpService;
+        if (typeof token === 'function' && token.name === 'AppService') return mockAppService;
         if (typeof token === 'function' && token.name === 'ConfigService') return mockConfigService;
         return undefined;
       })
@@ -753,6 +757,36 @@ describe('InkindsService', () => {
         expect.objectContaining({ where: expect.objectContaining({ OR: expect.any(Array) }) }),
         expect.any(Object),
       );
+    });
+
+    it('skips pagination when getEntireLogs is true', async () => {
+      mockPrismaService.groupInkind.findUnique.mockResolvedValue(mockGroupInkind);
+      mockPrismaService.beneficiaryInkindRedemption.findMany.mockResolvedValue([
+        {
+          uuid: 'r-uuid',
+          quantity: 10,
+          redeemedAt: new Date(),
+          txHash: '0xhash',
+          beneficiary: {
+            uuid: 'b-uuid',
+            walletAddress: '0xabc',
+            phone: '980',
+            extras: { name: 'Alice' },
+          },
+          Vendor: { uuid: 'v-uuid', name: 'Vendor A', walletAddress: '0xv' },
+        },
+      ]);
+
+      const result = await service.getLogsByGroupInkind({
+        groupInkindId: 'gi-uuid',
+        getEntireLogs: true,
+      });
+
+      expect(mockPaginateFn).not.toHaveBeenCalled();
+      expect(mockPrismaService.beneficiaryInkindRedemption.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ groupInkindId: 'gi-uuid' }) })
+      );
+      expect(result.data.logs).toHaveLength(1);
     });
   });
 
