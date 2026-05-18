@@ -4,6 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
+import bcrypt from 'bcryptjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -85,6 +86,7 @@ export class BeneficiaryService {
     });
     this.logger.log(`Beneficiary created: ${rdata.uuid}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.seedOtpsForBeneficiaries([dto]);
     return rdata;
   }
 
@@ -92,7 +94,6 @@ export class BeneficiaryService {
     const { beneficiaries } = dto;
     this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
 
-    // Process each beneficiary to remove isVerified field
     const processedBeneficiaries = beneficiaries.map(
       ({ isVerified, ...rest }) => rest
     );
@@ -104,6 +105,7 @@ export class BeneficiaryService {
 
     this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.seedOtpsForBeneficiaries(processedBeneficiaries);
     return rdata;
   }
 
@@ -750,6 +752,62 @@ export class BeneficiaryService {
       this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
+  }
+
+  private async seedOtpsForBeneficiaries(
+    beneficiaries: Array<{ phone?: string; walletAddress?: string; [key: string]: any }>
+  ) {
+    this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
+    const CHUNK_SIZE = 100;
+    // cost 8 for bulk seeding speed; storeOTP overwrites with cost 10 on actual redemption
+    const BCRYPT_ROUNDS = 8;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const eligible = beneficiaries.filter((b) => b.phone);
+    if (!eligible.length) return;
+
+    const isDev = process.env.NODE_ENV !== 'production';
+    let devHash: string | null = null;
+    if (isDev) {
+      devHash = await bcrypt.hash('1234:0', BCRYPT_ROUNDS);
+    }
+
+    const otpRecords: Array<{
+      phoneNumber: string;
+      walletAddress?: string;
+      otp: string;
+      otpHash: string;
+      amount: number;
+      expiresAt: Date;
+    }> = [];
+
+    for (let i = 0; i < eligible.length; i += CHUNK_SIZE) {
+      this.logger.debug(`Processing OTP seed chunk: ${i} to ${i + CHUNK_SIZE}`);
+      const chunk = eligible.slice(i, i + CHUNK_SIZE);
+      const chunkRecords = await Promise.all(
+        chunk.map(async (b) => {
+          const otp = isDev ? '1234' : Math.floor(1000 + Math.random() * 9000).toString();
+          const otpHash = isDev ? devHash! : await bcrypt.hash(`${otp}:0`, BCRYPT_ROUNDS);
+          return {
+            phoneNumber: b.phone!,
+            ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
+            otp,
+            otpHash,
+            amount: 0,
+            expiresAt,
+          };
+        })
+      );
+      otpRecords.push(...chunkRecords);
+    }
+    
+    this.logger.debug(`Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`);
+    await this.prisma.otp.createMany({
+      data: otpRecords,
+      skipDuplicates: true,
+    });
+
+    this.logger.log(`Seeded OTPs for ${otpRecords.length} beneficiaries`);
   }
 
   createBatches(total: number, batchSize: number, start = 1) {
