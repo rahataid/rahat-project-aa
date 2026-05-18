@@ -40,6 +40,7 @@ import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
 import { AppService } from '../app/app.service';
+import { rpc } from '@stellar/stellar-sdk';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -582,6 +583,50 @@ export class InkindsService {
       const [formattedGroups, walkInInkinds] = await Promise.all([
         this.getBenificiaryAssignedInkindByWallet(beneficiary.walletAddress),
         this.getBeneficiaryAssignedWalkinInkinds(beneficiary.walletAddress),
+      ]);
+
+      return {
+        isBeneficiaryExists: true,
+        beneficiary,
+        preDefinedInkinds: formattedGroups,
+        walkInInkinds,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch inkind details for beneficiary: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+
+  async getAvailableInkindByBeneficiaryWallet(walletAddress: string) {
+    this.logger.log(`Fetching inkinds for beneficiary wallet: ${walletAddress}`);
+
+    if (!walletAddress) {
+      throw new RpcException('Beneficiary wallet address is required');
+    }
+
+    try {
+      const beneficiary = await this.prisma.beneficiary.findFirst({
+        where: {
+          walletAddress,
+        }
+      });
+
+      if (!beneficiary) {
+        return {
+          isBeneficiaryExists: false,
+          beneficiary: null,
+          preDefinedInkinds: [],
+          walkInInkinds: [],
+        };
+      }
+
+      const [formattedGroups, walkInInkinds] = await Promise.all([
+        this.getBenificiaryAssignedInkindByWallet(walletAddress),
+        this.getBeneficiaryAssignedWalkinInkinds(walletAddress),
       ]);
 
       return {

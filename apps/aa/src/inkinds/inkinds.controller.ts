@@ -130,6 +130,14 @@ export class InkindsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BY_BENEFICIARY_WALLET,
+    uuid: process.env.PROJECT_ID,
+  })
+  getAvailableInkindByBeneficiaryWallet(@Payload() Payload: { walletAddress: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiaryWallet(Payload.walletAddress);
+  }
+
+  @MessagePattern({
     cmd: JOBS.INKINDS.BENEFICIARY_INKIND_DETAILS,
     uuid: process.env.PROJECT_ID,
   })
