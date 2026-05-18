@@ -60,10 +60,10 @@ export class AppService {
     }
 
     // Process chainSettings
-    if (payload.BLOCKCHAIN) {
+    if (payload.CHAIN_SETTINGS) {
       settings.push({
-        name: 'BLOCKCHAIN',
-        value: payload.BLOCKCHAIN,
+        name: 'CHAIN_SETTINGS',
+        value: payload.CHAIN_SETTINGS,
         dataType: 'OBJECT',
         requiredFields: [],
         isReadOnly: false,
@@ -80,18 +80,6 @@ export class AppService {
         requiredFields: [],
         isReadOnly: false,
         isPrivate: false,
-      });
-    }
-
-    //process ADMIN
-    if (payload.RAHAT_ADMIN_PRIVATE_KEY) {
-      settings.push({
-        name: 'RAHAT_ADMIN_PRIVATE_KEY',
-        value: payload.RAHAT_ADMIN_PRIVATE_KEY,
-        dataType: 'STRING',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: true,
       });
     }
 

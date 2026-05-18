@@ -8,6 +8,7 @@ import {
   IsIn,
   IsArray,
   IsObject,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -162,6 +163,10 @@ export class GetGroupInkindLogsDto {
   @IsString()
   @IsIn(['redeemedAt', 'quantity'])
   sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+
+  @IsOptional()
+  @IsBoolean()
+  getEntireLogs?: boolean = false;
 }
 
 export class GetVendorInkindLogsDto {
