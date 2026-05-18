@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, Prisma } from '@prisma/client';
+import { InkindStockMovementType, PayoutMode, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -270,8 +270,7 @@ export class InkindsService {
       return {
         totalInkindTypes: summary._count.id,
         totalStock: summary._sum.availableStock,
-        totalAvailableStock:
-          summary._sum.availableStock, 
+        totalAvailableStock: summary._sum.availableStock,
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
         totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
       };
@@ -446,16 +445,28 @@ export class InkindsService {
   }
 
   async assignGroupInkind(payload: AssignGroupInkindDto) {
-    const { inkindId, groupId, quantity, user } = payload;
+    const { inkindId, groupId, quantity, user, mode, payoutProcessorId } =
+      payload;
     const newQuantity = quantity || 1;
 
     this.logger.log(
-      `Assigning group inkind: inkindId=${inkindId}, groupId=${groupId}, quantity=${newQuantity}`
+      `Assigning group inkind: inkindId=${inkindId}, groupId=${groupId}, quantity=${newQuantity} mode=${mode} payoutProcessorId=${payoutProcessorId}`
     );
 
-    if (!inkindId || !groupId) {
+    if (!inkindId || !groupId || !mode) {
       throw new RpcException('Missing required fields');
     }
+
+    if (!(mode in PayoutMode)) {
+      throw new RpcException('Invalid payout mode');
+    }
+
+    if (mode === PayoutMode.OFFLINE && !payoutProcessorId) {
+      throw new RpcException(
+        'payoutProcessorId is required for offline payouts'
+      );
+    }
+
     const inkind = await this.findOneOrThrow(inkindId);
 
     if (inkind.type === InkindType.WALK_IN) {
@@ -495,6 +506,8 @@ export class InkindsService {
             inkindId,
             quantityAllocated: totalNeedInkindQuantity,
             createdBy: user?.name || 'system',
+            mode,
+            payoutProcessorId,
           },
         });
         await tx.inkindStockMovement.create({
@@ -519,14 +532,17 @@ export class InkindsService {
     }
   }
 
-  async getByGroup(inkindType?: string) {
-    const where = inkindType
-      ? {
-          inkind: {
-            type: inkindType,
-          },
-        }
-      : undefined;
+  async getByGroup(inkindType?: string, mode?: PayoutMode) {
+    const where = {
+      ...(inkindType
+        ? {
+            inkind: {
+              type: inkindType,
+            },
+          }
+        : undefined),
+      ...(mode && { mode }),
+    };
 
     try {
       this.logger.log(`Fetching inkinds by group`);
@@ -543,6 +559,32 @@ export class InkindsService {
           },
         },
       });
+
+      if (mode === PayoutMode.OFFLINE) {
+        this.logger.log(`Fetching vendor details for offline group inkinds`);
+
+        const vendorIds = groupInkinds
+          .map((g) => g.payoutProcessorId)
+          .filter((id) => id !== null);
+
+        const vendors = await this.prisma.vendor.findMany({
+          where: { uuid: { in: vendorIds } },
+          select: { uuid: true, name: true },
+        });
+
+        // Attach vendor details to the groupInkinds
+        const updatedGroupInkinds = groupInkinds.map((groupInkind) => {
+          const vendor = vendors.find(
+            (v) => v.uuid === groupInkind.payoutProcessorId
+          );
+          if (vendor) {
+            return { ...groupInkind, vendor: vendor.name };
+          }
+          return groupInkind;
+        });
+
+        return updatedGroupInkinds;
+      }
 
       return groupInkinds;
     } catch (error) {
@@ -700,7 +742,15 @@ export class InkindsService {
   }
 
   async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
-    const { vendorId, search, inkindType, page, perPage, sort = 'redeemedAt', order = 'desc' } = payload;
+    const {
+      vendorId,
+      search,
+      inkindType,
+      page,
+      perPage,
+      sort = 'redeemedAt',
+      order = 'desc',
+    } = payload;
 
     this.logger.log(
       `Fetching inkind redemption logs details for vendor: ${vendorId}`
@@ -737,9 +787,10 @@ export class InkindsService {
     const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
     const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
 
-    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput = {
-      [safeSort]: safeOrder,
-    };
+    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput =
+      {
+        [safeSort]: safeOrder,
+      };
 
     const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
       where,
@@ -778,7 +829,7 @@ export class InkindsService {
       const result = await paginate(
         this.prisma.beneficiaryInkindRedemption,
         query,
-        { page, perPage },
+        { page, perPage }
       );
       return result;
     } catch (error) {
@@ -927,11 +978,14 @@ export class InkindsService {
       for (const redemption of result.data as any[]) {
         const key = redemption.txHash ?? '__no_txhash__';
         if (!groupedMap.has(key)) {
-          const extras = redemption.beneficiary?.extras as Record<string, unknown> | null;
+          const extras = redemption.beneficiary?.extras as Record<
+            string,
+            unknown
+          > | null;
           groupedMap.set(key, {
             txHash: redemption.txHash ?? null,
             date: redemption.redeemedAt,
-            phone: extras?.phone as string || null,
+            phone: (extras?.phone as string) || null,
           });
         }
       }
@@ -1130,7 +1184,9 @@ export class InkindsService {
         beneficiary: {
           uuid: redemption.beneficiary.uuid,
           walletAddress: redemption.beneficiary.walletAddress,
-          phone: (redemption.beneficiary.extras as Record<string, unknown>)?.phone as string || null,
+          phone:
+            ((redemption.beneficiary.extras as Record<string, unknown>)
+              ?.phone as string) || null,
           name:
             (redemption.beneficiary.extras as Record<string, unknown>)?.name ||
             null,

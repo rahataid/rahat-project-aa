@@ -1,5 +1,14 @@
-import { IsNumber, IsObject, IsOptional, IsUUID, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { UserObject } from './inkind.dto';
+import { PayoutMode } from '@prisma/client';
 
 export class AssignGroupInkindDto {
   @IsUUID()
@@ -15,4 +24,12 @@ export class AssignGroupInkindDto {
 
   @IsObject()
   user: UserObject;
+
+  @IsEnum(PayoutMode)
+  @IsNotEmpty()
+  mode: PayoutMode;
+
+  @IsOptional()
+  @IsUUID()
+  payoutProcessorId?: string;
 }

@@ -18,6 +18,7 @@ import {
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
+import { PayoutMode } from '@prisma/client';
 
 @Controller()
 export class InkindsController {
@@ -109,8 +110,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_BY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  getByGroup(@Payload() payload: { inkindType: string }) {
-    return this.inkindsService.getByGroup(payload.inkindType);
+  getByGroup(@Payload() payload: { inkindType: string; mode?: PayoutMode }) {
+    return this.inkindsService.getByGroup(payload.inkindType, payload.mode);
   }
 
   @MessagePattern({
