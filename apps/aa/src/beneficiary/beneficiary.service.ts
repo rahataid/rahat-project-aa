@@ -759,7 +759,6 @@ export class BeneficiaryService {
   ) {
     this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
     const CHUNK_SIZE = 100;
-    // cost 8 for bulk seeding speed; storeOTP overwrites with cost 10 on actual redemption
     const BCRYPT_ROUNDS = 8;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
