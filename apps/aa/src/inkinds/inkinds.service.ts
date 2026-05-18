@@ -1271,15 +1271,6 @@ export class InkindsService {
           }
         )
       );
-      const isPhasePayoutActivate = await lastValueFrom(
-        this.client.send(
-          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
-          {
-            activeYear: value.active_year,
-            riverBasin: value.river_basin,
-          }
-        )
-      );
 
       if (!isPhasePayoutActivate) {
         this.logger.log(

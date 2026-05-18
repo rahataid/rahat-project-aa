@@ -1,4 +1,3 @@
-// prisma/seedForecastTabConfig.ts
 import { SettingDataType } from '@prisma/client';
 import { PrismaService } from '@rumsan/prisma';
 

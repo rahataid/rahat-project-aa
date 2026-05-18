@@ -20,12 +20,20 @@ export class ListernersService {
     private disbService: CvaDisbursementService
   ) {}
 
+  private statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   @OnEvent(EVENTS.BENEFICIARY_CREATED)
   @OnEvent(EVENTS.BENEFICIARY_REMOVED)
   @OnEvent(EVENTS.BENEFICIARY_UPDATED)
   @OnEvent(EVENTS.TOKEN_RESERVED)
-  async onBeneficiaryChanged() {
-    await this.aaStats.saveAllStats();
+  onBeneficiaryChanged() {
+    if (this.statsDebounceTimer) clearTimeout(this.statsDebounceTimer);
+    this.statsDebounceTimer = setTimeout(() => {
+      this.statsDebounceTimer = null;
+      this.aaStats.saveAllStats().catch((err) =>
+        this.logger.error('saveAllStats failed', err)
+      );
+    }, 2000);
   }
   @OnEvent(EVENTS.STAKEHOLDER_CREATED)
   @OnEvent(EVENTS.STAKEHOLDER_REMOVED)
