@@ -615,6 +615,8 @@ model OfflineBeneficiary {
 model Otp {
   id          Int      @id @default(autoincrement())
   phoneNumber String   @unique
+  walletAddress String?   @unique
+  otp         String?
   otpHash     String
   amount      Float
   expiresAt   DateTime
