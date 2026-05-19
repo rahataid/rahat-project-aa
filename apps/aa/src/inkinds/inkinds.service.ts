@@ -18,7 +18,10 @@ import {
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto, ListGroupInkindDto } from './dto/inkindGroup.dto';
+import {
+  AssignGroupInkindDto,
+  ListGroupInkindDto,
+} from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
   WalkInRedemptionItem,
@@ -566,11 +569,16 @@ export class InkindsService {
   }
 
   async getByGroup(payload: ListGroupInkindDto) {
-    const { page, perPage, order = 'desc', mode, inkindType } = payload;
+    const { page, perPage, order = 'desc', mode, inkindType, search } = payload;
 
     const where: Prisma.GroupInkindWhereInput = {
-      ...(inkindType && { inkind: { type: inkindType } }),
       ...(mode && { mode }),
+      ...((inkindType || search) && {
+        inkind: {
+          ...(inkindType && { type: inkindType }),
+          ...(search && { name: { contains: search, mode: 'insensitive' } }),
+        },
+      }),
     };
 
     try {

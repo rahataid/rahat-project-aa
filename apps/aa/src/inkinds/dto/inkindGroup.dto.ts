@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsObject,
   IsOptional,
+  IsString,
   IsUUID,
   Min,
 } from 'class-validator';
@@ -33,6 +34,10 @@ export class ListGroupInkindDto {
   @IsOptional()
   @IsEnum(PayoutMode)
   mode?: PayoutMode;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @IsOptional()
   inkindType?: string;
