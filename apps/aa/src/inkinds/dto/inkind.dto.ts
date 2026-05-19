@@ -132,6 +132,10 @@ export class BeneficiaryInkindRedeemDto {
 
   @IsObject()
   user: UserObject;
+
+  @IsOptional()
+  @IsString()
+  redeemedAt?: string;
 }
 
 export class GetGroupInkindLogsDto {
@@ -210,4 +214,27 @@ export class GetVendorInkindLogsDto {
   @IsOptional()
   @IsEnum(InkindType)
   inkindType?: InkindType;
+}
+
+export class RedeemOfflineInkindByVendorDto {
+  @IsObject()
+  user: UserObject
+
+  @IsArray()
+  redeemedInkinds: RedeemedOfflineInkinds[];
+}
+
+export class RedeemedOfflineInkinds {
+  @IsString()
+  beneficiaryWallet: string;
+
+  @IsArray()
+  inkindRedeemed: {
+    uuid: string;
+    groupInkindId: string;
+  }[];
+
+  @IsOptional()
+  @IsString()
+  redeemedAt?: string;
 }
