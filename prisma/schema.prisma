@@ -630,6 +630,22 @@ model Otp {
 
 // ============== End OTP SCHEMAS ================
 
+// ============== Start PDF Generation Job SCHEMAS ================
+model PdfGenerationJob {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  status    String   @default("pending")
+  groupId   String?
+  fileUrl   String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map(name: "tbl_pdf_generation_jobs")
+}
+
+// ============== End PDF Generation Job SCHEMAS ================
+
 enum Gender {
   MALE
   FEMALE

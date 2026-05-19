@@ -224,6 +224,22 @@ export class BeneficiaryController {
   // ***** multisig ends ********** //
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GENERATE_QR_PDF,
+    uuid: process.env.PROJECT_ID,
+  })
+  generateQrPdf(@Payload() payload: { groupId: string }) {
+    return this.beneficiaryService.initiateQrPdf(payload.groupId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_QR_PDF,
+    uuid: process.env.PROJECT_ID,
+  })
+  getQrPdfJob(@Payload() payload: { groupId: string }) {
+    return this.beneficiaryService.getQrPdf(payload.groupId);
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.CREATE_BENEFICIARY_WITH_DB_TRANSACTION,
     uuid: process.env.PROJECT_ID,
   })
