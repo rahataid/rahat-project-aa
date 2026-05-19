@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
@@ -9,25 +9,36 @@ import { buildQrPdf, QrCardData } from './qr-pdf-builder';
 
 const BATCH_SIZE = 200;
 
-function resolveEnv(key: string): string {
-  return process.env[key] || '';
+interface R2Settings {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  publicDomain: string;
 }
 
 @Injectable()
-export class QrPdfService {
+export class QrPdfService implements OnModuleInit {
   private readonly logger = new Logger(QrPdfService.name);
-  private readonly s3: S3Client;
+  private s3: S3Client;
+  private r2: R2Settings;
 
   constructor(
     @InjectQueue(BQUEUE.QR_PDF) private readonly qrPdfQueue: Queue,
     private readonly prisma: PrismaService
-  ) {
+  ) {}
+
+  async onModuleInit() {
+    const setting = await this.prisma.setting.findUniqueOrThrow({
+      where: { name: 'CLOUDFLARE_R2' },
+    });
+    this.r2 = setting.value as unknown as R2Settings;
     this.s3 = new S3Client({
       region: 'auto',
-      endpoint: `https://${resolveEnv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com`,
+      endpoint: `https://${this.r2.accountId}.r2.cloudflarestorage.com`,
       credentials: {
-        accessKeyId: resolveEnv('R2_ACCESS_KEY_ID'),
-        secretAccessKey: resolveEnv('R2_SECRET_ACCESS_KEY'),
+        accessKeyId: this.r2.accessKeyId,
+        secretAccessKey: this.r2.secretAccessKey,
       },
     });
   }
@@ -63,7 +74,7 @@ export class QrPdfService {
       const key = job.fileUrl.replace(/^https?:\/\/[^/]+\//, '');
       const signedUrl = await getSignedUrl(
         this.s3,
-        new GetObjectCommand({ Bucket: resolveEnv('R2_BUCKET'), Key: key }),
+        new GetObjectCommand({ Bucket: this.r2.bucket, Key: key }),
         { expiresIn: 3600 }
       );
       return { ...job, fileUrl: signedUrl };
@@ -88,14 +99,14 @@ export class QrPdfService {
       this.logger.log(`Uploading PDF to R2 at key ${key}`);
       await this.s3.send(
         new PutObjectCommand({
-          Bucket: resolveEnv('R2_BUCKET'),
+          Bucket: this.r2.bucket,
           Key: key,
           Body: pdfBuffer,
           ContentType: 'application/pdf',
         })
       );
 
-      const fileUrl = `https://${resolveEnv('R2_PUBLIC_DOMAIN')}/${key}`;
+      const fileUrl = `https://${this.r2.publicDomain}/${key}`;
     this.logger.log(`PDF uploaded successfully for job ${jobUuid}, updating database record`);
 
       await this.prisma.pdfGenerationJob.update({
