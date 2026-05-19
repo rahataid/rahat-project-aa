@@ -12,6 +12,7 @@ import {
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
   InkindTxStatus,
+  RedeemOfflineInkindByVendorDto,
 } from './dto/inkind.dto';
 import {
   AddInkindStockDto,
@@ -33,11 +34,9 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
+import { CHAIN_SERVICE, CORE_MODULE } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
-import { Queue } from 'bull';
-import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
 import { AppService } from '../app/app.service';
 
@@ -53,7 +52,6 @@ export class InkindsService {
     private configService: ConfigService,
     @Inject(CHAIN_SERVICE)
     private readonly chainService: ChainService,
-    // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
   ) {}
 
@@ -1310,7 +1308,7 @@ export class InkindsService {
   }
 
   async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
-    const { walletAddress, inkinds, user } = payload;
+    const { walletAddress, inkinds, user, redeemedAt } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
       throw new RpcException('Missing required fields');
@@ -1408,7 +1406,7 @@ export class InkindsService {
           }
           preDefinedPayload.push({
             uuid: payloadInkind.uuid,
-            groupInkindUuid: payloadInkind.groupInkindUuid,
+            groupInkindUuid: payloadInkind.groupInkindUuid
           });
         } else if (inkindRecord.type === InkindType.WALK_IN) {
           walkInPayload.push({ uuid: payloadInkind.uuid });
@@ -1452,13 +1450,16 @@ export class InkindsService {
         `Validated: ${validatedPreDefined.length} PRE_DEFINED, ${validatedWalkIn.length} WALK_IN inkinds`
       );
 
+      const redeemedAtDate = redeemedAt ? new Date(redeemedAt) : undefined;
+
       // ===== STEP 4: Execute all redemptions in a single transaction =====
       const redemptionResults = await this.prisma.$transaction(async (tx) => {
         const preDefinedResults = await this.executePreDefinedRedemptions(
           tx,
           validatedPreDefined,
           walletAddress,
-          user
+          user,
+          redeemedAtDate
         );
 
         const walkInResults = await this.executeWalkInRedemptions(
@@ -1767,6 +1768,184 @@ export class InkindsService {
     }
   }
 
+  async getAllOfflineBeneficiaryByVendor(vendorId: string) {
+    this.logger.log(
+      `Fetching all predefined offline beneficiaries for vendor: ${vendorId}`
+    );
+
+    if (!vendorId) {
+      throw new RpcException('vendorUid is required');
+    }
+
+    try {
+      // Get all group inkinds for the vendor that are of OFFLINE mode, along with their beneficiaries
+      const offlineGroupInkinds = await this.prisma.groupInkind.findMany({
+        where: {
+          payoutProcessorId: vendorId,
+          mode: PayoutMode.OFFLINE,
+        },
+        select: {
+          uuid: true,
+          inkind: {
+            select: {
+              uuid: true,
+              name: true,
+            },
+          },
+          group: {
+            select: {
+              beneficiaries: {
+                select: {
+                  beneficiary: {
+                    select: {
+                      uuid: true,
+                      walletAddress: true,
+                      extras: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (offlineGroupInkinds.length === 0) {
+        return { beneficiaries: [] };
+      }
+
+      // Aggregate if beneficaries are in multiple groups with offline mode for inkind redemption
+      const beneficiaryMap = new Map<
+        string,
+        {
+          uuid: string;
+          walletAddress: string;
+          phone: string | null;
+          otpHash?: string | null;
+          inkinds: { id: string; name: string; groupInkindId: string }[];
+        }
+      >();
+
+      // Loop through each group inkind and its beneficiaries to build the beneficiary map
+      for (const gi of offlineGroupInkinds) {
+        const inkindInfo = {
+          id: gi.inkind.uuid,
+          name: gi.inkind.name,
+          groupInkindId: gi.uuid,
+        };
+
+        for (const b of gi.group.beneficiaries) {
+          const ben = b.beneficiary;
+          const existing = beneficiaryMap.get(ben.uuid);
+
+          if (existing) {
+            if (!existing.inkinds.some((i) => i.id === inkindInfo.id)) {
+              existing.inkinds.push(inkindInfo);
+            }
+          } else {
+            beneficiaryMap.set(ben.uuid, {
+              uuid: ben.uuid,
+              walletAddress: ben.walletAddress,
+              phone:
+                typeof ben.extras === 'object' && ben.extras !== null
+                  ? (ben.extras as any).phone
+                  : null,
+              inkinds: [inkindInfo],
+            });
+          }
+        }
+      }
+
+      const beneficiaries = Array.from(beneficiaryMap.values());
+      const phones = beneficiaries
+        .map((b) => b.phone)
+        .filter(Boolean) as string[];
+
+      if (phones.length > 0) {
+        const otps = await this.prisma.otp.findMany({
+          where: { phoneNumber: { in: phones } },
+          select: { phoneNumber: true, otpHash: true },
+        });
+
+        const otpMap = new Map<string, string>();
+        for (const otp of otps) {
+          if (!otpMap.has(otp.phoneNumber)) {
+            otpMap.set(otp.phoneNumber, otp.otpHash);
+          }
+        }
+
+        for (const b of beneficiaries) {
+          if (b.phone && otpMap.has(b.phone)) {
+            b.otpHash = otpMap.get(b.phone);
+          } else {
+            b.otpHash = null;
+          }
+        }
+      }
+
+      return { beneficiaries };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch predefined offline beneficiaries for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async redeemOfflineInkindByVendor(payload: RedeemOfflineInkindByVendorDto) {
+    const { redeemedInkinds, user } = payload;
+
+    this.logger.log(
+      `Processing offline inkind redemption for vendor: ${user.uuid}`
+    );
+
+    if (!user || !user.uuid) {
+      throw new RpcException('userUuid is required');
+    }
+
+    if (!redeemedInkinds || redeemedInkinds.length === 0) {
+      throw new RpcException('No inkinds provided for redemption');
+    }
+
+    try {
+      const redemptionResults = [];
+      for (const item of redeemedInkinds) {
+        const { beneficiaryWallet, inkindRedeemed, redeemedAt } = item;
+
+        const mappedInkinds = inkindRedeemed.map((inkind) => ({
+          uuid: inkind.uuid,
+          groupInkindUuid: inkind.groupInkindId,
+        }));
+
+        // Uses the existing flow
+        const redemptionResult = await this.beneficiaryInkindRedeem({
+          walletAddress: beneficiaryWallet,
+          inkinds: mappedInkinds,
+          ...(redeemedAt ? { redeemedAt } : {}),
+          user,
+        });
+
+        redemptionResults.push(redemptionResult);
+      }
+
+      this.logger.log(
+        `Successfully processed offline inkind redemptions for vendor: ${user.uuid}`
+      );
+
+      return {
+        message: 'Offline inkinds redeemed successfully',
+        redemptions: redemptionResults,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to redeem offline inkinds for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   // ==================== VALIDATION HELPERS ====================
   private async validatePreDefinedInkinds(
     preDefinedPayload: Array<{ uuid: string; groupInkindUuid: string }>,
@@ -1928,7 +2107,8 @@ export class InkindsService {
     tx: Prisma.TransactionClient,
     items: PreDefinedRedemptionItem[],
     walletAddress: string,
-    vendor: UserObject
+    vendor: UserObject,
+    redeemedAt?: Date 
   ): Promise<PreDefinedRedemptionResult[]> {
     const results: PreDefinedRedemptionResult[] = [];
 
@@ -1944,6 +2124,7 @@ export class InkindsService {
           groupInkindId: item.groupInkindUuid,
           quantity: quantityPerBeneficiary,
           vendorUid: vendor.uuid,
+          ...(redeemedAt !== undefined ? { redeemedAt } : {}),
           status: InkindTxStatus.PENDING,
         },
       });
