@@ -10,11 +10,11 @@ import { buildQrPdf, QrCardData } from './qr-pdf-builder';
 const BATCH_SIZE = 200;
 
 interface R2Settings {
-  accountId: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucket: string;
-  publicDomain: string;
+  R2_ACCOUNT_ID: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  R2_BUCKET: string;
+  R2_PUBLIC_DOMAIN: string;
 }
 
 @Injectable()
@@ -35,10 +35,10 @@ export class QrPdfService implements OnModuleInit {
     this.r2 = setting.value as unknown as R2Settings;
     this.s3 = new S3Client({
       region: 'auto',
-      endpoint: `https://${this.r2.accountId}.r2.cloudflarestorage.com`,
+      endpoint: `https://${this.r2.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
       credentials: {
-        accessKeyId: this.r2.accessKeyId,
-        secretAccessKey: this.r2.secretAccessKey,
+        accessKeyId: this.r2.R2_ACCESS_KEY_ID,
+        secretAccessKey: this.r2.R2_SECRET_ACCESS_KEY,
       },
     });
   }
@@ -74,7 +74,7 @@ export class QrPdfService implements OnModuleInit {
       const key = job.fileUrl.replace(/^https?:\/\/[^/]+\//, '');
       const signedUrl = await getSignedUrl(
         this.s3,
-        new GetObjectCommand({ Bucket: this.r2.bucket, Key: key }),
+        new GetObjectCommand({ Bucket: this.r2.R2_BUCKET, Key: key }),
         { expiresIn: 3600 }
       );
       return { ...job, fileUrl: signedUrl };
@@ -99,14 +99,14 @@ export class QrPdfService implements OnModuleInit {
       this.logger.log(`Uploading PDF to R2 at key ${key}`);
       await this.s3.send(
         new PutObjectCommand({
-          Bucket: this.r2.bucket,
+          Bucket: this.r2.R2_BUCKET,
           Key: key,
           Body: pdfBuffer,
           ContentType: 'application/pdf',
         })
       );
 
-      const fileUrl = `https://${this.r2.publicDomain}/${key}`;
+      const fileUrl = `https://${this.r2.R2_PUBLIC_DOMAIN}/${key}`;
     this.logger.log(`PDF uploaded successfully for job ${jobUuid}, updating database record`);
 
       await this.prisma.pdfGenerationJob.update({

@@ -4,11 +4,11 @@ const prisma = new PrismaClient();
 
 export const seedR2Settings = async () => {
   const value = {
-    accountId: process.env.R2_ACCOUNT_ID || '',
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-    bucket: process.env.R2_BUCKET || 'rahat-qr-pdfs',
-    publicDomain: process.env.R2_PUBLIC_DOMAIN || '',
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID || '',
+    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID || '',
+    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY || '',
+    R2_BUCKET: process.env.R2_BUCKET || 'rahat-qr-pdfs',
+    R2_PUBLIC_DOMAIN: process.env.R2_PUBLIC_DOMAIN || '',
   };
 
   await prisma.setting.upsert({
