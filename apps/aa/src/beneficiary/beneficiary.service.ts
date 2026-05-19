@@ -18,6 +18,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, Prisma } from '@prisma/client';
+import { QrPdfService } from './qr-pdf.service';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
@@ -47,9 +48,18 @@ export class BeneficiaryService {
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
-    private readonly payoutService: PayoutsService
+    private readonly payoutService: PayoutsService,
+    private readonly qrPdfService: QrPdfService
   ) {
     this.rsprisma = prisma.rsclient;
+  }
+
+  initiateQrPdf(groupId: string) {
+    return this.qrPdfService.initiateQrPdf(groupId);
+  }
+
+  getQrPdf(groupId: string) {
+    return this.qrPdfService.getJobStatus(groupId);
   }
 
   async getAllBenfs() {
