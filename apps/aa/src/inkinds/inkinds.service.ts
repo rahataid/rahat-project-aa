@@ -522,6 +522,19 @@ export class InkindsService {
       this.logger.log(
         `Group inkind assigned successfully: groupId=${groupId}, inkindId=${inkindId}, quantity=${newQuantity}`
       );
+
+      // if mode if offline then we have so send default opt to all users using queue
+      if (mode === PayoutMode.OFFLINE) {
+        const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
+          where: {
+            groupId,
+          },
+          include: {
+            beneficiary: true,
+          },
+        });
+      }
+
       return { success: true, message: 'Group inkind assigned successfully' };
     } catch (error) {
       this.logger.error(
@@ -645,6 +658,7 @@ export class InkindsService {
     try {
       const groups = await this.prisma.groupInkind.findMany({
         where: {
+          mode: PayoutMode.ONLINE,
           group: {
             beneficiaries: {
               some: {
@@ -1228,23 +1242,28 @@ export class InkindsService {
       throw new RpcException('Beneficiary not found');
     }
 
+    const defaultOpt = await this.prisma.otp.findUnique({
+      where: { phoneNumber: number },
+    });
+
     const { otp } = await this.otpService.sendSms(
       number,
-      'Your OTP for inkind redemption is:'
+      'Your OTP for inkind redemption is:',
+      defaultOpt?.otp
     );
+
+    // if otp is set in db and not expired, do not update otp, just resend the existing otp
+    if (defaultOpt?.otp) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
 
     const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
     const hashOpt = await bcrypt.hash(otp, 10);
-    await this.prisma.otp.upsert({
-      where: { phoneNumber: number },
-      update: {
+    await this.prisma.otp.create({
+      data: {
         otpHash: hashOpt,
-        expiresAt: expiry,
-        amount: 0,
-        isVerified: false,
-      },
-      create: {
-        otpHash: hashOpt,
+        otp,
+        walletAddress: benf.walletAddress,
         expiresAt: expiry,
         phoneNumber: number,
         amount: 0,
@@ -1272,9 +1291,10 @@ export class InkindsService {
       throw new RpcException('OTP already verified');
     }
 
-    if (otpRecord.expiresAt < new Date()) {
-      throw new RpcException('OTP has expired');
-    }
+    // since we send the same opt every time so that this logic is commented out for now.
+    // if (otpRecord.expiresAt < new Date()) {
+    //   throw new RpcException('OTP has expired');
+    // }
 
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
     if (!isValid) {
