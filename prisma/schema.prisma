@@ -769,6 +769,10 @@ model GroupInkind {
   redemptions    BeneficiaryInkindRedemption[]
   stockMovements InkindStockMovement[]
 
+  mode   PayoutMode?
+  payoutProcessorId     String? //
+
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   createdBy String?
