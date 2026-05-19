@@ -83,6 +83,8 @@ export const JOBS = {
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
+    GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -343,6 +345,7 @@ export const BQUEUE = {
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
+  QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
