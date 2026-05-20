@@ -125,16 +125,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
     uuid: process.env.PROJECT_ID,
   })
-  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
-    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
-  }
-
-  @MessagePattern({
-    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BY_BENEFICIARY_WALLET,
-    uuid: process.env.PROJECT_ID,
-  })
-  getAvailableInkindByBeneficiaryWallet(@Payload() Payload: { walletAddress: string }) {
-    return this.inkindsService.getAvailableInkindByBeneficiaryWallet(Payload.walletAddress);
+  getAvailableInkindByBeneficiary(@Payload() Payload: { number?: string, walletAddress?: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number, Payload.walletAddress);
   }
 
   @MessagePattern({

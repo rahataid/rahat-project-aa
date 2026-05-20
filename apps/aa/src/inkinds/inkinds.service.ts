@@ -555,20 +555,25 @@ export class InkindsService {
     }
   }
 
-  async getAvailableInkindByBeneficiary(number: string) {
+  async getAvailableInkindByBeneficiary(number?: string, walletAddress?: string) {
     this.logger.log(
-      `Fetching available inkind details for beneficiary: ${number}`
+      `Fetching available inkind details for beneficiary: ${number || walletAddress}`
     );
 
-    if (!number) {
-      throw new RpcException('Beneficiary phone number is required');
+    if (!number && !walletAddress) {
+      throw new RpcException('Beneficiary phone number or wallet address is required');
     }
 
     try {
       const beneficiary = await this.prisma.beneficiary.findFirst({
-        where: {
-          extras: { path: ['phone'], equals: number },
-        },
+         where: walletAddress
+          ? { walletAddress }
+          : {
+              extras: {
+                path: ['phone'],
+                equals: String(number),
+              },
+            },
       });
 
       if (!beneficiary) {
@@ -583,50 +588,6 @@ export class InkindsService {
       const [formattedGroups, walkInInkinds] = await Promise.all([
         this.getBenificiaryAssignedInkindByWallet(beneficiary.walletAddress),
         this.getBeneficiaryAssignedWalkinInkinds(beneficiary.walletAddress),
-      ]);
-
-      return {
-        isBeneficiaryExists: true,
-        beneficiary,
-        preDefinedInkinds: formattedGroups,
-        walkInInkinds,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch inkind details for beneficiary: ${error.message}`,
-        error.stack
-      );
-      throw new RpcException(error.message);
-    }
-  }
-
-
-  async getAvailableInkindByBeneficiaryWallet(walletAddress: string) {
-    this.logger.log(`Fetching inkinds for beneficiary wallet: ${walletAddress}`);
-
-    if (!walletAddress) {
-      throw new RpcException('Beneficiary wallet address is required');
-    }
-
-    try {
-      const beneficiary = await this.prisma.beneficiary.findFirst({
-        where: {
-          walletAddress,
-        }
-      });
-
-      if (!beneficiary) {
-        return {
-          isBeneficiaryExists: false,
-          beneficiary: null,
-          preDefinedInkinds: [],
-          walkInInkinds: [],
-        };
-      }
-
-      const [formattedGroups, walkInInkinds] = await Promise.all([
-        this.getBenificiaryAssignedInkindByWallet(walletAddress),
-        this.getBeneficiaryAssignedWalkinInkinds(walletAddress),
       ]);
 
       return {
