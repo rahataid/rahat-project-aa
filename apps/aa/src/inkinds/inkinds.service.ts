@@ -43,7 +43,6 @@ import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
 import { AppService } from '../app/app.service';
-import { rpc } from '@stellar/stellar-sdk';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
