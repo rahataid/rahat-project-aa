@@ -37,11 +37,13 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { CHAIN_SERVICE, CORE_MODULE } from '../constants';
+import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { ChainService } from '../chain/chain.service';
 import { AppService } from '../app/app.service';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -1337,7 +1339,48 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async beneficiaryInkindRedeem(payload: BeneficiaryInkindRedeemDto) {
+  private async validateVendorAndPayoutPhase(user: UserObject) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        uuid: user?.uuid,
+      },
+    });
+
+    if (!vendor) {
+      throw new RpcException(`User '${user.name}' is not registered as a vendor`);
+    }
+
+    const { value } = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+
+    const isPhasePayoutActivate = await lastValueFrom(
+      this.client.send(
+        { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+        {
+          activeYear: value.active_year,
+          riverBasin: value.river_basin,
+        }
+      )
+    );
+
+    if (!isPhasePayoutActivate) {
+      this.logger.log('Payout phase not active. In-kind redemption is unavailable.');
+      throw new RpcException('Payout phase not active. In-kind redemption is unavailable.');
+    }
+
+    return vendor;
+  }
+
+  async beneficiaryInkindRedeem(
+    payload: BeneficiaryInkindRedeemDto,
+    options?: {
+      vendor?: Awaited<ReturnType<InkindsService['validateVendorAndPayoutPhase']>>;
+      skipVendorAndPhaseValidation?: boolean;
+      preloadedBeneficiary?: { uuid: string; walletAddress: string };
+      preloadedInkindRecords?: Array<{ uuid: string; name: string; type: string }>;
+    }
+  ) {
     const { walletAddress, inkinds, user, redeemedAt } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
@@ -1349,54 +1392,34 @@ export class InkindsService {
     );
 
     try {
-      const vendor = await this.prisma.vendor.findFirst({
-        where: {
-          uuid: user?.uuid,
-        },
-      });
+      const vendor = options?.skipVendorAndPhaseValidation
+        ? options.vendor
+        : await this.validateVendorAndPayoutPhase(user);
 
       if (!vendor) {
-        throw new RpcException(
-          `User '${user.name}' is not registered as a vendor`
-        );
-      }
-
-      const { value } = await this.appService.getSettings({
-        name: 'PROJECTINFO',
-      });
-
-      const isPhasePayoutActivate = await lastValueFrom(
-        this.client.send(
-          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
-          {
-            activeYear: value.active_year,
-            riverBasin: value.river_basin,
-          }
-        )
-      );
-
-      if (!isPhasePayoutActivate) {
-        this.logger.log(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-        throw new RpcException(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
+        throw new RpcException(`User '${user.name}' is not registered as a vendor`);
       }
 
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
-      const inkindRecords = await this.prisma.inkind.findMany({
-        where: { uuid: { in: inkindUuids }, deletedAt: null },
-      });
+      let inkindRecords = options?.preloadedInkindRecords ?? [];
+
+      if (inkindRecords.length !== inkinds.length) {
+        inkindRecords = await this.prisma.inkind.findMany({
+          where: { uuid: { in: inkindUuids }, deletedAt: null },
+        });
+      }
 
       if (inkinds.length !== inkindRecords.length) {
         throw new RpcException('One or more inkinds not found');
       }
 
-      const beneficiary = await this.prisma.beneficiary.findFirst({
-        where: { walletAddress },
-      });
+      const beneficiary =
+        options?.preloadedBeneficiary ??
+        (await this.prisma.beneficiary.findFirst({
+          where: { walletAddress },
+          select: { uuid: true, walletAddress: true },
+        }));
 
       if (!beneficiary) {
         throw new RpcException('Beneficiary not found');
@@ -1915,6 +1938,203 @@ export class InkindsService {
     }
   }
 
+  async beneficiaryBulkInkindRedeem(
+    payloads: BeneficiaryInkindRedeemDto[],
+    user: UserObject
+  ) {
+    if (!payloads || payloads.length === 0) {
+      throw new RpcException('No inkinds provided for redemption');
+    }
+
+    this.logger.log(`Processing bulk inkind redemption for vendor: ${user.uuid}`);
+
+    try {
+      // STEP 1: Validate vendor + payout phase once for whole batch.
+      const vendor = await this.validateVendorAndPayoutPhase(user);
+
+      // STEP 2: Build unique ID sets from payload (flat extraction + dedupe).
+      const allInkindUuids = Array.from(
+        new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.uuid)))
+      );
+      const allGroupInkindUuids = Array.from(
+        new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.groupInkindUuid).filter(Boolean)))
+      ) as string[];
+      const allBeneficiaryWallets = Array.from(
+        new Set(payloads.map((p) => p.walletAddress))
+      );
+
+      // STEP 3: O(1) bulk preload of everything required.
+      const [inkindRecords, beneficiaries, groupInkinds, existingRedemptions] = await Promise.all([
+        this.prisma.inkind.findMany({
+          where: { uuid: { in: allInkindUuids }, deletedAt: null },
+          select: { uuid: true, name: true, type: true },
+        }),
+        this.prisma.beneficiary.findMany({
+          where: { walletAddress: { in: allBeneficiaryWallets } },
+          select: { uuid: true, walletAddress: true },
+        }),
+        this.prisma.groupInkind.findMany({
+          where: { uuid: { in: allGroupInkindUuids } },
+          include: {
+            group: {
+              include: { _count: { select: { beneficiaries: true } } },
+            },
+          },
+        }),
+        this.prisma.beneficiaryInkindRedemption.findMany({
+          where: {
+            beneficiaryWallet: { in: allBeneficiaryWallets },
+            groupInkindId: { in: allGroupInkindUuids },
+          },
+          select: { beneficiaryWallet: true, groupInkindId: true },
+        }),
+      ]);
+
+      // STEP 4: Build O(1) lookup maps and sets for in-memory validation.
+      const inkindRecordMap = new Map(inkindRecords.map((r) => [r.uuid, r]));
+      const beneficiaryMap = new Map(beneficiaries.map((b) => [b.walletAddress, b]));
+      const groupInkindMap = new Map(groupInkinds.map((g) => [g.uuid, g]));
+
+      // Set for fast lookup of existing redemptions
+      const redeemedSet = new Set(
+        existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
+      );
+
+      const validRedemptionsToInsert: any[] = [];
+      const validStockMovementsToInsert: any[] = [];
+      const allBatchedInkindsToQueue: string[] = [];
+      const formattedRedemptionResults: any[] = [];
+
+      // STEP 5: Validate each row in memory and buffer valid DB writes.
+      for (const payload of payloads) {
+        const preloadedBeneficiary = beneficiaryMap.get(payload.walletAddress);
+
+        if (!preloadedBeneficiary) {
+          this.logger.warn(`Beneficiary ${payload.walletAddress} not found during bulk redeem, skipping.`);
+          continue;
+        }
+
+        const redeemedAtDate = payload.redeemedAt ? new Date(payload.redeemedAt) : undefined;
+
+        for (const payloadInkind of payload.inkinds) {
+          const inkindRecord = inkindRecordMap.get(payloadInkind.uuid);
+          if (!inkindRecord || inkindRecord.type !== InkindType.PRE_DEFINED || !payloadInkind.groupInkindUuid) {
+            continue;
+          }
+
+          const groupInkind = groupInkindMap.get(payloadInkind.groupInkindUuid);
+          if (!groupInkind) continue;
+
+          // Check for existing redemption to prevent double-spending
+          const redemptionKey = `${payload.walletAddress}_${payloadInkind.groupInkindUuid}`;
+          if (redeemedSet.has(redemptionKey)) {
+            this.logger.warn(`Beneficiary ${payload.walletAddress} has already redeemed PRE_DEFINED inkind: ${inkindRecord.name}, skipping.`);
+            continue;
+          }
+
+          const memberCount = groupInkind.group._count.beneficiaries;
+          if (!memberCount) continue;
+
+          const quantityPerBeneficiary = Math.floor(
+            groupInkind.quantityAllocated / memberCount
+          );
+
+          if (quantityPerBeneficiary <= 0) continue;
+
+          // We generate a UUID upfront to link redemption to stock movement
+          const crypto = require('crypto');
+          const redemptionId = crypto.randomUUID();
+
+          validRedemptionsToInsert.push({
+            uuid: redemptionId,
+            beneficiaryWallet: payload.walletAddress,
+            groupInkindId: payloadInkind.groupInkindUuid,
+            quantity: quantityPerBeneficiary,
+            vendorUid: vendor.uuid,
+            status: InkindTxStatus.PENDING,
+            ...(redeemedAtDate ? { redeemedAt: redeemedAtDate } : {}),
+          });
+
+          validStockMovementsToInsert.push({
+            uuid: crypto.randomUUID(),
+            inkindId: payloadInkind.uuid,
+            quantity: quantityPerBeneficiary,
+            type: InkindStockMovementType.REDEEM,
+            groupInkindId: payloadInkind.groupInkindUuid,
+            redemptionId: redemptionId,
+          });
+
+          allBatchedInkindsToQueue.push(payloadInkind.uuid);
+
+          formattedRedemptionResults.push({
+            type: InkindType.PRE_DEFINED,
+            inkindUuid: payloadInkind.uuid,
+            inkindName: inkindRecord.name,
+            groupInkindUuid: payloadInkind.groupInkindUuid,
+            quantityRedeemed: quantityPerBeneficiary,
+            redemptionId: redemptionId,
+          });
+        }
+      }
+
+      if (validRedemptionsToInsert.length === 0) {
+         return {
+           message: 'No valid predefined bulk inkinds found to redeem',
+           redemptions: [],
+         };
+      }
+
+      // STEP 6: Persist all valid rows in one DB transaction.
+      // Single transaction for all redemptions and stock movements
+      await this.prisma.$transaction([
+        this.prisma.beneficiaryInkindRedemption.createMany({ data: validRedemptionsToInsert }),
+        this.prisma.inkindStockMovement.createMany({ data: validStockMovementsToInsert }),
+      ]);
+
+      try {
+        // STEP 7: Dispatch smart contract transactions by wallet to queue.
+        this.logger.log(
+          `Enqueuing bulk contract job for ${allBatchedInkindsToQueue.length} inkinds total.`
+        );
+        // Dispatching them grouped by wallet to the chain service
+        const inkindsByWallet = payloads.reduce((acc, payload) => {
+           acc[payload.walletAddress] = payload.inkinds.map((i) => i.uuid);
+           return acc;
+        }, {} as Record<string, string[]>);
+
+        for (const [wallet, inkinds] of Object.entries(inkindsByWallet)) {
+            if (inkinds.length > 0) {
+               this.chainService.redeemInkind({
+                 beneficiaryAddress: wallet,
+                 vendorAddress: user.wallet,
+                 inkinds: inkinds,
+               });
+            }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to enqueue contract job for bulk inkind redemption: ${error.message}`,
+          error.stack
+        );
+      }
+
+      this.logger.log(
+        `Successfully processed bulk inkind redemptions for vendor: ${user.uuid}. Inserted ${validRedemptionsToInsert.length} redemptions.`
+      );
+
+      return {
+        message: 'Bulk inkinds redeemed successfully',
+        redemptions: formattedRedemptionResults,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to redeem bulk inkinds for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
   async redeemOfflineInkindByVendor(payload: RedeemOfflineInkindByVendorDto) {
     const { redeemedInkinds, user } = payload;
 
@@ -1931,34 +2151,19 @@ export class InkindsService {
     }
 
     try {
-      const redemptionResults = [];
-      for (const item of redeemedInkinds) {
-        const { beneficiaryWallet, inkindRedeemed, redeemedAt } = item;
-
-        const mappedInkinds = inkindRedeemed.map((inkind) => ({
-          uuid: inkind.uuid,
-          groupInkindUuid: inkind.groupInkindId,
-        }));
-
-        // Uses the existing flow
-        const redemptionResult = await this.beneficiaryInkindRedeem({
-          walletAddress: beneficiaryWallet,
-          inkinds: mappedInkinds,
-          ...(redeemedAt ? { redeemedAt } : {}),
+      const bulkPayloads: BeneficiaryInkindRedeemDto[] = redeemedInkinds.map((item) => {
+        return {
+          walletAddress: item.beneficiaryWallet,
           user,
-        });
+          redeemedAt: item.redeemedAt,
+          inkinds: item.inkindRedeemed.map((inkind) => ({
+            uuid: inkind.uuid,
+            groupInkindUuid: inkind.groupInkindId,
+          })),
+        };
+      });
 
-        redemptionResults.push(redemptionResult);
-      }
-
-      this.logger.log(
-        `Successfully processed offline inkind redemptions for vendor: ${user.uuid}`
-      );
-
-      return {
-        message: 'Offline inkinds redeemed successfully',
-        redemptions: redemptionResults,
-      };
+      return await this.beneficiaryBulkInkindRedeem(bulkPayloads, user);
     } catch (error: any) {
       this.logger.error(
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
