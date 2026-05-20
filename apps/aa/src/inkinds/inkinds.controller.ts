@@ -122,7 +122,7 @@ export class InkindsController {
   }
 
   @MessagePattern({
-    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_FOR_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
   getAvailableInkindByBeneficiary(@Payload() Payload: { number?: string, walletAddress?: string }) {
