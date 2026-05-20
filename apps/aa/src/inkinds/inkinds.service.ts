@@ -19,7 +19,10 @@ import {
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
+import {
+  AssignGroupInkindDto,
+  ListGroupInkindDto,
+} from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
   WalkInRedemptionItem,
@@ -52,7 +55,10 @@ export class InkindsService {
     private configService: ConfigService,
     @Inject(CHAIN_SERVICE)
     private readonly chainService: ChainService,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
+    // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    @InjectQueue(BQUEUE.COMMUNICATION)
+    private readonly communicationQueue: Queue
   ) {}
 
   async create(createInkindDto: CreateInkindDto) {
@@ -531,6 +537,24 @@ export class InkindsService {
             beneficiary: true,
           },
         });
+
+        for (const { beneficiary } of beneficiaries) {
+          const phone = (beneficiary.extras as Record<string, unknown>)?.phone;
+          if (!phone) {
+            continue;
+          }
+
+          await this.communicationQueue.add(
+            JOBS.INKINDS.SEND_BENEFICIARY_OTP_ON_QUEUE,
+            {
+              phone,
+            },
+            {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 5000 },
+            }
+          );
+        }
       }
 
       return { success: true, message: 'Group inkind assigned successfully' };
@@ -543,38 +567,45 @@ export class InkindsService {
     }
   }
 
-  async getByGroup(inkindType?: string, mode?: PayoutMode) {
-    const where = {
-      ...(inkindType
-        ? {
-            inkind: {
-              type: inkindType,
-            },
-          }
-        : undefined),
+  async getByGroup(payload: ListGroupInkindDto) {
+    const { page, perPage, order = 'desc', mode, inkindType, search } = payload;
+
+    const where: Prisma.GroupInkindWhereInput = {
       ...(mode && { mode }),
+      ...((inkindType || search) && {
+        inkind: {
+          ...(inkindType && { type: inkindType }),
+          ...(search && { name: { contains: search, mode: 'insensitive' } }),
+        },
+      }),
     };
 
     try {
       this.logger.log(`Fetching inkinds by group`);
-      const groupInkinds = await this.prisma.groupInkind.findMany({
-        where,
-        include: {
-          inkind: true,
-          group: {
-            include: {
-              _count: {
-                select: { beneficiaries: true },
+
+      const result = await paginate(
+        this.prisma.groupInkind,
+        {
+          where,
+          orderBy: { createdAt: order },
+          include: {
+            inkind: true,
+            group: {
+              include: {
+                _count: {
+                  select: { beneficiaries: true },
+                },
               },
             },
           },
         },
-      });
+        { page, perPage }
+      );
 
       if (mode === PayoutMode.OFFLINE) {
         this.logger.log(`Fetching vendor details for offline group inkinds`);
 
-        const vendorIds = groupInkinds
+        const vendorIds = (result.data as any[])
           .map((g) => g.payoutProcessorId)
           .filter((id) => id !== null);
 
@@ -583,21 +614,15 @@ export class InkindsService {
           select: { uuid: true, name: true },
         });
 
-        // Attach vendor details to the groupInkinds
-        const updatedGroupInkinds = groupInkinds.map((groupInkind) => {
+        result.data = (result.data as any[]).map((groupInkind) => {
           const vendor = vendors.find(
             (v) => v.uuid === groupInkind.payoutProcessorId
           );
-          if (vendor) {
-            return { ...groupInkind, vendor: vendor.name };
-          }
-          return groupInkind;
+          return vendor ? { ...groupInkind, vendor: vendor.name } : groupInkind;
         });
-
-        return updatedGroupInkinds;
       }
 
-      return groupInkinds;
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkinds by group: ${error.message}`,
@@ -607,20 +632,25 @@ export class InkindsService {
     }
   }
 
-  async getAvailableInkindByBeneficiary(number: string) {
+  async getAvailableInkindByBeneficiary(number?: string, walletAddress?: string) {
     this.logger.log(
-      `Fetching available inkind details for beneficiary: ${number}`
+      `Fetching available inkind details for beneficiary: ${number || walletAddress}`
     );
 
-    if (!number) {
-      throw new RpcException('Beneficiary phone number is required');
+    if (!number && !walletAddress) {
+      throw new RpcException('Beneficiary phone number or wallet address is required');
     }
 
     try {
       const beneficiary = await this.prisma.beneficiary.findFirst({
-        where: {
-          extras: { path: ['phone'], equals: number },
-        },
+         where: walletAddress
+          ? { walletAddress }
+          : {
+              extras: {
+                path: ['phone'],
+                equals: String(number),
+              },
+            },
       });
 
       if (!beneficiary) {

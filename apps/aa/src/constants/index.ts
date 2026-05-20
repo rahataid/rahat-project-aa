@@ -255,7 +255,7 @@ export const JOBS = {
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
-    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`,       // write ops: serial (concurrency 1), signer required
+    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`, // write ops: serial (concurrency 1), signer required
     QUERY_JOB: `aa.jobs.evm.query_${process.env.PROJECT_ID}`, // read ops:  concurrent (concurrency 5), no signer
     // Original job-type identifiers — used as `type` field inside job.data
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
@@ -286,8 +286,8 @@ export const JOBS = {
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
     GET_UNASSIGNED_GROUP_INKIND:
       'aa.jobs.groupInkinds.getUnassignedGroupInkind',
-    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
-      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
+    GET_AVAILABLE_INKIND_FOR_BENEFICIARY:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiary',
     GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
     GET_LOGS_DETAILS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsDetailsByVendor',
     GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
@@ -298,6 +298,7 @@ export const JOBS = {
     BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
     GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR: 'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
     REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
+    SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
