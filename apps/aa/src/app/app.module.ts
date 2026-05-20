@@ -81,6 +81,7 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
     }),
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
+    BullModule.registerQueue({ name: BQUEUE.QR_PDF }),
     ProcessorsModule,
     BeneficiaryModule,
     StakeholdersModule,

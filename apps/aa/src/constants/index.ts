@@ -83,6 +83,8 @@ export const JOBS = {
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
+    GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -253,7 +255,7 @@ export const JOBS = {
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
-    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`,       // write ops: serial (concurrency 1), signer required
+    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`, // write ops: serial (concurrency 1), signer required
     QUERY_JOB: `aa.jobs.evm.query_${process.env.PROJECT_ID}`, // read ops:  concurrent (concurrency 5), no signer
     // Original job-type identifiers — used as `type` field inside job.data
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
@@ -294,6 +296,7 @@ export const JOBS = {
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
     BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
+    SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -343,6 +346,7 @@ export const BQUEUE = {
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
+  QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

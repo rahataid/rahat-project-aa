@@ -26,6 +26,7 @@ import { AppService } from '../app/app.service';
     ]),
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
+    BullModule.registerQueue({name: BQUEUE.COMMUNICATION}),
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
