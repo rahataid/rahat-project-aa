@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, Prisma } from '@prisma/client';
+import { InkindStockMovementType, PayoutMode, Prisma } from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -18,7 +18,10 @@ import {
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
+import {
+  AssignGroupInkindDto,
+  ListGroupInkindDto,
+} from './dto/inkindGroup.dto';
 import {
   PreDefinedRedemptionItem,
   WalkInRedemptionItem,
@@ -54,7 +57,9 @@ export class InkindsService {
     @Inject(CHAIN_SERVICE)
     private readonly chainService: ChainService,
     // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    @InjectQueue(BQUEUE.COMMUNICATION)
+    private readonly communicationQueue: Queue
   ) {}
 
   async create(createInkindDto: CreateInkindDto) {
@@ -270,8 +275,7 @@ export class InkindsService {
       return {
         totalInkindTypes: summary._count.id,
         totalStock: summary._sum.availableStock,
-        totalAvailableStock:
-          summary._sum.availableStock, 
+        totalAvailableStock: summary._sum.availableStock,
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
         totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
       };
@@ -446,16 +450,28 @@ export class InkindsService {
   }
 
   async assignGroupInkind(payload: AssignGroupInkindDto) {
-    const { inkindId, groupId, quantity, user } = payload;
+    const { inkindId, groupId, quantity, user, mode, payoutProcessorId } =
+      payload;
     const newQuantity = quantity || 1;
 
     this.logger.log(
-      `Assigning group inkind: inkindId=${inkindId}, groupId=${groupId}, quantity=${newQuantity}`
+      `Assigning group inkind: inkindId=${inkindId}, groupId=${groupId}, quantity=${newQuantity} mode=${mode} payoutProcessorId=${payoutProcessorId}`
     );
 
-    if (!inkindId || !groupId) {
+    if (!inkindId || !groupId || !mode) {
       throw new RpcException('Missing required fields');
     }
+
+    if (!(mode in PayoutMode)) {
+      throw new RpcException('Invalid payout mode');
+    }
+
+    if (mode === PayoutMode.OFFLINE && !payoutProcessorId) {
+      throw new RpcException(
+        'payoutProcessorId is required for offline payouts'
+      );
+    }
+
     const inkind = await this.findOneOrThrow(inkindId);
 
     if (inkind.type === InkindType.WALK_IN) {
@@ -495,6 +511,8 @@ export class InkindsService {
             inkindId,
             quantityAllocated: totalNeedInkindQuantity,
             createdBy: user?.name || 'system',
+            mode,
+            payoutProcessorId,
           },
         });
         await tx.inkindStockMovement.create({
@@ -509,6 +527,37 @@ export class InkindsService {
       this.logger.log(
         `Group inkind assigned successfully: groupId=${groupId}, inkindId=${inkindId}, quantity=${newQuantity}`
       );
+
+      // if mode if offline then we have so send default opt to all users using queue
+      if (mode === PayoutMode.OFFLINE) {
+        const beneficiaries = await this.prisma.beneficiaryToGroup.findMany({
+          where: {
+            groupId,
+          },
+          include: {
+            beneficiary: true,
+          },
+        });
+
+        for (const { beneficiary } of beneficiaries) {
+          const phone = (beneficiary.extras as Record<string, unknown>)?.phone;
+          if (!phone) {
+            continue;
+          }
+
+          await this.communicationQueue.add(
+            JOBS.INKINDS.SEND_BENEFICIARY_OTP_ON_QUEUE,
+            {
+              phone,
+            },
+            {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 5000 },
+            }
+          );
+        }
+      }
+
       return { success: true, message: 'Group inkind assigned successfully' };
     } catch (error) {
       this.logger.error(
@@ -519,32 +568,62 @@ export class InkindsService {
     }
   }
 
-  async getByGroup(inkindType?: string) {
-    const where = inkindType
-      ? {
-          inkind: {
-            type: inkindType,
-          },
-        }
-      : undefined;
+  async getByGroup(payload: ListGroupInkindDto) {
+    const { page, perPage, order = 'desc', mode, inkindType, search } = payload;
+
+    const where: Prisma.GroupInkindWhereInput = {
+      ...(mode && { mode }),
+      ...((inkindType || search) && {
+        inkind: {
+          ...(inkindType && { type: inkindType }),
+          ...(search && { name: { contains: search, mode: 'insensitive' } }),
+        },
+      }),
+    };
 
     try {
       this.logger.log(`Fetching inkinds by group`);
-      const groupInkinds = await this.prisma.groupInkind.findMany({
-        where,
-        include: {
-          inkind: true,
-          group: {
-            include: {
-              _count: {
-                select: { beneficiaries: true },
+
+      const result = await paginate(
+        this.prisma.groupInkind,
+        {
+          where,
+          orderBy: { createdAt: order },
+          include: {
+            inkind: true,
+            group: {
+              include: {
+                _count: {
+                  select: { beneficiaries: true },
+                },
               },
             },
           },
         },
-      });
+        { page, perPage }
+      );
 
-      return groupInkinds;
+      if (mode === PayoutMode.OFFLINE) {
+        this.logger.log(`Fetching vendor details for offline group inkinds`);
+
+        const vendorIds = (result.data as any[])
+          .map((g) => g.payoutProcessorId)
+          .filter((id) => id !== null);
+
+        const vendors = await this.prisma.vendor.findMany({
+          where: { uuid: { in: vendorIds } },
+          select: { uuid: true, name: true },
+        });
+
+        result.data = (result.data as any[]).map((groupInkind) => {
+          const vendor = vendors.find(
+            (v) => v.uuid === groupInkind.payoutProcessorId
+          );
+          return vendor ? { ...groupInkind, vendor: vendor.name } : groupInkind;
+        });
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch inkinds by group: ${error.message}`,
@@ -603,6 +682,7 @@ export class InkindsService {
     try {
       const groups = await this.prisma.groupInkind.findMany({
         where: {
+          mode: PayoutMode.ONLINE,
           group: {
             beneficiaries: {
               some: {
@@ -700,7 +780,15 @@ export class InkindsService {
   }
 
   async getInkindLogsDetailsByVendor(payload: GetVendorInkindLogsDto) {
-    const { vendorId, search, inkindType, page, perPage, sort = 'redeemedAt', order = 'desc' } = payload;
+    const {
+      vendorId,
+      search,
+      inkindType,
+      page,
+      perPage,
+      sort = 'redeemedAt',
+      order = 'desc',
+    } = payload;
 
     this.logger.log(
       `Fetching inkind redemption logs details for vendor: ${vendorId}`
@@ -737,9 +825,10 @@ export class InkindsService {
     const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
     const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
 
-    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput = {
-      [safeSort]: safeOrder,
-    };
+    const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput =
+      {
+        [safeSort]: safeOrder,
+      };
 
     const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
       where,
@@ -778,7 +867,7 @@ export class InkindsService {
       const result = await paginate(
         this.prisma.beneficiaryInkindRedemption,
         query,
-        { page, perPage },
+        { page, perPage }
       );
       return result;
     } catch (error) {
@@ -927,11 +1016,14 @@ export class InkindsService {
       for (const redemption of result.data as any[]) {
         const key = redemption.txHash ?? '__no_txhash__';
         if (!groupedMap.has(key)) {
-          const extras = redemption.beneficiary?.extras as Record<string, unknown> | null;
+          const extras = redemption.beneficiary?.extras as Record<
+            string,
+            unknown
+          > | null;
           groupedMap.set(key, {
             txHash: redemption.txHash ?? null,
             date: redemption.redeemedAt,
-            phone: extras?.phone as string || null,
+            phone: (extras?.phone as string) || null,
           });
         }
       }
@@ -1119,7 +1211,8 @@ export class InkindsService {
 
       if (getEntireLogs) {
         // Warn: unbounded query — ensure this is only used for exports/trusted callers
-        const redemptions = await this.prisma.beneficiaryInkindRedemption.findMany(query);
+        const redemptions =
+          await this.prisma.beneficiaryInkindRedemption.findMany(query);
 
         return {
           data: {
@@ -1173,23 +1266,28 @@ export class InkindsService {
       throw new RpcException('Beneficiary not found');
     }
 
+    const defaultOpt = await this.prisma.otp.findUnique({
+      where: { phoneNumber: number },
+    });
+
     const { otp } = await this.otpService.sendSms(
       number,
-      'Your OTP for inkind redemption is:'
+      'Your OTP for inkind redemption is:',
+      defaultOpt?.otp
     );
+
+    // if otp is set in db and not expired, do not update otp, just resend the existing otp
+    if (defaultOpt?.otp) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
 
     const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
     const hashOpt = await bcrypt.hash(otp, 10);
-    await this.prisma.otp.upsert({
-      where: { phoneNumber: number },
-      update: {
+    await this.prisma.otp.create({
+      data: {
         otpHash: hashOpt,
-        expiresAt: expiry,
-        amount: 0,
-        isVerified: false,
-      },
-      create: {
-        otpHash: hashOpt,
+        otp,
+        walletAddress: benf.walletAddress,
         expiresAt: expiry,
         phoneNumber: number,
         amount: 0,
@@ -1217,9 +1315,10 @@ export class InkindsService {
       throw new RpcException('OTP already verified');
     }
 
-    if (otpRecord.expiresAt < new Date()) {
-      throw new RpcException('OTP has expired');
-    }
+    // since we send the same opt every time so that this logic is commented out for now.
+    // if (otpRecord.expiresAt < new Date()) {
+    //   throw new RpcException('OTP has expired');
+    // }
 
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
     if (!isValid) {
@@ -2098,7 +2197,9 @@ export class InkindsService {
         uuid: redemption.beneficiary.uuid,
         walletAddress: redemption.beneficiary.walletAddress,
         phone: redemption.beneficiary.phone,
-        name: (redemption.beneficiary.extras as Record<string, unknown>)?.name ?? null,
+        name:
+          (redemption.beneficiary.extras as Record<string, unknown>)?.name ??
+          null,
       },
       vendor: redemption.Vendor
         ? {

@@ -20,6 +20,8 @@ import { NotificationProcessor } from './notification.processor';
 import { EVMCentralizedProcessor } from './evm-centralized.processor';
 import { InkindsModule } from '../inkinds';
 import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatcher';
+import { InkindProcessor } from './inkind.processor';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
@@ -70,10 +72,13 @@ import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatche
         lockRenewTime: 30000,
       },
     }),
+    BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
+    OtpModule,
   ],
   providers: [
     PrismaService,
     ContractProcessor,
+    InkindProcessor,
     StatsProcessor,
     StellarProcessor,
     CheckTrustlineProcessor,
