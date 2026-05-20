@@ -1353,14 +1353,6 @@ export class InkindsService {
           'Payout phase not active. In-kind redemption is unavailable.'
         );
       }
-      if (!isPhasePayoutActivate) {
-        this.logger.log(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-        throw new RpcException(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-      }
 
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
