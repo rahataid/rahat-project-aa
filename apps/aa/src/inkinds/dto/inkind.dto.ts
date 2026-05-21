@@ -231,7 +231,7 @@ export class RedeemedOfflineInkinds {
   @IsArray()
   inkindRedeemed: {
     uuid: string;
-    groupInkindId: string;
+    groupInkindUuid: string;
   }[];
 
   @IsOptional()

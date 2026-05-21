@@ -796,7 +796,7 @@ export class BeneficiaryService {
       const chunkRecords = await Promise.all(
         chunk.map(async (b) => {
           const otp = isDev ? '1234' : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev ? devHash! : await bcrypt.hash(`${otp}:0`, BCRYPT_ROUNDS);
+          const otpHash = isDev ? devHash! : await bcrypt.hash(`${otp}`, BCRYPT_ROUNDS);
           return {
             phoneNumber: b.phone!,
             ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),

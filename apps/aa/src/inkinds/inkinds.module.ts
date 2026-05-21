@@ -2,6 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
 import { InkindsController } from './inkinds.controller';
 import { InkindsService } from './inkinds.service';
+import { InkindBulkRedeemProcessor } from './inkind-bulk-redeem.processor';
 import { OtpModule } from '../otp/otp.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BQUEUE, CORE_MODULE } from '../constants';
@@ -26,14 +27,13 @@ import { AppService } from '../app/app.service';
     ]),
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
-    BullModule.registerQueue({name: BQUEUE.COMMUNICATION}),
-    BullModule.registerQueue({
-      name: BQUEUE.STELLAR,
-    }),
+    BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
+    BullModule.registerQueue({ name: BQUEUE.INKIND_BULK_REDEEM }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR }),
     forwardRef(() => ChainModule),
   ],
   controllers: [InkindsController],
-  providers: [InkindsService, AppService],
+  providers: [InkindsService, AppService, InkindBulkRedeemProcessor],
   exports: [InkindsService],
 })
 export class InkindsModule {}

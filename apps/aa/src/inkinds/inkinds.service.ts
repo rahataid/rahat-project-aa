@@ -37,6 +37,7 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
@@ -46,6 +47,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
+const DEFAULT_BULK_BATCH_SIZE = parseInt(process.env.INKIND_BULK_BATCH_SIZE || '100', 10);
 
 @Injectable()
 export class InkindsService {
@@ -60,7 +62,9 @@ export class InkindsService {
     // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.COMMUNICATION)
-    private readonly communicationQueue: Queue
+    private readonly communicationQueue: Queue,
+    @InjectQueue(BQUEUE.INKIND_BULK_REDEEM)
+    private readonly inkindBulkQueue: Queue
   ) {}
 
   async create(createInkindDto: CreateInkindDto) {
@@ -1940,18 +1944,58 @@ export class InkindsService {
 
   async beneficiaryBulkInkindRedeem(
     payloads: BeneficiaryInkindRedeemDto[],
-    user: UserObject
+    user: UserObject,
+    batchSize = DEFAULT_BULK_BATCH_SIZE
   ) {
     if (!payloads || payloads.length === 0) {
       throw new RpcException('No inkinds provided for redemption');
     }
 
-    this.logger.log(`Processing bulk inkind redemption for vendor: ${user.uuid}`);
+    this.logger.log(
+      `Queuing bulk inkind redemption for vendor: ${user.uuid}, total=${payloads.length}, batchSize=${batchSize}`
+    );
 
     try {
-      // STEP 1: Validate vendor + payout phase once for whole batch.
       const vendor = await this.validateVendorAndPayoutPhase(user);
 
+      const batches: BeneficiaryInkindRedeemDto[][] = [];
+      for (let i = 0; i < payloads.length; i += batchSize) {
+        batches.push(payloads.slice(i, i + batchSize));
+      }
+
+      const jobs = await Promise.all(
+        batches.map((batch) =>
+          this.inkindBulkQueue.add(
+            JOBS.INKINDS.BULK_REDEEM_BATCH,
+            { payloads: batch, user, vendor: { uuid: vendor.uuid } },
+            { attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+          )
+        )
+      );
+
+      this.logger.log(`Queued ${batches.length} batch(es) for vendor: ${user.uuid}`);
+
+      return {
+        message: 'Bulk inkind redemption queued',
+        totalPayloads: payloads.length,
+        totalBatches: batches.length,
+        jobIds: jobs.map((j) => j.id),
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to process bulk inkind redemptions for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async processBulkBatch(
+    payloads: BeneficiaryInkindRedeemDto[],
+    user: UserObject,
+    vendor: { uuid: string }
+  ) {
+    try {
       // STEP 2: Build unique ID sets from payload (flat extraction + dedupe).
       const allInkindUuids = Array.from(
         new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.uuid)))
@@ -2004,46 +2048,62 @@ export class InkindsService {
       const validStockMovementsToInsert: any[] = [];
       const allBatchedInkindsToQueue: string[] = [];
       const formattedRedemptionResults: any[] = [];
+      const skipped: { beneficiaryWallet: string; inkindUuid?: string; reason: string }[] = [];
 
       // STEP 5: Validate each row in memory and buffer valid DB writes.
       for (const payload of payloads) {
         const preloadedBeneficiary = beneficiaryMap.get(payload.walletAddress);
 
         if (!preloadedBeneficiary) {
-          this.logger.warn(`Beneficiary ${payload.walletAddress} not found during bulk redeem, skipping.`);
+          this.logger.warn(`[BULK_REDEEM] Beneficiary ${payload.walletAddress} not found during bulk redeem, skipping.`);
+          skipped.push({ beneficiaryWallet: payload.walletAddress, reason: 'Beneficiary not found' });
           continue;
         }
+
+        this.logger.log(`[BULK_REDEEM] Processing beneficiary: ${payload.walletAddress}, inkinds count: ${payload.inkinds.length}`);
 
         const redeemedAtDate = payload.redeemedAt ? new Date(payload.redeemedAt) : undefined;
 
         for (const payloadInkind of payload.inkinds) {
           const inkindRecord = inkindRecordMap.get(payloadInkind.uuid);
-          if (!inkindRecord || inkindRecord.type !== InkindType.PRE_DEFINED || !payloadInkind.groupInkindUuid) {
+
+          if (!inkindRecord) {
+            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Inkind not found' });
+            continue;
+          }
+          if (inkindRecord.type !== InkindType.PRE_DEFINED) {
+            continue;
+          }
+          if (!payloadInkind.groupInkindUuid) {
+            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Missing groupInkindUuid for PRE_DEFINED inkind' });
             continue;
           }
 
           const groupInkind = groupInkindMap.get(payloadInkind.groupInkindUuid);
-          if (!groupInkind) continue;
+          if (!groupInkind) {
+            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Group inkind not found' });
+            continue;
+          }
 
           // Check for existing redemption to prevent double-spending
           const redemptionKey = `${payload.walletAddress}_${payloadInkind.groupInkindUuid}`;
           if (redeemedSet.has(redemptionKey)) {
-            this.logger.warn(`Beneficiary ${payload.walletAddress} has already redeemed PRE_DEFINED inkind: ${inkindRecord.name}, skipping.`);
+            this.logger.warn(`[BULK_REDEEM] Already redeemed key=${redemptionKey} (inkind: ${inkindRecord.name}), skipping.`);
+            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Already redeemed' });
             continue;
           }
 
           const memberCount = groupInkind.group._count.beneficiaries;
-          if (!memberCount) continue;
+          if (!memberCount) {
+            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Group has no members' });
+            continue;
+          }
 
           const quantityPerBeneficiary = Math.floor(
             groupInkind.quantityAllocated / memberCount
           );
 
-          if (quantityPerBeneficiary <= 0) continue;
-
-          // We generate a UUID upfront to link redemption to stock movement
-          const crypto = require('crypto');
-          const redemptionId = crypto.randomUUID();
+          const redemptionId = randomUUID();
 
           validRedemptionsToInsert.push({
             uuid: redemptionId,
@@ -2056,7 +2116,7 @@ export class InkindsService {
           });
 
           validStockMovementsToInsert.push({
-            uuid: crypto.randomUUID(),
+            uuid: randomUUID(),
             inkindId: payloadInkind.uuid,
             quantity: quantityPerBeneficiary,
             type: InkindStockMovementType.REDEEM,
@@ -2078,14 +2138,14 @@ export class InkindsService {
       }
 
       if (validRedemptionsToInsert.length === 0) {
-         return {
-           message: 'No valid predefined bulk inkinds found to redeem',
-           redemptions: [],
-         };
+        return {
+          message: 'No valid predefined bulk inkinds found to redeem',
+          redemptions: [],
+          skipped,
+        };
       }
 
       // STEP 6: Persist all valid rows in one DB transaction.
-      // Single transaction for all redemptions and stock movements
       await this.prisma.$transaction([
         this.prisma.beneficiaryInkindRedemption.createMany({ data: validRedemptionsToInsert }),
         this.prisma.inkindStockMovement.createMany({ data: validStockMovementsToInsert }),
@@ -2096,20 +2156,22 @@ export class InkindsService {
         this.logger.log(
           `Enqueuing bulk contract job for ${allBatchedInkindsToQueue.length} inkinds total.`
         );
-        // Dispatching them grouped by wallet to the chain service
-        const inkindsByWallet = payloads.reduce((acc, payload) => {
-           acc[payload.walletAddress] = payload.inkinds.map((i) => i.uuid);
-           return acc;
-        }, {} as Record<string, string[]>);
+        const inkindsByWallet: Record<string, string[]> = {};
+        for (let i = 0; i < validRedemptionsToInsert.length; i++) {
+          const wallet = validRedemptionsToInsert[i].beneficiaryWallet;
+          const inkindUuid = formattedRedemptionResults[i].inkindUuid;
+          if (!inkindsByWallet[wallet]) inkindsByWallet[wallet] = [];
+          inkindsByWallet[wallet].push(inkindUuid);
+        }
 
         for (const [wallet, inkinds] of Object.entries(inkindsByWallet)) {
-            if (inkinds.length > 0) {
-               this.chainService.redeemInkind({
-                 beneficiaryAddress: wallet,
-                 vendorAddress: user.wallet,
-                 inkinds: inkinds,
-               });
-            }
+          if (inkinds.length > 0) {
+            this.chainService.redeemInkind({
+              beneficiaryAddress: wallet,
+              vendorAddress: user.wallet,
+              inkinds: inkinds,
+            });
+          }
         }
       } catch (error) {
         this.logger.error(
@@ -2119,19 +2181,20 @@ export class InkindsService {
       }
 
       this.logger.log(
-        `Successfully processed bulk inkind redemptions for vendor: ${user.uuid}. Inserted ${validRedemptionsToInsert.length} redemptions.`
+        `Successfully processed bulk inkind batch for vendor: ${vendor.uuid}. Inserted ${validRedemptionsToInsert.length} redemptions.`
       );
 
       return {
         message: 'Bulk inkinds redeemed successfully',
         redemptions: formattedRedemptionResults,
+        skipped,
       };
     } catch (error: any) {
       this.logger.error(
-        `Failed to redeem bulk inkinds for vendor: ${error.message}`,
+        `Failed to process bulk inkind batch for vendor: ${error.message}`,
         error.stack
       );
-      throw new RpcException(error.message);
+      throw error;
     }
   }
 
@@ -2158,7 +2221,7 @@ export class InkindsService {
           redeemedAt: item.redeemedAt,
           inkinds: item.inkindRedeemed.map((inkind) => ({
             uuid: inkind.uuid,
-            groupInkindUuid: inkind.groupInkindId,
+            groupInkindUuid: inkind.groupInkindUuid,
           })),
         };
       });
