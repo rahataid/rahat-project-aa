@@ -633,20 +633,25 @@ export class InkindsService {
     }
   }
 
-  async getAvailableInkindByBeneficiary(number: string) {
+  async getAvailableInkindByBeneficiary(number?: string, walletAddress?: string) {
     this.logger.log(
-      `Fetching available inkind details for beneficiary: ${number}`
+      `Fetching available inkind details for beneficiary: ${number || walletAddress}`
     );
 
-    if (!number) {
-      throw new RpcException('Beneficiary phone number is required');
+    if (!number && !walletAddress) {
+      throw new RpcException('Beneficiary phone number or wallet address is required');
     }
 
     try {
       const beneficiary = await this.prisma.beneficiary.findFirst({
-        where: {
-          extras: { path: ['phone'], equals: number },
-        },
+         where: walletAddress
+          ? { walletAddress }
+          : {
+              extras: {
+                path: ['phone'],
+                equals: String(number),
+              },
+            },
       });
 
       if (!beneficiary) {

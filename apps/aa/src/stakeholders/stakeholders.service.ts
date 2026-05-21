@@ -65,6 +65,9 @@ export class StakeholdersService {
 
   // ***** stakeholders start ********** //
   async add(payload: AddStakeholdersData) {
+    this.logger.log(
+      `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
+    );
     const { phone, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
@@ -75,6 +78,17 @@ export class StakeholdersService {
           },
         }
       );
+
+      // if stakeholder is soft deleted then update stakeholder and set isDeleted to false
+      if (stakeholderWithSamePhone && stakeholderWithSamePhone.isDeleted) {
+        const updatedStakeholder = await this.prisma.stakeholders.update({
+          where: { uuid: stakeholderWithSamePhone.uuid },
+          data: { ...rest, phone: validPhone ? phone : null, isDeleted: false },
+        });
+        await this.eventEmitter.emit(EVENTS.STAKEHOLDER_UPDATED);
+        return updatedStakeholder;
+      }
+
       if (stakeholderWithSamePhone)
         throw new RpcException('Phone number must be unique');
     }
@@ -242,6 +256,7 @@ export class StakeholdersService {
               where: { phone: stakeholder.phone },
               data: {
                 ...this.removeEmptyFields(stakeholder),
+                isDeleted: false,
                 updatedAt: new Date(),
                 ...(groupUuid
                   ? { stakeholdersGroups: { connect: { uuid: groupUuid } } }
@@ -387,13 +402,16 @@ export class StakeholdersService {
         };
       }
     }
-
+    // update and disconnect from group
     const rData = await this.prisma.stakeholders.update({
       where: {
         uuid: payload.uuid,
       },
       data: {
         isDeleted: true,
+        stakeholdersGroups: {
+          set: [],
+        },
       },
     });
 
