@@ -1805,7 +1805,7 @@ export class InkindsService {
     }
 
     try {
-      // Get all group inkinds for the vendor that are of OFFLINE mode, along with their beneficiaries
+      // fetch all OFFLINE group inkinds assigned to this vendor, with their beneficiaries and inkind details
       const offlineGroupInkinds = await this.prisma.groupInkind.findMany({
         where: {
           payoutProcessorId: vendorId,
@@ -1841,7 +1841,7 @@ export class InkindsService {
         return { beneficiaries: [] };
       }
 
-      // Aggregate if beneficaries are in multiple groups with offline mode for inkind redemption
+      // one entry per beneficiary; inkinds from multiple groups are merged into one list
       const beneficiaryMap = new Map<
         string,
         {
@@ -1853,7 +1853,7 @@ export class InkindsService {
         }
       >();
 
-      // Loop through each group inkind and its beneficiaries to build the beneficiary map
+      // walk groups → beneficiaries → inkinds; skip duplicate inkind per beneficiary
       for (const gi of offlineGroupInkinds) {
         const inkindInfo = {
           id: gi.inkind.uuid,
@@ -1883,6 +1883,7 @@ export class InkindsService {
         }
       }
 
+      // flatten map; collect phones, wallets, groupInkindIds for batch queries below
       const beneficiaries = Array.from(beneficiaryMap.values());
       const phones = beneficiaries.map((b) => b.phone).filter(Boolean) as string[];
       const allWallets = beneficiaries.map((b) => b.walletAddress);
@@ -1890,6 +1891,7 @@ export class InkindsService {
         b.inkinds.map((i) => i.groupInkindId)
       );
 
+      // parallel: OTPs for offline auth handshake, redemptions to exclude already-done inkinds
       const [otps, existingRedemptions] = await Promise.all([
         phones.length > 0
           ? this.prisma.otp.findMany({
@@ -1908,10 +1910,12 @@ export class InkindsService {
           : Promise.resolve([]),
       ]);
 
+      // composite key wallet_groupInkindId for O(1) already-redeemed lookup
       const redeemedSet = new Set(
         existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
       );
 
+      // phone → otpHash lookup for attaching to each beneficiary
       const otpMap = new Map<string, string>();
       for (const otp of otps) {
         if (!otpMap.has(otp.phoneNumber)) {
@@ -1919,6 +1923,7 @@ export class InkindsService {
         }
       }
 
+      // attach OTP hash; strip already-redeemed inkinds so vendor only sees pending ones
       for (const b of beneficiaries) {
         b.otpHash = b.phone && otpMap.has(b.phone) ? otpMap.get(b.phone) : null;
         b.inkinds = b.inkinds.filter(
@@ -1950,14 +1955,16 @@ export class InkindsService {
     );
 
     try {
+      // guard: vendor must be registered and payout phase must be open
       const vendor = await this.validateVendorAndPayoutPhase(user);
 
+      // split payloads into fixed-size chunks
       const batches: BeneficiaryInkindRedeemDto[][] = [];
       for (let i = 0; i < payloads.length; i += batchSize) {
         batches.push(payloads.slice(i, i + batchSize));
       }
 
-      // Persist one record per batch BEFORE enqueuing — survives server crashes
+      // persist each batch to DB before enqueuing — if server dies before pickup, onModuleInit replays
       const batchRecords = await Promise.all(
         batches.map((batch) =>
           this.prisma.tempOfflineInkindRedemption.create({
@@ -1972,7 +1979,7 @@ export class InkindsService {
         )
       );
 
-      // Use batchRecord.uuid as Bull jobId for idempotency (deduplicates on restart)
+      // jobId = batchRecord.uuid so Bull deduplicates if the same batch is re-queued on restart
       const jobs = await Promise.all(
         batchRecords.map((record, i) =>
           this.inkindBulkQueue.add(
@@ -1985,6 +1992,7 @@ export class InkindsService {
 
       this.logger.log(`Queued ${batches.length} batch(es) for vendor: ${user.uuid}`);
 
+      // return immediately; processing happens async in the Bull worker
       return {
         message: 'Bulk inkind redemption queued',
         totalPayloads: payloads.length,
@@ -2006,6 +2014,7 @@ export class InkindsService {
     vendor: { uuid: string },
     batchId?: string
   ) {
+    // mark in-flight so restart recovery knows to re-queue if server dies mid-batch
     if (batchId) {
       await this.prisma.tempOfflineInkindRedemption.update({
         where: { uuid: batchId },
@@ -2014,7 +2023,7 @@ export class InkindsService {
     }
 
     try {
-      // STEP 2: Build unique ID sets from payload (flat extraction + dedupe).
+      // collect unique IDs across all payloads — one query per entity type below
       const allInkindUuids = Array.from(
         new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.uuid)))
       );
@@ -2025,7 +2034,7 @@ export class InkindsService {
         new Set(payloads.map((p) => p.walletAddress))
       );
 
-      // STEP 3: O(1) bulk preload of everything required.
+      // 4 parallel DB reads — single round-trip before the write phase
       const [inkindRecords, beneficiaries, groupInkinds, existingRedemptions] = await Promise.all([
         this.prisma.inkind.findMany({
           where: { uuid: { in: allInkindUuids }, deletedAt: null },
@@ -2052,23 +2061,24 @@ export class InkindsService {
         }),
       ]);
 
-      // STEP 4: Build O(1) lookup maps and sets for in-memory validation.
+      // uuid-keyed maps replace repeated array.find() in the hot loop below
       const inkindRecordMap = new Map(inkindRecords.map((r) => [r.uuid, r]));
       const beneficiaryMap = new Map(beneficiaries.map((b) => [b.walletAddress, b]));
       const groupInkindMap = new Map(groupInkinds.map((g) => [g.uuid, g]));
 
-      // Set for fast lookup of existing redemptions
+      // composite key wallet_groupInkindId — O(1) duplicate check without per-row DB query
       const redeemedSet = new Set(
         existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
       );
 
+      // buffers collect valid rows; written in one atomic transaction at the end
       const validRedemptionsToInsert: any[] = [];
       const validStockMovementsToInsert: any[] = [];
       const allBatchedInkindsToQueue: string[] = [];
       const formattedRedemptionResults: any[] = [];
       const skipped: { beneficiaryWallet: string; inkindUuid?: string; reason: string }[] = [];
 
-      // STEP 5: Validate each row in memory and buffer valid DB writes.
+      // validate each beneficiary+inkind in memory; invalids go to skipped[], valids go to buffers
       for (const payload of payloads) {
         const preloadedBeneficiary = beneficiaryMap.get(payload.walletAddress);
 
@@ -2089,6 +2099,7 @@ export class InkindsService {
             skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Inkind not found' });
             continue;
           }
+          // WALK_IN is not accepted for OFFLINE redemption
           if (inkindRecord.type !== InkindType.PRE_DEFINED) {
             continue;
           }
@@ -2117,12 +2128,14 @@ export class InkindsService {
             continue;
           }
 
+          // equal share: total allocated for the group divided by member count
           const quantityPerBeneficiary = Math.floor(
             groupInkind.quantityAllocated / memberCount
           );
 
           const redemptionId = randomUUID();
 
+          // buffer redemption row — links beneficiary, group, vendor, quantity
           validRedemptionsToInsert.push({
             uuid: redemptionId,
             beneficiaryWallet: payload.walletAddress,
@@ -2133,6 +2146,7 @@ export class InkindsService {
             ...(redeemedAtDate ? { redeemedAt: redeemedAtDate } : {}),
           });
 
+          // buffer stock deduction row, back-linked to the redemption by redemptionId
           validStockMovementsToInsert.push({
             uuid: randomUUID(),
             inkindId: payloadInkind.uuid,
@@ -2194,7 +2208,7 @@ export class InkindsService {
             });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error(
           `Failed to enqueue contract job for bulk inkind redemption: ${error.message}`,
           error.stack
