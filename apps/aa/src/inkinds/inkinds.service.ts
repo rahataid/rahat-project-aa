@@ -36,13 +36,14 @@ import {
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
-import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, JOBS } from '../constants';
+import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { ChainService } from '../chain/chain.service';
 import { AppService } from '../app/app.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -59,7 +60,8 @@ export class InkindsService {
     // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.COMMUNICATION)
-    private readonly communicationQueue: Queue
+    private readonly communicationQueue: Queue,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async create(createInkindDto: CreateInkindDto) {
@@ -452,6 +454,11 @@ export class InkindsService {
   async assignGroupInkind(payload: AssignGroupInkindDto) {
     const { inkindId, groupId, quantity, user, mode, payoutProcessorId } =
       payload;
+    const projectDetails = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+    const projectId = this.configService.get('PROJECT_ID');
+
     const newQuantity = quantity || 1;
 
     this.logger.log(
@@ -486,10 +493,16 @@ export class InkindsService {
       throw new RpcException(`Inkind is already assigned to this group.`);
     }
 
-    const numberOfGroupBeneficiaries =
-      await this.prisma.beneficiaryToGroup.count({
-        where: { groupId },
-      });
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: groupId },
+      include: { beneficiaries: true },
+    });
+
+    if (!group) {
+      throw new RpcException(`Group not found.`);
+    }
+
+    const numberOfGroupBeneficiaries = group.beneficiaries.length;
 
     if (numberOfGroupBeneficiaries === 0) {
       throw new RpcException(`No beneficiaries found in the group.`);
@@ -557,6 +570,24 @@ export class InkindsService {
           );
         }
       }
+
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Inkind assigned to group`,
+          description: `${inkind.name} inkind has been assigned by ${
+            user?.name || 'system'
+          } in project ${
+            projectDetails.value['project_name'] || projectId
+          } to group "${
+            group.name
+          }" with ${numberOfGroupBeneficiaries} beneficiaries (${newQuantity} unit${
+            newQuantity !== 1 ? 's' : ''
+          } each, ${totalNeedInkindQuantity} total) via ${mode} redeem`,
+          group: 'Inkind Assignment',
+          projectId: projectId,
+          notify: true,
+        },
+      });
 
       return { success: true, message: 'Group inkind assigned successfully' };
     } catch (error) {
@@ -633,18 +664,25 @@ export class InkindsService {
     }
   }
 
-  async getAvailableInkindByBeneficiary(number?: string, walletAddress?: string) {
+  async getAvailableInkindByBeneficiary(
+    number?: string,
+    walletAddress?: string
+  ) {
     this.logger.log(
-      `Fetching available inkind details for beneficiary: ${number || walletAddress}`
+      `Fetching available inkind details for beneficiary: ${
+        number || walletAddress
+      }`
     );
 
     if (!number && !walletAddress) {
-      throw new RpcException('Beneficiary phone number or wallet address is required');
+      throw new RpcException(
+        'Beneficiary phone number or wallet address is required'
+      );
     }
 
     try {
       const beneficiary = await this.prisma.beneficiary.findFirst({
-         where: walletAddress
+        where: walletAddress
           ? { walletAddress }
           : {
               extras: {
