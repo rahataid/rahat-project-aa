@@ -812,6 +812,22 @@ model BeneficiaryInkindRedemption {
   @@map("tbl_beneficiary_inkind_redemptions")
 }
 
+model TempOfflineInkindRedemption {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  vendorId  String
+  user      Json
+  vendor    Json
+  payloads  Json
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([vendorId])
+  @@map("tbl_temp_offline_inkind_redemptions")
+}
+
 // ============== End Inkind SCHEMAS ================
 
 

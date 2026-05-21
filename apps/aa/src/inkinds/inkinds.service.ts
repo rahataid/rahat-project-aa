@@ -893,7 +893,6 @@ export class InkindsService {
     const {
       vendorId,
       search,
-      sort = 'redeemedAt',
       order = 'desc',
       page = 1,
       perPage = 10,
@@ -948,49 +947,7 @@ export class InkindsService {
           }),
       };
 
-      // Build order by
-      const allowedSortFields = ['redeemedAt', 'quantity'];
-      const safeSort = allowedSortFields.includes(sort) ? sort : 'redeemedAt';
       const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
-
-      const orderBy: Prisma.BeneficiaryInkindRedemptionOrderByWithRelationInput =
-        {
-          [safeSort]: safeOrder,
-        };
-
-      // Build query for paginate function
-      const query: Prisma.BeneficiaryInkindRedemptionFindManyArgs = {
-        where,
-        orderBy,
-        include: {
-          beneficiary: {
-            select: {
-              uuid: true,
-              walletAddress: true,
-              phone: true,
-              extras: true,
-            },
-          },
-          groupInkind: {
-            select: {
-              uuid: true,
-              inkind: {
-                select: {
-                  uuid: true,
-                  name: true,
-                  type: true,
-                },
-              },
-              group: {
-                select: {
-                  uuid: true,
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      };
 
       // Get stats for this vendor
       const [totalRedemptions, totalQuantityRedeemed, todayRedemptions] =
@@ -1012,32 +969,46 @@ export class InkindsService {
           }),
         ]);
 
-      // Use paginate function
-      const result = await paginate(
-        this.prisma.beneficiaryInkindRedemption,
-        query,
-        { page, perPage }
+       // distinct transactions, not raw records (N records share one txHash).
+      const [groupedLogs, allGroups] = await Promise.all([
+        this.prisma.beneficiaryInkindRedemption.groupBy({
+          by: ['txHash', 'beneficiaryWallet'],
+          where,
+          _min: { redeemedAt: true },
+          orderBy: { _min: { redeemedAt: safeOrder } },
+          skip: (page - 1) * perPage,
+          take: perPage,
+        }),
+        this.prisma.beneficiaryInkindRedemption.groupBy({
+          by: ['txHash', 'beneficiaryWallet'],
+          where,
+        }),
+      ]);
+
+      const totalGroups = allGroups.length;
+      const totalPages = Math.ceil(totalGroups / perPage);
+
+      // Fetch phone for each wallet on this page only
+      const wallets = [...new Set(groupedLogs.map((g) => g.beneficiaryWallet))];
+      const beneficiaryPhones = wallets.length
+        ? await this.prisma.beneficiary.findMany({
+            where: { walletAddress: { in: wallets } },
+            select: { walletAddress: true, extras: true },
+          })
+        : [];
+
+      const phoneMap = new Map(
+        beneficiaryPhones.map((b) => [
+          b.walletAddress,
+          ((b.extras as Record<string, unknown>)?.phone as string) || null,
+        ])
       );
 
-      const groupedMap = new Map<
-        string,
-        { txHash: string | null; date: Date; phone: string | null }
-      >();
-      for (const redemption of result.data as any[]) {
-        const key = redemption.txHash ?? '__no_txhash__';
-        if (!groupedMap.has(key)) {
-          const extras = redemption.beneficiary?.extras as Record<
-            string,
-            unknown
-          > | null;
-          groupedMap.set(key, {
-            txHash: redemption.txHash ?? null,
-            date: redemption.redeemedAt,
-            phone: (extras?.phone as string) || null,
-          });
-        }
-      }
-      const formattedLogs = Array.from(groupedMap.values());
+      const formattedLogs = groupedLogs.map((g) => ({
+        txHash: g.txHash ?? null,
+        date: g._min.redeemedAt,
+        phone: phoneMap.get(g.beneficiaryWallet) ?? null,
+      }));
 
       return {
         data: {
@@ -1053,7 +1024,14 @@ export class InkindsService {
           },
           logs: formattedLogs,
         },
-        meta: result.meta,
+        meta: {
+          total: totalGroups,
+          currentPage: page,
+          perPage,
+          lastPage: totalPages,
+          prev: page > 1 ? page - 1 : null,
+          next: page < totalPages ? page + 1 : null,
+        },
       };
     } catch (error) {
       this.logger.error(
@@ -1979,12 +1957,28 @@ export class InkindsService {
         batches.push(payloads.slice(i, i + batchSize));
       }
 
-      const jobs = await Promise.all(
+      // Persist one record per batch BEFORE enqueuing — survives server crashes
+      const batchRecords = await Promise.all(
         batches.map((batch) =>
+          this.prisma.tempOfflineInkindRedemption.create({
+            data: {
+              vendorId: vendor.uuid,
+              user: user as any,
+              vendor: { uuid: vendor.uuid } as any,
+              payloads: batch as any,
+              status: 'PENDING',
+            },
+          })
+        )
+      );
+
+      // Use batchRecord.uuid as Bull jobId for idempotency (deduplicates on restart)
+      const jobs = await Promise.all(
+        batchRecords.map((record, i) =>
           this.inkindBulkQueue.add(
             JOBS.INKINDS.BULK_REDEEM_BATCH,
-            { payloads: batch, user, vendor: { uuid: vendor.uuid } },
-            { attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+            { payloads: batches[i], user, vendor: { uuid: vendor.uuid }, batchId: record.uuid },
+            { jobId: record.uuid, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
           )
         )
       );
@@ -2009,8 +2003,16 @@ export class InkindsService {
   async processBulkBatch(
     payloads: BeneficiaryInkindRedeemDto[],
     user: UserObject,
-    vendor: { uuid: string }
+    vendor: { uuid: string },
+    batchId?: string
   ) {
+    if (batchId) {
+      await this.prisma.tempOfflineInkindRedemption.update({
+        where: { uuid: batchId },
+        data: { status: 'PROCESSING' },
+      }).catch(() => {});
+    }
+
     try {
       // STEP 2: Build unique ID sets from payload (flat extraction + dedupe).
       const allInkindUuids = Array.from(
@@ -2154,6 +2156,9 @@ export class InkindsService {
       }
 
       if (validRedemptionsToInsert.length === 0) {
+        if (batchId) {
+          await this.prisma.tempOfflineInkindRedemption.delete({ where: { uuid: batchId } }).catch(() => {});
+        }
         return {
           message: 'No valid predefined bulk inkinds found to redeem',
           redemptions: [],
@@ -2199,6 +2204,10 @@ export class InkindsService {
       this.logger.log(
         `Successfully processed bulk inkind batch for vendor: ${vendor.uuid}. Inserted ${validRedemptionsToInsert.length} redemptions.`
       );
+
+      if (batchId) {
+        await this.prisma.tempOfflineInkindRedemption.delete({ where: { uuid: batchId } }).catch(() => {});
+      }
 
       return {
         message: 'Bulk inkinds redeemed successfully',
