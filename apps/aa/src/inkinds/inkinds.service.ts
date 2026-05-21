@@ -1906,30 +1906,46 @@ export class InkindsService {
       }
 
       const beneficiaries = Array.from(beneficiaryMap.values());
-      const phones = beneficiaries
-        .map((b) => b.phone)
-        .filter(Boolean) as string[];
+      const phones = beneficiaries.map((b) => b.phone).filter(Boolean) as string[];
+      const allWallets = beneficiaries.map((b) => b.walletAddress);
+      const allGroupInkindIds = beneficiaries.flatMap((b) =>
+        b.inkinds.map((i) => i.groupInkindId)
+      );
 
-      if (phones.length > 0) {
-        const otps = await this.prisma.otp.findMany({
-          where: { phoneNumber: { in: phones } },
-          select: { phoneNumber: true, otpHash: true },
-        });
+      const [otps, existingRedemptions] = await Promise.all([
+        phones.length > 0
+          ? this.prisma.otp.findMany({
+              where: { phoneNumber: { in: phones } },
+              select: { phoneNumber: true, otpHash: true },
+            })
+          : Promise.resolve([]),
+        allGroupInkindIds.length > 0
+          ? this.prisma.beneficiaryInkindRedemption.findMany({
+              where: {
+                beneficiaryWallet: { in: allWallets },
+                groupInkindId: { in: allGroupInkindIds },
+              },
+              select: { beneficiaryWallet: true, groupInkindId: true },
+            })
+          : Promise.resolve([]),
+      ]);
 
-        const otpMap = new Map<string, string>();
-        for (const otp of otps) {
-          if (!otpMap.has(otp.phoneNumber)) {
-            otpMap.set(otp.phoneNumber, otp.otpHash);
-          }
+      const redeemedSet = new Set(
+        existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
+      );
+
+      const otpMap = new Map<string, string>();
+      for (const otp of otps) {
+        if (!otpMap.has(otp.phoneNumber)) {
+          otpMap.set(otp.phoneNumber, otp.otpHash);
         }
+      }
 
-        for (const b of beneficiaries) {
-          if (b.phone && otpMap.has(b.phone)) {
-            b.otpHash = otpMap.get(b.phone);
-          } else {
-            b.otpHash = null;
-          }
-        }
+      for (const b of beneficiaries) {
+        b.otpHash = b.phone && otpMap.has(b.phone) ? otpMap.get(b.phone) : null;
+        b.inkinds = b.inkinds.filter(
+          (i) => !redeemedSet.has(`${b.walletAddress}_${i.groupInkindId}`)
+        );
       }
 
       return { beneficiaries };
