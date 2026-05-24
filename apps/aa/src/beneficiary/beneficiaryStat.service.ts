@@ -28,14 +28,19 @@ export class BeneficiaryStatService {
     };
   }
 
-  async countExtrasFieldValuesNormalized(field: string, expected: string[]) {
-    const results = await this.prisma.beneficiary.findMany({
-      select: {
-        extras: true,
-      },
-    });
+  private async fetchAllExtras(): Promise<{ extras: any }[]> {
+    return this.prisma.beneficiary.findMany({ select: { extras: true } });
+  }
 
-    // Initialize counts with 0 for each expected value
+  async countExtrasFieldValuesNormalized(
+    field: string,
+    expected: string[],
+    preloadedData?: { extras: any }[]
+  ) {
+    const results =
+      preloadedData ??
+      (await this.prisma.beneficiary.findMany({ select: { extras: true } }));
+
     const counts: Record<string, number> = {};
     for (const key of expected) {
       counts[key] = 0;
@@ -45,7 +50,7 @@ export class BeneficiaryStatService {
       const rawVal = item.extras?.[field];
 
       if (typeof rawVal === 'string') {
-        const normalized = rawVal.trim().toLowerCase(); // Normalize
+        const normalized = rawVal.trim().toLowerCase();
         if (expected.includes(normalized)) {
           counts[normalized] += 1;
         }
@@ -53,7 +58,7 @@ export class BeneficiaryStatService {
     }
 
     return Object.entries(counts).map(([key, count]) => ({
-      id: key.charAt(0).toUpperCase() + key.slice(1), // Capitalize
+      id: key.charAt(0).toUpperCase() + key.slice(1),
       count,
     }));
   }
@@ -111,19 +116,13 @@ export class BeneficiaryStatService {
     }, {});
   }
 
-  async calculateCountByBankStats() {
-    const results = await this.prisma.beneficiary.findMany({
-      where: {
-        extras: {
-          path: ['bank_name'],
-          not: null || '',
-        },
-      },
-      select: {
-        uuid: true,
-        extras: true,
-      },
-    });
+  async calculateCountByBankStats(preloadedData?: { extras: any }[]) {
+    const results = preloadedData
+      ? preloadedData.filter((item) => item.extras?.bank_name)
+      : await this.prisma.beneficiary.findMany({
+          where: { extras: { path: ['bank_name'], not: null || '' } },
+          select: { uuid: true, extras: true },
+        });
 
     const bankCounts = this.countByBank(results);
     const resultArray = Object.keys(bankCounts).map((key) => {
@@ -181,8 +180,8 @@ export class BeneficiaryStatService {
     }));
   }
 
-  async calculateTypeOfSSA() {
-    const benef = await this.prisma.beneficiary.findMany({});
+  async calculateTypeOfSSA(preloadedData?: { extras: any }[]) {
+    const benef = preloadedData ?? (await this.prisma.beneficiary.findMany({}));
     const myData = countBySSAType(benef);
     return Object.keys(myData).map((d) => ({
       id: d,
@@ -190,22 +189,22 @@ export class BeneficiaryStatService {
     }));
   }
 
-  async calculateBeneflocationStats() {
-    const benef = await this.prisma.beneficiary.findMany({});
+  async calculateBeneflocationStats(preloadedData?: { extras: any }[]) {
+    const benef = preloadedData ?? (await this.prisma.beneficiary.findMany({}));
 
     const wardLocationStats = generateLocationStats({
-      dataList: benef,
+      dataList: benef as any[],
       getKeyParts: (item) => {
         const extras = item.extras as { ward_no?: number };
-        return {
-          ward_no: extras?.ward_no,
-        };
+        return extras?.ward_no != null ? { ward_no: extras.ward_no } : undefined;
       },
 
       getCoordinates: (item) => {
         const extras = item?.extras as { gps?: string };
-
-        return extractLatLng(extras?.gps);
+        const coords = extractLatLng(extras?.gps);
+        return coords.latitude != null
+          ? (coords as { latitude: number; longitude: number })
+          : undefined;
       },
     });
     const k = Object.entries(wardLocationStats).map(([key, value]) => ({
@@ -227,8 +226,8 @@ export class BeneficiaryStatService {
     });
   }
 
-  async calculateAgeGroups() {
-    const benef = await this.prisma.beneficiary.findMany({});
+  async calculateAgeGroups(preloadedData?: { extras: any }[]) {
+    const benef = preloadedData ?? (await this.prisma.beneficiary.findMany({}));
     const ageGroupCounts = mapAgeGroupCounts(benef);
     return Object.keys(ageGroupCounts).map((d) => ({
       id: d,
@@ -236,8 +235,8 @@ export class BeneficiaryStatService {
     }));
   }
 
-  async calculateTotalFamilyMembers() {
-    const benefs = await this.prisma.beneficiary.findMany();
+  async calculateTotalFamilyMembers(preloadedData?: { extras: any }[]) {
+    const benefs = preloadedData ?? (await this.prisma.beneficiary.findMany());
 
     const total = benefs.reduce((sum, ben) => {
       const extras = ben.extras as {
@@ -249,12 +248,12 @@ export class BeneficiaryStatService {
 
     return { count: total };
   }
-  async fieldMapResult() {
-    const benefs = await this.prisma.beneficiary.findMany();
+  async fieldMapResult(preloadedData?: { extras: any }[]) {
+    const benefs = preloadedData ?? (await this.prisma.beneficiary.findMany());
     return countResult(benefs);
   }
 
-  async calculateChannelUsageStats() {
+  async calculateChannelUsageStats(preloadedData?: { extras: any }[]) {
     const fields = [
       'channelcommunity',
       'channelfm_radio',
@@ -266,12 +265,9 @@ export class BeneficiaryStatService {
       'channelsocial_media',
     ];
 
-    const results = await this.prisma.beneficiary.findMany({
-      select: {
-        uuid: true,
-        extras: true,
-      },
-    });
+    const results =
+      preloadedData ??
+      (await this.prisma.beneficiary.findMany({ select: { uuid: true, extras: true } }));
 
     const counts: Record<string, number> = {};
 
@@ -292,10 +288,11 @@ export class BeneficiaryStatService {
       count,
     }));
   }
-  async phoneTypeDistribution() {
+  async phoneTypeDistribution(preloadedData?: { extras: any }[]) {
     const rData = await this.countExtrasFieldValuesNormalized(
       'type_of_phone_set',
-      ['smartphone', 'keypad', 'both', 'brick']
+      ['smartphone', 'keypad', 'both', 'brick'],
+      preloadedData
     );
     const result = [];
 
@@ -314,12 +311,10 @@ export class BeneficiaryStatService {
     return result;
   }
 
-  async calculateUniqueWards() {
-    const rData = await this.prisma.beneficiary.findMany({
-      select: {
-        extras: true,
-      },
-    });
+  async calculateUniqueWards(preloadedData?: { extras: any }[]) {
+    const rData =
+      preloadedData ??
+      (await this.prisma.beneficiary.findMany({ select: { extras: true } }));
     const uniqueWards = Array.from(
       new Set(
         rData
@@ -336,7 +331,7 @@ export class BeneficiaryStatService {
     return uniqueWards;
   }
 
-  async getExtrasStats() {
+  async getExtrasStats(preloadedData?: { extras: any }[]) {
     const keys = [
       'flood_affected_in_5_years',
       'use_digital_wallets',
@@ -347,12 +342,12 @@ export class BeneficiaryStatService {
       'receive_disaster_info',
     ];
 
+    const data =
+      preloadedData ?? (await this.prisma.beneficiary.findMany({ select: { extras: true } }));
+
     const responses = await Promise.all(
       keys.map(async (key) => {
-        const value = await this.countExtrasFieldValuesNormalized(key, [
-          'yes',
-          'no',
-        ]);
+        const value = await this.countExtrasFieldValuesNormalized(key, ['yes', 'no'], data);
         return { name: key, data: value, group: 'beneficiary' };
       })
     );
@@ -361,9 +356,14 @@ export class BeneficiaryStatService {
   }
 
   async calculateAllStats() {
+    // 3 DB queries total — everything else is in-memory from allExtras
+    const [total, gender, allExtras] = await Promise.all([
+      this.totalBeneficiaries(),
+      this.calculateGenderStats(),
+      this.fetchAllExtras(),
+    ]);
+
     const [
-      total,
-      gender,
       countByBank,
       calculateAgeGroups,
       calculateTotalFamilyMembers,
@@ -375,19 +375,18 @@ export class BeneficiaryStatService {
       phoneTypeDistribution,
       calculateUniqueWards,
     ] = await Promise.all([
-      this.totalBeneficiaries(),
-      this.calculateGenderStats(),
-      this.calculateCountByBankStats(),
-      this.calculateAgeGroups(),
-      this.calculateTotalFamilyMembers(),
-      this.calculateTypeOfSSA(),
-      this.fieldMapResult(),
-      this.calculateBeneflocationStats(),
-      this.calculateChannelUsageStats(),
-      this.getExtrasStats(),
-      this.phoneTypeDistribution(),
-      this.calculateUniqueWards(),
+      this.calculateCountByBankStats(allExtras),
+      this.calculateAgeGroups(allExtras),
+      this.calculateTotalFamilyMembers(allExtras),
+      this.calculateTypeOfSSA(allExtras),
+      this.fieldMapResult(allExtras),
+      this.calculateBeneflocationStats(allExtras),
+      this.calculateChannelUsageStats(allExtras),
+      this.getExtrasStats(allExtras),
+      this.phoneTypeDistribution(allExtras),
+      this.calculateUniqueWards(allExtras),
     ]);
+
     return {
       total,
       gender,

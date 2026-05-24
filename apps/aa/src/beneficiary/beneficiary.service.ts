@@ -4,6 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
+import bcrypt from 'bcryptjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -17,6 +18,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, Prisma } from '@prisma/client';
+import { QrPdfService } from './qr-pdf.service';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
@@ -46,16 +48,27 @@ export class BeneficiaryService {
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
-    private readonly payoutService: PayoutsService
+    private readonly payoutService: PayoutsService,
+    private readonly qrPdfService: QrPdfService
   ) {
     this.rsprisma = prisma.rsclient;
   }
 
+  initiateQrPdf(groupId: string) {
+    return this.qrPdfService.initiateQrPdf(groupId);
+  }
+
+  getQrPdf(groupId: string) {
+    return this.qrPdfService.getJobStatus(groupId);
+  }
+
   async getAllBenfs() {
+    this.logger.debug('Fetching all beneficiaries');
     return this.prisma.beneficiary.findMany();
   }
 
   async getCount() {
+    this.logger.debug('Getting active beneficiary count');
     return this.prisma.beneficiary.count({
       where: {
         deletedAt: null,
@@ -64,6 +77,7 @@ export class BeneficiaryService {
   }
 
   async getBenfBetweenIds(startId: number, endId: number) {
+    this.logger.debug(`Fetching beneficiaries between ids ${startId}-${endId}`);
     return this.prisma.beneficiary.findMany({
       where: {
         id: {
@@ -75,18 +89,21 @@ export class BeneficiaryService {
   }
 
   async create(dto: CreateBeneficiaryDto) {
+    this.logger.debug('Creating beneficiary');
     const { isVerified, ...rest } = dto;
     const rdata = await this.rsprisma.beneficiary.create({
       data: rest,
     });
+    this.logger.log(`Beneficiary created: ${rdata.uuid}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.seedOtpsForBeneficiaries([dto]);
     return rdata;
   }
 
   async createBulk(dto: CreateBulkBeneficiaryDto) {
     const { beneficiaries } = dto;
+    this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
 
-    // Process each beneficiary to remove isVerified field
     const processedBeneficiaries = beneficiaries.map(
       ({ isVerified, ...rest }) => rest
     );
@@ -96,16 +113,20 @@ export class BeneficiaryService {
       skipDuplicates: true,
     });
 
+    this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.seedOtpsForBeneficiaries(processedBeneficiaries);
     return rdata;
   }
 
   async createMany(dto) {
+    this.logger.debug(`Creating many beneficiaries, count: ${dto?.length ?? 'unknown'}`);
     const rdata = await this.rsprisma.beneficiary.createMany({
       data: dto,
       skipDuplicates: true,
     });
 
+    this.logger.log(`Beneficiaries created: ${rdata.count}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
     return rdata;
@@ -113,6 +134,7 @@ export class BeneficiaryService {
 
   async findAll(dto) {
     const { page, perPage, sort, order } = dto;
+    this.logger.debug(`Finding all beneficiaries - page: ${page}, perPage: ${perPage}, sort: ${sort} ${order}`);
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -208,6 +230,8 @@ export class BeneficiaryService {
       }
     );
 
+    this.logger.debug(`Fetched ${benfGroups.data.length} groups, forwarding to project service`);
+
     const res = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
@@ -234,6 +258,7 @@ export class BeneficiaryService {
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
     this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
+    this.logger.debug(`Group uuids: ${uuids.length}, selectFields: ${selectField?.join(',') ?? 'all'}`);
     try {
       let selectFields;
 
@@ -254,20 +279,25 @@ export class BeneficiaryService {
         ...(selectFields ? { select: selectFields } : {}),
       });
 
+      this.logger.debug(`Found ${groups.length} groups`);
       return groups;
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error fetching beneficiary groups by uuids: ${errMsg}`);
       throw new RpcException(
-        `Error while fetching beneficiary groups by uuids. ${err.message}`
+        `Error while fetching beneficiary groups by uuids. ${errMsg}`
       );
     }
   }
 
   async findByUUID(uuid: UUID) {
+    this.logger.debug(`Finding beneficiary by UUID: ${uuid}`);
     return await this.rsprisma.beneficiary.findUnique({ where: { uuid } });
   }
 
   async findOne(payload) {
     const { uuid, data } = payload;
+    this.logger.debug(`Finding beneficiary: ${uuid}`);
     const projectBendata = await this.rsprisma.beneficiary.findUnique({
       where: { uuid },
     });
@@ -277,6 +307,7 @@ export class BeneficiaryService {
 
   async findTokenDetails(payload) {
     const { uuid } = payload;
+    this.logger.debug(`Fetching token details for beneficiary: ${uuid}`);
     const contractSettings = await this.prisma.setting.findUnique({
       where: {
         name: 'CONTRACT',
@@ -284,6 +315,7 @@ export class BeneficiaryService {
     });
     const formattedValue = contractSettings?.value as any;
     const rahatTokenAddress = formattedValue?.RAHATTOKEN?.ADDRESS;
+    this.logger.debug(`Using token address: ${rahatTokenAddress}`);
     const projectContract = await createContractInstance(
       'AAPROJECT',
       this.prisma.setting
@@ -315,6 +347,7 @@ export class BeneficiaryService {
       (sum, item) => sum + Number(item.amount ?? item?.amount ?? 0),
       0
     );
+    this.logger.debug(`Token details for ${uuid} - available: ${ethers.formatUnits(tokenAllocation, decimal)}, assigned: ${benDetails?.benTokens}, redeemed: ${redemeedToken}`);
     return {
       availableToken: ethers.formatUnits(tokenAllocation, decimal),
       assignedToken: benDetails?.benTokens,
@@ -324,6 +357,7 @@ export class BeneficiaryService {
 
   async findOneBeneficiary(payload) {
     const { uuid, data } = payload;
+    this.logger.debug(`Finding one beneficiary for project: ${uuid}`);
     const projectBendata = await this.rsprisma.beneficiary.findUnique({
       where: { uuid },
     });
@@ -334,17 +368,20 @@ export class BeneficiaryService {
   }
 
   async findOneBeneficiaryByWalletAddress(walletAddress: string) {
+    this.logger.debug('Finding beneficiary by wallet address');
     return this.rsprisma.beneficiary.findUnique({
       where: { walletAddress },
     });
   }
 
   async update(id: number, updateBeneficiaryDto: UpdateBeneficiaryDto) {
+    this.logger.debug(`Updating beneficiary id: ${id}`);
     const rdata = await this.rsprisma.beneficiary.update({
       where: { id: id },
       data: { ...updateBeneficiaryDto },
     });
 
+    this.logger.log(`Beneficiary updated: ${rdata.uuid}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_UPDATED);
 
     return rdata;
@@ -352,13 +389,17 @@ export class BeneficiaryService {
 
   async remove(payload: any) {
     const uuid = payload.uuid;
+    this.logger.debug(`Removing beneficiary: ${uuid}`);
     const findUuid = await this.rsprisma.beneficiary.findUnique({
       where: {
         uuid,
       },
     });
 
-    if (!findUuid) return 'OK';
+    if (!findUuid) {
+      this.logger.warn(`Beneficiary not found for removal: ${uuid}`);
+      return 'OK';
+    }
 
     const rdata = await this.rsprisma.beneficiary.update({
       where: {
@@ -369,6 +410,7 @@ export class BeneficiaryService {
       },
     });
 
+    this.logger.log(`Beneficiary soft-deleted: ${uuid}`);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_REMOVED);
 
     return rdata;
@@ -376,6 +418,7 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
+    this.logger.debug(`Fetching beneficiary group: ${uuid}`);
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
@@ -393,6 +436,7 @@ export class BeneficiaryService {
 
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
+    this.logger.debug(`Group found: ${uuid}, fetching project data`);
     const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
@@ -401,6 +445,7 @@ export class BeneficiaryService {
     );
 
     const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
+    this.logger.debug(`Group ${uuid} has ${totalBenf} beneficiaries`);
 
     data.benfGroupTokensStatus = benfGroup?.tokensReserved?.status;
 
@@ -422,6 +467,7 @@ export class BeneficiaryService {
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
+    this.logger.debug(`Adding beneficiary group ${beneficiaryGroupData.uuid} to project`);
     const group = await this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,
@@ -449,6 +495,7 @@ export class BeneficiaryService {
   }
 
   async checkIsTokenAlreadyAssigned(groupId: UUID) {
+    this.logger.debug(`Checking token assignment for group: ${groupId}`);
     const group = await this.getOneGroup(groupId);
 
     const benfIdsAndWalletAddress = group.groupedBeneficiaries.map(
@@ -476,6 +523,7 @@ export class BeneficiaryService {
     }
 
     if (tokenAssignedBenfWallet.length > 0) {
+      this.logger.warn(`Token already assigned to ${tokenAssignedBenfWallet.length} beneficiaries in group: ${groupId}`);
       return {
         isAssignable: false,
         status: 'error',
@@ -486,6 +534,7 @@ export class BeneficiaryService {
       };
     }
 
+    this.logger.debug(`No token conflicts found for group: ${groupId}`);
     return {
       isAssignable: true,
       status: 'success',
@@ -504,12 +553,15 @@ export class BeneficiaryService {
       params,
     } = payload;
 
+    this.logger.debug(`Reserving ${totalTokensReserved} tokens for group: ${beneficiaryGroupId}`);
+
     const isAlreadyReserved =
       await this.prisma.beneficiaryGroupTokens.findUnique({
         where: { groupId: beneficiaryGroupId },
       });
 
     if (isAlreadyReserved) {
+      this.logger.warn(`Token already reserved for group: ${beneficiaryGroupId}`);
       throw new RpcException('Token already reserved.');
     }
 
@@ -520,6 +572,7 @@ export class BeneficiaryService {
     });
 
     if (!benfGroup) {
+      this.logger.warn(`Beneficiary group not found: ${beneficiaryGroupId}`);
       throw new RpcException('Beneficiary group not found.');
     }
 
@@ -527,6 +580,7 @@ export class BeneficiaryService {
       benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
       benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
+      this.logger.warn(`Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`);
       throw new RpcException(
         `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
       );
@@ -552,7 +606,10 @@ export class BeneficiaryService {
         },
       });
 
+      this.logger.log(`Tokens reserved for group ${beneficiaryGroupId}: ${totalTokensReserved}`);
+
       if (isPayoutIntegrated && params) {
+        this.logger.debug(`Creating integrated payout for group: ${beneficiaryGroupId}`);
         await this.payoutService.create(
           {
             type: params.type,
@@ -578,6 +635,7 @@ export class BeneficiaryService {
 
   async getAllTokenReservations(dto) {
     const { page, perPage, sort, order } = dto;
+    this.logger.debug(`Fetching all token reservations - page: ${page}, perPage: ${perPage}`);
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -592,6 +650,8 @@ export class BeneficiaryService {
         perPage,
       }
     );
+
+    this.logger.debug(`Fetched ${data.length} token reservations, enriching with group data`);
 
     const formattedData: Array<
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
@@ -613,6 +673,7 @@ export class BeneficiaryService {
 
   async getOneTokenReservation(payload) {
     const { uuid } = payload;
+    this.logger.debug(`Fetching token reservation: ${uuid}`);
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: {
         uuid: uuid,
@@ -628,6 +689,7 @@ export class BeneficiaryService {
   }
 
   async getOneTokenReservationByGroupId(groupId: string) {
+    this.logger.debug(`Fetching token reservation for group: ${groupId}`);
     const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
       where: { groupId: groupId },
       include: {
@@ -639,19 +701,23 @@ export class BeneficiaryService {
   }
 
   async getReservationStats(payload) {
+    this.logger.debug('Fetching reservation stats');
     const totalReservedTokens = await this.prisma.beneficiary.aggregate({
       _sum: {
         benTokens: true,
       },
     });
+    this.logger.debug(`Total reserved tokens: ${totalReservedTokens._sum.benTokens}`);
     return {
       totalReservedTokens,
     };
   }
 
   async assignToken() {
+    this.logger.log('Starting token assignment process');
     const allBenfs = await this.getCount();
     const batches = this.createBatches(allBenfs, BATCH_SIZE);
+    this.logger.debug(`Total beneficiaries: ${allBenfs}, batches: ${batches.length}`);
 
     if (batches.length) {
       batches?.forEach((batch) => {
@@ -664,6 +730,9 @@ export class BeneficiaryService {
           },
         });
       });
+      this.logger.log(`Queued ${batches.length} token assignment batches`);
+    } else {
+      this.logger.warn('No batches to process for token assignment');
     }
   }
 
@@ -672,6 +741,7 @@ export class BeneficiaryService {
   ) {
     try {
       const { groupUuid, ...data } = payload;
+      this.logger.debug(`Updating group token for group: ${groupUuid}`);
 
       const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
         where: { groupId: groupUuid },
@@ -692,6 +762,61 @@ export class BeneficiaryService {
       this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
+  }
+
+  private async seedOtpsForBeneficiaries(
+    beneficiaries: Array<{ phone?: string; walletAddress?: string; [key: string]: any }>
+  ) {
+    this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
+    const CHUNK_SIZE = 100;
+    const BCRYPT_ROUNDS = 8;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const eligible = beneficiaries.filter((b) => b.phone);
+    if (!eligible.length) return;
+
+    const isDev = process.env.NODE_ENV !== 'production';
+    let devHash: string | null = null;
+    if (isDev) {
+      devHash = await bcrypt.hash('1234:0', BCRYPT_ROUNDS);
+    }
+
+    const otpRecords: Array<{
+      phoneNumber: string;
+      walletAddress?: string;
+      otp: string;
+      otpHash: string;
+      amount: number;
+      expiresAt: Date;
+    }> = [];
+
+    for (let i = 0; i < eligible.length; i += CHUNK_SIZE) {
+      this.logger.debug(`Processing OTP seed chunk: ${i} to ${i + CHUNK_SIZE}`);
+      const chunk = eligible.slice(i, i + CHUNK_SIZE);
+      const chunkRecords = await Promise.all(
+        chunk.map(async (b) => {
+          const otp = isDev ? '1234' : Math.floor(1000 + Math.random() * 9000).toString();
+          const otpHash = isDev ? devHash! : await bcrypt.hash(`${otp}:0`, BCRYPT_ROUNDS);
+          return {
+            phoneNumber: b.phone!,
+            ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
+            otp,
+            otpHash,
+            amount: 0,
+            expiresAt,
+          };
+        })
+      );
+      otpRecords.push(...chunkRecords);
+    }
+    
+    this.logger.debug(`Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`);
+    await this.prisma.otp.createMany({
+      data: otpRecords,
+      skipDuplicates: true,
+    });
+
+    this.logger.log(`Seeded OTPs for ${otpRecords.length} beneficiaries`);
   }
 
   createBatches(total: number, batchSize: number, start = 1) {
@@ -720,6 +845,7 @@ export class BeneficiaryService {
     payload: Prisma.BeneficiaryRedeemUpdateInput
   ) {
     try {
+      this.logger.debug(`Updating beneficiary redeem: ${uuid}`);
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.update({
         where: { uuid },
         data: payload,
@@ -738,14 +864,18 @@ export class BeneficiaryService {
     uuids: string[],
     payload: Prisma.BeneficiaryRedeemUpdateInput
   ) {
-    return this.prisma.beneficiaryRedeem.updateMany({
+    this.logger.debug(`Bulk updating ${uuids.length} beneficiary redeems`);
+    const result = await this.prisma.beneficiaryRedeem.updateMany({
       where: { uuid: { in: uuids } },
       data: payload,
     });
+    this.logger.log(`Bulk updated ${result.count} beneficiary redeems`);
+    return result;
   }
 
   async createBeneficiaryRedeem(payload: Prisma.BeneficiaryRedeemCreateInput) {
     try {
+      this.logger.debug('Creating beneficiary redeem');
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.create({
         data: payload,
       });
@@ -763,6 +893,7 @@ export class BeneficiaryService {
     payload: Prisma.BeneficiaryRedeemCreateManyInput[]
   ) {
     try {
+      this.logger.debug(`Creating bulk beneficiary redeems, count: ${payload.length}`);
       const logs = await this.prisma.beneficiaryRedeem.createMany({
         data: payload,
       });
@@ -778,6 +909,7 @@ export class BeneficiaryService {
 
   async getBeneficiaryRedeem(uuid: string) {
     try {
+      this.logger.debug(`Fetching beneficiary redeem: ${uuid}`);
       const beneficiaryRedeem = await this.prisma.beneficiaryRedeem.findUnique({
         where: { uuid },
         include: {
@@ -811,6 +943,7 @@ export class BeneficiaryService {
       }>[];
     }[]
   > {
+    this.logger.debug(`Fetching failed beneficiary redeems for payout: ${payoutUUID}`);
     return this.prisma.$queryRaw`
       SELECT
         status,
@@ -861,6 +994,7 @@ export class BeneficiaryService {
     });
 
     if (!beneficiary) {
+      this.logger.warn(`Beneficiary not found: ${beneficiaryUUID}`);
       throw new RpcException('Beneficiary not found');
     }
 
@@ -902,8 +1036,11 @@ export class BeneficiaryService {
       });
 
       if (!beneficiaryRedeems || beneficiaryRedeems.length === 0) {
+        this.logger.debug(`No completed redeems found for beneficiary: ${beneficiaryUUID}`);
         return [];
       }
+
+      this.logger.debug(`Found ${beneficiaryRedeems.length} redeems for beneficiary: ${beneficiaryUUID}`);
 
       return beneficiaryRedeems.map((redeem) => ({
         uuid: redeem.uuid,
@@ -941,12 +1078,13 @@ export class BeneficiaryService {
     });
 
     if (!beneficiary) {
+      this.logger.warn(`Beneficiary not found: ${beneficiaryUUID}`);
       throw new RpcException('Beneficiary not found');
     }
 
     try {
       //fetch inkind redeems of the beneficiary
-      return await this.prisma.beneficiaryInkindRedemption.findMany({
+      const redeems = await this.prisma.beneficiaryInkindRedemption.findMany({
         where: {
           beneficiaryWallet: beneficiary.walletAddress,
           status: 'COMPLETED',
@@ -978,6 +1116,9 @@ export class BeneficiaryService {
           },
         },
       });
+
+      this.logger.debug(`Found ${redeems.length} inkind redeems for beneficiary: ${beneficiaryUUID}`);
+      return redeems;
     } catch (error) {
       this.logger.error(
         `Error getting beneficiary inkind redeem info: ${error}`
@@ -1031,6 +1172,8 @@ export class BeneficiaryService {
           beneficiaryGroup.beneficiaries.length
       );
 
+      this.logger.debug(`Distributing ${tokensPerBeneficiary} tokens each to ${benfIds.length} beneficiaries in group ${groupUuid}`);
+
       await this.prisma.beneficiary.updateMany({
         where: {
           uuid: {
@@ -1058,6 +1201,7 @@ export class BeneficiaryService {
   }
 
   async getBalance() {
+    this.logger.debug('Fetching beneficiary token balances');
     try {
       // Fetch all active beneficiaries with wallet addresses
       const redeems = await this.prisma.beneficiaryRedeem.findMany({
@@ -1071,6 +1215,7 @@ export class BeneficiaryService {
       });
 
       const wallets = redeems.map((r) => r.beneficiaryWalletAddress);
+      this.logger.debug(`Fetching balances for ${wallets.length} unique wallets`);
 
       // Get token contract address and Alchemy API URL
       const cashTokenSetting = await this.settingsService.getPublic(
@@ -1078,23 +1223,24 @@ export class BeneficiaryService {
       );
       const tokenAddress = cashTokenSetting.value;
 
-      const alchemyApiUrl = (await this.settingsService.getPublic('API_URL'))
-        .value as { URL: string };
+      const alchemyApiUrl = (await this.settingsService.getPublic('CHAIN_SETTINGS'))
+        .value as any;
 
       // Initialize total balance
       let totalBalance = 0n;
-      const metadataResponse = await axios.post(alchemyApiUrl.URL, {
+      const metadataResponse = await axios.post(alchemyApiUrl.rpcUrl, {
         jsonrpc: '2.0',
         id: 1,
         method: 'alchemy_getTokenMetadata',
         params: [tokenAddress],
       });
       const decimals = metadataResponse.data?.result?.decimals ?? 18;
+      this.logger.debug(`Token decimals: ${decimals}`);
 
       // Fetch balances for each wallet
       await Promise.all(
         wallets.map(async (wallet) => {
-          const response = await axios.post(alchemyApiUrl.URL, {
+          const response = await axios.post(alchemyApiUrl.rpcUrl, {
             jsonrpc: '2.0',
             id: 1,
             method: 'alchemy_getTokenBalances',
@@ -1124,15 +1270,15 @@ export class BeneficiaryService {
           },
         });
       const formattedData = Number(totalBalance);
+      const formatted = ethers.formatUnits(formattedData.toString(), decimals);
+      this.logger.log(`Total balance across ${wallets.length} wallets: ${formatted}`);
       return {
-        totalBalance: ethers.formatUnits(formattedData.toString(), decimals),
+        totalBalance: formatted,
         latestCompletedRedeemAt: latestCompletedRedeem?.updatedAt || null,
       };
     } catch (error) {
-      console.error(
-        'Error fetching balances:',
-        error.response?.data || error.message
-      );
+      const errData = error instanceof Error ? (error as any).response?.data || error.message : String(error);
+      this.logger.error(`Error fetching balances: ${errData}`);
       throw new Error('Failed to fetch balances');
     }
   }
@@ -1188,7 +1334,9 @@ export class BeneficiaryService {
       this.logger.log(message);
       return { isSuccess: true, message };
     } catch (error) {
-      throw new Error(`Database transaction failed: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Database transaction failed [${action}] txId=${aaDbTxId}: ${errMsg}`);
+      throw new Error(`Database transaction failed: ${errMsg}`);
     }
   }
 }
