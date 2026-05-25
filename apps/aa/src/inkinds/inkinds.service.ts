@@ -1432,14 +1432,7 @@ export class InkindsService {
           'Payout phase not active. In-kind redemption is unavailable.'
         );
       }
-      if (!isPhasePayoutActivate) {
-        this.logger.log(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-        throw new RpcException(
-          'Payout phase not active. In-kind redemption is unavailable.'
-        );
-      }
+
 
       // ===== STEP 1: Fetch and validate common data =====
       const inkindUuids = inkinds.map((i) => i.uuid);
@@ -2023,7 +2016,7 @@ export class InkindsService {
   }
 
   async createVendorRedemption(payload: AddVendorInkindRedeemDto) {
-    const { vendorUuid, inkindUuid, quantity } = payload;
+    const { vendorUuid, inkindUuid, quantity  } = payload;
     this.logger.log(
       `Creating inkind redemption for vendor: ${vendorUuid}, inkind: ${inkindUuid}, quantity: ${quantity}`
     );
@@ -2050,21 +2043,25 @@ export class InkindsService {
         throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
       }
 
-      const inlkind = await this.prisma.inkind.findUnique({
+      const inkind = await this.prisma.inkind.findUnique({
         where: { uuid: inkindUuid },
       });
 
-      if (!inlkind) {
+      if (!inkind) {
         throw new RpcException(`Inkind with UUID ${inkindUuid} not found`);
       }
 
       const redemption = await this.prisma.vendorInkindRedemption.create({
         data: {
           vendorUuid,
-          inkindUuid,
+          inkindUuid, 
           quantity,
         },
       });
+
+      this.logger.log(
+        `Vendor redemption record created with ID: ${redemption.id}, enqueuing contract job for token approval`
+      );
 
       this.logger.log(
         `Successfully created vendor redemption with ID: ${redemption.id}`
@@ -2074,7 +2071,7 @@ export class InkindsService {
       this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         payload: {
           title: `Vendor Inkind Redemption Created`,
-          description: `Vendor "${vendor.name}" has requested a redemption of ${quantity} unit${quantity !== 1 ? 's' : ''} of "${inlkind.name}" in project ${projectDetails.value['project_name'] || projectId}`,
+          description: `Vendor "${vendor.name}" has requested a redemption of ${quantity} unit${quantity !== 1 ? 's' : ''} of "${inkind.name}" in project ${projectDetails.value['project_name'] || projectId}`,
           group: 'vendor inkind redemption',
           projectId: projectId,
           notify: true,
@@ -2111,10 +2108,18 @@ export class InkindsService {
         where: { uuid },
       });
 
+      
       if (!redemption) {
         throw new RpcException(`Vendor redemption with UUID ${uuid} not found`);
       }
+      
+      const vendorDetails = await this.prisma.vendor.findUnique({
+        where: { uuid: redemption?.vendorUuid },
+      });
 
+      if (!vendorDetails) {
+        throw new RpcException(`Vendor with UUID ${redemption.vendorUuid} not found`);
+      }
       // now we have to create tx hash of this redemption and update the redemption record with that tx hash
 
       await this.prisma.vendorInkindRedemption.update({
@@ -2129,6 +2134,24 @@ export class InkindsService {
         },
       });
 
+      this.logger.log(
+        `Vendor redemption status updated to ${status} for redemption UUID: ${uuid}`
+      );
+
+      this.logger.log(
+        `Enqueuing contract job to redeem vendor inkind tokens for redemption UUID: ${uuid}`
+      )
+
+      this.chainService.redeemVendorInkindTokens({
+        redemptionUuid: uuid,
+        vendorWallet: vendorDetails.walletAddress,
+        quantity: redemption.quantity,
+      });
+      
+      this.logger.log(
+        `Successfully updated vendor redemption status for redemption UUID: ${uuid}`
+      );
+
       return {
         success: true,
         message: 'Vendor redemption status updated successfully',
@@ -2136,6 +2159,41 @@ export class InkindsService {
     } catch (error) {
       this.logger.error(
         `Failed to update vendor redemption status: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateVendorRedemptionTxHash(
+    redemptionUuid: string,
+    txHash: string
+  ) {
+    this.logger.log(
+      `Updating vendor redemption txHash: redemptionUuid=${redemptionUuid}`
+    );
+
+    if (!redemptionUuid || !txHash) {
+      throw new RpcException('Missing required fields');
+    }
+
+    try {
+      await this.prisma.vendorInkindRedemption.update({
+        where: { uuid: redemptionUuid },
+        data: { transactionHash: txHash },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for vendor redemption: ${redemptionUuid}`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor redemption txHash updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update vendor redemption txHash: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);

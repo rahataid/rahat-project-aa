@@ -266,6 +266,7 @@ export const JOBS = {
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
     REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND_TOKEN_FOR_CASH: `aa.jobs.evm.redeemTokenForCash_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
@@ -311,6 +312,7 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+    REDEEM_VENDOR_INKIND_TOKENS: 'aa.jobs.chain.redeemVendorInkindTokens',
   },
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',
