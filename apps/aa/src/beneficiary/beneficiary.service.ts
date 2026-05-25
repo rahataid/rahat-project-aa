@@ -219,7 +219,6 @@ export class BeneficiaryService {
               beneficiaries: true,
             },
           },
-          beneficiaries: true,
           tokensReserved: true,
         },
         orderBy,
