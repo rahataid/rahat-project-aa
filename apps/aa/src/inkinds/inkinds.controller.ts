@@ -17,7 +17,15 @@ import {
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto, ListGroupInkindDto } from './dto/inkindGroup.dto';
+import {
+  AssignGroupInkindDto,
+  ListGroupInkindDto,
+} from './dto/inkindGroup.dto';
+import {
+  AddVendorInkindRedeemDto,
+  GetVendorInkindRedemptionDto,
+  UpdateVendorInkindRedeemStatusDto,
+} from './dto/vendorInkindRedem.dto';
 
 @Controller()
 export class InkindsController {
@@ -125,8 +133,13 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_FOR_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
-  getAvailableInkindByBeneficiary(@Payload() Payload: { number?: string, walletAddress?: string }) {
-    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number, Payload.walletAddress);
+  getAvailableInkindByBeneficiary(
+    @Payload() Payload: { number?: string; walletAddress?: string }
+  ) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(
+      Payload.number,
+      Payload.walletAddress
+    );
   }
 
   @MessagePattern({
@@ -205,5 +218,33 @@ export class InkindsController {
       payload.txHash,
       payload.vendorUid
     );
+  }
+
+  // ============== Vendor Redemption ============================
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_VENDOR_REDEMPTIONS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getVendorRedemptions(@Payload() payload: GetVendorInkindRedemptionDto) {
+    return this.inkindsService.getVendorRedemptions(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.CREATE_VENDOR_REDEMPTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  createVendorRedemption(@Payload() payload: AddVendorInkindRedeemDto) {
+    return this.inkindsService.createVendorRedemption(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.UPDATE_VENDOR_REDEMPTION_STATUS,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateVendorRedemptionStatus(
+    @Payload() payload: UpdateVendorInkindRedeemStatusDto
+  ) {
+    return this.inkindsService.updateVendorRedemptionStatus(payload);
   }
 }
