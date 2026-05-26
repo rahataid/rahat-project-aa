@@ -274,6 +274,7 @@ export const JOBS = {
     CREATE_BUDGET: 'aa.jobs.cash-tracker.createBudget',
   },
   INKINDS: {
+    BULK_REDEEM_BATCH: 'aa.jobs.inkinds.bulkRedeemBatch',
     CREATE: 'aa.jobs.inkinds.create',
     UPDATE: 'aa.jobs.inkinds.update',
     DELETE: 'aa.jobs.inkinds.delete',
@@ -297,6 +298,8 @@ export const JOBS = {
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
     BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
+    GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR: 'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
+    REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
     SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
     CREATE_VENDOR_REDEMPTION: 'aa.jobs.inkinds.createVendorRedemption',
     GET_VENDOR_REDEMPTIONS: 'aa.jobs.inkinds.getVendorRedemptions',
@@ -351,6 +354,7 @@ export const BQUEUE = {
   VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
+  INKIND_BULK_REDEEM: `INKIND_BULK_REDEEM_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
 };

@@ -102,7 +102,9 @@ export class BeneficiaryService {
 
   async createBulk(dto: CreateBulkBeneficiaryDto) {
     const { beneficiaries } = dto;
-    this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
+    this.logger.debug(
+      `Creating bulk beneficiaries, count: ${beneficiaries.length}`
+    );
 
     const processedBeneficiaries = beneficiaries.map(
       ({ isVerified, ...rest }) => rest
@@ -120,7 +122,9 @@ export class BeneficiaryService {
   }
 
   async createMany(dto) {
-    this.logger.debug(`Creating many beneficiaries, count: ${dto?.length ?? 'unknown'}`);
+    this.logger.debug(
+      `Creating many beneficiaries, count: ${dto?.length ?? 'unknown'}`
+    );
     const rdata = await this.rsprisma.beneficiary.createMany({
       data: dto,
       skipDuplicates: true,
@@ -134,7 +138,9 @@ export class BeneficiaryService {
 
   async findAll(dto) {
     const { page, perPage, sort, order } = dto;
-    this.logger.debug(`Finding all beneficiaries - page: ${page}, perPage: ${perPage}, sort: ${sort} ${order}`);
+    this.logger.debug(
+      `Finding all beneficiaries - page: ${page}, perPage: ${perPage}, sort: ${sort} ${order}`
+    );
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -229,7 +235,9 @@ export class BeneficiaryService {
       }
     );
 
-    this.logger.debug(`Fetched ${benfGroups.data.length} groups, forwarding to project service`);
+    this.logger.debug(
+      `Fetched ${benfGroups.data.length} groups, forwarding to project service`
+    );
 
     const res = await lastValueFrom(
       this.client.send(
@@ -257,7 +265,11 @@ export class BeneficiaryService {
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
     this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
-    this.logger.debug(`Group uuids: ${uuids.length}, selectFields: ${selectField?.join(',') ?? 'all'}`);
+    this.logger.debug(
+      `Group uuids: ${uuids.length}, selectFields: ${
+        selectField?.join(',') ?? 'all'
+      }`
+    );
     try {
       let selectFields;
 
@@ -282,7 +294,9 @@ export class BeneficiaryService {
       return groups;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Error fetching beneficiary groups by uuids: ${errMsg}`);
+      this.logger.error(
+        `Error fetching beneficiary groups by uuids: ${errMsg}`
+      );
       throw new RpcException(
         `Error while fetching beneficiary groups by uuids. ${errMsg}`
       );
@@ -346,7 +360,12 @@ export class BeneficiaryService {
       (sum, item) => sum + Number(item.amount ?? item?.amount ?? 0),
       0
     );
-    this.logger.debug(`Token details for ${uuid} - available: ${ethers.formatUnits(tokenAllocation, decimal)}, assigned: ${benDetails?.benTokens}, redeemed: ${redemeedToken}`);
+    this.logger.debug(
+      `Token details for ${uuid} - available: ${ethers.formatUnits(
+        tokenAllocation,
+        decimal
+      )}, assigned: ${benDetails?.benTokens}, redeemed: ${redemeedToken}`
+    );
     return {
       availableToken: ethers.formatUnits(tokenAllocation, decimal),
       assignedToken: benDetails?.benTokens,
@@ -466,7 +485,9 @@ export class BeneficiaryService {
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
-    this.logger.debug(`Adding beneficiary group ${beneficiaryGroupData.uuid} to project`);
+    this.logger.debug(
+      `Adding beneficiary group ${beneficiaryGroupData.uuid} to project`
+    );
     const group = await this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupData.uuid,
@@ -522,7 +543,9 @@ export class BeneficiaryService {
     }
 
     if (tokenAssignedBenfWallet.length > 0) {
-      this.logger.warn(`Token already assigned to ${tokenAssignedBenfWallet.length} beneficiaries in group: ${groupId}`);
+      this.logger.warn(
+        `Token already assigned to ${tokenAssignedBenfWallet.length} beneficiaries in group: ${groupId}`
+      );
       return {
         isAssignable: false,
         status: 'error',
@@ -552,7 +575,9 @@ export class BeneficiaryService {
       params,
     } = payload;
 
-    this.logger.debug(`Reserving ${totalTokensReserved} tokens for group: ${beneficiaryGroupId}`);
+    this.logger.debug(
+      `Reserving ${totalTokensReserved} tokens for group: ${beneficiaryGroupId}`
+    );
 
     const isAlreadyReserved =
       await this.prisma.beneficiaryGroupTokens.findUnique({
@@ -560,7 +585,9 @@ export class BeneficiaryService {
       });
 
     if (isAlreadyReserved) {
-      this.logger.warn(`Token already reserved for group: ${beneficiaryGroupId}`);
+      this.logger.warn(
+        `Token already reserved for group: ${beneficiaryGroupId}`
+      );
       throw new RpcException('Token already reserved.');
     }
 
@@ -579,7 +606,9 @@ export class BeneficiaryService {
       benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
       benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
-      this.logger.warn(`Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`);
+      this.logger.warn(
+        `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
+      );
       throw new RpcException(
         `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
       );
@@ -605,10 +634,14 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(`Tokens reserved for group ${beneficiaryGroupId}: ${totalTokensReserved}`);
+      this.logger.log(
+        `Tokens reserved for group ${beneficiaryGroupId}: ${totalTokensReserved}`
+      );
 
       if (isPayoutIntegrated && params) {
-        this.logger.debug(`Creating integrated payout for group: ${beneficiaryGroupId}`);
+        this.logger.debug(
+          `Creating integrated payout for group: ${beneficiaryGroupId}`
+        );
         await this.payoutService.create(
           {
             type: params.type,
@@ -634,7 +667,9 @@ export class BeneficiaryService {
 
   async getAllTokenReservations(dto) {
     const { page, perPage, sort, order } = dto;
-    this.logger.debug(`Fetching all token reservations - page: ${page}, perPage: ${perPage}`);
+    this.logger.debug(
+      `Fetching all token reservations - page: ${page}, perPage: ${perPage}`
+    );
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -650,7 +685,9 @@ export class BeneficiaryService {
       }
     );
 
-    this.logger.debug(`Fetched ${data.length} token reservations, enriching with group data`);
+    this.logger.debug(
+      `Fetched ${data.length} token reservations, enriching with group data`
+    );
 
     const formattedData: Array<
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
@@ -706,7 +743,9 @@ export class BeneficiaryService {
         benTokens: true,
       },
     });
-    this.logger.debug(`Total reserved tokens: ${totalReservedTokens._sum.benTokens}`);
+    this.logger.debug(
+      `Total reserved tokens: ${totalReservedTokens._sum.benTokens}`
+    );
     return {
       totalReservedTokens,
     };
@@ -716,7 +755,9 @@ export class BeneficiaryService {
     this.logger.log('Starting token assignment process');
     const allBenfs = await this.getCount();
     const batches = this.createBatches(allBenfs, BATCH_SIZE);
-    this.logger.debug(`Total beneficiaries: ${allBenfs}, batches: ${batches.length}`);
+    this.logger.debug(
+      `Total beneficiaries: ${allBenfs}, batches: ${batches.length}`
+    );
 
     if (batches.length) {
       batches?.forEach((batch) => {
@@ -764,7 +805,11 @@ export class BeneficiaryService {
   }
 
   private async seedOtpsForBeneficiaries(
-    beneficiaries: Array<{ phone?: string; walletAddress?: string; [key: string]: any }>
+    beneficiaries: Array<{
+      phone?: string;
+      walletAddress?: string;
+      [key: string]: any;
+    }>
   ) {
     this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
     const CHUNK_SIZE = 100;
@@ -794,8 +839,12 @@ export class BeneficiaryService {
       const chunk = eligible.slice(i, i + CHUNK_SIZE);
       const chunkRecords = await Promise.all(
         chunk.map(async (b) => {
-          const otp = isDev ? '1234' : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev ? devHash! : await bcrypt.hash(`${otp}:0`, BCRYPT_ROUNDS);
+          const otp = isDev
+            ? '1234'
+            : Math.floor(1000 + Math.random() * 9000).toString();
+          const otpHash = isDev
+            ? devHash!
+            : await bcrypt.hash(`${otp}`, BCRYPT_ROUNDS);
           return {
             phoneNumber: b.phone!,
             ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
@@ -808,8 +857,10 @@ export class BeneficiaryService {
       );
       otpRecords.push(...chunkRecords);
     }
-    
-    this.logger.debug(`Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`);
+
+    this.logger.debug(
+      `Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`
+    );
     await this.prisma.otp.createMany({
       data: otpRecords,
       skipDuplicates: true,
@@ -892,7 +943,9 @@ export class BeneficiaryService {
     payload: Prisma.BeneficiaryRedeemCreateManyInput[]
   ) {
     try {
-      this.logger.debug(`Creating bulk beneficiary redeems, count: ${payload.length}`);
+      this.logger.debug(
+        `Creating bulk beneficiary redeems, count: ${payload.length}`
+      );
       const logs = await this.prisma.beneficiaryRedeem.createMany({
         data: payload,
       });
@@ -942,7 +995,9 @@ export class BeneficiaryService {
       }>[];
     }[]
   > {
-    this.logger.debug(`Fetching failed beneficiary redeems for payout: ${payoutUUID}`);
+    this.logger.debug(
+      `Fetching failed beneficiary redeems for payout: ${payoutUUID}`
+    );
     return this.prisma.$queryRaw`
       SELECT
         status,
@@ -1035,11 +1090,15 @@ export class BeneficiaryService {
       });
 
       if (!beneficiaryRedeems || beneficiaryRedeems.length === 0) {
-        this.logger.debug(`No completed redeems found for beneficiary: ${beneficiaryUUID}`);
+        this.logger.debug(
+          `No completed redeems found for beneficiary: ${beneficiaryUUID}`
+        );
         return [];
       }
 
-      this.logger.debug(`Found ${beneficiaryRedeems.length} redeems for beneficiary: ${beneficiaryUUID}`);
+      this.logger.debug(
+        `Found ${beneficiaryRedeems.length} redeems for beneficiary: ${beneficiaryUUID}`
+      );
 
       return beneficiaryRedeems.map((redeem) => ({
         uuid: redeem.uuid,
@@ -1116,7 +1175,9 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.debug(`Found ${redeems.length} inkind redeems for beneficiary: ${beneficiaryUUID}`);
+      this.logger.debug(
+        `Found ${redeems.length} inkind redeems for beneficiary: ${beneficiaryUUID}`
+      );
       return redeems;
     } catch (error) {
       this.logger.error(
@@ -1171,7 +1232,9 @@ export class BeneficiaryService {
           beneficiaryGroup.beneficiaries.length
       );
 
-      this.logger.debug(`Distributing ${tokensPerBeneficiary} tokens each to ${benfIds.length} beneficiaries in group ${groupUuid}`);
+      this.logger.debug(
+        `Distributing ${tokensPerBeneficiary} tokens each to ${benfIds.length} beneficiaries in group ${groupUuid}`
+      );
 
       await this.prisma.beneficiary.updateMany({
         where: {
@@ -1214,7 +1277,9 @@ export class BeneficiaryService {
       });
 
       const wallets = redeems.map((r) => r.beneficiaryWalletAddress);
-      this.logger.debug(`Fetching balances for ${wallets.length} unique wallets`);
+      this.logger.debug(
+        `Fetching balances for ${wallets.length} unique wallets`
+      );
 
       // Get token contract address and Alchemy API URL
       const cashTokenSetting = await this.settingsService.getPublic(
@@ -1222,8 +1287,9 @@ export class BeneficiaryService {
       );
       const tokenAddress = cashTokenSetting.value;
 
-      const alchemyApiUrl = (await this.settingsService.getPublic('CHAIN_SETTINGS'))
-        .value as any;
+      const alchemyApiUrl = (
+        await this.settingsService.getPublic('CHAIN_SETTINGS')
+      ).value as any;
 
       // Initialize total balance
       let totalBalance = 0n;
@@ -1270,13 +1336,18 @@ export class BeneficiaryService {
         });
       const formattedData = Number(totalBalance);
       const formatted = ethers.formatUnits(formattedData.toString(), decimals);
-      this.logger.log(`Total balance across ${wallets.length} wallets: ${formatted}`);
+      this.logger.log(
+        `Total balance across ${wallets.length} wallets: ${formatted}`
+      );
       return {
         totalBalance: formatted,
         latestCompletedRedeemAt: latestCompletedRedeem?.updatedAt || null,
       };
     } catch (error) {
-      const errData = error instanceof Error ? (error as any).response?.data || error.message : String(error);
+      const errData =
+        error instanceof Error
+          ? (error as any).response?.data || error.message
+          : String(error);
       this.logger.error(`Error fetching balances: ${errData}`);
       throw new Error('Failed to fetch balances');
     }
@@ -1334,7 +1405,9 @@ export class BeneficiaryService {
       return { isSuccess: true, message };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Database transaction failed [${action}] txId=${aaDbTxId}: ${errMsg}`);
+      this.logger.error(
+        `Database transaction failed [${action}] txId=${aaDbTxId}: ${errMsg}`
+      );
       throw new Error(`Database transaction failed: ${errMsg}`);
     }
   }
