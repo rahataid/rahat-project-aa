@@ -11,13 +11,14 @@ import {
   BeneficiaryInkindRedeemDto,
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
+  RedeemOfflineInkindByVendorDto,
 } from './dto/inkind.dto';
 import {
   AddInkindStockDto,
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
+import { AssignGroupInkindDto, ListGroupInkindDto } from './dto/inkindGroup.dto';
 
 @Controller()
 export class InkindsController {
@@ -109,8 +110,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_BY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  getByGroup(@Payload() payload: { inkindType: string }) {
-    return this.inkindsService.getByGroup(payload.inkindType);
+  getByGroup(@Payload() payload: ListGroupInkindDto) {
+    return this.inkindsService.getByGroup(payload);
   }
 
   @MessagePattern({
@@ -122,11 +123,11 @@ export class InkindsController {
   }
 
   @MessagePattern({
-    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_FOR_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
-  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
-    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  getAvailableInkindByBeneficiary(@Payload() Payload: { number?: string, walletAddress?: string }) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number, Payload.walletAddress);
   }
 
   @MessagePattern({
@@ -205,5 +206,21 @@ export class InkindsController {
       payload.txHash,
       payload.vendorUid
     );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR,
+    uuid: process.env.PROJECT_ID
+  })
+  getAllOfflineBeneficiaryByVendor(@Payload() payload: { vendorId: string }) {
+    return this.inkindsService.getAllOfflineBeneficiaryByVendor(payload.vendorId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.REDEEM_OFFLINE_INKIND_BY_VENDOR,
+    uuid: process.env.PROJECT_ID
+  })
+  redeemOfflineInkindByVendor(@Payload() payload: RedeemOfflineInkindByVendorDto) {
+    return this.inkindsService.redeemOfflineInkindByVendor(payload);
   }
 }
