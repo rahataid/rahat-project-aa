@@ -239,27 +239,28 @@ export class BeneficiaryService {
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        benfGroups
-      )
-    );
+    // this code effect performance and this data is not needed for getAllGroups API, so commenting out for now. We can revisit if project service needs this data.
+    // const res = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+    //     benfGroups
+    //   )
+    // );
 
-    res.data = res.data.map((group) => {
-      let updatedGroup = group;
-      benfGroups.data.forEach((benfGroup: any) => {
-        if (group?.uuid === benfGroup?.uuid) {
-          updatedGroup = {
-            ...group,
-            tokensReserved: benfGroup.tokensReserved,
-          };
-        }
-      });
-      return updatedGroup;
-    });
+    // res.data = res.data.map((group) => {
+    //   let updatedGroup = group;
+    //   benfGroups.data.forEach((benfGroup: any) => {
+    //     if (group?.uuid === benfGroup?.uuid) {
+    //       updatedGroup = {
+    //         ...group,
+    //         tokensReserved: benfGroup.tokensReserved,
+    //       };
+    //     }
+    //   });
+    //   return updatedGroup;
+    // });
 
-    return res;
+    return benfGroups;
   }
 
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
