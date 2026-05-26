@@ -302,9 +302,11 @@ export const JOBS = {
     REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
     SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
     CREATE_VENDOR_REDEMPTION: 'aa.jobs.inkinds.createVendorRedemption',
+    GET_VENDOR_AVAILABLE_INKIND_DETAILS: 'aa.jobs.inkinds.getVendorAvailableInkindsDetails',
     GET_VENDOR_REDEMPTIONS: 'aa.jobs.inkinds.getVendorRedemptions',
     UPDATE_VENDOR_REDEMPTION_STATUS:
       'aa.jobs.inkinds.updateVendorRedemptionStatus',
+    UPDATE_VENDOR_REDEMPTION_TX_HASH: 'aa.jobs.inkinds.updateVendorRedemptionTxHash'
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',

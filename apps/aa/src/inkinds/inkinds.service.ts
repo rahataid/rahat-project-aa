@@ -2390,13 +2390,15 @@ export class InkindsService {
         );
       }
 
-      // Total paid out per inkind: approved vendor redemption requests
+      // Total consumed per inkind: approved redemptions + pending requests
       const vendorRedemptionGroups =
         await this.prisma.vendorInkindRedemption.groupBy({
           by: ['inkindUuid'],
           where: {
             vendorUuid,
-            redemptionStatus: RedemptionStatus.APPROVED,
+            redemptionStatus: {
+              in: [RedemptionStatus.APPROVED, RedemptionStatus.REQUESTED],
+            },
           },
           _sum: { quantity: true },
         });
@@ -2410,8 +2412,8 @@ export class InkindsService {
         groupInkinds.map((g) => [g.inkindId, g.inkind])
       );
 
-      const inkinds = Array.from(earnedByInkind.entries()).map(
-        ([inkindUuid, totalEarned]) => {
+      const inkinds = Array.from(earnedByInkind.entries())
+        .map(([inkindUuid, totalEarned]) => {
           const inkind = inkindDetailMap.get(inkindUuid);
           const totalPaidOut = paidByInkind.get(inkindUuid) ?? 0;
           return {
@@ -2420,8 +2422,8 @@ export class InkindsService {
             inkindType: inkind?.type,
             totalAvailable: Math.max(totalEarned - totalPaidOut, 0),
           };
-        }
-      );
+        })
+        .filter((item) => item.totalAvailable > 0);
 
       return {
         vendor: {
@@ -2461,7 +2463,7 @@ export class InkindsService {
       const query: Prisma.VendorInkindRedemptionFindManyArgs = {
         where: {
           ...(vendorUuid && { vendorUuid }),
-          ...(status && { status }),
+          ...(status && { redemptionStatus: status }),
           ...(vendorName && {
             vendor: { name: { contains: vendorName, mode: 'insensitive' } },
           }),
@@ -2488,6 +2490,14 @@ export class InkindsService {
         page,
         perPage,
       });
+
+      if (result.data.length === 0) {
+        this.logger.log(
+          `No vendor redemptions found with filters: ${JSON.stringify(payload)}`
+        );
+
+        return [];
+      }
 
       return result;
     } catch (error) {
@@ -2546,10 +2556,6 @@ export class InkindsService {
       });
 
       this.logger.log(
-        `Vendor redemption record created with ID: ${redemption.id}, enqueuing contract job for token approval`
-      );
-
-      this.logger.log(
         `Successfully created vendor redemption with ID: ${redemption.id}`
       );
 
@@ -2567,6 +2573,7 @@ export class InkindsService {
       return {
         success: true,
         message: 'Vendor redemption created successfully',
+        redemptionUuid: redemption.uuid,
       };
     } catch (error) {
       this.logger.error(
@@ -2624,15 +2631,15 @@ export class InkindsService {
         `Vendor redemption status updated to ${status} for redemption UUID: ${uuid}`
       );
 
-      this.logger.log(
-        `Enqueuing contract job to redeem vendor inkind tokens for redemption UUID: ${uuid}`
-      )
+      // this.logger.log(
+      //   `Enqueuing contract job to redeem vendor inkind tokens for redemption UUID: ${uuid}`
+      // )
 
-      this.chainService.redeemVendorInkindTokens({
-        redemptionUuid: uuid,
-        vendorWallet: vendorDetails.walletAddress,
-        quantity: redemption.quantity,
-      });
+      // this.chainService.redeemVendorInkindTokens({
+      //   redemptionUuid: uuid,
+      //   vendorWallet: vendorDetails.walletAddress,
+      //   quantity: redemption.quantity,
+      // });
       
       this.logger.log(
         `Successfully updated vendor redemption status for redemption UUID: ${uuid}`

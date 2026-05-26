@@ -238,6 +238,13 @@ export class InkindsController {
   }
 
   // ============== Vendor Redemption ============================
+@MessagePattern({
+    cmd: JOBS.INKINDS.GET_VENDOR_AVAILABLE_INKIND_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getVendorAvailableInkindsDetails(@Payload() payload: { vendorUuid: string }) {
+    return this.inkindsService.getVendorAvailableInkindsDetails(payload.vendorUuid);
+  }
 
   @MessagePattern({
     cmd: JOBS.INKINDS.GET_VENDOR_REDEMPTIONS,
@@ -263,5 +270,18 @@ export class InkindsController {
     @Payload() payload: UpdateVendorInkindRedeemStatusDto
   ) {
     return this.inkindsService.updateVendorRedemptionStatus(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.UPDATE_VENDOR_REDEMPTION_TX_HASH,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateVendorRedemptionTxHash(
+    @Payload() payload: { redemptionUuid: string; txHash: string }
+  ) {
+    return this.inkindsService.updateVendorRedemptionTxHash(
+      payload.redemptionUuid,
+      payload.txHash
+    );
   }
 }
