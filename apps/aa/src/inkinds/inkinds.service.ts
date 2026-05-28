@@ -1347,9 +1347,9 @@ export class InkindsService {
       throw new RpcException('OTP record not found');
     }
 
-    if (otpRecord.isVerified) {
-      throw new RpcException('OTP already verified');
-    }
+    // if (otpRecord.isVerified) {
+    //   throw new RpcException('OTP already verified');
+    // }
 
     // since we send the same opt every time so that this logic is commented out for now.
     // if (otpRecord.expiresAt < new Date()) {
