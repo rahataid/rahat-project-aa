@@ -17,7 +17,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
-import { GroupPurpose, Prisma } from '@prisma/client';
+import { GroupPurpose, PayoutType, Prisma } from '@prisma/client';
 import { QrPdfService } from './qr-pdf.service';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
@@ -167,8 +167,16 @@ export class BeneficiaryService {
 
   async getAllGroups(dto: GetBenfGroupDto) {
     this.logger.log('Getting all beneficiary groups data');
-    const { page, perPage, sort, order, tokenAssigned, search, hasPayout } =
-      dto;
+    const {
+      page,
+      perPage,
+      sort,
+      order,
+      tokenAssigned,
+      search,
+      hasPayout,
+      excludeGroupPurpose,
+    } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -210,6 +218,11 @@ export class BeneficiaryService {
             },
           }),
         },
+        {
+          ...(excludeGroupPurpose && {
+            groupPurpose: { not: excludeGroupPurpose },
+          }),
+        },
       ],
     };
 
@@ -239,27 +252,28 @@ export class BeneficiaryService {
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        benfGroups
-      )
-    );
+    // this code effect performance and this data is not needed for getAllGroups API, so commenting out for now. We can revisit if project service needs this data.
+    // const res = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+    //     benfGroups
+    //   )
+    // );
 
-    res.data = res.data.map((group) => {
-      let updatedGroup = group;
-      benfGroups.data.forEach((benfGroup: any) => {
-        if (group?.uuid === benfGroup?.uuid) {
-          updatedGroup = {
-            ...group,
-            tokensReserved: benfGroup.tokensReserved,
-          };
-        }
-      });
-      return updatedGroup;
-    });
+    // res.data = res.data.map((group) => {
+    //   let updatedGroup = group;
+    //   benfGroups.data.forEach((benfGroup: any) => {
+    //     if (group?.uuid === benfGroup?.uuid) {
+    //       updatedGroup = {
+    //         ...group,
+    //         tokensReserved: benfGroup.tokensReserved,
+    //       };
+    //     }
+    //   });
+    //   return updatedGroup;
+    // });
 
-    return res;
+    return benfGroups;
   }
 
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
@@ -602,7 +616,16 @@ export class BeneficiaryService {
       throw new RpcException('Beneficiary group not found.');
     }
 
+    const isVendorWithGeneral =
+      params?.type === PayoutType.VENDOR &&
+      benfGroup.groupPurpose === GroupPurpose.GENERAL;
+
+    const isNoPayoutWithGeneral =
+      !isPayoutIntegrated && benfGroup.groupPurpose === GroupPurpose.GENERAL;
+
     if (
+      !isVendorWithGeneral &&
+      !isNoPayoutWithGeneral &&
       benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
       benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
@@ -610,7 +633,7 @@ export class BeneficiaryService {
         `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
       );
       throw new RpcException(
-        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
+        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER, MOBILE_MONEY, and GENERAL are allowed.`
       );
     }
 
