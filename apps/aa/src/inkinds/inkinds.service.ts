@@ -2547,6 +2547,20 @@ export class InkindsService {
         throw new RpcException(`Inkind with UUID ${inkindUuid} not found`);
       }
 
+      const existingRedemption = await this.prisma.vendorInkindRedemption.findFirst({
+        where: {
+          vendorUuid,
+          inkindUuid,
+          redemptionStatus: RedemptionStatus.REQUESTED,
+        },
+      });
+
+      if (existingRedemption) {
+        throw new RpcException(
+          `A pending redemption already exists for this vendor and inkind`
+        );
+      }
+
       const redemption = await this.prisma.vendorInkindRedemption.create({
         data: {
           vendorUuid,
