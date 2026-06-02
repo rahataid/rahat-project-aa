@@ -71,6 +71,7 @@ enum GroupPurpose {
   BANK_TRANSFER
   MOBILE_MONEY
   COMMUNICATION
+  GENERAL
 }
 
 enum RedemptionStatus {
