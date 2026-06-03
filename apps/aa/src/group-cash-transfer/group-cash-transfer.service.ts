@@ -6,6 +6,7 @@ import {
   AssignFundDto,
   CreateGroupCashTransferDto,
   ListGroupCashTransferDto,
+  ListGroupCashTransferRecordDto,
   UpdateGroupCashTransferDto,
 } from './dto/group-cash-transfer.dto';
 
@@ -99,8 +100,12 @@ export class GroupCashTransferService {
       page,
       perPage,
       search,
+      phone,
+      ward,
+      supportArea,
       sort = 'createdAt',
       order = 'desc',
+      hasFund,
     } = payload;
 
     try {
@@ -109,10 +114,24 @@ export class GroupCashTransferService {
       const where: Record<string, any> = {
         deletedAt: null,
         ...(search && {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { phone: { contains: search, mode: 'insensitive' } },
-          ],
+          name: { contains: search, mode: 'insensitive' },
+        }),
+        ...(phone && {
+          phone: { contains: phone, mode: 'insensitive' },
+        }),
+        ...(ward || supportArea
+          ? {
+              AND: [
+                ...(ward ? [{ extras: { path: ['ward'], string_contains: ward } }] : []),
+                ...(supportArea ? [{ extras: { path: ['supportArea'], string_contains: supportArea } }] : []),
+              ],
+            }
+          : {}),
+        ...(hasFund === true && {
+          groupCashTransferRecords: { some: { deletedAt: null } },
+        }),
+        ...(hasFund === false && {
+          groupCashTransferRecords: { none: { deletedAt: null } },
         }),
       };
 
@@ -120,7 +139,7 @@ export class GroupCashTransferService {
       const safeSort = allowedSortFields.includes(sort) ? sort : 'createdAt';
       const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
 
-      return paginate(
+      const result = await paginate(
         this.db.groupCashTransferDetail,
         {
           where,
@@ -139,6 +158,16 @@ export class GroupCashTransferService {
         },
         { page, perPage }
       );
+
+      result.data = result.data.map((item: any) => ({
+        ...item,
+        totalAssignedAmount: item.groupCashTransferRecords.reduce(
+          (sum: number, r: any) => sum + (r.amount ?? 0),
+          0
+        ),
+      }));
+
+      return result;
     } catch (error: any) {
       this.logger.error(`Failed to fetch group cash transfers: ${error.message}`, error.stack);
       throw new RpcException(error.message);
@@ -148,19 +177,39 @@ export class GroupCashTransferService {
   async getOne(uuid: string) {
     try {
       this.logger.log(`Fetching group cash transfer: ${uuid}`);
-      const record = await this.findOneOrThrow(uuid);
 
-      const records = await this.db.groupCashTransferRecord.findMany({
-        where: { groupCashTransferId: uuid, deletedAt: null },
+      const record = await this.db.groupCashTransferDetail.findFirst({
+        where: { uuid, deletedAt: null },
+        include: {
+          groupCashTransferRecords: {
+            where: { deletedAt: null },
+            select: {
+              uuid: true,
+              title: true,
+              amount: true,
+              status: true,
+              payoutProcessorId: true,
+              createdBy: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
       });
 
-      const totalAmount = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+      if (!record) {
+        throw new RpcException(`Group cash transfer with UUID ${uuid} not found`);
+      }
+
+      const totalAmount = record.groupCashTransferRecords.reduce(
+        (sum: number, r: any) => sum + (r.amount ?? 0),
+        0
+      );
 
       return {
         ...record,
         totalAmount,
-        totalRecords: records.length,
-        records,
+        totalRecords: record.groupCashTransferRecords.length,
       };
     } catch (error: any) {
       this.logger.error(`Failed to fetch group cash transfer: ${error.message}`, error.stack);
@@ -169,7 +218,7 @@ export class GroupCashTransferService {
   }
 
   async assignFund(dto: AssignFundDto) {
-    const { groupCashTransferId, amount } = dto;
+    const { groupCashTransferId, title, amount, user } = dto;
 
     try {
       this.logger.log(
@@ -181,8 +230,10 @@ export class GroupCashTransferService {
       const record = await this.db.groupCashTransferRecord.create({
         data: {
           groupCashTransferId,
+          title,
           amount,
           status: 'NOT_STARTED',
+          createdBy: user?.name || null,
         },
       });
 
@@ -191,6 +242,73 @@ export class GroupCashTransferService {
     } catch (error: any) {
       this.logger.error(`Failed to assign fund: ${error.message}`, error.stack);
       throw new RpcException(error.message);
+    }
+  }
+
+  async getRecords(dto: ListGroupCashTransferRecordDto) {
+    const { page, perPage, groupCashTransferId, search, status, sort = 'createdAt', order = 'desc' } = dto;
+
+    try {
+      this.logger.log(`Fetching records for groupCashTransferId=${groupCashTransferId}`);
+
+      await this.findOneOrThrow(groupCashTransferId);
+
+      const allowedSortFields = ['createdAt', 'title', 'amount'];
+      const safeSort = allowedSortFields.includes(sort) ? sort : 'createdAt';
+      const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
+
+      const where: Record<string, any> = {
+        groupCashTransferId,
+        deletedAt: null,
+        ...(status && { status }),
+        ...(search && {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { groupCashTransfer: { name: { contains: search, mode: 'insensitive' } } },
+          ],
+        }),
+      };
+
+      return paginate(
+        this.db.groupCashTransferRecord,
+        {
+          where,
+          orderBy: { [safeSort]: safeOrder },
+          include: {
+            groupCashTransfer: {
+              select: { uuid: true, name: true },
+            },
+          },
+        },
+        { page, perPage }
+      );
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch records: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getOneRecord(recordUuid: string) {
+    try {
+      this.logger.log(`Fetching group cash transfer record: ${recordUuid}`);
+
+      const record = await this.db.groupCashTransferRecord.findFirst({
+        where: { uuid: recordUuid, deletedAt: null },
+        include: {
+          groupCashTransfer: {
+            select: { uuid: true, name: true, phone: true, bankDetails: true },
+          },
+        },
+      });
+
+      if (!record) {
+        throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
+      }
+
+      return record;
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch record: ${error.message}`, error.stack);
+      throw error;
     }
   }
 

@@ -878,13 +878,16 @@ model GroupCashTransferRecord {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())
 
+  title               String
   groupCashTransferId String
 
   amount              Float?  @default(0)
-  payoutProcessorId   String? // refer to either a Vendor UUID or a PaymentProvider Id from rahat-offramp-service
+  payoutProcessorId   String? 
 
   status String @default("NOT_STARTED")
+  disbursedAt DateTime?
 
+  createdBy String?
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   deletedAt DateTime?
