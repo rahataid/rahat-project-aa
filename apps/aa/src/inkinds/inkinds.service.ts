@@ -2443,7 +2443,7 @@ export class InkindsService {
   }
 
   async getVendorRedemptions(payload: GetVendorInkindRedemptionDto) {
-    const { vendorUuid, status, vendorName, inkindName, page, perPage } = payload;
+    const { vendorUuid, status, vendorName, inkindName, inkindType, page, perPage } = payload;
     this.logger.log(
       `Fetching all vendor redemptions with filters: ${JSON.stringify(payload)}`
     );
@@ -2469,6 +2469,9 @@ export class InkindsService {
           }),
           ...(inkindName && {
             inkind: { name: { contains: inkindName, mode: 'insensitive' } },
+          }),
+          ...(inkindType && {
+            inkind: { type: { contains: inkindType, mode: 'insensitive' } },
           }),
         },
         orderBy: { createdAt: 'desc' },
