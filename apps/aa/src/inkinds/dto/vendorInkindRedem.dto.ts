@@ -23,6 +23,10 @@ export class GetVendorInkindRedemptionDto {
   @IsOptional()
   vendorName?: string;
 
+  @IsString()
+  @IsOptional()
+  inkindName?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)
