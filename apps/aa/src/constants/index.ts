@@ -301,6 +301,14 @@ export const JOBS = {
     REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
     SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
   },
+  GROUP_CASH_TRANSFER: {
+    CREATE: 'aa.jobs.groupCashTransfer.create',
+    UPDATE: 'aa.jobs.groupCashTransfer.update',
+    DELETE: 'aa.jobs.groupCashTransfer.delete',
+    GET: 'aa.jobs.groupCashTransfer.get',
+    ASSIGN_FUND: 'aa.jobs.groupCashTransfer.assignFund',
+    DISBURSE: 'aa.jobs.groupCashTransfer.disburse',
+  },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
