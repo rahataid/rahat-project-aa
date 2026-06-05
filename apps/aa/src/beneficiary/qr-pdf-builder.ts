@@ -108,6 +108,144 @@ function getLogoBuffer(): Buffer | null {
   return null;
 }
 
+async function generateAllQrBuffers(cards: QrCardData[]): Promise<Buffer[]> {
+  const results: Buffer[] = [];
+  for (const card of cards) {
+    const buf = await QRCode.toBuffer(card.walletAddress || ' ', {
+      type: 'png',
+      width: QR_SIZE,
+      margin: 1,
+    });
+    results.push(buf);
+  }
+  return results;
+}
+
+function renderCardsToPdf(
+  doc: typeof PDFDocument,
+  cards: QrCardData[],
+  qrBuffers: Buffer[],
+  logo: Buffer | null
+) {
+  for (let i = 0; i < cards.length; i++) {
+    const posInPage = i % CARDS_PER_PAGE;
+
+    if (i > 0 && posInPage === 0) {
+      doc.addPage();
+    }
+
+    const { x, y } = cardOrigin(posInPage);
+    const card = cards[i];
+
+    doc.save();
+    doc.roundedRect(x, y, CARD_WIDTH, CARD_HEIGHT, 6).clip();
+    drawCardBackground(doc, x, y);
+
+    // Logo centered in white top strip
+    const logoAreaCenterY = y + LOGO_SECTION_H / 2;
+    if (logo) {
+      const logoH = LOGO_SECTION_H * 0.65;
+      const logoW = logoH * 4.2;
+      doc.image(logo, x + (CARD_WIDTH - logoW) / 2, logoAreaCenterY - logoH / 2, {
+        width: logoW,
+        height: logoH,
+      });
+    } else {
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor(BLUE_COLOR)
+        .text('Rahat', x, logoAreaCenterY - 6, {
+          width: CARD_WIDTH,
+          align: 'center',
+        });
+    }
+
+    // QR code box: white rounded rect with blue border
+    const qrBoxPadding = 5;
+    const qrX = x + (CARD_WIDTH - QR_SIZE) / 2;
+    const qrY = y + LOGO_SECTION_H + 8;
+    const qrBoxX = qrX - qrBoxPadding;
+    const qrBoxY = qrY - qrBoxPadding;
+    const qrBoxSize = QR_SIZE + qrBoxPadding * 2;
+
+    doc
+      .roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 8)
+      .fillColor('#ffffff')
+      .fill();
+    doc
+      .roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 8)
+      .strokeColor(BLUE_COLOR)
+      .lineWidth(1.5)
+      .stroke();
+
+    doc.image(qrBuffers[i], qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
+
+    doc.restore();
+
+    // Text section on blue background below the wave
+    const textStartY = y + BLUE_TOP_H + WAVE_DIP + 8;
+    let textY = textStartY;
+    const lineH = 14;
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(9)
+      .fillColor('#ffffff')
+      .text(card.name || '', x, textY, { width: CARD_WIDTH, align: 'center' });
+    textY += lineH;
+
+    const locationParts = [card.location, card.district].filter(Boolean);
+    if (locationParts.length > 0) {
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#ddeeff')
+        .text(locationParts.join(', '), x, textY, { width: CARD_WIDTH, align: 'center' });
+      textY += lineH;
+    }
+
+    if (card.ward) {
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#ddeeff')
+        .text(`Ward: ${card.ward}`, x, textY, { width: CARD_WIDTH, align: 'center' });
+      textY += lineH;
+    }
+
+    if (card.phone) {
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#ddeeff')
+        .text(card.phone, x, textY, { width: CARD_WIDTH, align: 'center' });
+      textY += lineH;
+    }
+
+    if (card.otp) {
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(8.5)
+        .fillColor('#ffffff')
+        .text(`Rahat Pin: ${card.otp}`, x, textY, { width: CARD_WIDTH, align: 'center' });
+      textY += lineH;
+    }
+
+    if (card.governmentIdType) {
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#ddeeff')
+        .text(
+          `Govt ID: ${formatGovId(card.governmentIdType, card.governmentIdNumber)}`,
+          x, textY,
+          { width: CARD_WIDTH, align: 'center' }
+        );
+    }
+  }
+}
+
 export async function buildQrPdf(cards: QrCardData[]): Promise<Buffer> {
   console.log(`Building QR PDF for ${cards.length} cards...`);
 
@@ -115,6 +253,10 @@ export async function buildQrPdf(cards: QrCardData[]): Promise<Buffer> {
   if (!logo) {
     console.warn('Rahat logo not found — falling back to text');
   }
+
+  // Pre-generate all QR buffers before opening the PDF stream to avoid
+  // async/sync interleaving that causes empty documents at high card counts.
+  const qrBuffers = await generateAllQrBuffers(cards);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
@@ -125,136 +267,11 @@ export async function buildQrPdf(cards: QrCardData[]): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks as any)));
     doc.on('error', reject);
 
-    (async () => {
-      try {
-        for (let i = 0; i < cards.length; i++) {
-          console.log(`Adding card ${i + 1}/${cards.length} to PDF...`);
-          const posInPage = i % CARDS_PER_PAGE;
-
-          if (i > 0 && posInPage === 0) {
-            doc.addPage();
-          }
-
-          const { x, y } = cardOrigin(posInPage);
-          const card = cards[i];
-
-          doc.save();
-          doc.roundedRect(x, y, CARD_WIDTH, CARD_HEIGHT, 6).clip();
-          drawCardBackground(doc, x, y);
-
-          // Logo centered in white top strip
-          const logoAreaCenterY = y + LOGO_SECTION_H / 2;
-          if (logo) {
-            const logoH = LOGO_SECTION_H * 0.65;
-            const logoW = logoH * 4.2;
-            doc.image(logo, x + (CARD_WIDTH - logoW) / 2, logoAreaCenterY - logoH / 2, {
-              width: logoW,
-              height: logoH,
-            });
-          } else {
-            doc
-              .font('Helvetica-Bold')
-              .fontSize(12)
-              .fillColor(BLUE_COLOR)
-              .text('Rahat', x, logoAreaCenterY - 6, {
-                width: CARD_WIDTH,
-                align: 'center',
-              });
-          }
-
-          // QR code box: white rounded rect with blue border
-          const qrBoxPadding = 5;
-          const qrX = x + (CARD_WIDTH - QR_SIZE) / 2;
-          const qrY = y + LOGO_SECTION_H + 8;
-          const qrBoxX = qrX - qrBoxPadding;
-          const qrBoxY = qrY - qrBoxPadding;
-          const qrBoxSize = QR_SIZE + qrBoxPadding * 2;
-
-          doc
-            .roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 8)
-            .fillColor('#ffffff')
-            .fill();
-          doc
-            .roundedRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 8)
-            .strokeColor(BLUE_COLOR)
-            .lineWidth(1.5)
-            .stroke();
-
-          const qrBuffer = await QRCode.toBuffer(card.walletAddress || ' ', {
-            type: 'png',
-            width: QR_SIZE,
-            margin: 1,
-          });
-          doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
-
-          doc.restore();
-
-          // Text section on blue background below the wave
-          const textStartY = y + BLUE_TOP_H + WAVE_DIP + 8;
-          let textY = textStartY;
-          const lineH = 14;
-
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(9)
-            .fillColor('#ffffff')
-            .text(card.name || '', x, textY, { width: CARD_WIDTH, align: 'center' });
-          textY += lineH;
-
-          const locationParts = [card.location, card.district].filter(Boolean);
-          if (locationParts.length > 0) {
-            doc
-              .font('Helvetica')
-              .fontSize(8)
-              .fillColor('#ddeeff')
-              .text(locationParts.join(', '), x, textY, { width: CARD_WIDTH, align: 'center' });
-            textY += lineH;
-          }
-
-          if (card.ward) {
-            doc
-              .font('Helvetica')
-              .fontSize(8)
-              .fillColor('#ddeeff')
-              .text(`Ward: ${card.ward}`, x, textY, { width: CARD_WIDTH, align: 'center' });
-            textY += lineH;
-          }
-
-          if (card.phone) {
-            doc
-              .font('Helvetica')
-              .fontSize(8)
-              .fillColor('#ddeeff')
-              .text(card.phone, x, textY, { width: CARD_WIDTH, align: 'center' });
-            textY += lineH;
-          }
-
-          if (card.otp) {
-            doc
-              .font('Helvetica-Bold')
-              .fontSize(8.5)
-              .fillColor('#ffffff')
-              .text(`Rahat Pin: ${card.otp}`, x, textY, { width: CARD_WIDTH, align: 'center' });
-            textY += lineH;
-          }
-
-          if (card.governmentIdType) {
-            doc
-              .font('Helvetica')
-              .fontSize(8)
-              .fillColor('#ddeeff')
-              .text(
-                `Govt ID: ${formatGovId(card.governmentIdType, card.governmentIdNumber)}`,
-                x, textY,
-                { width: CARD_WIDTH, align: 'center' }
-              );
-          }
-        }
-
-        doc.end();
-      } catch (err) {
-        reject(err);
-      }
-    })();
+    try {
+      renderCardsToPdf(doc, cards, qrBuffers, logo);
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
   });
 }
