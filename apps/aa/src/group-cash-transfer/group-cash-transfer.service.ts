@@ -25,13 +25,8 @@ export class GroupCashTransferService {
   async create(dto: CreateGroupCashTransferDto) {
     try {
       this.logger.log(`Creating group cash transfer: ${dto.name}`);
-      const existing = await this.db.groupCashTransferDetail.findFirst({
-        where: { name: dto.name, deletedAt: null },
-      });
 
-      if (existing) {
-        throw new RpcException(`Group cash transfer '${dto.name}' already exists`);
-      }
+      await this.checkUniqueness(dto);
 
       const record = await this.db.groupCashTransferDetail.create({
         data: {
@@ -55,6 +50,8 @@ export class GroupCashTransferService {
     try {
       this.logger.log(`Updating group cash transfer: ${uuid}`);
       await this.findOneOrThrow(uuid);
+
+      await this.checkUniqueness(dto, uuid);
 
       const record = await this.db.groupCashTransferDetail.update({
         where: { uuid },
@@ -111,6 +108,30 @@ export class GroupCashTransferService {
     try {
       this.logger.log(`Fetching group cash transfers`);
 
+      const areas = supportArea
+        ? Array.isArray(supportArea)
+          ? supportArea
+          : [supportArea]
+        : [];
+
+      let supportAreaUuids: string[] | null = null;
+      if (areas.length > 0) {
+        const matched = await Promise.all(
+          areas.map((area) =>
+            this.db.$queryRaw<{ uuid: string }[]>`
+              SELECT uuid FROM tbl_group_cash_transfer_details
+              WHERE "deletedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(extras->'supportArea') AS s
+                WHERE s ILIKE ${'%' + area + '%'}
+              )
+            `
+          )
+        );
+        const uuids = [...new Set(matched.flat().map((r) => r.uuid))];
+        supportAreaUuids = uuids;
+      }
+
       const where: Record<string, any> = {
         deletedAt: null,
         ...(search && {
@@ -119,14 +140,12 @@ export class GroupCashTransferService {
         ...(phone && {
           phone: { contains: phone, mode: 'insensitive' },
         }),
-        ...(ward || supportArea
-          ? {
-              AND: [
-                ...(ward ? [{ extras: { path: ['ward'], string_contains: ward } }] : []),
-                ...(supportArea ? [{ extras: { path: ['supportArea'], string_contains: supportArea } }] : []),
-              ],
-            }
-          : {}),
+        ...(ward && {
+          extras: { path: ['ward'], string_contains: ward },
+        }),
+        ...(supportAreaUuids && {
+          uuid: { in: supportAreaUuids },
+        }),
         ...(hasFund === true && {
           groupCashTransferRecords: { some: { deletedAt: null } },
         }),
@@ -226,6 +245,13 @@ export class GroupCashTransferService {
       );
 
       await this.findOneOrThrow(groupCashTransferId);
+
+      const existingFund = await this.db.groupCashTransferRecord.findFirst({
+        where: { groupCashTransferId, deletedAt: null },
+      });
+      if (existingFund) {
+        throw new RpcException('Funds have already been reserved for this group. Duplicate assignment is not allowed.');
+      }
 
       const record = await this.db.groupCashTransferRecord.create({
         data: {
@@ -334,6 +360,68 @@ export class GroupCashTransferService {
     } catch (error: any) {
       this.logger.error(`Failed to disburse: ${error.message}`, error.stack);
       throw new RpcException(error.message);
+    }
+  }
+
+  // TODO: Complete after nchl api is working
+  async validateBankAccount(_dto: unknown) {
+    return { valid: true };
+  }
+
+  async getAllValidGroupTransfers() {
+    try {
+      this.logger.log('Fetching all valid group transfers (no funds assigned)');
+      return this.db.groupCashTransferDetail.findMany({
+        where: {
+          deletedAt: null,
+          groupCashTransferRecords: { none: { deletedAt: null } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch valid group transfers: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
+  private async checkUniqueness(
+    dto: { name?: string; phone?: string; bankDetails?: Record<string, unknown> },
+    excludeUuid?: string,
+  ) {
+    const base: Record<string, any> = { deletedAt: null };
+    if (excludeUuid) base.uuid = { not: excludeUuid };
+
+    const checks: Array<{ field: string; where: Record<string, any> }> = [];
+
+    if (dto.name) {
+      checks.push({ field: 'name', where: { ...base, name: dto.name } });
+    }
+
+    if (dto.phone) {
+      checks.push({ field: 'phone', where: { ...base, phone: dto.phone } });
+    }
+
+    const accountNumber = (dto.bankDetails as any)?.accountNumber;
+    if (accountNumber) {
+      checks.push({
+        field: 'account number',
+        where: { ...base, bankDetails: { path: ['accountNumber'], equals: accountNumber } },
+      });
+    }
+
+    const email = (dto.bankDetails as any)?.email;
+    if (email) {
+      checks.push({
+        field: 'email',
+        where: { ...base, bankDetails: { path: ['email'], equals: email } },
+      });
+    }
+
+    for (const { field, where } of checks) {
+      const existing = await this.db.groupCashTransferDetail.findFirst({ where });
+      if (existing) {
+        throw new RpcException(`A group with this ${field} already exists`);
+      }
     }
   }
 

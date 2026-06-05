@@ -87,4 +87,20 @@ export class GroupCashTransferController {
   getOneRecord(@Payload() payload: { uuid: string }) {
     return this.groupCashTransferService.getOneRecord(payload.uuid);
   }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.VALIDATE_BANK_ACCOUNT,
+    uuid: process.env.PROJECT_ID,
+  })
+  validateBankAccount(@Payload() payload: unknown) {
+    return this.groupCashTransferService.validateBankAccount(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.GET_ALL_VALID,
+    uuid: process.env.PROJECT_ID,
+  })
+  getAllValidGroupTransfers() {
+    return this.groupCashTransferService.getAllValidGroupTransfers();
+  }
 }

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsObject, IsUUID, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsObject, IsUUID, IsBoolean, IsArray } from 'class-validator';
 import { UserObject } from '../../inkinds';
 
 export class CreateGroupCashTransferDto {
@@ -59,8 +59,8 @@ export class ListGroupCashTransferDto {
   ward?: string;
 
   @IsOptional()
-  @IsString()
-  supportArea?: string;
+  @IsArray()
+  supportArea?: string[];
 
   @IsOptional()
   @IsString()
