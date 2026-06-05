@@ -8,6 +8,7 @@ import {
   ListGroupCashTransferDto,
   ListGroupCashTransferRecordDto,
   UpdateGroupCashTransferDto,
+  UpdateGroupCashTransferRecordDto,
 } from './dto/group-cash-transfer.dto';
 
 @Controller()
@@ -102,5 +103,21 @@ export class GroupCashTransferController {
   })
   getAllValidGroupTransfers() {
     return this.groupCashTransferService.getAllValidGroupTransfers();
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.UPDATE_RECORD,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateRecord(@Payload() payload: UpdateGroupCashTransferRecordDto) {
+    return this.groupCashTransferService.updateRecord(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.GET_GCT_DATA,
+    uuid: process.env.PROJECT_ID,
+  })
+  getGCTData() {
+    return this.groupCashTransferService.getGCTData();
   }
 }

@@ -89,6 +89,19 @@ export class AssignFundDto {
   user: UserObject;
 }
 
+export class UpdateGroupCashTransferRecordDto {
+  @IsUUID()
+  uuid!: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
+}
+
 export class ListGroupCashTransferRecordDto {
   @IsOptional()
   page?: number;
@@ -96,8 +109,8 @@ export class ListGroupCashTransferRecordDto {
   @IsOptional()
   perPage?: number;
 
-  @IsUUID()
-  groupCashTransferId!: string;
+  @IsString()
+  groupCashTransferName!: string;
 
   @IsOptional()
   @IsString()

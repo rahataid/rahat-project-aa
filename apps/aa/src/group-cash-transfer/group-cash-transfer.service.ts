@@ -8,6 +8,7 @@ import {
   ListGroupCashTransferDto,
   ListGroupCashTransferRecordDto,
   UpdateGroupCashTransferDto,
+  UpdateGroupCashTransferRecordDto,
 } from './dto/group-cash-transfer.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
@@ -272,12 +273,18 @@ export class GroupCashTransferService {
   }
 
   async getRecords(dto: ListGroupCashTransferRecordDto) {
-    const { page, perPage, groupCashTransferId, search, status, sort = 'createdAt', order = 'desc' } = dto;
+    const { page, perPage, groupCashTransferName, search, status, sort = 'createdAt', order = 'desc' } = dto;
 
     try {
-      this.logger.log(`Fetching records for groupCashTransferId=${groupCashTransferId}`);
+      this.logger.log(`Fetching records for groupCashTransferName=${groupCashTransferName}`);
 
-      await this.findOneOrThrow(groupCashTransferId);
+      const group = await this.db.groupCashTransferDetail.findFirst({
+        where: { name: { contains: groupCashTransferName, mode: 'insensitive' }, deletedAt: null },
+      });
+      if (!group) {
+        throw new RpcException(`Group cash transfer '${groupCashTransferName}' not found`);
+      }
+      const groupCashTransferId = group.uuid;
 
       const allowedSortFields = ['createdAt', 'title', 'amount'];
       const safeSort = allowedSortFields.includes(sort) ? sort : 'createdAt';
@@ -338,6 +345,38 @@ export class GroupCashTransferService {
     }
   }
 
+  async updateRecord(dto: UpdateGroupCashTransferRecordDto) {
+    const { uuid, ...data } = dto;
+    try {
+      this.logger.log(`Updating group cash transfer record: ${uuid}`);
+
+      const record = await this.db.groupCashTransferRecord.findFirst({
+        where: { uuid, deletedAt: null },
+      });
+
+      if (!record) {
+        throw new RpcException(`Record ${uuid} not found`);
+      }
+
+      if (record.disbursedAt) {
+        throw new RpcException('Cannot edit: disbursal has already been initiated for this record');
+      }
+
+      const editableStatuses = ['NOT_STARTED', 'FAILED'];
+      if (!editableStatuses.includes(record.status)) {
+        throw new RpcException(`Cannot edit: record status is '${record.status}'. Only NOT_STARTED or FAILED records can be edited`);
+      }
+
+      return this.db.groupCashTransferRecord.update({
+        where: { uuid },
+        data,
+      });
+    } catch (error: any) {
+      this.logger.error(`Failed to update record: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
   async disburse(recordUuid: string) {
     try {
       this.logger.log(`Disbursing group cash transfer record: ${recordUuid}`);
@@ -364,6 +403,56 @@ export class GroupCashTransferService {
   }
 
   // TODO: Complete after nchl api is working
+  async getGCTData() {
+    try {
+      this.logger.log('Fetching GCT overview data');
+
+      const [
+        totalGroups,
+        recordStats,
+        disbursedStats,
+        disbursedCount,
+      ] = await Promise.all([
+        this.db.groupCashTransferDetail.count({ where: { deletedAt: null } }),
+        this.db.groupCashTransferRecord.aggregate({
+          where: { deletedAt: null },
+          _sum: { amount: true },
+        }),
+        this.db.groupCashTransferRecord.aggregate({
+          where: { deletedAt: null, disbursedAt: { not: null } },
+          _sum: { amount: true },
+        }),
+        this.db.groupCashTransferRecord.count({
+          where: { deletedAt: null, disbursedAt: { not: null } },
+        }),
+      ]);
+
+      const statusCounts = await this.db.groupCashTransferRecord.groupBy({
+        by: ['status'],
+        where: { deletedAt: null },
+        _count: { _all: true },
+      });
+
+      const byStatus = statusCounts.reduce((acc: Record<string, number>, s: any) => {
+        acc[s.status] = s._count._all;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        totalGroups,
+        totalAllocatedAmount: recordStats._sum.amount ?? 0,
+        totalDisbursedAmount: disbursedStats._sum.amount ?? 0,
+        disbursedCount,
+        pendingCount: byStatus['PENDING'] ?? 0,
+        notStartedCount: byStatus['NOT_STARTED'] ?? 0,
+        failedCount: byStatus['FAILED'] ?? 0,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch GCT overview data: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
   async validateBankAccount(_dto: unknown) {
     return { valid: true };
   }
