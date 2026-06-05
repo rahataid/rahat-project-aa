@@ -74,6 +74,12 @@ enum GroupPurpose {
   GENERAL
 }
 
+enum RedemptionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
 
 model Beneficiary {
@@ -418,6 +424,7 @@ model Vendor {
   BeneficiaryRedeem            BeneficiaryRedeem[]
   OfflineBeneficiary           OfflineBeneficiary[]
   beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
+  vendorInkindRedemptions       VendorInkindRedemption[]
 
   @@map("tbl_vendors")
 }
@@ -719,6 +726,7 @@ model Inkind {
 
   stockMovements InkindStockMovement[]
   groupInkinds   GroupInkind[]
+  vendorInkindRedemptions VendorInkindRedemption[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -827,6 +835,31 @@ model TempOfflineInkindRedemption {
   @@index([status])
   @@index([vendorId])
   @@map("tbl_temp_offline_inkind_redemptions")
+}
+
+model VendorInkindRedemption {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  redemptionStatus RedemptionStatus @default(REQUESTED)
+  quantity Int @default(1)
+
+  transactionHash String?
+  approvedBy      String?
+  approvedAt      DateTime?
+
+  inkindUuid String
+  inkind     Inkind @relation(fields: [inkindUuid], references: [uuid])
+
+  vendorUuid       String                @db.Uuid()
+  vendor Vendor @relation(fields: [vendorUuid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime @default(now())
+
+  @@index([vendorUuid])
+  @@index([updatedAt(sort: Desc)])
+  @@map("tbl_vendor_inkind_redemptions")
 }
 
 // ============== End Inkind SCHEMAS ================

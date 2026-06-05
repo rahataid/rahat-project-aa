@@ -266,6 +266,7 @@ export const JOBS = {
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
     REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND_TOKEN_FOR_CASH: `aa.jobs.evm.redeemTokenForCash_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
@@ -300,6 +301,12 @@ export const JOBS = {
     GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR: 'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
     REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
     SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
+    CREATE_VENDOR_REDEMPTION: 'aa.jobs.inkinds.createVendorRedemption',
+    GET_VENDOR_AVAILABLE_INKIND_DETAILS: 'aa.jobs.inkinds.getVendorAvailableInkindsDetails',
+    GET_VENDOR_REDEMPTIONS: 'aa.jobs.inkinds.getVendorRedemptions',
+    UPDATE_VENDOR_REDEMPTION_STATUS:
+      'aa.jobs.inkinds.updateVendorRedemptionStatus',
+    UPDATE_VENDOR_REDEMPTION_TX_HASH: 'aa.jobs.inkinds.updateVendorRedemptionTxHash'
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -310,6 +317,7 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+    REDEEM_VENDOR_INKIND_TOKENS: 'aa.jobs.chain.redeemVendorInkindTokens',
   },
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',
