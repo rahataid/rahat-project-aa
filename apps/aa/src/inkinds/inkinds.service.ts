@@ -1,7 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, PayoutMode, Prisma } from '@prisma/client';
+import {
+  InkindStockMovementType,
+  PayoutMode,
+  Prisma,
+  RedemptionStatus,
+} from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -46,6 +51,11 @@ import { AppService } from '../app/app.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import {
+  AddVendorInkindRedeemDto,
+  GetVendorInkindRedemptionDto,
+  UpdateVendorInkindRedeemStatusDto,
+} from './dto/vendorInkindRedem.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 const DEFAULT_BULK_BATCH_SIZE = parseInt(process.env.INKIND_BULK_BATCH_SIZE || '100', 10);
@@ -1337,9 +1347,9 @@ export class InkindsService {
       throw new RpcException('OTP record not found');
     }
 
-    if (otpRecord.isVerified) {
-      throw new RpcException('OTP already verified');
-    }
+    // if (otpRecord.isVerified) {
+    //   throw new RpcException('OTP already verified');
+    // }
 
     // since we send the same opt every time so that this logic is commented out for now.
     // if (otpRecord.expiresAt < new Date()) {
@@ -2307,6 +2317,396 @@ export class InkindsService {
     } catch (error: any) {
       this.logger.error(
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  // ====================  VENDOR REDEMPTION ====================
+
+  async getVendorAvailableInkindsDetails(vendorUuid: string) {
+    this.logger.log(
+      `Fetching total earned inkinds details for vendor: ${vendorUuid}`
+    );
+
+    if (!vendorUuid) {
+      throw new RpcException('vendorUuid is required');
+    }
+
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+        select: { uuid: true, name: true, walletAddress: true },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+
+      // Total earned per inkind: what the vendor collected from beneficiaries
+      const beneficiaryRedemptionGroups =
+        await this.prisma.beneficiaryInkindRedemption.groupBy({
+          by: ['groupInkindId'],
+          where: { vendorUid: vendorUuid },
+          _sum: { quantity: true },
+        });
+
+      if (beneficiaryRedemptionGroups.length === 0) {
+        return {
+          vendor: {
+            uuid: vendor.uuid,
+            name: vendor.name,
+            walletAddress: vendor.walletAddress,
+          },
+          inkinds: [],
+        };
+      }
+
+      // Resolve groupInkindId -> inkindUuid
+      const groupInkindIds = beneficiaryRedemptionGroups.map(
+        (g) => g.groupInkindId
+      );
+      const groupInkinds = await this.prisma.groupInkind.findMany({
+        where: { uuid: { in: groupInkindIds } },
+        select: {
+          uuid: true,
+          inkindId: true,
+          inkind: { select: { uuid: true, name: true, type: true } },
+        },
+      });
+
+      const groupInkindMap = new Map(groupInkinds.map((g) => [g.uuid, g]));
+
+      // Aggregate earned quantity per inkind uuid
+      const earnedByInkind = new Map<string, number>();
+      for (const group of beneficiaryRedemptionGroups) {
+        const groupInkind = groupInkindMap.get(group.groupInkindId);
+        if (!groupInkind) continue;
+        const inkindUuid = groupInkind.inkindId;
+        earnedByInkind.set(
+          inkindUuid,
+          (earnedByInkind.get(inkindUuid) ?? 0) + (group._sum.quantity ?? 0)
+        );
+      }
+
+      // Total consumed per inkind: approved redemptions + pending requests
+      const vendorRedemptionGroups =
+        await this.prisma.vendorInkindRedemption.groupBy({
+          by: ['inkindUuid'],
+          where: {
+            vendorUuid,
+            redemptionStatus: {
+              in: [RedemptionStatus.APPROVED, RedemptionStatus.REQUESTED],
+            },
+          },
+          _sum: { quantity: true },
+        });
+
+      const paidByInkind = new Map<string, number>(
+        vendorRedemptionGroups.map((g) => [g.inkindUuid, g._sum.quantity ?? 0])
+      );
+
+      // Build per-inkind summary using inkind details resolved above
+      const inkindDetailMap = new Map(
+        groupInkinds.map((g) => [g.inkindId, g.inkind])
+      );
+
+      const inkinds = Array.from(earnedByInkind.entries())
+        .map(([inkindUuid, totalEarned]) => {
+          const inkind = inkindDetailMap.get(inkindUuid);
+          const totalPaidOut = paidByInkind.get(inkindUuid) ?? 0;
+          return {
+            inkindUuid,
+            inkindName: inkind?.name,
+            inkindType: inkind?.type,
+            totalAvailable: Math.max(totalEarned - totalPaidOut, 0),
+          };
+        })
+        .filter((item) => item.totalAvailable > 0);
+
+      return {
+        vendor: {
+          uuid: vendor.uuid,
+          name: vendor.name,
+          walletAddress: vendor.walletAddress,
+        },
+        inkinds,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch total earned inkinds for vendor ${vendorUuid}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorRedemptions(payload: GetVendorInkindRedemptionDto) {
+    const { vendorUuid, status, vendorName, inkindName, inkindType, page, perPage } = payload;
+    this.logger.log(
+      `Fetching all vendor redemptions with filters: ${JSON.stringify(payload)}`
+    );
+
+    if (vendorUuid) {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+        select: { uuid: true, name: true },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+    }
+
+    try {
+      const query: Prisma.VendorInkindRedemptionFindManyArgs = {
+        where: {
+          ...(vendorUuid && { vendorUuid }),
+          ...(status && { redemptionStatus: status }),
+          ...(vendorName && {
+            vendor: { name: { contains: vendorName, mode: 'insensitive' } },
+          }),
+          ...(inkindName && {
+            inkind: { name: { contains: inkindName, mode: 'insensitive' } },
+          }),
+          ...(inkindType && {
+            inkind: { type: { contains: inkindType, mode: 'insensitive' } },
+          }),
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          inkind: {
+            select: {
+              uuid: true,
+              name: true,
+              type: true,
+            },
+          },
+          vendor: {
+            select: {
+              uuid: true,
+              name: true,
+            },
+          },
+        },
+      };
+
+      const result = await paginate(this.prisma.vendorInkindRedemption, query, {
+        page,
+        perPage,
+      });
+
+      if (result.data.length === 0) {
+        this.logger.log(
+          `No vendor redemptions found with filters: ${JSON.stringify(payload)}`
+        );
+
+        return [];
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch vendor redemptions with filters ${JSON.stringify(
+          payload
+        )}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async createVendorRedemption(payload: AddVendorInkindRedeemDto) {
+    const { vendorUuid, inkindUuid, quantity  } = payload;
+    this.logger.log(
+      `Creating inkind redemption for vendor: ${vendorUuid}, inkind: ${inkindUuid}, quantity: ${quantity}`
+    );
+
+    const projectDetails = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+    const projectId = this.configService.get('PROJECT_ID');
+
+    if (!vendorUuid || !inkindUuid || !quantity) {
+      throw new RpcException('Missing required fields');
+    }
+
+    if (quantity <= 0) {
+      throw new RpcException('Quantity must be greater than zero');
+    }
+
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+
+      const inkind = await this.prisma.inkind.findUnique({
+        where: { uuid: inkindUuid },
+      });
+
+      if (!inkind) {
+        throw new RpcException(`Inkind with UUID ${inkindUuid} not found`);
+      }
+
+      const existingRedemption = await this.prisma.vendorInkindRedemption.findFirst({
+        where: {
+          vendorUuid,
+          inkindUuid,
+          redemptionStatus: RedemptionStatus.REQUESTED,
+        },
+      });
+
+      if (existingRedemption) {
+        throw new RpcException(
+          `A pending redemption already exists for this vendor and inkind`
+        );
+      }
+
+      const redemption = await this.prisma.vendorInkindRedemption.create({
+        data: {
+          vendorUuid,
+          inkindUuid, 
+          quantity,
+        },
+      });
+
+      this.logger.log(
+        `Successfully created vendor redemption with ID: ${redemption.id}`
+      );
+
+      // sending notification to vendor about redemption creation
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Vendor Inkind Redemption Created`,
+          description: `Vendor "${vendor.name}" has requested a redemption of ${quantity} unit${quantity !== 1 ? 's' : ''} of "${inkind.name}" in project ${projectDetails.value['project_name'] || projectId}`,
+          group: 'vendor inkind redemption',
+          projectId: projectId,
+          notify: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Vendor redemption created successfully',
+        redemptionUuid: redemption.uuid,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to create vendor redemption: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateVendorRedemptionStatus(
+    payload: UpdateVendorInkindRedeemStatusDto
+  ) {
+    const { uuid, status, user } = payload;
+    this.logger.log(
+      `Updating vendor redemption status: redemptionUuid=${uuid}, newStatus=${status}`
+    );
+
+    if (!uuid || !status) {
+      throw new RpcException('Missing required fields');
+    }
+
+    try {
+      const redemption = await this.prisma.vendorInkindRedemption.findUnique({
+        where: { uuid },
+      });
+
+      
+      if (!redemption) {
+        throw new RpcException(`Vendor redemption with UUID ${uuid} not found`);
+      }
+      
+      const vendorDetails = await this.prisma.vendor.findUnique({
+        where: { uuid: redemption?.vendorUuid },
+      });
+
+      if (!vendorDetails) {
+        throw new RpcException(`Vendor with UUID ${redemption.vendorUuid} not found`);
+      }
+      // now we have to create tx hash of this redemption and update the redemption record with that tx hash
+
+      await this.prisma.vendorInkindRedemption.update({
+        where: { uuid },
+        data: {
+          redemptionStatus: status,
+
+          ...(status === RedemptionStatus.APPROVED && {
+            approvedAt: new Date(),
+            approvedBy: user.name,
+          }),
+        },
+      });
+
+      this.logger.log(
+        `Vendor redemption status updated to ${status} for redemption UUID: ${uuid}`
+      );
+
+      // this.logger.log(
+      //   `Enqueuing contract job to redeem vendor inkind tokens for redemption UUID: ${uuid}`
+      // )
+
+      // this.chainService.redeemVendorInkindTokens({
+      //   redemptionUuid: uuid,
+      //   vendorWallet: vendorDetails.walletAddress,
+      //   quantity: redemption.quantity,
+      // });
+      
+      this.logger.log(
+        `Successfully updated vendor redemption status for redemption UUID: ${uuid}`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor redemption status updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update vendor redemption status: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateVendorRedemptionTxHash(
+    redemptionUuid: string,
+    txHash: string
+  ) {
+    this.logger.log(
+      `Updating vendor redemption txHash: redemptionUuid=${redemptionUuid}`
+    );
+
+    if (!redemptionUuid || !txHash) {
+      throw new RpcException('Missing required fields');
+    }
+
+    try {
+      await this.prisma.vendorInkindRedemption.update({
+        where: { uuid: redemptionUuid },
+        data: { transactionHash: txHash },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for vendor redemption: ${redemptionUuid}`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor redemption txHash updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update vendor redemption txHash: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);

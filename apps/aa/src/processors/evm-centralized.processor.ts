@@ -716,6 +716,96 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     }
   }
 
+  async handleRedeemVendorTokenForCash(
+    job: Job<{
+      redemptionUuid: string;
+      vendorAddress: string;
+      amount: string;
+    }>
+  ): Promise<any> {
+    try {
+      this.logger.log(
+        'Processing EVM vendor token redemption for cash...',
+        EVMCentralizedProcessor.name
+      );
+
+      const safeWalletSetting = await this.prismaService.setting.findUnique({
+        where: { name: 'DEPLOYER_WALLET_KEY' },
+      });
+
+      if (!safeWalletSetting) {
+        throw new RpcException('DEPLOYER_WALLET_KEY setting not found');
+      }
+
+      const offrampWalletAddress = safeWalletSetting.value;
+
+      await this.ensureInitialized();
+
+      const { redemptionUuid, vendorAddress, amount } = job.data;
+
+      const inkindTokenContract = await this.createContractInstanceSign(
+        'INKINDTOKEN',
+        null,
+        this.signer
+      );
+
+      const decimals = await inkindTokenContract.decimals.staticCall();
+      const vendorBalance = await inkindTokenContract.balanceOf.staticCall(
+        vendorAddress
+      );
+      const transferAmount = ethers.parseUnits(amount, decimals);
+
+      if (vendorBalance < transferAmount) {
+        throw new RpcException(
+          `Insufficient vendor token balance. Required: ${amount}, Available: ${ethers.formatUnits(
+            vendorBalance,
+            decimals
+          )}`
+        );
+      }
+
+      this.logger.log(
+        `Transferring ${amount} tokens from vendor ${vendorAddress} to offramp ${offrampWalletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+
+      const tx = await inkindTokenContract.transferFrom(
+        vendorAddress,
+        offrampWalletAddress,
+        transferAmount
+      );
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully redeemed vendor tokens for cash. Transaction: ${receipt.hash}`,
+        EVMCentralizedProcessor.name
+      );
+
+       await this.inkindService.updateVendorRedemptionTxHash(
+        redemptionUuid,
+        receipt.hash
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from: vendorAddress,
+        to: offrampWalletAddress,
+        amount,
+        method: 'transferFrom',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error redeeming vendor tokens for cash: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Vendor token redemption failed: ${error.message}`
+      );
+    }
+  }
   // ===== HELPER METHODS =====
 
   private async createDisbursementLogsForBatch(

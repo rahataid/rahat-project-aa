@@ -38,6 +38,7 @@ export interface IChainService {
 
   // Inkind redemption
   redeemInkind?(redeemDto: RedeemInkindDto): Promise<any>;
+  redeemVendorInkindTokens?(redeemVendorInkindDto: RedeemInkindTokenForCashDto): Promise<any>;
 }
 
 export type ChainType = 'stellar' | 'evm';
@@ -99,4 +100,10 @@ export interface RedeemInkindDto {
   beneficiaryAddress: string;
   inkindId: string[];
   vendorAddress: string;
+}
+
+export interface RedeemInkindTokenForCashDto {
+  vendorAddress: string;
+  amount: string;
+  redemptionUuid: string;
 }
