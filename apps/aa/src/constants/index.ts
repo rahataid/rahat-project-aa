@@ -85,6 +85,8 @@ export const JOBS = {
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
+    SYNC_IMPORTED_GROUP_BENEFICIARIES:
+      'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -298,15 +300,19 @@ export const JOBS = {
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
     BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
-    GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR: 'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
-    REDEEM_OFFLINE_INKIND_BY_VENDOR: 'aa.jobs.inkinds.redeemOfflineInkindByVendor',
+    GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR:
+      'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
+    REDEEM_OFFLINE_INKIND_BY_VENDOR:
+      'aa.jobs.inkinds.redeemOfflineInkindByVendor',
     SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
     CREATE_VENDOR_REDEMPTION: 'aa.jobs.inkinds.createVendorRedemption',
-    GET_VENDOR_AVAILABLE_INKIND_DETAILS: 'aa.jobs.inkinds.getVendorAvailableInkindsDetails',
+    GET_VENDOR_AVAILABLE_INKIND_DETAILS:
+      'aa.jobs.inkinds.getVendorAvailableInkindsDetails',
     GET_VENDOR_REDEMPTIONS: 'aa.jobs.inkinds.getVendorRedemptions',
     UPDATE_VENDOR_REDEMPTION_STATUS:
       'aa.jobs.inkinds.updateVendorRedemptionStatus',
-    UPDATE_VENDOR_REDEMPTION_TX_HASH: 'aa.jobs.inkinds.updateVendorRedemptionTxHash'
+    UPDATE_VENDOR_REDEMPTION_TX_HASH:
+      'aa.jobs.inkinds.updateVendorRedemptionTxHash',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
