@@ -253,4 +253,12 @@ export class BeneficiaryController {
   ) {
     return this.beneficiaryService.createBeneficiaryWithDbTransaction(dto);
   }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.SYNC_IMPORTED_GROUP_BENEFICIARIES,
+    uuid: process.env.PROJECT_ID,
+  })
+  async syncBeneficiaryGroupData(@Payload() dto: any) {
+    return this.beneficiaryService.syncBeneficiaryGroupData(dto);
+  }
 }
