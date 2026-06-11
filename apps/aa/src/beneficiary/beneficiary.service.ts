@@ -845,7 +845,7 @@ export class BeneficiaryService {
     const isDev = process.env.NODE_ENV !== 'production';
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234:0', BCRYPT_ROUNDS);
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
     }
 
     const otpRecords: Array<{
