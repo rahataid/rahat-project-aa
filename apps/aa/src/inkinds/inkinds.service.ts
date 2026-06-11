@@ -1384,17 +1384,18 @@ export class InkindsService {
       name: 'PROJECTINFO',
     });
 
-    const isPhasePayoutActivate = await lastValueFrom(
+    const { isPayoutMethodPhaseActivated } = await lastValueFrom(
       this.client.send(
         { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
         {
           activeYear: value.active_year,
           riverBasin: value.river_basin,
+          disbursementMethod: "INKIND"
         }
       )
     );
 
-    if (!isPhasePayoutActivate) {
+    if (!isPayoutMethodPhaseActivated) {
       this.logger.log('Payout phase not active. In-kind redemption is unavailable.');
       throw new RpcException('Payout phase not active. In-kind redemption is unavailable.');
     }
