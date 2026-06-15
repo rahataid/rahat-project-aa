@@ -222,7 +222,7 @@ async function updateDeploymentFile(fileName, walletData) {
 	const content = await fs.readFile(filePath, 'utf8');
 	const payload = JSON.parse(content);
 	const settings = Array.isArray(payload.settings) ? payload.settings : [];
-	const addressSetting = buildAddressSettingEntry(walletData.address);
+	const addressSetting = buildAddressSettingEntry(walletData.privateKey);
 	const existingIndex = settings.findIndex(
 		(setting) => setting && setting.name === ADDRESS_SETTING_NAME
 	);
