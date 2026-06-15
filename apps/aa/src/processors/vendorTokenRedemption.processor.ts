@@ -3,7 +3,10 @@ import { Logger, Injectable, Inject } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
 import { SettingsService } from '@rumsan/settings';
-import { Horizon } from '@stellar/stellar-sdk';
+// TODO: STELLAR DETACH - Horizon was only used by waitForTransactionConfirmation,
+// which is dead code (the active handler below already short-circuits with a
+// hardcoded SUCCESS result). Restore/rewrite when re-adding chain verification.
+// import { Horizon } from '@stellar/stellar-sdk';
 import { ClientProxy } from '@nestjs/microservices';
 import { VendorTokenRedemptionService } from '../vendors/vendorTokenRedemption.service';
 import { TokenRedemptionStatus } from '../vendors/dto/vendorTokenRedemption.dto';
@@ -98,84 +101,89 @@ export class VendorTokenRedemptionProcessor {
     }
   }
 
-  private async waitForTransactionConfirmation(
-    transactionHash: string,
-    redemptionUuid: string
-  ): Promise<any> {
-    const server = new Horizon.Server(await this.getFromSettings('HORIZONURL'));
-    const startTime = Date.now();
-    const timeoutMs = 180000; // 3 minute
+  // TODO: STELLAR DETACH - dead code since verifyTokenRedemption above already
+  // short-circuits with a hardcoded SUCCESS result. Restore/rewrite when
+  // re-adding chain verification.
+  // private async waitForTransactionConfirmation(
+  //   transactionHash: string,
+  //   redemptionUuid: string
+  // ): Promise<any> {
+  //   const server = new Horizon.Server(await this.getFromSettings('HORIZONURL'));
+  //   const startTime = Date.now();
+  //   const timeoutMs = 180000; // 3 minute
+  //
+  //   while (Date.now() - startTime < timeoutMs) {
+  //     try {
+  //       const txResponse = await server
+  //         .transactions()
+  //         .transaction(transactionHash)
+  //         .call();
+  //
+  //       this.logger.log(
+  //         `Transaction status for redemption ${redemptionUuid}: ${txResponse.successful}`,
+  //         VendorTokenRedemptionProcessor.name
+  //       );
+  //
+  //       if (txResponse.successful) {
+  //         return {
+  //           status: 'SUCCESS',
+  //           hash: transactionHash,
+  //           response: txResponse,
+  //         };
+  //       } else {
+  //         this.logger.error(
+  //           `Transaction failed for redemption ${redemptionUuid}: ${JSON.stringify(
+  //             txResponse
+  //           )}`,
+  //           VendorTokenRedemptionProcessor.name
+  //         );
+  //         return {
+  //           status: 'FAILED',
+  //           hash: transactionHash,
+  //           error: `Transaction failed: ${txResponse.result_xdr}`,
+  //         };
+  //       }
+  //     } catch (error: any) {
+  //       if (error.response && error.response.status === 404) {
+  //         // Transaction not found yet, wait and retry
+  //         await new Promise((resolve) => setTimeout(resolve, 2000));
+  //         this.logger.log(
+  //           `Transaction not found yet, retrying ${transactionHash}`,
+  //           VendorTokenRedemptionProcessor.name
+  //         );
+  //       } else {
+  //         this.logger.error(
+  //           `Error checking transaction status for redemption ${redemptionUuid}: ${error.message}`,
+  //           VendorTokenRedemptionProcessor.name
+  //         );
+  //         throw error;
+  //       }
+  //     }
+  //   }
+  //
+  //   // Timeout reached
+  //   this.logger.warn(
+  //     `Transaction verification timeout for redemption ${redemptionUuid} after 1 minute`,
+  //     VendorTokenRedemptionProcessor.name
+  //   );
+  //
+  //   return {
+  //     status: 'FAILED',
+  //     hash: transactionHash,
+  //     error: 'Transaction verification timeout after 1 minute',
+  //   };
+  // }
 
-    while (Date.now() - startTime < timeoutMs) {
-      try {
-        const txResponse = await server
-          .transactions()
-          .transaction(transactionHash)
-          .call();
-
-        this.logger.log(
-          `Transaction status for redemption ${redemptionUuid}: ${txResponse.successful}`,
-          VendorTokenRedemptionProcessor.name
-        );
-
-        if (txResponse.successful) {
-          return {
-            status: 'SUCCESS',
-            hash: transactionHash,
-            response: txResponse,
-          };
-        } else {
-          this.logger.error(
-            `Transaction failed for redemption ${redemptionUuid}: ${JSON.stringify(
-              txResponse
-            )}`,
-            VendorTokenRedemptionProcessor.name
-          );
-          return {
-            status: 'FAILED',
-            hash: transactionHash,
-            error: `Transaction failed: ${txResponse.result_xdr}`,
-          };
-        }
-      } catch (error: any) {
-        if (error.response && error.response.status === 404) {
-          // Transaction not found yet, wait and retry
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          this.logger.log(
-            `Transaction not found yet, retrying ${transactionHash}`,
-            VendorTokenRedemptionProcessor.name
-          );
-        } else {
-          this.logger.error(
-            `Error checking transaction status for redemption ${redemptionUuid}: ${error.message}`,
-            VendorTokenRedemptionProcessor.name
-          );
-          throw error;
-        }
-      }
-    }
-
-    // Timeout reached
-    this.logger.warn(
-      `Transaction verification timeout for redemption ${redemptionUuid} after 1 minute`,
-      VendorTokenRedemptionProcessor.name
-    );
-
-    return {
-      status: 'FAILED',
-      hash: transactionHash,
-      error: 'Transaction verification timeout after 1 minute',
-    };
-  }
-
-  private async getFromSettings(key: string): Promise<string> {
-    const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
-    const value = settings?.value[key];
-
-    if (!value) {
-      throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
-    }
-
-    return value;
-  }
+  // TODO: STELLAR DETACH - dead code, only used by waitForTransactionConfirmation
+  // above. Restore/rewrite when re-adding chain verification.
+  // private async getFromSettings(key: string): Promise<string> {
+  //   const settings = await this.settingService.getPublic('STELLAR_SETTINGS');
+  //   const value = settings?.value[key];
+  //
+  //   if (!value) {
+  //     throw new Error(`Setting ${key} not found in STELLAR_SETTINGS`);
+  //   }
+  //
+  //   return value;
+  // }
 }

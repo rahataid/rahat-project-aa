@@ -17,7 +17,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { StellarModule } from '../stellar/stellar.module';
+// TODO: STELLAR DETACH - re-import StellarModule once it is rewritten and wired back in.
+// import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
@@ -88,7 +89,8 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
-    StellarModule,
+    // TODO: STELLAR DETACH - re-add StellarModule once it is rewritten and wired back in.
+    // StellarModule,
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,

@@ -11,7 +11,9 @@ import {
   CreateClaimDto,
   VendorOnlinePayoutDto,
 } from '../vendors/dto/vendor-offline-payout.dto';
-import { StellarService } from '../stellar/stellar.service';
+// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
+// equivalent OTP verification / asset transfer methods.
+// import { StellarService } from '../stellar/stellar.service';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 
@@ -23,7 +25,8 @@ export class VendorOfflinePayoutProcessor {
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prismaService: PrismaService,
-    private readonly stellarService: StellarService,
+    // TODO: STELLAR DETACH - re-add once stellar module is rewritten.
+    // private readonly stellarService: StellarService,
   ) {}
 
   @Process({ name: JOBS.VENDOR.ONLINE_PAYOUT, concurrency: 5 })
@@ -261,59 +264,66 @@ export class VendorOfflinePayoutProcessor {
         );
       }
 
-      // Use StellarService.verifyOTP for OTP validation and marking as verified
-      await this.stellarService['verifyOTP'](
-        otp,
-        (beneficiary.extras as any).phone,
-        amount
+      // TODO: STELLAR DETACH - offline token transfer relied on
+      // StellarService.verifyOTP and StellarService.sendAssetToVendor to validate
+      // the OTP and move tokens from beneficiary to vendor on-chain. Re-implement
+      // this flow once the stellar module is rewritten.
+      // // Use StellarService.verifyOTP for OTP validation and marking as verified
+      // await this.stellarService['verifyOTP'](
+      //   otp,
+      //   (beneficiary.extras as any).phone,
+      //   amount
+      // );
+      //
+      // // Send tokens from beneficiary to vendor using Stellar service (offline flow)
+      // const transferResult = await this.stellarService.sendAssetToVendor(
+      //   {
+      //     phoneNumber: (beneficiary.extras as any).phone || '',
+      //     receiverAddress: vendor.walletAddress,
+      //     amount: amount.toString(),
+      //     otp: otp,
+      //   },
+      //   true, // skipOtpVerification
+      //   true // skipBeneficiaryRedeemCreation
+      // );
+      //
+      // // Update the beneficiaryRedeem record
+      // await this.prismaService.beneficiaryRedeem.update({
+      //   where: { uuid: redeemRecord.uuid },
+      //   data: {
+      //     txHash: transferResult.txHash,
+      //     isCompleted: true,
+      //     status: 'COMPLETED',
+      //     info: {
+      //       ...(typeof redeemRecord.info === 'object' &&
+      //       redeemRecord.info !== null
+      //         ? redeemRecord.info
+      //         : {}),
+      //       message: 'Offline beneficiary redemption successful',
+      //       transactionHash: transferResult.txHash,
+      //       offrampWalletAddress: vendor.walletAddress,
+      //       beneficiaryWalletAddress: beneficiary.walletAddress,
+      //       otp: otp,
+      //       mode: 'OFFLINE',
+      //     },
+      //   },
+      // });
+      //
+      // this.logger.log(
+      //   `Successfully processed offline token transfer for beneficiary ${beneficiaryUuid}. Transaction hash: ${transferResult.txHash}`,
+      //   VendorOfflinePayoutProcessor.name
+      // );
+      //
+      // return {
+      //   success: true,
+      //   transactionHash: transferResult.txHash,
+      //   amount,
+      //   beneficiaryUuid,
+      //   vendorUuid,
+      // };
+      throw new RpcException(
+        'Offline token transfer is temporarily disabled - stellar module detached. TODO: re-implement using the rewritten stellar module.'
       );
-
-      // Send tokens from beneficiary to vendor using Stellar service (offline flow)
-      const transferResult = await this.stellarService.sendAssetToVendor(
-        {
-          phoneNumber: (beneficiary.extras as any).phone || '',
-          receiverAddress: vendor.walletAddress,
-          amount: amount.toString(),
-          otp: otp,
-        },
-        true, // skipOtpVerification
-        true // skipBeneficiaryRedeemCreation
-      );
-
-      // Update the beneficiaryRedeem record
-      await this.prismaService.beneficiaryRedeem.update({
-        where: { uuid: redeemRecord.uuid },
-        data: {
-          txHash: transferResult.txHash,
-          isCompleted: true,
-          status: 'COMPLETED',
-          info: {
-            ...(typeof redeemRecord.info === 'object' &&
-            redeemRecord.info !== null
-              ? redeemRecord.info
-              : {}),
-            message: 'Offline beneficiary redemption successful',
-            transactionHash: transferResult.txHash,
-            offrampWalletAddress: vendor.walletAddress,
-            beneficiaryWalletAddress: beneficiary.walletAddress,
-            otp: otp,
-            mode: 'OFFLINE',
-          },
-        },
-      });
-
-      this.logger.log(
-        `Successfully processed offline token transfer for beneficiary ${beneficiaryUuid}. Transaction hash: ${transferResult.txHash}`,
-        VendorOfflinePayoutProcessor.name
-      );
-
-      return {
-        success: true,
-        transactionHash: transferResult.txHash,
-        amount,
-        beneficiaryUuid,
-        vendorUuid,
-      };
     } catch (error) {
       this.logger.error(
         `Failed to process offline token transfer for vendor/beneficiary: ${error.message}`,

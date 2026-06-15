@@ -10,14 +10,15 @@ import { HttpModule} from '@nestjs/axios';
 import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { StellarModule } from '../stellar/stellar.module';
+// TODO: STELLAR DETACH - re-add once stellar module is rewritten.
+// import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
     VendorsModule,
     HttpModule,
     forwardRef(() => BeneficiaryModule),
-    StellarModule,
+    // StellarModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',
@@ -40,9 +41,10 @@ import { StellarModule } from '../stellar/stellar.module';
         },
       },
     ]),
-    BullModule.registerQueue({
-      name: BQUEUE.STELLAR,
-    }),
+    // TODO: STELLAR DETACH - PayoutsService no longer injects BQUEUE.STELLAR.
+    // BullModule.registerQueue({
+    //   name: BQUEUE.STELLAR,
+    // }),
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
