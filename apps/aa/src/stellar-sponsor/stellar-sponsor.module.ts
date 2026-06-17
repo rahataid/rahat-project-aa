@@ -32,10 +32,13 @@ import { StellarSponsorProcessor } from './stellar-sponsor.processor';
     {
       provide: STELLAR_CLIENT,
       useFactory: async (settingsService: SettingsService) => {
-        console.log('Initializing StellarClient with settings from database');
-        const settings = await settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-        console.log('Retrieved Stellar sponsor settings:', settings);
-        return new StellarClient(settings.value as unknown as StellarClientConfig);
+        try {
+          const settings = await settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
+          if (!settings?.value) return null;
+          return new StellarClient(settings.value as unknown as StellarClientConfig);
+        } catch {
+          return null;
+        }
       },
       inject: [SettingsService],
     },
