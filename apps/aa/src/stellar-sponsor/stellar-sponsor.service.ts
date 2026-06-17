@@ -21,16 +21,12 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     try {
       const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
       this.isStellarChain = (chainSettings?.value as any)?.type === 'stellar';
-    } catch {
-      this.isStellarChain = false;
-    }
 
-    if (!this.isStellarChain) {
-      this.logger.log('Chain type is not Stellar — StellarSponsorService will remain inactive.');
-      return;
-    }
+      if (!this.isStellarChain) {
+        this.logger.log('Chain type is not Stellar — StellarSponsorService will remain inactive.');
+        return;
+      }
 
-    try {
       const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
       if (!sponsorSettings?.value) {
         this.logger.warn(
@@ -38,39 +34,41 @@ export class StellarSponsorService implements OnApplicationBootstrap {
           'Stellar account sponsorship will be disabled until the setting is added.'
         );
       }
-    } catch {}
+    } catch (err: any) {
+      this.logger.warn(`Failed to load settings during bootstrap: ${err?.message}`);
+    }
   }
 
   @OnEvent(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT)
-  async onBeneficiaryGroupAdded(payload: { groupUuid: string; beneficiaryIds: string[] }) {
-    this.logger.debug(`Received event ${EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT} by sponsor service for ${payload.groupUuid}`);
+  async sponsorBeneficiaries(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Sponsoring beneficiaries for group ${groupUuid}`);
 
     if (!this.isStellarChain) {
-      this.logger.debug('Chain type is not Stellar — skipping sponsorship for group ' + payload.groupUuid);
+      this.logger.debug(`Chain is not Stellar — skipping sponsorship for group ${groupUuid}`);
       return;
     }
 
     try {
       const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
       if (!sponsorSettings?.value) {
-        this.logger.debug('STELLAR_SPONSOR_SETTINGS not configured — skipping sponsorship for group ' + payload.groupUuid);
+        this.logger.debug(`STELLAR_SPONSOR_SETTINGS not configured — skipping group ${groupUuid}`);
         return;
       }
     } catch {
-      this.logger.debug('STELLAR_SPONSOR_SETTINGS not found — skipping sponsorship for group ' + payload.groupUuid);
+      this.logger.debug(`STELLAR_SPONSOR_SETTINGS unavailable — skipping group ${groupUuid}`);
       return;
     }
 
-    const { groupUuid, beneficiaryIds } = payload;
-
-    const records = await this.prisma.beneficiary.findMany({
-      where: { uuid: { in: beneficiaryIds } },
-      select: { uuid: true, walletAddress: true },
+    const records = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId: groupUuid },
+      select: { beneficiary: { select: { uuid: true, walletAddress: true } } },
     });
 
     const beneficiaries = records
-      .filter((r) => r.walletAddress)
-      .map((r) => ({ beneficiaryId: r.uuid, walletAddress: r.walletAddress as string }));
+      .map((r) => r.beneficiary)
+      .filter((b) => b.walletAddress)
+      .map((b) => ({ beneficiaryId: b.uuid, walletAddress: b.walletAddress as string }));
 
     if (!beneficiaries.length) {
       this.logger.warn(`No wallet addresses found for group ${groupUuid}`);

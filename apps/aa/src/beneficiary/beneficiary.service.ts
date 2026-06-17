@@ -522,10 +522,8 @@ export class BeneficiaryService {
       `New Beneficiary group ${group.name} added to project with ${groupedBeneficiaries.count} beneficiaries.`
     );
 
-    const beneficiaryIds = beneficiaryGroupData.groupedBeneficiaries.map((b) => b.beneficiaryId);
     this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
       groupUuid: beneficiaryGroupData.uuid,
-      beneficiaryIds,
     });
 
     return {
