@@ -38,6 +38,11 @@ export class BeneficiaryMultisigService {
       },
     });
 
+    const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
+    if (typeof chainType !== 'string' || chainType.toLowerCase() !== 'evm') {
+      return;
+    }
+
     const safeProposerPrivateKeySetting = await this.prisma.setting.findFirst({
       where: {
         name: 'SAFE_PROPOSER_PRIVATE_ADDRESS',

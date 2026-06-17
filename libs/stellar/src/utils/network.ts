@@ -7,6 +7,7 @@ export interface ResolvedNetwork {
   server: Horizon.Server;
 }
 
+//TODO: make horizon urls configurable
 const HORIZON_URLS: Record<StellarNetwork, string> = {
   mainnet: 'https://horizon.stellar.org',
   testnet: 'https://horizon-testnet.stellar.org',

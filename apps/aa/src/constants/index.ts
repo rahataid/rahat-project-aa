@@ -3,6 +3,8 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+export const STELLAR_CLIENT = 'STELLAR_CLIENT';
+export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -115,6 +117,10 @@ export const JOBS = {
     TRANSFER_TO_OFFRAMP: `aa.jobs.stellar.transferToOfframp`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
+    SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
+  },
+  WALLET: {
+    GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
   },
   OFFRAMP: {
     CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
@@ -342,6 +348,7 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -365,6 +372,7 @@ export const BQUEUE = {
   INKIND_BULK_REDEEM: `INKIND_BULK_REDEEM_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
+  STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

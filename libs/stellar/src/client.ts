@@ -23,6 +23,7 @@ export class StellarClient {
   readonly asset: Asset;
   private readonly sponsorKeypair: Keypair;
 
+  //TODO: consider sender horizon urls as well
   constructor(config: StellarClientConfig) {
     this.config = config;
 
@@ -33,6 +34,7 @@ export class StellarClient {
 
     this.asset = new Asset(config.assetCode, config.assetIssuer);
     this.sponsorKeypair = Keypair.fromSecret(config.sponsorSecret);
+    console.log('StellarClient initialized with config:', config);
   }
 
   get sponsorPublicKey(): string {
@@ -54,8 +56,8 @@ export class StellarClient {
   }
 
   /** Creates up to MAX_ACCOUNTS_PER_BATCH sponsored accounts in a single transaction. */
-  async createSponsoredAccountsBatch(count: number): Promise<CreateSponsoredAccountsBatchResult> {
-    return createSponsoredAccountsBatch(this.opContext, count);
+  async createSponsoredAccountsBatch(keypairs: Keypair[]): Promise<CreateSponsoredAccountsBatchResult> {
+    return createSponsoredAccountsBatch(this.opContext, keypairs);
   }
 
   /** Sponsor sends the configured asset to a sponsored account. */

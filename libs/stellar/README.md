@@ -9,6 +9,7 @@ Stellar transactions are assembled.
 ## Usage
 
 ```ts
+import { Keypair } from '@stellar/stellar-sdk';
 import { StellarClient, StellarOperationError } from '@rahataid/stellar';
 
 const stellar = new StellarClient({
@@ -22,8 +23,9 @@ const stellar = new StellarClient({
 const { account, hash } = await stellar.createSponsoredAccount();
 // account = { publicKey: 'G...', secretKey: 'S...' }
 
-// Batch-create up to 16 accounts in a single transaction
-const { accounts } = await stellar.createSponsoredAccountsBatch(10);
+// Batch-sponsor existing accounts — pass keypairs derived from beneficiary secrets
+const keypairs = beneficiarySecrets.map((s) => Keypair.fromSecret(s));
+const { accounts } = await stellar.createSponsoredAccountsBatch(keypairs);
 
 // Sponsor sends the configured asset to a sponsored beneficiary
 await stellar.sendToSponsored(account.publicKey, '50');

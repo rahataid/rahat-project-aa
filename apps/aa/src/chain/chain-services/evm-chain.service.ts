@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
@@ -41,7 +41,7 @@ export interface EVMChainConfig {
 }
 
 @Injectable()
-export class EvmChainService implements IChainService {
+export class EvmChainService implements IChainService, OnModuleInit {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
   private _evmProcessor: EVMCentralizedProcessor | null = null;
@@ -55,8 +55,21 @@ export class EvmChainService implements IChainService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly moduleRef: ModuleRef
-  ) {
-    this.initializeProvider();
+  ) {}
+
+  async onModuleInit() {
+    const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+    const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
+    if (typeof chainType === 'string' && chainType.toLowerCase() !== 'evm') {
+      this.logger.log(
+        `Chain type is "${chainType}", skipping EVM provider initialization`,
+        EvmChainService.name
+      );
+      return;
+    }
+    await this.initializeProvider().catch((err) =>
+      this.logger.error(`Failed to initialize EVM provider: ${err.message}`, err.stack, EvmChainService.name)
+    );
   }
 
   private get evmProcessor(): EVMCentralizedProcessor {

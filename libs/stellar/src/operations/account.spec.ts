@@ -9,11 +9,12 @@ describe('createSponsoredAccountsBatch', () => {
     asset: new Asset('RAHAT', 'GAVSXFHUI5YWS3YI2RFQV7SB3KKVFERKWWY2QSVJNDTROKQZRWEPXLWG'),
   };
 
-  it('rejects a count below 1', async () => {
-    await expect(createSponsoredAccountsBatch(ctx, 0)).rejects.toThrow(RangeError);
+  it('rejects an empty keypairs array', async () => {
+    await expect(createSponsoredAccountsBatch(ctx, [])).rejects.toThrow(RangeError);
   });
 
-  it('rejects a count above MAX_ACCOUNTS_PER_BATCH', async () => {
-    await expect(createSponsoredAccountsBatch(ctx, MAX_ACCOUNTS_PER_BATCH + 1)).rejects.toThrow(RangeError);
+  it('rejects a keypairs array exceeding MAX_ACCOUNTS_PER_BATCH', async () => {
+    const keypairs = Array.from({ length: MAX_ACCOUNTS_PER_BATCH + 1 }, () => Keypair.random());
+    await expect(createSponsoredAccountsBatch(ctx, keypairs)).rejects.toThrow(RangeError);
   });
 });

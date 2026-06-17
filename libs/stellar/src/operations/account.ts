@@ -56,21 +56,24 @@ export async function createSponsoredAccount(ctx: AccountOpContext): Promise<Cre
 
 /**
  * Creates up to MAX_ACCOUNTS_PER_BATCH sponsored accounts (with trustlines)
- * in a single transaction.
+ * in a single transaction. Pass the keypairs for the accounts to sponsor —
+ * derive them from existing secrets via Keypair.fromSecret(secret).
  */
 export async function createSponsoredAccountsBatch(
   ctx: AccountOpContext,
-  count: number
+  keypairs: Keypair[]
 ): Promise<CreateSponsoredAccountsBatchResult> {
-  if (count < 1 || count > MAX_ACCOUNTS_PER_BATCH) {
-    throw new RangeError(`count must be between 1 and ${MAX_ACCOUNTS_PER_BATCH} (got ${count})`);
+  if (keypairs.length < 1 || keypairs.length > MAX_ACCOUNTS_PER_BATCH) {
+    throw new RangeError(
+      `keypairs.length must be between 1 and ${MAX_ACCOUNTS_PER_BATCH} (got ${keypairs.length})`
+    );
   }
 
-  const sponsoredKeypairs = Array.from({ length: count }, () => Keypair.random());
+  const sponsoredKeypairs = keypairs;
   const sponsorAccount = await ctx.server.loadAccount(ctx.sponsorKeypair.publicKey());
 
   let builder = new TransactionBuilder(sponsorAccount, {
-    fee: (Number(BASE_FEE) * count * OPS_PER_ACCOUNT).toString(),
+    fee: (Number(BASE_FEE) * keypairs.length * OPS_PER_ACCOUNT).toString(),
     networkPassphrase: ctx.networkPassphrase,
   });
 

@@ -26,6 +26,7 @@ import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
 import { FundallocationModule } from '../fundallocation/fundallocation.module';
+import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
 
 @Module({
   imports: [
@@ -83,7 +84,9 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     BullModule.registerQueue({ name: BQUEUE.QR_PDF }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SPONSOR }),
     ProcessorsModule,
+    StellarSponsorModule,
     BeneficiaryModule,
     StakeholdersModule,
     SettingsModule,

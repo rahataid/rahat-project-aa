@@ -5,7 +5,9 @@
   "projectType": "application",
   "targets": {
     "build": {
-      "dependsOn": ["mainBuild"],
+      "dependsOn": [
+        "mainBuild"
+      ],
       "executor": "nx:run-commands",
       "options": {
         "commands": [
@@ -15,7 +17,9 @@
     },
     "mainBuild": {
       "executor": "@nx/webpack:webpack",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "options": {
         "target": "node",
         "compiler": "tsc",
@@ -27,19 +31,19 @@
         "webpackConfig": "apps/aa/webpack.config.js"
       },
       "configurations": {
-        "devaaopment": {},
+        "development": {},
         "production": {}
       }
     },
     "serve": {
       "executor": "@nx/js:node",
-      "defaultConfiguration": "devaaopment",
+      "defaultConfiguration": "development",
       "options": {
         "buildTarget": "aa:build"
       },
       "configurations": {
-        "devaaopment": {
-          "buildTarget": "aa:build:devaaopment"
+        "development": {
+          "buildTarget": "aa:build:development"
         },
         "production": {
           "buildTarget": "aa:build:production"
@@ -48,7 +52,9 @@
     },
     "test": {
       "executor": "@nrwl/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/apps/aa"],
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/aa"
+      ],
       "options": {
         "jestConfig": "apps/aa/jest.config.ts",
         "passWithNoTests": true
