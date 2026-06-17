@@ -9,6 +9,7 @@ import { BQUEUE, EVENTS, JOBS, STELLAR_SPONSOR_BATCH_SIZE } from '../constants';
 @Injectable()
 export class StellarSponsorService implements OnApplicationBootstrap {
   private readonly logger = new Logger(StellarSponsorService.name);
+  private isStellarChain = false;
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SPONSOR) private readonly queue: Queue,
@@ -18,13 +19,20 @@ export class StellarSponsorService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     try {
-      const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-      if (sponsorSettings?.value) return;
-    } catch {}
+      const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+      this.isStellarChain = (chainSettings?.value as any)?.type === 'stellar';
+    } catch {
+      this.isStellarChain = false;
+    }
+
+    if (!this.isStellarChain) {
+      this.logger.log('Chain type is not Stellar — StellarSponsorService will remain inactive.');
+      return;
+    }
 
     try {
-      const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
-      if ((chainSettings?.value as any)?.type === 'stellar') {
+      const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
+      if (!sponsorSettings?.value) {
         this.logger.warn(
           'Chain type is Stellar but STELLAR_SPONSOR_SETTINGS is not configured. ' +
           'Stellar account sponsorship will be disabled until the setting is added.'
@@ -36,6 +44,11 @@ export class StellarSponsorService implements OnApplicationBootstrap {
   @OnEvent(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT)
   async onBeneficiaryGroupAdded(payload: { groupUuid: string; beneficiaryIds: string[] }) {
     this.logger.debug(`Received event ${EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT} by sponsor service for ${payload.groupUuid}`);
+
+    if (!this.isStellarChain) {
+      this.logger.debug('Chain type is not Stellar — skipping sponsorship for group ' + payload.groupUuid);
+      return;
+    }
 
     try {
       const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');

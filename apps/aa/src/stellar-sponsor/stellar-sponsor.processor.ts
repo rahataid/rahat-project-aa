@@ -24,6 +24,8 @@ export class StellarSponsorProcessor {
     private readonly prisma: PrismaService
   ) {}
 
+  //TODO: once sponsorship is completed tag group as ready for disburseemnt.
+  //this only applies when the chain.type in chain settings is set to stellar and the STELLAR_SPONSOR_SETTINGS is configured.
   @Process({ name: JOBS.STELLAR.SPONSOR_ACCOUNTS_BATCH, concurrency: 1 })
   async sponsorAccountsBatch(job: Job<SponsorBatchJobData>) {
     const { groupUuid, beneficiaries } = job.data;
