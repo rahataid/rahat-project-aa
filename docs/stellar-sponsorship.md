@@ -2,7 +2,7 @@
 
 ## Overview
 
-When a beneficiary group is added to a project, the sponsorship flow automatically creates and funds Stellar accounts for each beneficiary. A designated **sponsor account** covers the base reserve (XLM minimum balance) so beneficiaries do not need to hold any XLM themselves.
+When a beneficiary group is added to a project, A designated **sponsor account** covers the base reserve (XLM minimum balance) so beneficiaries do not need to hold any XLM themselves.
 
 ---
 
