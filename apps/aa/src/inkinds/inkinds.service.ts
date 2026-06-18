@@ -1384,17 +1384,18 @@ export class InkindsService {
       name: 'PROJECTINFO',
     });
 
-    const isPhasePayoutActivate = await lastValueFrom(
+    const { isPayoutMethodPhaseActivated } = await lastValueFrom(
       this.client.send(
         { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
         {
           activeYear: value.active_year,
           riverBasin: value.river_basin,
+          disbursementMethod: "INKIND"
         }
       )
     );
 
-    if (!isPhasePayoutActivate) {
+    if (!isPayoutMethodPhaseActivated) {
       this.logger.log('Payout phase not active. In-kind redemption is unavailable.');
       throw new RpcException('Payout phase not active. In-kind redemption is unavailable.');
     }
@@ -1411,7 +1412,7 @@ export class InkindsService {
       preloadedInkindRecords?: Array<{ uuid: string; name: string; type: string }>;
     }
   ) {
-    const { walletAddress, inkinds, user, redeemedAt } = payload;
+    const { walletAddress, inkinds, user, redeemedAt, otpExemptionReason } = payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
       throw new RpcException('Missing required fields');
@@ -1421,6 +1422,7 @@ export class InkindsService {
       `Processing inkind redemption for beneficiary: ${walletAddress}`
     );
 
+    this.logger.log(`otp exemption reasons comes as: `, options);
     try {
       const vendor = options?.skipVendorAndPhaseValidation
         ? options.vendor
@@ -1534,7 +1536,8 @@ export class InkindsService {
           validatedPreDefined,
           walletAddress,
           user,
-          redeemedAtDate
+          redeemedAtDate,
+          otpExemptionReason
         );
 
         const walkInResults = await this.executeWalkInRedemptions(
@@ -1542,7 +1545,8 @@ export class InkindsService {
           validatedWalkIn,
           walletAddress,
           beneficiary.uuid,
-          user
+          user,
+          otpExemptionReason
         );
 
         return [...preDefinedResults, ...walkInResults];
@@ -2875,7 +2879,8 @@ export class InkindsService {
     items: PreDefinedRedemptionItem[],
     walletAddress: string,
     vendor: UserObject,
-    redeemedAt?: Date 
+    redeemedAt?: Date,
+    otpExemptionReason?: string
   ): Promise<PreDefinedRedemptionResult[]> {
     const results: PreDefinedRedemptionResult[] = [];
 
@@ -2885,6 +2890,7 @@ export class InkindsService {
       );
 
       // Create redemption record
+            this.logger.log('Otp exempted with reason: ', otpExemptionReason)
       const redemption = await tx.beneficiaryInkindRedemption.create({
         data: {
           beneficiaryWallet: walletAddress,
@@ -2893,6 +2899,7 @@ export class InkindsService {
           vendorUid: vendor.uuid,
           ...(redeemedAt !== undefined ? { redeemedAt } : {}),
           status: InkindTxStatus.PENDING,
+          otpExemptionReason
         },
       });
 
@@ -2925,7 +2932,8 @@ export class InkindsService {
     items: WalkInRedemptionItem[],
     walletAddress: string,
     beneficiaryUuid: string,
-    vendor: UserObject
+    vendor: UserObject,
+    otpExemptionReason?: string
   ): Promise<WalkInRedemptionResult[]> {
     const results: WalkInRedemptionResult[] = [];
 
@@ -3012,6 +3020,7 @@ export class InkindsService {
         });
       }
 
+      this.logger.log('Otp exempted with reason: ', otpExemptionReason)
       // Create redemption record
       const redemption = await tx.beneficiaryInkindRedemption.create({
         data: {
@@ -3020,6 +3029,7 @@ export class InkindsService {
           quantity: 1,
           vendorUid: vendor.uuid,
           status: InkindTxStatus.PENDING,
+          otpExemptionReason
         },
       });
 

@@ -845,7 +845,7 @@ export class BeneficiaryService {
     const isDev = process.env.NODE_ENV !== 'production';
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234:0', BCRYPT_ROUNDS);
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
     }
 
     const otpRecords: Array<{
@@ -1433,5 +1433,61 @@ export class BeneficiaryService {
       );
       throw new Error(`Database transaction failed: ${errMsg}`);
     }
+  }
+
+  async syncBeneficiaryGroupData(dto: {
+    groupUuid: string;
+    beneficiariesData: {
+      uuid: string;
+      walletAddress: string;
+      gender?: string;
+      isVerified?: boolean;
+      extras?: any;
+      phone?: string;
+    }[];
+  }) {
+    const { groupUuid, beneficiariesData } = dto;
+
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: groupUuid },
+    });
+    if (!group) throw new Error(`Beneficiary group not found: ${groupUuid}`);
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const benf of beneficiariesData) {
+        await tx.beneficiary.upsert({
+          where: { uuid: benf.uuid },
+          update: {
+            walletAddress: benf.walletAddress,
+            gender: (benf.gender as any) || 'UNKNOWN',
+            isVerified: benf.isVerified ?? false,
+            extras: benf.extras,
+            phone: benf.phone || null,
+          },
+          create: {
+            uuid: benf.uuid,
+            walletAddress: benf.walletAddress,
+            gender: (benf.gender as any) || 'UNKNOWN',
+            isVerified: benf.isVerified ?? false,
+            extras: benf.extras,
+            phone: benf.phone || null,
+          },
+        });
+
+        await tx.beneficiaryToGroup.upsert({
+          where: {
+            beneficiaryId_groupId: {
+              beneficiaryId: benf.uuid,
+              groupId: groupUuid,
+            },
+          },
+          update: {},
+          create: { beneficiaryId: benf.uuid, groupId: groupUuid },
+        });
+      }
+    });
+
+    this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
+    return { message: 'Sync process completed successfully' };
   }
 }

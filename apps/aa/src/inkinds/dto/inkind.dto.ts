@@ -130,6 +130,10 @@ export class BeneficiaryInkindRedeemDto {
     groupInkindUuid?: string;
   }[];
 
+  @IsOptional()
+  @IsString()
+  otpExemptionReason?: string;
+
   @IsObject()
   user: UserObject;
 

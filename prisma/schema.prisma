@@ -809,6 +809,7 @@ model BeneficiaryInkindRedemption {
 
   txHash String?
   status String  @default("PENDING")
+  otpExemptionReason String? 
 
   vendorUid String? @db.Uuid()
   Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])
