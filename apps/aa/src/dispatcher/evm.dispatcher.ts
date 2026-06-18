@@ -29,6 +29,8 @@ export class EVMTxDispatcher {
         return this.evmProcessor.handleFundAccount(job);
       case JOBS.CONTRACT.TRANSFER_TOKENS:
         return this.evmProcessor.handleTransferTokens(job);
+      case JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH:
+        return this.evmProcessor.handleRedeemVendorTokenForCash(job);
       default:
         throw new Error(`Unknown TX job type: ${type}`);
     }

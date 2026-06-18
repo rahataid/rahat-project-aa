@@ -1,7 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { InkindStockMovementType, PayoutMode, Prisma } from '@prisma/client';
+import {
+  InkindStockMovementType,
+  PayoutMode,
+  Prisma,
+  RedemptionStatus,
+} from '@prisma/client';
 import {
   CreateInkindDto,
   UpdateInkindDto,
@@ -46,9 +51,17 @@ import { AppService } from '../app/app.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import {
+  AddVendorInkindRedeemDto,
+  GetVendorInkindRedemptionDto,
+  UpdateVendorInkindRedeemStatusDto,
+} from './dto/vendorInkindRedem.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
-const DEFAULT_BULK_BATCH_SIZE = parseInt(process.env.INKIND_BULK_BATCH_SIZE || '100', 10);
+const DEFAULT_BULK_BATCH_SIZE = parseInt(
+  process.env.INKIND_BULK_BATCH_SIZE || '100',
+  10
+);
 
 @Injectable()
 export class InkindsService {
@@ -1007,7 +1020,7 @@ export class InkindsService {
           }),
         ]);
 
-       // distinct transactions, not raw records (N records share one txHash).
+      // distinct transactions, not raw records (N records share one txHash).
       const [groupedLogs, allGroups] = await Promise.all([
         this.prisma.beneficiaryInkindRedemption.groupBy({
           by: ['txHash', 'beneficiaryWallet'],
@@ -1337,9 +1350,9 @@ export class InkindsService {
       throw new RpcException('OTP record not found');
     }
 
-    if (otpRecord.isVerified) {
-      throw new RpcException('OTP already verified');
-    }
+    // if (otpRecord.isVerified) {
+    //   throw new RpcException('OTP already verified');
+    // }
 
     // since we send the same opt every time so that this logic is commented out for now.
     // if (otpRecord.expiresAt < new Date()) {
@@ -1367,26 +1380,33 @@ export class InkindsService {
     });
 
     if (!vendor) {
-      throw new RpcException(`User '${user.name}' is not registered as a vendor`);
+      throw new RpcException(
+        `User '${user.name}' is not registered as a vendor`
+      );
     }
 
     const { value } = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
 
-    const isPhasePayoutActivate = await lastValueFrom(
+    const { isPayoutMethodPhaseActivated } = await lastValueFrom(
       this.client.send(
         { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
         {
           activeYear: value.active_year,
           riverBasin: value.river_basin,
+          disbursementMethod: 'INKIND',
         }
       )
     );
 
-    if (!isPhasePayoutActivate) {
-      this.logger.log('Payout phase not active. In-kind redemption is unavailable.');
-      throw new RpcException('Payout phase not active. In-kind redemption is unavailable.');
+    if (!isPayoutMethodPhaseActivated) {
+      this.logger.log(
+        'Payout phase not active. In-kind redemption is unavailable.'
+      );
+      throw new RpcException(
+        'Payout phase not active. In-kind redemption is unavailable.'
+      );
     }
 
     return vendor;
@@ -1395,13 +1415,20 @@ export class InkindsService {
   async beneficiaryInkindRedeem(
     payload: BeneficiaryInkindRedeemDto,
     options?: {
-      vendor?: Awaited<ReturnType<InkindsService['validateVendorAndPayoutPhase']>>;
+      vendor?: Awaited<
+        ReturnType<InkindsService['validateVendorAndPayoutPhase']>
+      >;
       skipVendorAndPhaseValidation?: boolean;
       preloadedBeneficiary?: { uuid: string; walletAddress: string };
-      preloadedInkindRecords?: Array<{ uuid: string; name: string; type: string }>;
+      preloadedInkindRecords?: Array<{
+        uuid: string;
+        name: string;
+        type: string;
+      }>;
     }
   ) {
-    const { walletAddress, inkinds, user, redeemedAt } = payload;
+    const { walletAddress, inkinds, user, redeemedAt, otpExemptionReason } =
+      payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
       throw new RpcException('Missing required fields');
@@ -1411,13 +1438,16 @@ export class InkindsService {
       `Processing inkind redemption for beneficiary: ${walletAddress}`
     );
 
+    this.logger.log(`otp exemption reasons comes as: `, options);
     try {
       const vendor = options?.skipVendorAndPhaseValidation
         ? options.vendor
         : await this.validateVendorAndPayoutPhase(user);
 
       if (!vendor) {
-        throw new RpcException(`User '${user.name}' is not registered as a vendor`);
+        throw new RpcException(
+          `User '${user.name}' is not registered as a vendor`
+        );
       }
 
       // ===== STEP 1: Fetch and validate common data =====
@@ -1471,7 +1501,7 @@ export class InkindsService {
           }
           preDefinedPayload.push({
             uuid: payloadInkind.uuid,
-            groupInkindUuid: payloadInkind.groupInkindUuid
+            groupInkindUuid: payloadInkind.groupInkindUuid,
           });
         } else if (inkindRecord.type === InkindType.WALK_IN) {
           walkInPayload.push({ uuid: payloadInkind.uuid });
@@ -1524,7 +1554,8 @@ export class InkindsService {
           validatedPreDefined,
           walletAddress,
           user,
-          redeemedAtDate
+          redeemedAtDate,
+          otpExemptionReason
         );
 
         const walkInResults = await this.executeWalkInRedemptions(
@@ -1532,7 +1563,8 @@ export class InkindsService {
           validatedWalkIn,
           walletAddress,
           beneficiary.uuid,
-          user
+          user,
+          otpExemptionReason
         );
 
         return [...preDefinedResults, ...walkInResults];
@@ -1923,7 +1955,9 @@ export class InkindsService {
 
       // flatten map; collect phones, wallets, groupInkindIds for batch queries below
       const beneficiaries = Array.from(beneficiaryMap.values());
-      const phones = beneficiaries.map((b) => b.phone).filter(Boolean) as string[];
+      const phones = beneficiaries
+        .map((b) => b.phone)
+        .filter(Boolean) as string[];
       const allWallets = beneficiaries.map((b) => b.walletAddress);
       const allGroupInkindIds = beneficiaries.flatMap((b) =>
         b.inkinds.map((i) => i.groupInkindId)
@@ -1950,7 +1984,9 @@ export class InkindsService {
 
       // composite key wallet_groupInkindId for O(1) already-redeemed lookup
       const redeemedSet = new Set(
-        existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
+        existingRedemptions.map(
+          (r) => `${r.beneficiaryWallet}_${r.groupInkindId}`
+        )
       );
 
       // phone → otpHash lookup for attaching to each beneficiary
@@ -2022,13 +2058,24 @@ export class InkindsService {
         batchRecords.map((record, i) =>
           this.inkindBulkQueue.add(
             JOBS.INKINDS.BULK_REDEEM_BATCH,
-            { payloads: batches[i], user, vendor: { uuid: vendor.uuid }, batchId: record.uuid },
-            { jobId: record.uuid, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+            {
+              payloads: batches[i],
+              user,
+              vendor: { uuid: vendor.uuid },
+              batchId: record.uuid,
+            },
+            {
+              jobId: record.uuid,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 2000 },
+            }
           )
         )
       );
 
-      this.logger.log(`Queued ${batches.length} batch(es) for vendor: ${user.uuid}`);
+      this.logger.log(
+        `Queued ${batches.length} batch(es) for vendor: ${user.uuid}`
+      );
 
       // return immediately; processing happens async in the Bull worker
       return {
@@ -2054,10 +2101,12 @@ export class InkindsService {
   ) {
     // mark in-flight so restart recovery knows to re-queue if server dies mid-batch
     if (batchId) {
-      await this.prisma.tempOfflineInkindRedemption.update({
-        where: { uuid: batchId },
-        data: { status: 'PROCESSING' },
-      }).catch(() => {});
+      await this.prisma.tempOfflineInkindRedemption
+        .update({
+          where: { uuid: batchId },
+          data: { status: 'PROCESSING' },
+        })
+        .catch(() => {});
     }
 
     try {
@@ -2066,47 +2115,56 @@ export class InkindsService {
         new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.uuid)))
       );
       const allGroupInkindUuids = Array.from(
-        new Set(payloads.flatMap((p) => p.inkinds.map((i) => i.groupInkindUuid).filter(Boolean)))
+        new Set(
+          payloads.flatMap((p) =>
+            p.inkinds.map((i) => i.groupInkindUuid).filter(Boolean)
+          )
+        )
       ) as string[];
       const allBeneficiaryWallets = Array.from(
         new Set(payloads.map((p) => p.walletAddress))
       );
 
       // 4 parallel DB reads — single round-trip before the write phase
-      const [inkindRecords, beneficiaries, groupInkinds, existingRedemptions] = await Promise.all([
-        this.prisma.inkind.findMany({
-          where: { uuid: { in: allInkindUuids }, deletedAt: null },
-          select: { uuid: true, name: true, type: true },
-        }),
-        this.prisma.beneficiary.findMany({
-          where: { walletAddress: { in: allBeneficiaryWallets } },
-          select: { uuid: true, walletAddress: true },
-        }),
-        this.prisma.groupInkind.findMany({
-          where: { uuid: { in: allGroupInkindUuids } },
-          include: {
-            group: {
-              include: { _count: { select: { beneficiaries: true } } },
+      const [inkindRecords, beneficiaries, groupInkinds, existingRedemptions] =
+        await Promise.all([
+          this.prisma.inkind.findMany({
+            where: { uuid: { in: allInkindUuids }, deletedAt: null },
+            select: { uuid: true, name: true, type: true },
+          }),
+          this.prisma.beneficiary.findMany({
+            where: { walletAddress: { in: allBeneficiaryWallets } },
+            select: { uuid: true, walletAddress: true },
+          }),
+          this.prisma.groupInkind.findMany({
+            where: { uuid: { in: allGroupInkindUuids } },
+            include: {
+              group: {
+                include: { _count: { select: { beneficiaries: true } } },
+              },
             },
-          },
-        }),
-        this.prisma.beneficiaryInkindRedemption.findMany({
-          where: {
-            beneficiaryWallet: { in: allBeneficiaryWallets },
-            groupInkindId: { in: allGroupInkindUuids },
-          },
-          select: { beneficiaryWallet: true, groupInkindId: true },
-        }),
-      ]);
+          }),
+          this.prisma.beneficiaryInkindRedemption.findMany({
+            where: {
+              beneficiaryWallet: { in: allBeneficiaryWallets },
+              groupInkindId: { in: allGroupInkindUuids },
+            },
+            select: { beneficiaryWallet: true, groupInkindId: true },
+          }),
+        ]);
 
       // uuid-keyed maps replace repeated array.find() in the hot loop below
       const inkindRecordMap = new Map(inkindRecords.map((r) => [r.uuid, r]));
-      const beneficiaryMap = new Map(beneficiaries.map((b) => [b.walletAddress, b]));
+      const beneficiaryMap = new Map(
+        beneficiaries.map((b) => [b.walletAddress, b])
+      );
       const groupInkindMap = new Map(groupInkinds.map((g) => [g.uuid, g]));
 
       // composite key wallet_groupInkindId — O(1) duplicate check without per-row DB query
       const redeemedSet = new Set(
-        existingRedemptions.map((r) => `${r.beneficiaryWallet}_${r.groupInkindId}`)
+        existingRedemptions.map(
+          (r) => `${r.beneficiaryWallet}_${r.groupInkindId}`
+        )
       );
 
       // buffers collect valid rows; written in one atomic transaction at the end
@@ -2114,27 +2172,44 @@ export class InkindsService {
       const validStockMovementsToInsert: any[] = [];
       const allBatchedInkindsToQueue: string[] = [];
       const formattedRedemptionResults: any[] = [];
-      const skipped: { beneficiaryWallet: string; inkindUuid?: string; reason: string }[] = [];
+      const skipped: {
+        beneficiaryWallet: string;
+        inkindUuid?: string;
+        reason: string;
+      }[] = [];
 
       // validate each beneficiary+inkind in memory; invalids go to skipped[], valids go to buffers
       for (const payload of payloads) {
         const preloadedBeneficiary = beneficiaryMap.get(payload.walletAddress);
 
         if (!preloadedBeneficiary) {
-          this.logger.warn(`[BULK_REDEEM] Beneficiary ${payload.walletAddress} not found during bulk redeem, skipping.`);
-          skipped.push({ beneficiaryWallet: payload.walletAddress, reason: 'Beneficiary not found' });
+          this.logger.warn(
+            `[BULK_REDEEM] Beneficiary ${payload.walletAddress} not found during bulk redeem, skipping.`
+          );
+          skipped.push({
+            beneficiaryWallet: payload.walletAddress,
+            reason: 'Beneficiary not found',
+          });
           continue;
         }
 
-        this.logger.log(`[BULK_REDEEM] Processing beneficiary: ${payload.walletAddress}, inkinds count: ${payload.inkinds.length}`);
+        this.logger.log(
+          `[BULK_REDEEM] Processing beneficiary: ${payload.walletAddress}, inkinds count: ${payload.inkinds.length}`
+        );
 
-        const redeemedAtDate = payload.redeemedAt ? new Date(payload.redeemedAt) : undefined;
+        const redeemedAtDate = payload.redeemedAt
+          ? new Date(payload.redeemedAt)
+          : undefined;
 
         for (const payloadInkind of payload.inkinds) {
           const inkindRecord = inkindRecordMap.get(payloadInkind.uuid);
 
           if (!inkindRecord) {
-            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Inkind not found' });
+            skipped.push({
+              beneficiaryWallet: payload.walletAddress,
+              inkindUuid: payloadInkind.uuid,
+              reason: 'Inkind not found',
+            });
             continue;
           }
           // WALK_IN is not accepted for OFFLINE redemption
@@ -2142,27 +2217,45 @@ export class InkindsService {
             continue;
           }
           if (!payloadInkind.groupInkindUuid) {
-            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Missing groupInkindUuid for PRE_DEFINED inkind' });
+            skipped.push({
+              beneficiaryWallet: payload.walletAddress,
+              inkindUuid: payloadInkind.uuid,
+              reason: 'Missing groupInkindUuid for PRE_DEFINED inkind',
+            });
             continue;
           }
 
           const groupInkind = groupInkindMap.get(payloadInkind.groupInkindUuid);
           if (!groupInkind) {
-            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Group inkind not found' });
+            skipped.push({
+              beneficiaryWallet: payload.walletAddress,
+              inkindUuid: payloadInkind.uuid,
+              reason: 'Group inkind not found',
+            });
             continue;
           }
 
           // Check for existing redemption to prevent double-spending
           const redemptionKey = `${payload.walletAddress}_${payloadInkind.groupInkindUuid}`;
           if (redeemedSet.has(redemptionKey)) {
-            this.logger.warn(`[BULK_REDEEM] Already redeemed key=${redemptionKey} (inkind: ${inkindRecord.name}), skipping.`);
-            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Already redeemed' });
+            this.logger.warn(
+              `[BULK_REDEEM] Already redeemed key=${redemptionKey} (inkind: ${inkindRecord.name}), skipping.`
+            );
+            skipped.push({
+              beneficiaryWallet: payload.walletAddress,
+              inkindUuid: payloadInkind.uuid,
+              reason: 'Already redeemed',
+            });
             continue;
           }
 
           const memberCount = groupInkind.group._count.beneficiaries;
           if (!memberCount) {
-            skipped.push({ beneficiaryWallet: payload.walletAddress, inkindUuid: payloadInkind.uuid, reason: 'Group has no members' });
+            skipped.push({
+              beneficiaryWallet: payload.walletAddress,
+              inkindUuid: payloadInkind.uuid,
+              reason: 'Group has no members',
+            });
             continue;
           }
 
@@ -2209,7 +2302,9 @@ export class InkindsService {
 
       if (validRedemptionsToInsert.length === 0) {
         if (batchId) {
-          await this.prisma.tempOfflineInkindRedemption.delete({ where: { uuid: batchId } }).catch(() => {});
+          await this.prisma.tempOfflineInkindRedemption
+            .delete({ where: { uuid: batchId } })
+            .catch(() => {});
         }
         return {
           message: 'No valid predefined bulk inkinds found to redeem',
@@ -2220,8 +2315,12 @@ export class InkindsService {
 
       // STEP 6: Persist all valid rows in one DB transaction.
       await this.prisma.$transaction([
-        this.prisma.beneficiaryInkindRedemption.createMany({ data: validRedemptionsToInsert }),
-        this.prisma.inkindStockMovement.createMany({ data: validStockMovementsToInsert }),
+        this.prisma.beneficiaryInkindRedemption.createMany({
+          data: validRedemptionsToInsert,
+        }),
+        this.prisma.inkindStockMovement.createMany({
+          data: validStockMovementsToInsert,
+        }),
       ]);
 
       try {
@@ -2258,7 +2357,9 @@ export class InkindsService {
       );
 
       if (batchId) {
-        await this.prisma.tempOfflineInkindRedemption.delete({ where: { uuid: batchId } }).catch(() => {});
+        await this.prisma.tempOfflineInkindRedemption
+          .delete({ where: { uuid: batchId } })
+          .catch(() => {});
       }
 
       return {
@@ -2291,22 +2392,427 @@ export class InkindsService {
     }
 
     try {
-      const bulkPayloads: BeneficiaryInkindRedeemDto[] = redeemedInkinds.map((item) => {
-        return {
-          walletAddress: item.beneficiaryWallet,
-          user,
-          redeemedAt: item.redeemedAt,
-          inkinds: item.inkindRedeemed.map((inkind) => ({
-            uuid: inkind.uuid,
-            groupInkindUuid: inkind.groupInkindUuid,
-          })),
-        };
-      });
+      const bulkPayloads: BeneficiaryInkindRedeemDto[] = redeemedInkinds.map(
+        (item) => {
+          return {
+            walletAddress: item.beneficiaryWallet,
+            user,
+            redeemedAt: item.redeemedAt,
+            inkinds: item.inkindRedeemed.map((inkind) => ({
+              uuid: inkind.uuid,
+              groupInkindUuid: inkind.groupInkindUuid,
+            })),
+          };
+        }
+      );
 
       return await this.beneficiaryBulkInkindRedeem(bulkPayloads, user);
     } catch (error: any) {
       this.logger.error(
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  // ====================  VENDOR REDEMPTION ====================
+
+  async getVendorAvailableInkindsDetails(vendorUuid: string) {
+    this.logger.log(
+      `Fetching total earned inkinds details for vendor: ${vendorUuid}`
+    );
+
+    if (!vendorUuid) {
+      throw new RpcException('vendorUuid is required');
+    }
+
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+        select: { uuid: true, name: true, walletAddress: true },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+
+      // Total earned per inkind: what the vendor collected from beneficiaries
+      const beneficiaryRedemptionGroups =
+        await this.prisma.beneficiaryInkindRedemption.groupBy({
+          by: ['groupInkindId'],
+          where: { vendorUid: vendorUuid },
+          _sum: { quantity: true },
+        });
+
+      if (beneficiaryRedemptionGroups.length === 0) {
+        return {
+          vendor: {
+            uuid: vendor.uuid,
+            name: vendor.name,
+            walletAddress: vendor.walletAddress,
+          },
+          inkinds: [],
+        };
+      }
+
+      // Resolve groupInkindId -> inkindUuid
+      const groupInkindIds = beneficiaryRedemptionGroups.map(
+        (g) => g.groupInkindId
+      );
+      const groupInkinds = await this.prisma.groupInkind.findMany({
+        where: { uuid: { in: groupInkindIds } },
+        select: {
+          uuid: true,
+          inkindId: true,
+          inkind: { select: { uuid: true, name: true, type: true } },
+        },
+      });
+
+      const groupInkindMap = new Map(groupInkinds.map((g) => [g.uuid, g]));
+
+      // Aggregate earned quantity per inkind uuid
+      const earnedByInkind = new Map<string, number>();
+      for (const group of beneficiaryRedemptionGroups) {
+        const groupInkind = groupInkindMap.get(group.groupInkindId);
+        if (!groupInkind) continue;
+        const inkindUuid = groupInkind.inkindId;
+        earnedByInkind.set(
+          inkindUuid,
+          (earnedByInkind.get(inkindUuid) ?? 0) + (group._sum.quantity ?? 0)
+        );
+      }
+
+      // Total consumed per inkind: approved redemptions + pending requests
+      const vendorRedemptionGroups =
+        await this.prisma.vendorInkindRedemption.groupBy({
+          by: ['inkindUuid'],
+          where: {
+            vendorUuid,
+            redemptionStatus: {
+              in: [RedemptionStatus.APPROVED, RedemptionStatus.REQUESTED],
+            },
+          },
+          _sum: { quantity: true },
+        });
+
+      const paidByInkind = new Map<string, number>(
+        vendorRedemptionGroups.map((g) => [g.inkindUuid, g._sum.quantity ?? 0])
+      );
+
+      // Build per-inkind summary using inkind details resolved above
+      const inkindDetailMap = new Map(
+        groupInkinds.map((g) => [g.inkindId, g.inkind])
+      );
+
+      const inkinds = Array.from(earnedByInkind.entries())
+        .map(([inkindUuid, totalEarned]) => {
+          const inkind = inkindDetailMap.get(inkindUuid);
+          const totalPaidOut = paidByInkind.get(inkindUuid) ?? 0;
+          return {
+            inkindUuid,
+            inkindName: inkind?.name,
+            inkindType: inkind?.type,
+            totalAvailable: Math.max(totalEarned - totalPaidOut, 0),
+          };
+        })
+        .filter((item) => item.totalAvailable > 0);
+
+      return {
+        vendor: {
+          uuid: vendor.uuid,
+          name: vendor.name,
+          walletAddress: vendor.walletAddress,
+        },
+        inkinds,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch total earned inkinds for vendor ${vendorUuid}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getVendorRedemptions(payload: GetVendorInkindRedemptionDto) {
+    const {
+      vendorUuid,
+      status,
+      vendorName,
+      inkindName,
+      inkindType,
+      page,
+      perPage,
+    } = payload;
+    this.logger.log(
+      `Fetching all vendor redemptions with filters: ${JSON.stringify(payload)}`
+    );
+
+    if (vendorUuid) {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+        select: { uuid: true, name: true },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+    }
+
+    try {
+      const query: Prisma.VendorInkindRedemptionFindManyArgs = {
+        where: {
+          ...(vendorUuid && { vendorUuid }),
+          ...(status && { redemptionStatus: status }),
+          ...(vendorName && {
+            vendor: { name: { contains: vendorName, mode: 'insensitive' } },
+          }),
+          ...(inkindName && {
+            inkind: { name: { contains: inkindName, mode: 'insensitive' } },
+          }),
+          ...(inkindType && {
+            inkind: { type: { contains: inkindType, mode: 'insensitive' } },
+          }),
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          inkind: {
+            select: {
+              uuid: true,
+              name: true,
+              type: true,
+            },
+          },
+          vendor: {
+            select: {
+              uuid: true,
+              name: true,
+            },
+          },
+        },
+      };
+
+      const result = await paginate(this.prisma.vendorInkindRedemption, query, {
+        page,
+        perPage,
+      });
+
+      if (result.data.length === 0) {
+        this.logger.log(
+          `No vendor redemptions found with filters: ${JSON.stringify(payload)}`
+        );
+
+        return [];
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch vendor redemptions with filters ${JSON.stringify(
+          payload
+        )}: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async createVendorRedemption(payload: AddVendorInkindRedeemDto) {
+    const { vendorUuid, inkindUuid, quantity } = payload;
+    this.logger.log(
+      `Creating inkind redemption for vendor: ${vendorUuid}, inkind: ${inkindUuid}, quantity: ${quantity}`
+    );
+
+    const projectDetails = await this.appService.getSettings({
+      name: 'PROJECTINFO',
+    });
+    const projectId = this.configService.get('PROJECT_ID');
+
+    if (!vendorUuid || !inkindUuid || !quantity) {
+      throw new RpcException('Missing required fields');
+    }
+
+    if (quantity <= 0) {
+      throw new RpcException('Quantity must be greater than zero');
+    }
+
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { uuid: vendorUuid },
+      });
+
+      if (!vendor) {
+        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+      }
+
+      const inkind = await this.prisma.inkind.findUnique({
+        where: { uuid: inkindUuid },
+      });
+
+      if (!inkind) {
+        throw new RpcException(`Inkind with UUID ${inkindUuid} not found`);
+      }
+
+      const existingRedemption =
+        await this.prisma.vendorInkindRedemption.findFirst({
+          where: {
+            vendorUuid,
+            inkindUuid,
+            redemptionStatus: RedemptionStatus.REQUESTED,
+          },
+        });
+
+      if (existingRedemption) {
+        throw new RpcException(
+          `A pending redemption already exists for this vendor and inkind`
+        );
+      }
+
+      const redemption = await this.prisma.vendorInkindRedemption.create({
+        data: {
+          vendorUuid,
+          inkindUuid,
+          quantity,
+        },
+      });
+
+      this.logger.log(
+        `Successfully created vendor redemption with ID: ${redemption.id}`
+      );
+
+      // sending notification to vendor about redemption creation
+      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        payload: {
+          title: `Vendor Inkind Redemption Created`,
+          description: `Vendor "${
+            vendor.name
+          }" has requested a redemption of ${quantity} unit${
+            quantity !== 1 ? 's' : ''
+          } of "${inkind.name}" in project ${
+            projectDetails.value['project_name'] || projectId
+          }`,
+          group: 'vendor inkind redemption',
+          projectId: projectId,
+          notify: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Vendor redemption created successfully',
+        redemptionUuid: redemption.uuid,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to create vendor redemption: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateVendorRedemptionStatus(
+    payload: UpdateVendorInkindRedeemStatusDto
+  ) {
+    const { uuid, status, user } = payload;
+    this.logger.log(
+      `Updating vendor redemption status: redemptionUuid=${uuid}, newStatus=${status}`
+    );
+
+    if (!uuid || !status) {
+      throw new RpcException('Missing required fields');
+    }
+
+    try {
+      const redemption = await this.prisma.vendorInkindRedemption.findUnique({
+        where: { uuid },
+      });
+
+      if (!redemption) {
+        throw new RpcException(`Vendor redemption with UUID ${uuid} not found`);
+      }
+
+      const vendorDetails = await this.prisma.vendor.findUnique({
+        where: { uuid: redemption?.vendorUuid },
+      });
+
+      if (!vendorDetails) {
+        throw new RpcException(
+          `Vendor with UUID ${redemption.vendorUuid} not found`
+        );
+      }
+      // now we have to create tx hash of this redemption and update the redemption record with that tx hash
+
+      await this.prisma.vendorInkindRedemption.update({
+        where: { uuid },
+        data: {
+          redemptionStatus: status,
+
+          ...(status === RedemptionStatus.APPROVED && {
+            approvedAt: new Date(),
+            approvedBy: user.name,
+          }),
+        },
+      });
+
+      this.logger.log(
+        `Vendor redemption status updated to ${status} for redemption UUID: ${uuid}`
+      );
+
+      // this.logger.log(
+      //   `Enqueuing contract job to redeem vendor inkind tokens for redemption UUID: ${uuid}`
+      // )
+
+      // this.chainService.redeemVendorInkindTokens({
+      //   redemptionUuid: uuid,
+      //   vendorWallet: vendorDetails.walletAddress,
+      //   quantity: redemption.quantity,
+      // });
+
+      this.logger.log(
+        `Successfully updated vendor redemption status for redemption UUID: ${uuid}`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor redemption status updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update vendor redemption status: ${error.message}`,
+        error.stack
+      );
+      throw new RpcException(error.message);
+    }
+  }
+
+  async updateVendorRedemptionTxHash(redemptionUuid: string, txHash: string) {
+    this.logger.log(
+      `Updating vendor redemption txHash: redemptionUuid=${redemptionUuid}`
+    );
+
+    if (!redemptionUuid || !txHash) {
+      throw new RpcException('Missing required fields');
+    }
+
+    try {
+      await this.prisma.vendorInkindRedemption.update({
+        where: { uuid: redemptionUuid },
+        data: { transactionHash: txHash },
+      });
+
+      this.logger.log(
+        `Successfully updated txHash for vendor redemption: ${redemptionUuid}`
+      );
+
+      return {
+        success: true,
+        message: 'Vendor redemption txHash updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update vendor redemption txHash: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
@@ -2475,7 +2981,8 @@ export class InkindsService {
     items: PreDefinedRedemptionItem[],
     walletAddress: string,
     vendor: UserObject,
-    redeemedAt?: Date 
+    redeemedAt?: Date,
+    otpExemptionReason?: string
   ): Promise<PreDefinedRedemptionResult[]> {
     const results: PreDefinedRedemptionResult[] = [];
 
@@ -2485,6 +2992,7 @@ export class InkindsService {
       );
 
       // Create redemption record
+      this.logger.log('Otp exempted with reason: ', otpExemptionReason);
       const redemption = await tx.beneficiaryInkindRedemption.create({
         data: {
           beneficiaryWallet: walletAddress,
@@ -2493,6 +3001,7 @@ export class InkindsService {
           vendorUid: vendor.uuid,
           ...(redeemedAt !== undefined ? { redeemedAt } : {}),
           status: InkindTxStatus.PENDING,
+          otpExemptionReason,
         },
       });
 
@@ -2525,7 +3034,8 @@ export class InkindsService {
     items: WalkInRedemptionItem[],
     walletAddress: string,
     beneficiaryUuid: string,
-    vendor: UserObject
+    vendor: UserObject,
+    otpExemptionReason?: string
   ): Promise<WalkInRedemptionResult[]> {
     const results: WalkInRedemptionResult[] = [];
 
@@ -2597,6 +3107,7 @@ export class InkindsService {
             groupId,
             inkindId: item.inkindUuid,
             quantityAllocated: 1,
+            mode: PayoutMode.ONLINE,
           },
         });
         groupInkindUuid = newGroupInkind.uuid;
@@ -2612,6 +3123,7 @@ export class InkindsService {
         });
       }
 
+      this.logger.log('Otp exempted with reason: ', otpExemptionReason);
       // Create redemption record
       const redemption = await tx.beneficiaryInkindRedemption.create({
         data: {
@@ -2620,6 +3132,7 @@ export class InkindsService {
           quantity: 1,
           vendorUid: vendor.uuid,
           status: InkindTxStatus.PENDING,
+          otpExemptionReason,
         },
       });
 

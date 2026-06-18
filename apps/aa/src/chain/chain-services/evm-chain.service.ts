@@ -20,6 +20,7 @@ import {
   FundAccountDto,
   IChainService,
   RedeemInkindDto,
+  RedeemInkindTokenForCashDto,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
@@ -1330,6 +1331,21 @@ export class EvmChainService implements IChainService {
   async redeemInkind(redeemDto: RedeemInkindDto) {
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        removeOnFail: false,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+      }
+    );
+  }
+
+  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto) {
+    return this.evmTxQueue.add(
+      { type: JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH, ...redeemVendorInkindDto },
       {
         attempts: 3,
         removeOnComplete: true,

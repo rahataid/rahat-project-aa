@@ -16,6 +16,7 @@ import {
   AddTriggerDto,
   UpdateTriggerDto,
   RedeemInkindDto,
+  RedeemInkindTokenForCashDto,
 } from '../interfaces/chain-service.interface';
 import { lastValueFrom } from 'rxjs';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
@@ -743,5 +744,9 @@ export class StellarChainService implements IChainService {
 
   async redeemInkind(redeemDto: RedeemInkindDto): Promise<any> {
     throw new RpcException('Inkind redemption is not supported on Stellar chain');
+  }
+
+  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto): Promise<any> {
+    throw new RpcException('Vendor inkind token redemption is not supported on Stellar chain');
   }
 }
