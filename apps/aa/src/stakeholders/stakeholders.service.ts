@@ -695,36 +695,69 @@ export class StakeholdersService {
     });
   }
 
+  // Looks up a value by key, ignoring case/whitespace differences in the key itself
+  private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+    const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
+    this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
+
+    const matchEntry = Object.entries(item).find(([itemKey]) =>
+      normalizedKeys.includes(itemKey.trim().toLowerCase())
+    );
+
+    return matchEntry?.[1];
+  }
+
   // Maps raw Excel rows → CreateStakeholderDto shape — no validation
   private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
     return payload.map((item) => {
-      // Find the first valid supportArea string value
-      const rawSupportArea =
-        typeof item['Support Area'] === 'string'
-          ? item['Support Area']
-          : typeof item['Support Area #'] === 'string'
-          ? item['Support Area #']
-          : typeof item['Support Area '] === 'string'
-          ? item['Support Area ']
-          : '';
+      const rawSupportArea = this.getFieldCaseInsensitive(
+        item,
+        'Support Area',
+        'Support Area #'
+      );
 
       return {
-        name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
-        designation: item['Designation']?.trim() || '',
-        organization: item['Organization']?.trim() || '',
-        district: item['District']?.trim() || '',
-        municipality: item['Municipality']?.trim() || '',
+        name:
+          this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        designation:
+          this.getFieldCaseInsensitive(item, 'Designation')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        organization:
+          this.getFieldCaseInsensitive(item, 'Organization')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        district:
+          this.getFieldCaseInsensitive(item, 'District')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        municipality:
+          this.getFieldCaseInsensitive(item, 'Municipality')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
         phone:
-          item['Mobile #']?.toString().trim() ||
-          item['Phone Number']?.toString().trim() ||
-          '',
-        supportArea: rawSupportArea
-          ? rawSupportArea
-              .split(',')
-              .map((v) => v.trim())
-              .filter(Boolean)
-          : [],
-        email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+          this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
+            ?.toString()
+            .trim() || '',
+        supportArea:
+          typeof rawSupportArea === 'string' && rawSupportArea
+            ? rawSupportArea
+                .split(',')
+                .map((v) => v.trim().toLowerCase())
+                .filter(Boolean)
+            : [],
+        email:
+          this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
       };
     });
   }

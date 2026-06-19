@@ -3173,7 +3173,7 @@ export class InkindsService {
     const payload: CreateGroupPayload = {
       name: groupName,
       beneficiaries: beneficiaryUuids.map((uuid) => ({ uuid })),
-      groupPurpose: 'MOBILE_MONEY',
+      groupPurpose: 'GENERAL',
       projectId: process.env.PROJECT_ID,
     };
 
