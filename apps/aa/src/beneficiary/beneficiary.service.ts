@@ -1492,6 +1492,7 @@ export class BeneficiaryService {
     });
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
+    await this.initiateQrPdf(groupUuid);
     return { message: 'Sync process completed successfully' };
   }
 }

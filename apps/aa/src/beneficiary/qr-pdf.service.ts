@@ -55,6 +55,7 @@ export class QrPdfService implements OnModuleInit {
     });
 
     if (existing) {
+      this.logger.log(`QR PDF job already running for group ${groupId}`);
       return { jobId: existing.uuid, alreadyRunning: true };
     }
 
@@ -63,6 +64,7 @@ export class QrPdfService implements OnModuleInit {
     });
 
     await this.qrPdfQueue.add({ groupId, jobUuid: job.uuid });
+    this.logger.log(`QR PDF generation queued for group ${groupId}`);
 
     return { jobId: job.uuid, alreadyRunning: false };
   }
