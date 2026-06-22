@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppService } from './app.service';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 
 jest.mock('./settings.config', () => ({
   setSettings: jest.fn(),
@@ -19,6 +20,12 @@ describe('AppService', () => {
     bulkCreate: jest.fn(),
   };
 
+  const mockPrismaService = {
+    setting: {
+      upsert: jest.fn(),
+    },
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -26,6 +33,10 @@ describe('AppService', () => {
         {
           provide: SettingsService,
           useValue: mockSettingsService,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
         },
       ],
     }).compile();
@@ -93,52 +104,65 @@ describe('AppService', () => {
   });
 
   describe('setupProjectSettings', () => {
-    const mockSetupDto = {
-      CONTRACTS: { address: '0x123' },
-      BLOCKCHAIN: { network: 'testnet' },
-      SUBGRAPH_URL: 'http://test.com',
-      RAHAT_ADMIN_PRIVATE_KEY: '0xkey',
-      DEPLOYER_PRIVATE_KEY: '0xkey2',
-      ADMIN: { address: '0x456' },
-    };
+    it('should upsert all settings from payload', async () => {
+      mockPrismaService.setting.upsert.mockResolvedValue({});
 
-    it('should create settings for all provided configurations', async () => {
-      mockSettingsService.bulkCreate.mockResolvedValue({ success: true });
-      
-      const result = await service.setupProjectSettings(mockSetupDto);
-      
-      expect(settingsService.bulkCreate).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ name: 'CONTRACTS' }),
-        expect.objectContaining({ name: 'BLOCKCHAIN' }),
-        expect.objectContaining({ name: 'SUBGRAPH_URL' }),
-        expect.objectContaining({ name: 'RAHAT_ADMIN_PRIVATE_KEY' }),
-        expect.objectContaining({ name: 'DEPLOYER_PRIVATE_KEY' }),
-        expect.objectContaining({ name: 'ADMIN' }),
-      ]));
-      expect(result).toEqual({ message: 'Project Setup Successfully' });
-    });
-
-    it('should only create settings for provided configurations', async () => {
-      const partialSetupDto = {
-        CONTRACTS: { address: '0x123' },
-        BLOCKCHAIN: { network: 'testnet' },
+      const payload = {
+        settings: [
+          {
+            name: 'CONTRACTS',
+            value: '{"address":"0x123"}',
+            dataType: 'OBJECT',
+            requiredFields: '{}',
+            isReadOnly: false,
+            isPrivate: false,
+          },
+          {
+            name: 'CHAIN_SETTINGS',
+            value: '{"network":"testnet"}',
+            dataType: 'OBJECT',
+            requiredFields: '{}',
+            isReadOnly: false,
+            isPrivate: false,
+          },
+        ],
       };
 
-      mockSettingsService.bulkCreate.mockResolvedValue({ success: true });
-      
-      await service.setupProjectSettings(partialSetupDto);
-      
-      expect(settingsService.bulkCreate).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ name: 'CONTRACTS' }),
-        expect.objectContaining({ name: 'BLOCKCHAIN' }),
-      ]));
-      expect(settingsService.bulkCreate).toHaveBeenCalledWith(
-        expect.not.arrayContaining([
-          expect.objectContaining({ name: 'SUBGRAPH_URL' }),
-          expect.objectContaining({ name: 'RAHAT_ADMIN_PRIVATE_KEY' }),
-          expect.objectContaining({ name: 'DEPLOYER_PRIVATE_KEY' }),
-          expect.objectContaining({ name: 'ADMIN' }),
-        ])
+      const result = await service.setupProjectSettings(payload);
+
+      expect(mockPrismaService.setting.upsert).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ message: 'Upserted 2 setting(s) successfully' });
+    });
+
+    it('should handle empty settings array', async () => {
+      const result = await service.setupProjectSettings({ settings: [] });
+
+      expect(mockPrismaService.setting.upsert).not.toHaveBeenCalled();
+      expect(result).toEqual({ message: 'Upserted 0 setting(s) successfully' });
+    });
+
+    it('should parse OBJECT values from JSON strings', async () => {
+      mockPrismaService.setting.upsert.mockResolvedValue({});
+
+      await service.setupProjectSettings({
+        settings: [
+          {
+            name: 'TEST',
+            value: '{"key":"val"}',
+            dataType: 'OBJECT',
+            requiredFields: '{}',
+            isReadOnly: false,
+            isPrivate: false,
+          },
+        ],
+      });
+
+      expect(mockPrismaService.setting.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            value: { key: 'val' },
+          }),
+        }),
       );
     });
   });

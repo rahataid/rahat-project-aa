@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 
 describe('AppController', () => {
   let controller: AppController;
@@ -24,6 +25,12 @@ describe('AppController', () => {
     bulkCreate: jest.fn(),
   };
 
+  const mockPrismaService = {
+    setting: {
+      upsert: jest.fn(),
+    },
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
@@ -35,6 +42,10 @@ describe('AppController', () => {
         {
           provide: SettingsService,
           useValue: mockSettingsService,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
         },
       ],
     }).compile();
@@ -108,23 +119,20 @@ describe('AppController', () => {
 
   describe('setupProjectSettings', () => {
     const mockSetupDto = {
-      CONTRACTS: { address: '0x123' },
-      BLOCKCHAIN: { network: 'testnet' },
-      SUBGRAPH_URL: 'http://test.com',
-      RAHAT_ADMIN_PRIVATE_KEY: '0xkey',
-      DEPLOYER_PRIVATE_KEY: '0xkey2',
-      ADMIN: { address: '0x456' },
+      settings: [
+        { name: 'CONTRACTS', value: '{"address":"0x123"}', dataType: 'OBJECT', requiredFields: '{}', isReadOnly: false, isPrivate: false },
+      ],
     };
 
     it('should call service.setupProjectSettings with correct parameters', async () => {
-      mockAppService.setupProjectSettings.mockResolvedValue({ 
-        message: 'Project Setup Successfully' 
+      mockAppService.setupProjectSettings.mockResolvedValue({
+        message: 'Upserted 1 setting(s) successfully'
       });
-      
+
       const result = await controller.setupProjectSettings(mockSetupDto);
-      
+
       expect(service.setupProjectSettings).toHaveBeenCalledWith(mockSetupDto);
-      expect(result).toEqual({ message: 'Project Setup Successfully' });
+      expect(result).toEqual({ message: 'Upserted 1 setting(s) successfully' });
     });
   });
 });
