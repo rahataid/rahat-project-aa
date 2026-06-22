@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 import { lowerCaseObjectKeys } from '../utils/utility';
 
 @Injectable()
 export class AppService {
-  constructor(private readonly settingService: SettingsService) {
+  constructor(
+    private readonly settingService: SettingsService,
+    private readonly prismaService: PrismaService,
+  ) {
     this.refreshSettings();
   }
 
@@ -43,69 +47,93 @@ export class AppService {
     return 'ok';
   }
 
-  //TODO: optimize for multiple dynamic settings
   async setupProjectSettings(payload: any) {
-    const settings = [];
+    const settings: any[] = Array.isArray(payload.settings)
+      ? payload.settings
+      : [];
+    const validSettings = settings.filter((s) => s && s.name);
 
-    // Process contracts
-    if (payload.CONTRACTS) {
-      settings.push({
-        name: 'CONTRACTS',
-        value: payload.CONTRACTS,
-        dataType: 'OBJECT',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: false,
+    let upsertedCount = 0;
+
+    for (const setting of validSettings) {
+      const data = {
+        name: setting.name,
+        value: this.parseValueForPrisma(setting),
+        dataType: setting.dataType,
+        requiredFields: this.normalizeRequiredFields(setting.requiredFields),
+        isReadOnly: Boolean(setting.isReadOnly),
+        isPrivate: Boolean(setting.isPrivate),
+      };
+
+      await this.prismaService.setting.upsert({
+        where: { name: data.name },
+        update: {
+          value: data.value,
+          dataType: data.dataType,
+          requiredFields: data.requiredFields,
+          isReadOnly: data.isReadOnly,
+          isPrivate: data.isPrivate,
+        },
+        create: data,
       });
+
+      upsertedCount++;
     }
 
-    // Process chainSettings
-    if (payload.CHAIN_SETTINGS) {
-      settings.push({
-        name: 'CHAIN_SETTINGS',
-        value: payload.CHAIN_SETTINGS,
-        dataType: 'OBJECT',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: false,
-      });
+    return {
+      message: `Upserted ${upsertedCount} setting(s) successfully`,
+    };
+  }
+
+  private parseValueForPrisma(setting: any) {
+    const { value, dataType } = setting;
+
+    if (typeof value !== 'string') {
+      return value;
     }
 
-    // Process subgraphUrl
-    if (payload.SUBGRAPH_URL) {
-      settings.push({
-        name: 'SUBGRAPH_URL',
-        value: payload.SUBGRAPH_URL,
-        dataType: 'OBJECT',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: false,
-      });
+    if (dataType === 'OBJECT') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
     }
 
-    if (payload.DEPLOYER_PRIVATE_KEY) {
-      settings.push({
-        name: 'DEPLOYER_PRIVATE_KEY',
-        value: payload.DEPLOYER_PRIVATE_KEY,
-        dataType: 'STRING',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: false,
-      });
+    if (dataType === 'NUMBER') {
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? value : parsed;
     }
 
-    if (payload.ADMIN) {
-      settings.push({
-        name: 'ADMIN',
-        value: payload.ADMIN,
-        dataType: 'OBJECT',
-        requiredFields: [],
-        isReadOnly: false,
-        isPrivate: false,
-      });
+    if (dataType === 'BOOLEAN') {
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+      return value;
     }
 
-    await this.settingService.bulkCreate(settings);
-    return { message: 'Project Setup Successfully' };
+    return value;
+  }
+
+  private normalizeRequiredFields(requiredFields: any): string[] {
+    if (Array.isArray(requiredFields)) {
+      return requiredFields.map((field) => String(field));
+    }
+
+    if (typeof requiredFields !== 'string') {
+      return [];
+    }
+
+    const trimmed = requiredFields.trim();
+
+    if (!trimmed || trimmed === '{}' || trimmed === '[]') {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed.map((field) => String(field)) : [];
+    } catch {
+      return [];
+    }
   }
 }
