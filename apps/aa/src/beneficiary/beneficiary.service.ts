@@ -1250,6 +1250,20 @@ export class BeneficiaryService {
         (benf) => benf.beneficiaryId
       );
 
+      // ponytail: atomic claim via existing `status` field — DISBURSED -> CREDITED.
+      // 0 rows updated means another TOKEN_DISBURSED event already claimed this group.
+      const claim = await this.prisma.beneficiaryGroupTokens.updateMany({
+        where: { groupId: groupUuid, status: 'DISBURSED' },
+        data: { status: 'CREDITED' },
+      });
+
+      if (claim.count === 0) {
+        this.logger.warn(
+          `Beneficiary tokens already credited for group ${groupUuid}, skipping duplicate credit.`
+        );
+        return;
+      }
+
       const tokensPerBeneficiary = Math.floor(
         beneficiaryGroup.tokensReserved.numberOfTokens /
           beneficiaryGroup.beneficiaries.length
