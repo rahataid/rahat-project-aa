@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
-          
+
       #Import vault Secrets
       - name: Import Secrets from Vault
         id: vault
@@ -149,8 +149,8 @@ jobs:
             esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}
             esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}
             esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.timestamp }}
-          cache-from: type=registry,ref=esatya/${{ inputs.image_name }}:buildcache
-          cache-to: type=registry,ref=esatya/${{ inputs.image_name }}:buildcache,mode=max
+          cache-from: type=registry,ref=esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-buildcache
+          cache-to: type=registry,ref=esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-buildcache,mode=max
           provenance: false
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
