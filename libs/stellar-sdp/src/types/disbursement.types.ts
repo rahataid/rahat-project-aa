@@ -19,6 +19,9 @@ export interface CreateDisbursementRequest {
   asset_id: string;
   verification_field: string;
   registration_contact_type?: string;
+  receiver_registration_message_template?: string;
+  file: Buffer;
+  filename?: string;
 }
 
 export interface UpdateDisbursementStatusRequest {

@@ -31,9 +31,19 @@ export class DisbursementsService {
   }
 
   async create(request: CreateDisbursementRequest): Promise<Disbursement> {
+    const { file, filename, ...metadata } = request;
+
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(metadata));
+    formData.append('file', file, {
+      filename: filename || 'instructions.csv',
+      contentType: 'text/csv',
+    });
+
     const { data } = await this.http.post<Disbursement>(
       '/disbursements',
-      request
+      formData,
+      { headers: { ...formData.getHeaders() } }
     );
     return data;
   }
