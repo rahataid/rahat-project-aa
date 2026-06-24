@@ -32,4 +32,8 @@ export class ChainService {
   redeemInkind(redeemDto: any) {
     return this.chainQueueService.redeemInkind(redeemDto);
   }
+
+  redeemVendorInkindTokens(redeemVendorInkindDto: any) {
+    return this.chainQueueService.redeemVendorInkindTokens(redeemVendorInkindDto);
+  }
 }

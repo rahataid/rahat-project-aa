@@ -112,7 +112,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   // ===== JOB HANDLERS =====
 
-  async handleAssignTokens(job: Job<{ groups: string[] }>): Promise<any> {
+  async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
+    this.logger.log('Starting handleAssignTokens with job data: ', job.data);
     const { groups } = job.data;
     const BATCH_SIZE = 10;
 
@@ -129,13 +130,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         this.signer
       );
 
-      const benGroups =
-        (groups && groups.length) > 0
-          ? groups
-          : await this.getDisbursableGroupsUuids();
+      // const benGroup =  await this.getDisbursableGroupsUuids();
+
+      // if (!benGroup) {
+      //   this.logger.log('No disbursable group found');
+      // }
 
       this.logger.log('Token Disburse for: ', groups);
-      const bens = await this.getBeneficiaryTokenBalance(benGroups);
+      const bens = await this.getBeneficiaryTokenBalance(groups);
 
       if (!bens || bens.length === 0) {
         throw new RpcException('Beneficiary Token Balance not found');
@@ -155,6 +157,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
+        this.logger.log(`Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`);
         if (benf.amount) {
           const formattedAmountBn = ethers.parseUnits(
             benf.amount.toString(),
@@ -713,6 +716,96 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     }
   }
 
+  async handleRedeemVendorTokenForCash(
+    job: Job<{
+      redemptionUuid: string;
+      vendorAddress: string;
+      amount: string;
+    }>
+  ): Promise<any> {
+    try {
+      this.logger.log(
+        'Processing EVM vendor token redemption for cash...',
+        EVMCentralizedProcessor.name
+      );
+
+      const safeWalletSetting = await this.prismaService.setting.findUnique({
+        where: { name: 'DEPLOYER_WALLET_KEY' },
+      });
+
+      if (!safeWalletSetting) {
+        throw new RpcException('DEPLOYER_WALLET_KEY setting not found');
+      }
+
+      const offrampWalletAddress = safeWalletSetting.value;
+
+      await this.ensureInitialized();
+
+      const { redemptionUuid, vendorAddress, amount } = job.data;
+
+      const inkindTokenContract = await this.createContractInstanceSign(
+        'INKINDTOKEN',
+        null,
+        this.signer
+      );
+
+      const decimals = await inkindTokenContract.decimals.staticCall();
+      const vendorBalance = await inkindTokenContract.balanceOf.staticCall(
+        vendorAddress
+      );
+      const transferAmount = ethers.parseUnits(amount, decimals);
+
+      if (vendorBalance < transferAmount) {
+        throw new RpcException(
+          `Insufficient vendor token balance. Required: ${amount}, Available: ${ethers.formatUnits(
+            vendorBalance,
+            decimals
+          )}`
+        );
+      }
+
+      this.logger.log(
+        `Transferring ${amount} tokens from vendor ${vendorAddress} to offramp ${offrampWalletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+
+      const tx = await inkindTokenContract.transferFrom(
+        vendorAddress,
+        offrampWalletAddress,
+        transferAmount
+      );
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Successfully redeemed vendor tokens for cash. Transaction: ${receipt.hash}`,
+        EVMCentralizedProcessor.name
+      );
+
+       await this.inkindService.updateVendorRedemptionTxHash(
+        redemptionUuid,
+        receipt.hash
+      );
+
+      return {
+        success: true,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        from: vendorAddress,
+        to: offrampWalletAddress,
+        amount,
+        method: 'transferFrom',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error redeeming vendor tokens for cash: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Vendor token redemption failed: ${error.message}`
+      );
+    }
+  }
   // ===== HELPER METHODS =====
 
   private async createDisbursementLogsForBatch(
@@ -882,7 +975,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   }
 
   private async getDisbursableGroupsUuids() {
-    const benGroups = await this.prismaService.beneficiaryGroupTokens.findMany({
+    const benGroups = await this.prismaService.beneficiaryGroupTokens.findFirst({
       where: {
         AND: [
           { numberOfTokens: { gt: 0 } },
@@ -892,15 +985,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       },
       select: { uuid: true, groupId: true },
     });
-    return benGroups.map((group) => group.groupId);
+    return benGroups?.uuid;
   }
 
-  async getBeneficiaryTokenBalance(groupUuids: string[]) {
-    if (!groupUuids.length) return [];
+  async getBeneficiaryTokenBalance(groupUuid: string) {
+    if (!groupUuid) return [];
 
     const [groups, tokens] = await Promise.all([
-      this.fetchGroupedBeneficiaries(groupUuids),
-      this.fetchGroupTokenAmounts(groupUuids),
+      this.fetchGroupedBeneficiaries(groupUuid),
+      this.fetchGroupTokenAmounts(groupUuid),
     ]);
 
     this.logger.log(`Found ${groups.length} groups`);
@@ -909,27 +1002,27 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     return this.computeBeneficiaryTokenDistribution(groups, tokens);
   }
 
-  private async fetchGroupedBeneficiaries(groupUuids: string[]) {
+  private async fetchGroupedBeneficiaries(groupUuid: string) {
     const response = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        { data: groupUuids.map((uuid) => ({ uuid })) }
+        { data: [{ uuid: groupUuid }] }
       )
     );
 
     return response.data ?? [];
   }
 
-  private async fetchGroupTokenAmounts(groupUuids: string[]) {
+  private async fetchGroupTokenAmounts(groupUuid: string) {
     return this.prismaService.beneficiaryGroupTokens.findMany({
-      where: { groupId: { in: groupUuids } },
+      where: { groupId: groupUuid },
       select: { numberOfTokens: true, groupId: true },
     });
   }
 
   private computeBeneficiaryTokenDistribution(
     groups: any[],
-    tokens: { numberOfTokens: number; groupId: string }[]
+    tokens: { numberOfTokens: number; groupId: string }[] 
   ) {
     const csvData: Record<
       string,

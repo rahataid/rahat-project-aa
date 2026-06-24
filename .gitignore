@@ -67,8 +67,11 @@ mainnet-stellar-seed.md
 
 .cursor
 .data
+
+/tools/deployment-scripts/deployments/ 
 .claude
 .claude-flow
 CLAUDE.md
 .mcp.json
 .swarm
+.sisyphus

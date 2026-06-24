@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
 import { StatDto } from './dto/stat.dto';
 
@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class StatsService {
+  private readonly logger = new Logger(StatsService.name);
   private communicationService: CommunicationService;
 
   constructor(
@@ -26,6 +27,7 @@ export class StatsService {
     });
   }
   async save(data: StatDto) {
+    this.logger.log('Received stat for save:', data);
     data.name = data.name.toUpperCase();
 
     return this.prismaService.stats.upsert({
@@ -36,6 +38,7 @@ export class StatsService {
   }
 
   async saveMany(stats: StatDto[]) {
+    this.logger.log('Received stats for saveMany:', stats.length);
     const formattedStats = stats.map((stat) => ({
       ...stat,
       name: stat.name.toUpperCase(),
@@ -58,6 +61,7 @@ export class StatsService {
     group: string,
     select: { name?: boolean; data?: boolean; group?: boolean } | null = null
   ) {
+    this.logger.log(`Fetching stats for group: ${group} with select: ${JSON.stringify(select)}`);
     return this.prismaService.stats.findMany({
       where: { group },
       select,
@@ -65,6 +69,7 @@ export class StatsService {
   }
 
   async findAll(payload) {
+    this.logger.log('Received payload for findAll:', payload);
     try {
       const benefStats = await this.prismaService.stats.findMany();
       const triggeersStats = await firstValueFrom(
@@ -75,11 +80,12 @@ export class StatsService {
         triggeersStats,
       };
     } catch (error) {
-      console.error('Error from microservice:', error);
+      this.logger.error('Error from microservice:', error);
     }
   }
 
   async mapLocation(payload) {
+    this.logger.log('Received payload for mapLocation:', payload);
     const { ward_no, location } = payload;
 
     try {
@@ -100,7 +106,7 @@ export class StatsService {
 
       return mapLocation;
     } catch (error) {
-      console.error('Error from microservice:', error);
+      this.logger.error('Error from microservice:', error);
       throw error;
     }
   }

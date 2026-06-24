@@ -11,13 +11,22 @@ import {
   BeneficiaryInkindRedeemDto,
   GetGroupInkindLogsDto,
   GetVendorInkindLogsDto,
+  RedeemOfflineInkindByVendorDto,
 } from './dto/inkind.dto';
 import {
   AddInkindStockDto,
   ListStockMovementsDto,
   RemoveInkindStockDto,
 } from './dto/inkindStock.dto';
-import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
+import {
+  AssignGroupInkindDto,
+  ListGroupInkindDto,
+} from './dto/inkindGroup.dto';
+import {
+  AddVendorInkindRedeemDto,
+  GetVendorInkindRedemptionDto,
+  UpdateVendorInkindRedeemStatusDto,
+} from './dto/vendorInkindRedem.dto';
 
 @Controller()
 export class InkindsController {
@@ -109,8 +118,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_BY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  getByGroup(@Payload() payload: { inkindType: string }) {
-    return this.inkindsService.getByGroup(payload.inkindType);
+  getByGroup(@Payload() payload: ListGroupInkindDto) {
+    return this.inkindsService.getByGroup(payload);
   }
 
   @MessagePattern({
@@ -122,11 +131,16 @@ export class InkindsController {
   }
 
   @MessagePattern({
-    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_BENEFICIARY_PHONE,
+    cmd: JOBS.INKINDS.GET_AVAILABLE_INKIND_FOR_BENEFICIARY,
     uuid: process.env.PROJECT_ID,
   })
-  getAvailableInkindByBeneficiary(@Payload() Payload: { number: string }) {
-    return this.inkindsService.getAvailableInkindByBeneficiary(Payload.number);
+  getAvailableInkindByBeneficiary(
+    @Payload() Payload: { number?: string; walletAddress?: string }
+  ) {
+    return this.inkindsService.getAvailableInkindByBeneficiary(
+      Payload.number,
+      Payload.walletAddress
+    );
   }
 
   @MessagePattern({
@@ -204,6 +218,70 @@ export class InkindsController {
     return this.inkindsService.getLogsDetailsByTxHash(
       payload.txHash,
       payload.vendorUid
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR,
+    uuid: process.env.PROJECT_ID
+  })
+  getAllOfflineBeneficiaryByVendor(@Payload() payload: { vendorId: string }) {
+    return this.inkindsService.getAllOfflineBeneficiaryByVendor(payload.vendorId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.REDEEM_OFFLINE_INKIND_BY_VENDOR,
+    uuid: process.env.PROJECT_ID
+  })
+  redeemOfflineInkindByVendor(@Payload() payload: RedeemOfflineInkindByVendorDto) {
+    return this.inkindsService.redeemOfflineInkindByVendor(payload);
+  }
+
+  // ============== Vendor Redemption ============================
+@MessagePattern({
+    cmd: JOBS.INKINDS.GET_VENDOR_AVAILABLE_INKIND_DETAILS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getVendorAvailableInkindsDetails(@Payload() payload: { vendorUuid: string }) {
+    return this.inkindsService.getVendorAvailableInkindsDetails(payload.vendorUuid);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.GET_VENDOR_REDEMPTIONS,
+    uuid: process.env.PROJECT_ID,
+  })
+  getVendorRedemptions(@Payload() payload: GetVendorInkindRedemptionDto) {
+    return this.inkindsService.getVendorRedemptions(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.CREATE_VENDOR_REDEMPTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  createVendorRedemption(@Payload() payload: AddVendorInkindRedeemDto) {
+    return this.inkindsService.createVendorRedemption(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.UPDATE_VENDOR_REDEMPTION_STATUS,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateVendorRedemptionStatus(
+    @Payload() payload: UpdateVendorInkindRedeemStatusDto
+  ) {
+    return this.inkindsService.updateVendorRedemptionStatus(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.INKINDS.UPDATE_VENDOR_REDEMPTION_TX_HASH,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateVendorRedemptionTxHash(
+    @Payload() payload: { redemptionUuid: string; txHash: string }
+  ) {
+    return this.inkindsService.updateVendorRedemptionTxHash(
+      payload.redemptionUuid,
+      payload.txHash
     );
   }
 }

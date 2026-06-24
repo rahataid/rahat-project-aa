@@ -63,4 +63,12 @@ export class ChainController {
   redeemInkind(data: RedeemInkindDto) {
     return this.chainService.redeemInkind(data); 
   }
+
+  @MessagePattern({
+    cmd: JOBS.CHAIN.REDEEM_VENDOR_INKIND_TOKENS,
+    uuid: process.env.PROJECT_ID,
+  })
+  redeemVendorInkindTokens(data: any) {
+    return this.chainService.redeemVendorInkindTokens(data);  
+  }
 }

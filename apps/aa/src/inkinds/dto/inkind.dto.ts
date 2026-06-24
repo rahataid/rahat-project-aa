@@ -8,6 +8,7 @@ import {
   IsIn,
   IsArray,
   IsObject,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -129,8 +130,16 @@ export class BeneficiaryInkindRedeemDto {
     groupInkindUuid?: string;
   }[];
 
+  @IsOptional()
+  @IsString()
+  otpExemptionReason?: string;
+
   @IsObject()
   user: UserObject;
+
+  @IsOptional()
+  @IsString()
+  redeemedAt?: string;
 }
 
 export class GetGroupInkindLogsDto {
@@ -162,6 +171,10 @@ export class GetGroupInkindLogsDto {
   @IsString()
   @IsIn(['redeemedAt', 'quantity'])
   sort?: 'redeemedAt' | 'quantity' = 'redeemedAt';
+
+  @IsOptional()
+  @IsBoolean()
+  getEntireLogs?: boolean = false;
 }
 
 export class GetVendorInkindLogsDto {
@@ -205,4 +218,27 @@ export class GetVendorInkindLogsDto {
   @IsOptional()
   @IsEnum(InkindType)
   inkindType?: InkindType;
+}
+
+export class RedeemOfflineInkindByVendorDto {
+  @IsObject()
+  user: UserObject
+
+  @IsArray()
+  redeemedInkinds: RedeemedOfflineInkinds[];
+}
+
+export class RedeemedOfflineInkinds {
+  @IsString()
+  beneficiaryWallet: string;
+
+  @IsArray()
+  inkindRedeemed: {
+    uuid: string;
+    groupInkindUuid: string;
+  }[];
+
+  @IsOptional()
+  @IsString()
+  redeemedAt?: string;
 }

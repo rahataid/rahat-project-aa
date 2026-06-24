@@ -11,6 +11,8 @@ import { StellarModule } from '../stellar/stellar.module';
 import { SettingsModule } from '@rumsan/settings';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 import { PayoutsModule } from '../payouts/payouts.module';
+import { QrPdfService } from './qr-pdf.service';
+import { PdfGenerationProcessor } from '../processors/pdf-generation.processor';
 
 @Module({
   imports: [
@@ -35,6 +37,9 @@ import { PayoutsModule } from '../payouts/payouts.module';
     BullModule.registerQueue({
       name: BQUEUE.STELLAR,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.QR_PDF,
+    }),
   ],
   controllers: [BeneficiaryController],
   providers: [
@@ -42,7 +47,9 @@ import { PayoutsModule } from '../payouts/payouts.module';
     PrismaService,
     BeneficiaryStatService,
     BeneficiaryMultisigService,
+    QrPdfService,
+    PdfGenerationProcessor,
   ],
-  exports: [BeneficiaryService, BeneficiaryStatService],
+  exports: [BeneficiaryService, BeneficiaryStatService, QrPdfService],
 })
 export class BeneficiaryModule {}

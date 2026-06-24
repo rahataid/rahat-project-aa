@@ -12,6 +12,7 @@ import {
   AddTriggerDto,
   UpdateTriggerDto,
   RedeemInkindDto,
+  RedeemInkindTokenForCashDto,
 } from './interfaces/chain-service.interface';
 import { SendAssetDto } from '../stellar/dto/send-otp.dto';
 
@@ -61,7 +62,6 @@ export class ChainQueueService {
   }
 
   async disburse(data: DisburseDto, chainType?: ChainType): Promise<any> {
-    this.logger.log(`Disbursing to beneficiaries`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
@@ -267,4 +267,11 @@ export class ChainQueueService {
     return chainService.redeemInkind(redeemDto);
   }
 
+  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto, chainType?: ChainType): Promise<any> {
+    this.logger.log(`Redeeming inkind tokens for vendor ${redeemVendorInkindDto.vendorAddress}`);
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.redeemVendorInkindTokens(redeemVendorInkindDto);
+  }
 }

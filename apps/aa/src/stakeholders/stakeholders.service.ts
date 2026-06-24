@@ -65,6 +65,9 @@ export class StakeholdersService {
 
   // ***** stakeholders start ********** //
   async add(payload: AddStakeholdersData) {
+    this.logger.log(
+      `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
+    );
     const { phone, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
@@ -75,6 +78,17 @@ export class StakeholdersService {
           },
         }
       );
+
+      // if stakeholder is soft deleted then update stakeholder and set isDeleted to false
+      if (stakeholderWithSamePhone && stakeholderWithSamePhone.isDeleted) {
+        const updatedStakeholder = await this.prisma.stakeholders.update({
+          where: { uuid: stakeholderWithSamePhone.uuid },
+          data: { ...rest, phone: validPhone ? phone : null, isDeleted: false },
+        });
+        await this.eventEmitter.emit(EVENTS.STAKEHOLDER_UPDATED);
+        return updatedStakeholder;
+      }
+
       if (stakeholderWithSamePhone)
         throw new RpcException('Phone number must be unique');
     }
@@ -242,6 +256,7 @@ export class StakeholdersService {
               where: { phone: stakeholder.phone },
               data: {
                 ...this.removeEmptyFields(stakeholder),
+                isDeleted: false,
                 updatedAt: new Date(),
                 ...(groupUuid
                   ? { stakeholdersGroups: { connect: { uuid: groupUuid } } }
@@ -284,6 +299,24 @@ export class StakeholdersService {
       supportArea,
     } = payload;
 
+    this.logger.log(
+      `Fetching stakeholders with filters - name: ${name}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
+    );
+
+    // Case-insensitive array search via raw SQL — Prisma hasSome is case-sensitive
+    let supportAreaUuids: string[] | null = null;
+    if (supportArea) {
+      const matches = await this.prisma.$queryRaw<{ uuid: string }[]>`
+      SELECT uuid FROM tbl_stakeholders
+      WHERE EXISTS (
+        SELECT 1 FROM unnest("supportArea") AS s
+        WHERE s ILIKE ${'%' + supportArea + '%'}
+      )
+      AND "isDeleted" = false
+    `;
+      supportAreaUuids = matches.map((m) => m.uuid);
+    }
+
     const query = {
       where: {
         isDeleted: false,
@@ -300,21 +333,17 @@ export class StakeholdersService {
         ...(organization && {
           organization: { contains: organization, mode: 'insensitive' },
         }),
-        ...(supportArea && { supportArea: { hasSome: [supportArea] } }),
+        ...(supportAreaUuids && { uuid: { in: supportAreaUuids } }),
       },
       include: {
         stakeholdersGroups: true,
       },
       ...(order && sort
         ? {
-            orderBy: {
-              [sort]: order,
-            },
+            orderBy: [{ [sort]: order }, { id: 'desc' }],
           }
         : {
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           }),
     };
 
@@ -373,13 +402,16 @@ export class StakeholdersService {
         };
       }
     }
-
+    // update and disconnect from group
     const rData = await this.prisma.stakeholders.update({
       where: {
         uuid: payload.uuid,
       },
       data: {
         isDeleted: true,
+        stakeholdersGroups: {
+          set: [],
+        },
       },
     });
 
@@ -663,36 +695,69 @@ export class StakeholdersService {
     });
   }
 
+  // Looks up a value by key, ignoring case/whitespace differences in the key itself
+  private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+    const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
+    this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
+
+    const matchEntry = Object.entries(item).find(([itemKey]) =>
+      normalizedKeys.includes(itemKey.trim().toLowerCase())
+    );
+
+    return matchEntry?.[1];
+  }
+
   // Maps raw Excel rows → CreateStakeholderDto shape — no validation
   private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
     return payload.map((item) => {
-      // Find the first valid supportArea string value
-      const rawSupportArea =
-        typeof item['Support Area'] === 'string'
-          ? item['Support Area']
-          : typeof item['Support Area #'] === 'string'
-          ? item['Support Area #']
-          : typeof item['Support Area '] === 'string'
-          ? item['Support Area ']
-          : '';
+      const rawSupportArea = this.getFieldCaseInsensitive(
+        item,
+        'Support Area',
+        'Support Area #'
+      );
 
       return {
-        name: item['Name']?.trim() || item['Stakeholders Name']?.trim() || '',
-        designation: item['Designation']?.trim() || '',
-        organization: item['Organization']?.trim() || '',
-        district: item['District']?.trim() || '',
-        municipality: item['Municipality']?.trim() || '',
+        name:
+          this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        designation:
+          this.getFieldCaseInsensitive(item, 'Designation')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        organization:
+          this.getFieldCaseInsensitive(item, 'Organization')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        district:
+          this.getFieldCaseInsensitive(item, 'District')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
+        municipality:
+          this.getFieldCaseInsensitive(item, 'Municipality')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
         phone:
-          item['Mobile #']?.toString().trim() ||
-          item['Phone Number']?.toString().trim() ||
-          '',
-        supportArea: rawSupportArea
-          ? rawSupportArea
-              .split(',')
-              .map((v) => v.trim())
-              .filter(Boolean)
-          : [],
-        email: item['Email ID']?.trim() || item['Email']?.trim() || '',
+          this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
+            ?.toString()
+            .trim() || '',
+        supportArea:
+          typeof rawSupportArea === 'string' && rawSupportArea
+            ? rawSupportArea
+                .split(',')
+                .map((v) => v.trim().toLowerCase())
+                .filter(Boolean)
+            : [],
+        email:
+          this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
+            ?.toString()
+            .trim()
+            .toLowerCase() || '',
       };
     });
   }

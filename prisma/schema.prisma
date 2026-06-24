@@ -71,6 +71,13 @@ enum GroupPurpose {
   BANK_TRANSFER
   MOBILE_MONEY
   COMMUNICATION
+  GENERAL
+}
+
+enum RedemptionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
 }
 
 // ++++++++++++++++++ START: @el/beneficiaries +++++++++++++++++++++++++++
@@ -417,6 +424,7 @@ model Vendor {
   BeneficiaryRedeem            BeneficiaryRedeem[]
   OfflineBeneficiary           OfflineBeneficiary[]
   beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
+  vendorInkindRedemptions       VendorInkindRedemption[]
 
   @@map("tbl_vendors")
 }
@@ -615,6 +623,8 @@ model OfflineBeneficiary {
 model Otp {
   id          Int      @id @default(autoincrement())
   phoneNumber String   @unique
+  walletAddress String?   @unique
+  otp         String?
   otpHash     String
   amount      Float
   expiresAt   DateTime
@@ -627,6 +637,22 @@ model Otp {
 }
 
 // ============== End OTP SCHEMAS ================
+
+// ============== Start PDF Generation Job SCHEMAS ================
+model PdfGenerationJob {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  status    String   @default("pending")
+  groupId   String?
+  fileUrl   String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map(name: "tbl_pdf_generation_jobs")
+}
+
+// ============== End PDF Generation Job SCHEMAS ================
 
 enum Gender {
   MALE
@@ -700,6 +726,7 @@ model Inkind {
 
   stockMovements InkindStockMovement[]
   groupInkinds   GroupInkind[]
+  vendorInkindRedemptions VendorInkindRedemption[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -751,6 +778,10 @@ model GroupInkind {
   redemptions    BeneficiaryInkindRedemption[]
   stockMovements InkindStockMovement[]
 
+  mode   PayoutMode?
+  payoutProcessorId     String? //
+
+
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
   createdBy String?
@@ -779,6 +810,7 @@ model BeneficiaryInkindRedemption {
 
   txHash String?
   status String @default("PENDING")
+  otpExemptionReason String? 
 
   vendorUid String? @db.Uuid()
   Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])
@@ -788,6 +820,47 @@ model BeneficiaryInkindRedemption {
   @@index([vendorUid])
   @@index([redeemedAt(sort: Desc)])
   @@map("tbl_beneficiary_inkind_redemptions")
+}
+
+model TempOfflineInkindRedemption {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  vendorId  String
+  user      Json
+  vendor    Json
+  payloads  Json
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([vendorId])
+  @@map("tbl_temp_offline_inkind_redemptions")
+}
+
+model VendorInkindRedemption {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  redemptionStatus RedemptionStatus @default(REQUESTED)
+  quantity Int @default(1)
+
+  transactionHash String?
+  approvedBy      String?
+  approvedAt      DateTime?
+
+  inkindUuid String
+  inkind     Inkind @relation(fields: [inkindUuid], references: [uuid])
+
+  vendorUuid       String                @db.Uuid()
+  vendor Vendor @relation(fields: [vendorUuid], references: [uuid])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime @default(now())
+
+  @@index([vendorUuid])
+  @@index([updatedAt(sort: Desc)])
+  @@map("tbl_vendor_inkind_redemptions")
 }
 
 // ============== End Inkind SCHEMAS ================

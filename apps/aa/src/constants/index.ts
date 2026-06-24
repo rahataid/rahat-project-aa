@@ -24,7 +24,6 @@ export const CONTROLLERS = {
     LIST: NAMESPACE + '.vendor.list',
     LISTONE: NAMESPACE + '.vendor.listone',
     UPDATE: NAMESPACE + '.vendor.update',
-    BLOCKCHAIN: NAMESPACE + '.vendor.blockchain',
   },
   BENEFICIARY: {
     CREATE: NAMESPACE + '.beneficiary.create',
@@ -84,6 +83,10 @@ export const JOBS = {
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
+    GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
+    SYNC_IMPORTED_GROUP_BENEFICIARIES:
+      'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -254,7 +257,7 @@ export const JOBS = {
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
-    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`,       // write ops: serial (concurrency 1), signer required
+    TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`, // write ops: serial (concurrency 1), signer required
     QUERY_JOB: `aa.jobs.evm.query_${process.env.PROJECT_ID}`, // read ops:  concurrent (concurrency 5), no signer
     // Original job-type identifiers — used as `type` field inside job.data
     ASSIGN_TOKENS: `aa.jobs.evm.assignTokens_${process.env.PROJECT_ID}`,
@@ -265,6 +268,7 @@ export const JOBS = {
     ADD_TRIGGER: `aa.jobs.evm.addTrigger_${process.env.PROJECT_ID}`,
     UPDATE_TRIGGER_PARAMS: `aa.jobs.evm.updateTriggerParams_${process.env.PROJECT_ID}`,
     REDEEM_INKIND: `aa.jobs.evm.redeemInkind_${process.env.PROJECT_ID}`,
+    REDEEM_INKIND_TOKEN_FOR_CASH: `aa.jobs.evm.redeemTokenForCash_${process.env.PROJECT_ID}`,
   },
   CASH_TRACKER: {
     EXECUTE_ACTION: 'aa.jobs.cash-tracker.executeAction',
@@ -272,6 +276,7 @@ export const JOBS = {
     CREATE_BUDGET: 'aa.jobs.cash-tracker.createBudget',
   },
   INKINDS: {
+    BULK_REDEEM_BATCH: 'aa.jobs.inkinds.bulkRedeemBatch',
     CREATE: 'aa.jobs.inkinds.create',
     UPDATE: 'aa.jobs.inkinds.update',
     DELETE: 'aa.jobs.inkinds.delete',
@@ -285,8 +290,8 @@ export const JOBS = {
     GET_BY_GROUP: 'aa.jobs.groupInkinds.getByGroup',
     GET_UNASSIGNED_GROUP_INKIND:
       'aa.jobs.groupInkinds.getUnassignedGroupInkind',
-    GET_AVAILABLE_INKIND_BENEFICIARY_PHONE:
-      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiaryPhone',
+    GET_AVAILABLE_INKIND_FOR_BENEFICIARY:
+      'aa.jobs.groupInkinds.getAvailableInkindByBeneficiary',
     GET_GROUP_INKIND_LOGS: 'aa.jobs.groupInkinds.getLogs',
     GET_LOGS_DETAILS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsDetailsByVendor',
     GET_GROUP_INKIND_LOGS_BY_VENDOR: 'aa.jobs.groupInkinds.getLogsByVendor',
@@ -295,6 +300,19 @@ export const JOBS = {
     SEND_BENEFICIARY_OTP: 'aa.jobs.inkinds.sendBeneficiaryOtp',
     VALIDATE_BENEFICIARY_OTP: 'aa.jobs.inkinds.validateBeneficiaryOtp',
     BENEFICIARY_INKIND_DETAILS: 'aa.jobs.beneficiary.inKindDetails',
+    GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR:
+      'aa.jobs.inkinds.getAllOfflineBeneficiaryByVendor',
+    REDEEM_OFFLINE_INKIND_BY_VENDOR:
+      'aa.jobs.inkinds.redeemOfflineInkindByVendor',
+    SEND_BENEFICIARY_OTP_ON_QUEUE: `aa.jobs.inkinds.sendBeneficiaryOtpOnQueue`,
+    CREATE_VENDOR_REDEMPTION: 'aa.jobs.inkinds.createVendorRedemption',
+    GET_VENDOR_AVAILABLE_INKIND_DETAILS:
+      'aa.jobs.inkinds.getVendorAvailableInkindsDetails',
+    GET_VENDOR_REDEMPTIONS: 'aa.jobs.inkinds.getVendorRedemptions',
+    UPDATE_VENDOR_REDEMPTION_STATUS:
+      'aa.jobs.inkinds.updateVendorRedemptionStatus',
+    UPDATE_VENDOR_REDEMPTION_TX_HASH:
+      'aa.jobs.inkinds.updateVendorRedemptionTxHash',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
@@ -305,6 +323,7 @@ export const JOBS = {
   },
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
+    REDEEM_VENDOR_INKIND_TOKENS: 'aa.jobs.chain.redeemVendorInkindTokens',
   },
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',
@@ -343,7 +362,9 @@ export const BQUEUE = {
   VENDOR_CVA: `VENDOR_CVA_${process.env.PROJECT_ID}`,
   VENDOR: `VENDOR_${process.env.PROJECT_ID}`,
   BATCH_TRANSFER: `BATCH_TRANSFER_${process.env.PROJECT_ID}`,
+  INKIND_BULK_REDEEM: `INKIND_BULK_REDEEM_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
+  QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
