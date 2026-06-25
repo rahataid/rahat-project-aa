@@ -1488,7 +1488,56 @@ export class BeneficiaryService {
     });
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
+    await this.syncOtpsForBeneficiaries(beneficiariesData);
     await this.initiateQrPdf(groupUuid);
     return { message: 'Sync process completed successfully' };
+  }
+
+  private async syncOtpsForBeneficiaries(
+    beneficiaries: Array<{
+      phone?: string;
+      walletAddress: string;
+    }>
+  ) {
+    const eligible = beneficiaries.filter((b) => b.phone && b.walletAddress);
+    if (!eligible.length) return;
+
+    const BCRYPT_ROUNDS = 8;
+    const isDev = process.env.NODE_ENV !== 'production';
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let devHash: string | null = null;
+    if (isDev) {
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+    }
+
+    for (const benf of eligible) {
+      const otp = isDev
+        ? '1234'
+        : Math.floor(1000 + Math.random() * 9000).toString();
+      const otpHash = isDev
+        ? devHash!
+        : await bcrypt.hash(otp, BCRYPT_ROUNDS);
+
+      await this.prisma.otp.upsert({
+        where: { walletAddress: benf.walletAddress },
+        update: {
+          phoneNumber: benf.phone!,
+          otp,
+          otpHash,
+          expiresAt,
+        },
+        create: {
+          phoneNumber: benf.phone!,
+          walletAddress: benf.walletAddress,
+          otp,
+          otpHash,
+          amount: 0,
+          expiresAt,
+        },
+      });
+    }
+
+    this.logger.log(`Synced OTPs for ${eligible.length} beneficiaries`);
   }
 }
