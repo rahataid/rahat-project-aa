@@ -249,7 +249,7 @@ export class StellarChainService implements IChainService {
         return [
           escape(ben.phone),
           escape(ben.walletAddress),
-          escape(ben.name),
+          escape(''),
           escape(receiverId),
           escape(ben.amount),
           escape(paymentId),

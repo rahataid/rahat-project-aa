@@ -45,12 +45,27 @@ export class DisbursementsService {
       contentType: 'text/csv',
     });
 
-    const { data } = await this.http.post<Disbursement>(
-      '/disbursements',
-      formData,
-      { headers: { ...formData.getHeaders() } }
-    );
-    return data;
+    try {
+      const { data } = await this.http.post<Disbursement>(
+        '/disbursements',
+        formData,
+        { headers: { ...formData.getHeaders() } }
+      );
+      return data;
+    } catch (error: any) {
+      if (error.response?.data) {
+        const { error: errorMessage, extras } = error.response.data;
+        let formattedError = errorMessage || error.message;
+        if (extras && typeof extras === 'object') {
+          const extraMessages = Object.entries(extras)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join('; ');
+          formattedError += ` - Details: ${extraMessages}`;
+        }
+        throw new Error(formattedError);
+      }
+      throw error;
+    }
   }
 
   async updateStatus(

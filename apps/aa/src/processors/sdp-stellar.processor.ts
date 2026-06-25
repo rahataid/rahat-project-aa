@@ -107,7 +107,9 @@ export class SdpStellarProcessor {
         name: dName,
         wallet_id: sdpSettings.walletId,
         asset_id: sdpSettings.assetId,
+        registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
         verification_field: sdpSettings.verificationField,
+        receiver_registration_message_template: '',
         file: csvBuffer,
         filename: `${dName}_instructions.csv`,
       });
