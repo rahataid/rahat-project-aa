@@ -118,6 +118,14 @@ export class SdpStellarProcessor {
         `SDP disbursement created: ${disbursement.id} for group ${groupUuid}`
       );
 
+      await sdpClient.disbursements.updateStatus(disbursement.id, {
+        status: 'STARTED',
+      });
+
+      this.logger.log(
+        `SDP disbursement ${disbursement.id} status updated to STARTED`
+      );
+
       await this.beneficiaryService.updateGroupToken({
         groupUuid,
         status: 'STARTED',
