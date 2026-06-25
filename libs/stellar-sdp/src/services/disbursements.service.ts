@@ -1,5 +1,5 @@
 import { AxiosInstance } from 'axios';
-import * as FormData from 'form-data';
+import FormData = require('form-data');
 import {
   CreateDisbursementRequest,
   Disbursement,
@@ -31,7 +31,12 @@ export class DisbursementsService {
   }
 
   async create(request: CreateDisbursementRequest): Promise<Disbursement> {
-    const { file, filename, ...metadata } = request;
+    const { file, filename, ...rest } = request;
+    const metadata = {
+      ...rest,
+      wallet_id: rest.wallet_id ?? '',
+      verification_field: rest.verification_field ?? '',
+    };
 
     const formData = new FormData();
     formData.append('data', JSON.stringify(metadata));

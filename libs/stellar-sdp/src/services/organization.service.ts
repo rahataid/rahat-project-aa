@@ -1,6 +1,6 @@
 import { AxiosInstance } from 'axios';
 import { Organization, UpdateOrganizationRequest } from '../types';
-import * as FormData from 'form-data';
+import FormData = require('form-data');
 
 export class OrganizationService {
   constructor(private readonly http: AxiosInstance) {}

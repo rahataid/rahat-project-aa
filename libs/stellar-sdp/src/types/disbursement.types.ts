@@ -15,9 +15,9 @@ export interface Disbursement {
 
 export interface CreateDisbursementRequest {
   name: string;
-  wallet_id: string;
+  wallet_id?: string;
   asset_id: string;
-  verification_field: string;
+  verification_field?: string;
   registration_contact_type?: string;
   receiver_registration_message_template?: string;
   file: Buffer;

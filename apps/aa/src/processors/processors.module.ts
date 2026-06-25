@@ -3,20 +3,14 @@ import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { PrismaService } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
-// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and
-// StellarProcessor is re-registered.
-// import { StellarProcessor } from './stellar.processor';
+import { SdpStellarProcessor } from './sdp-stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
 import { VendorOfflinePayoutProcessor } from './vendor-cva-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
-// import { StellarModule } from '../stellar/stellar.module';
-// import { ReceiveService } from '@rahataid/stellar-sdk';
-// import { CheckTrustlineProcessor } from './checkTrutline.processor';
 import { PayoutsModule } from '../payouts/payouts.module';
-// import { SettingsService } from '@rumsan/settings';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { NotificationProcessor } from './notification.processor';
 import { EVMCentralizedProcessor } from './evm-centralized.processor';
@@ -24,15 +18,15 @@ import { InkindsModule } from '../inkinds';
 import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatcher';
 import { InkindProcessor } from './inkind.processor';
 import { OtpModule } from '../otp/otp.module';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
-    // TODO: STELLAR DETACH - re-add once stellar module is rewritten.
-    // StellarModule,
     BeneficiaryModule,
     forwardRef(() => InkindsModule),
     PayoutsModule,
     StakeholdersModule,
+    ChainModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -44,14 +38,7 @@ import { OtpModule } from '../otp/otp.module';
         },
       },
     ]),
-    // TODO: STELLAR DETACH - StellarProcessor/CheckTrustlineProcessor no longer
-    // registered, so these queues have no consumers in this module.
-    // BullModule.registerQueue({
-    //   name: BQUEUE.STELLAR,
-    // }),
-    // BullModule.registerQueue({
-    //   name: BQUEUE.STELLAR_CHECK_TRUSTLINE,
-    // }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
@@ -85,9 +72,7 @@ import { OtpModule } from '../otp/otp.module';
     ContractProcessor,
     InkindProcessor,
     StatsProcessor,
-    // TODO: STELLAR DETACH - re-register once stellar module is rewritten.
-    // StellarProcessor,
-    // CheckTrustlineProcessor,
+    SdpStellarProcessor,
     NotificationProcessor,
     OfframpProcessor,
     VendorOfflinePayoutProcessor,
@@ -95,24 +80,6 @@ import { OtpModule } from '../otp/otp.module';
     EVMCentralizedProcessor,
     EVMTxDispatcher,
     EVMQueryDispatcher,
-    // TODO: STELLAR DETACH - re-add once ReceiveService-equivalent is available.
-    // {
-    //   provide: ReceiveService,
-    //   useFactory: async (settingsService: SettingsService) => {
-    //     const stellarSettings = await settingsService.getPublic(
-    //       'STELLAR_SETTINGS'
-    //     );
-    //     return new ReceiveService(
-    //       (stellarSettings.value as any).ASSETISSUER,
-    //       (stellarSettings.value as any).ASSETCODE,
-    //       (stellarSettings.value as any).NETWORK,
-    //       (stellarSettings.value as any).FAUCETSECRETKEY,
-    //       (stellarSettings.value as any).FUNDINGAMOUNT,
-    //       (stellarSettings.value as any).HORIZONURL
-    //     );
-    //   },
-    //   inject: [SettingsService],
-    // },
   ],
   exports: [EVMCentralizedProcessor, EVMTxDispatcher, EVMQueryDispatcher, ContractProcessor],
 })

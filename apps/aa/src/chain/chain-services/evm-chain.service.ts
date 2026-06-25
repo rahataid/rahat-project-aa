@@ -310,6 +310,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
+    this.logger.log(`Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`);
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.ASSIGN_TOKENS,
@@ -802,6 +803,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async fundAccount(data: FundAccountDto): Promise<any> {
+    this.logger.log(`Funding account ${data.walletAddress} with amount ${data.amount}`);
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.FUND_ACCOUNT,
@@ -847,7 +849,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   validateAddress(address: string): boolean {
-    return ethers.isAddress(address);
+    const isValid = ethers.isAddress(address);
+    this.logger.debug(`Address validation for ${address}: ${isValid}`);
+    return isValid;
   }
 
   // Helper methods
@@ -939,6 +943,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   private async getDisbursableGroupsUuids() {
+    this.logger.debug('Fetching disbursable group UUIDs');
     const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
         AND: [
@@ -952,6 +957,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       },
       select: { uuid: true, groupId: true },
     });
+    this.logger.debug(`Found ${benGroups.length} disbursable groups`);
     return benGroups.map((group) => group.groupId);
   }
 
@@ -1342,6 +1348,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
+    this.logger.log(`Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`);
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
       {
@@ -1357,6 +1364,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto) {
+    this.logger.log(`Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`);
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH, ...redeemVendorInkindDto },
       {

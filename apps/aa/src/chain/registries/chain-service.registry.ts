@@ -4,9 +4,7 @@ import {
   IChainService,
   ChainType,
 } from '../interfaces/chain-service.interface';
-// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and a Stellar
-// chain service implementation is available again.
-// import { StellarChainService } from '../chain-services/stellar-chain.service';
+import { StellarChainService } from '../chain-services/stellar-chain.service';
 import { EvmChainService } from '../chain-services/evm-chain.service';
 
 @Injectable()
@@ -16,19 +14,16 @@ export class ChainServiceRegistry {
 
   constructor(
     private settingsService: SettingsService,
-    // private stellarChainService: StellarChainService,
+    private stellarChainService: StellarChainService,
     private evmChainService: EvmChainService
   ) {
     this.registerServices();
   }
 
   private registerServices(): void {
-    // TODO: STELLAR DETACH - re-register once a Stellar chain service
-    // implementation is available again.
-    // this.chainServices.set('stellar', this.stellarChainService);
+    this.chainServices.set('stellar', this.stellarChainService);
     this.chainServices.set('evm', this.evmChainService);
-
-    this.logger.log('Registered chain services: evm');
+    this.logger.log('Registered chain services: stellar, evm');
   }
 
   async getChainService(chainType?: ChainType): Promise<IChainService> {
@@ -53,9 +48,6 @@ export class ChainServiceRegistry {
         typeof chainSettings.value !== 'object' ||
         !('type' in chainSettings.value)
       ) {
-        // TODO: STELLAR DETACH - defaulted to 'stellar' previously. Stellar chain
-        // service is no longer registered, so default to 'evm' until the stellar
-        // module is rewritten and re-registered.
         this.logger.warn('Chain settings not found, defaulting to evm');
         return 'evm';
       }
@@ -65,8 +57,6 @@ export class ChainServiceRegistry {
       ).type.toLowerCase() as ChainType;
 
       if (!this.isValidChainType(chainType)) {
-        // TODO: STELLAR DETACH - defaulted to 'stellar' previously. Defaulting to
-        // 'evm' since stellar chain service is no longer registered.
         this.logger.warn(
           `Invalid chain type: ${chainType}, defaulting to evm`
         );
@@ -77,12 +67,7 @@ export class ChainServiceRegistry {
       return chainType;
     } catch (error) {
       this.logger.error('Error detecting chain from settings:', error);
-      // TODO: STELLAR DETACH - defaulted to 'stellar' previously. Defaulting to
-      // 'evm' since stellar chain service is no longer registered. Note: if
-      // CHAIN_SETTINGS.type === 'stellar' is explicitly configured,
-      // getChainService will still throw - accepted broken-feature case until
-      // the stellar module is rewritten.
-      return 'evm'; // Default fallback
+      return 'evm';
     }
   }
 
@@ -105,15 +90,11 @@ export class ChainServiceRegistry {
   }
 
   async getChainServiceByAddress(address: string): Promise<IChainService> {
-    // Try to detect chain type by address format
     if (address.length === 56 && address.startsWith('G')) {
-      // Stellar address format
       return this.getChainService('stellar');
     } else if (address.startsWith('0x') && address.length === 42) {
-      // Ethereum address format
       return this.getChainService('evm');
     } else {
-      // Fallback to settings detection
       return this.getChainService();
     }
   }

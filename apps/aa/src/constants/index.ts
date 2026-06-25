@@ -119,6 +119,10 @@ export const JOBS = {
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
   },
+  STELLAR_SDP: {
+    DISBURSE: 'aa.jobs.stellar_sdp.disburse',
+    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+  },
   WALLET: {
     GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
   },
@@ -373,6 +377,7 @@ export const BQUEUE = {
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
   STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
+  STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
