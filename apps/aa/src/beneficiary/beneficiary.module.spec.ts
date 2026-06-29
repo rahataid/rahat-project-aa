@@ -5,7 +5,6 @@ import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { PrismaService } from '@rumsan/prisma';
 import { CvaDisbursementService } from '@rahat-project/cva';
-import { StellarService } from '../stellar/stellar.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE } from '../constants';
@@ -14,7 +13,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { DisbursementServices, ReceiveService, TransactionService } from '@rahataid/stellar-sdk';
-import { StellarModule } from '../stellar/stellar.module';
 import { AppService } from '../app/app.service';
 import { VendorTokenRedemptionService } from '../vendors/vendorTokenRedemption.service';
 import { PayoutsService } from '../payouts/payouts.service';
@@ -51,17 +49,6 @@ describe('BeneficiaryModule', () => {
       update: jest.fn(),
       remove: jest.fn(),
     } as unknown as jest.Mocked<CvaDisbursementService>;
-
-    const mockStellarService = {
-      createAccount: jest.fn(),
-      faucetAndTrustlineService: jest.fn(),
-      sendOtp: jest.fn(),
-      sendAssetToVendor: jest.fn(),
-      checkTrustline: jest.fn(),
-      addDisbursementJobs: jest.fn(),
-      disburse: jest.fn(),
-      getDisbursement: jest.fn(),
-    };
 
     const mockAppService = {
       getSettings: jest.fn(),
@@ -135,8 +122,6 @@ describe('BeneficiaryModule', () => {
       .useValue(mockCvaDisbursementService)
       .overrideProvider(DisbursementServices)
       .useValue(disbursementServices)
-      .overrideProvider(StellarService)
-      .useValue(mockStellarService)
       .overrideProvider(AppService)
       .useValue(mockAppService)
       .overrideProvider(ReceiveService)
@@ -182,7 +167,5 @@ describe('BeneficiaryModule', () => {
     const cvaDisbursementService = module.get<CvaDisbursementService>(CvaDisbursementService);
     expect(cvaDisbursementService).toBeDefined();
     
-    const stellarService = module.get<StellarService>(StellarService);
-    expect(stellarService).toBeDefined();
   });
 }); 

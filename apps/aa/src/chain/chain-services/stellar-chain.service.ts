@@ -10,6 +10,7 @@ import {
   DisburseDto,
   FundAccountDto,
   SendOtpDto,
+  SendAssetDto,
   TransferTokensDto,
   VerifyOtpDto,
   AddTriggerDto,
@@ -19,7 +20,6 @@ import {
 } from '../interfaces/chain-service.interface';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import { getFormattedTimeDiff } from '../../utils/date';
 import { lastValueFrom } from 'rxjs';
 

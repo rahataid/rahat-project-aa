@@ -11,7 +11,6 @@ import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import { ContractProcessor } from '../../processors/contract.processor';
 import { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
   AddTriggerDto,
   AssignTokensDto,
@@ -21,6 +20,7 @@ import {
   IChainService,
   RedeemInkindDto,
   RedeemInkindTokenForCashDto,
+  SendAssetDto,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
