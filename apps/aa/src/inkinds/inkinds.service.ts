@@ -273,15 +273,16 @@ export class InkindsService {
     try {
       this.logger.log(`Fetching inkind summary`);
 
-      const [summary, totalAssignedStock] = await Promise.all([
+      const [
+        summary,
+        totalAssignedStock,
+        redemptionsByType,
+        otpReasonBreakdown,
+      ] = await Promise.all([
         this.prisma.inkind.aggregate({
           where: { deletedAt: null },
-          _count: {
-            id: true,
-          },
-          _sum: {
-            availableStock: true,
-          },
+          _count: { id: true },
+          _sum: { availableStock: true },
         }),
         this.prisma.groupInkind.aggregate({
           _sum: {
@@ -289,7 +290,53 @@ export class InkindsService {
             quantityRedeemed: true,
           },
         }),
+        // Single query for both PRE_DEFINED and WALK_IN counts
+        this.prisma.beneficiaryInkindRedemption.findMany({
+          select: {
+            groupInkind: {
+              select: {
+                inkind: { select: { type: true } },
+              },
+            },
+          },
+        }),
+        // Single query for OTP breakdown and counts
+        this.prisma.beneficiaryInkindRedemption.groupBy({
+          by: ['otpExemptionReason'],
+          _count: { id: true },
+        }),
       ]);
+
+      // Aggregate redemption types in-memory
+      const redemptionCounts = redemptionsByType.reduce(
+        (acc, redemption) => {
+          if (redemption.groupInkind.inkind.type === InkindType.PRE_DEFINED) {
+            acc.predefined++;
+          } else if (redemption.groupInkind.inkind.type === InkindType.WALK_IN) {
+            acc.walkIn++;
+          }
+          return acc;
+        },
+        { predefined: 0, walkIn: 0 }
+      );
+
+      const totalRedemptions =
+        redemptionCounts.predefined + redemptionCounts.walkIn;
+
+      // Calculate OTP stats from grouped data
+      const otpSkippedCount = otpReasonBreakdown
+        .filter((r) => r.otpExemptionReason !== null)
+        .reduce((sum, r) => sum + r._count.id, 0);
+
+      const otpNotSkippedCount = totalRedemptions - otpSkippedCount;
+
+      // Format otp reasons for chart
+      const otpSkipReasons = otpReasonBreakdown
+        .filter((r) => r.otpExemptionReason !== null)
+        .map((r) => ({
+          reason: r.otpExemptionReason,
+          count: r._count.id,
+        }));
 
       this.logger.log(`Inkind summary fetched successfully`);
       return {
@@ -298,6 +345,17 @@ export class InkindsService {
         totalAvailableStock: summary._sum.availableStock,
         totalAssignedStock: totalAssignedStock._sum.quantityAllocated,
         totalRedeemedStock: totalAssignedStock._sum.quantityRedeemed,
+        chartData: {
+          redemptionType: {
+            predefined: redemptionCounts.predefined,
+            walkIn: redemptionCounts.walkIn,
+          },
+          otpStatus: {
+            skipped: otpSkippedCount,
+            notSkipped: otpNotSkippedCount,
+          },
+          otpSkipReasons,
+        },
       };
     } catch (error) {
       this.logger.error(
@@ -3230,10 +3288,11 @@ export class InkindsService {
       quantity: redemption.quantity,
       redeemedAt: redemption.redeemedAt,
       txHash: redemption.txHash,
+      otpExemptionReason: redemption.otpExemptionReason ?? null,
       beneficiary: {
         uuid: redemption.beneficiary.uuid,
         walletAddress: redemption.beneficiary.walletAddress,
-        phone: redemption.beneficiary.phone,
+        phone: redemption.beneficiary.extras?.phone ?? null,
         name:
           (redemption.beneficiary.extras as Record<string, unknown>)?.name ??
           null,
