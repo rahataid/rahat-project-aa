@@ -1437,6 +1437,7 @@ export class BeneficiaryService {
 
   async syncBeneficiaryGroupData(dto: {
     groupUuid: string;
+    isLastBatch?: boolean;
     beneficiariesData: {
       uuid: string;
       walletAddress: string;
@@ -1446,12 +1447,21 @@ export class BeneficiaryService {
       phone?: string;
     }[];
   }) {
-    const { groupUuid, beneficiariesData } = dto;
+    const { groupUuid, beneficiariesData, isLastBatch } = dto;
 
     const group = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: groupUuid },
     });
     if (!group) throw new Error(`Beneficiary group not found: ${groupUuid}`);
+
+    const BCRYPT_ROUNDS = 8;
+    const isDev = process.env.NODE_ENV !== 'production';
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let devHash: string | null = null;
+    if (isDev) {
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       for (const benf of beneficiariesData) {
@@ -1484,11 +1494,43 @@ export class BeneficiaryService {
           update: {},
           create: { beneficiaryId: benf.uuid, groupId: groupUuid },
         });
+
+        if (benf.phone && benf.walletAddress) {
+          const otp = isDev
+            ? '1234'
+            : Math.floor(1000 + Math.random() * 9000).toString();
+          const otpHash = isDev
+            ? devHash!
+            : await bcrypt.hash(otp, BCRYPT_ROUNDS);
+
+          await tx.otp.upsert({
+            where: { walletAddress: benf.walletAddress },
+            update: {
+              phoneNumber: benf.phone,
+              otp,
+              otpHash,
+              expiresAt,
+            },
+            create: {
+              phoneNumber: benf.phone,
+              walletAddress: benf.walletAddress,
+              otp,
+              otpHash,
+              amount: 0,
+              expiresAt,
+            },
+          });
+        }
       }
     });
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
-    await this.initiateQrPdf(groupUuid);
+
+    if (isLastBatch) {
+      await this.initiateQrPdf(groupUuid);
+      this.logger.log(`Last batch processed, PDF generation triggered for group: ${groupUuid}`);
+    }
+
     return { message: 'Sync process completed successfully' };
   }
 }
