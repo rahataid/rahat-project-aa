@@ -2,10 +2,15 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '@rumsan/prisma';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { BQUEUE } from '../constants';
 import { buildQrPdf, QrCardData } from './qr-pdf-builder';
+import { AppService } from '../app/app.service';
 
 const BATCH_SIZE = 200;
 
@@ -50,6 +55,7 @@ export class QrPdfService implements OnModuleInit {
     });
 
     if (existing) {
+      this.logger.log(`QR PDF job already running for group ${groupId}`);
       return { jobId: existing.uuid, alreadyRunning: true };
     }
 
@@ -58,6 +64,7 @@ export class QrPdfService implements OnModuleInit {
     });
 
     await this.qrPdfQueue.add({ groupId, jobUuid: job.uuid });
+    this.logger.log(`QR PDF generation queued for group ${groupId}`);
 
     return { jobId: job.uuid, alreadyRunning: false };
   }
@@ -67,7 +74,13 @@ export class QrPdfService implements OnModuleInit {
     const job = await this.prisma.pdfGenerationJob.findFirst({
       where: { groupId },
       orderBy: { createdAt: 'desc' },
-      select: { uuid: true, status: true, fileUrl: true, error: true, groupId: true },
+      select: {
+        uuid: true,
+        status: true,
+        fileUrl: true,
+        error: true,
+        groupId: true,
+      },
     });
 
     if (job?.status === 'completed' && job.fileUrl) {
@@ -91,7 +104,9 @@ export class QrPdfService implements OnModuleInit {
 
     try {
       const cards = await this.collectCards(groupId);
-      this.logger.log(`Building PDF for ${cards.length} beneficiaries in group ${groupId}`);
+      this.logger.log(
+        `Building PDF for ${cards.length} beneficiaries in group ${groupId}`
+      );
 
       const pdfBuffer = await buildQrPdf(cards);
 
@@ -107,7 +122,9 @@ export class QrPdfService implements OnModuleInit {
       );
 
       const fileUrl = `https://${this.r2.R2_PUBLIC_DOMAIN}/${key}`;
-    this.logger.log(`PDF uploaded successfully for job ${jobUuid}, updating database record`);
+      this.logger.log(
+        `PDF uploaded successfully for job ${jobUuid}, updating database record`
+      );
 
       await this.prisma.pdfGenerationJob.update({
         where: { uuid: jobUuid },
@@ -125,6 +142,7 @@ export class QrPdfService implements OnModuleInit {
   }
 
   private async collectCards(groupId: string): Promise<QrCardData[]> {
+    this.logger.log(`Collecting beneficiaries for group ${groupId}`);
     const cards: QrCardData[] = [];
     let skip = 0;
 
@@ -156,11 +174,46 @@ export class QrPdfService implements OnModuleInit {
         const name = this.resolveName(extras);
         const otp = otpMap[ben.walletAddress || ''] ?? '';
 
+        const isRandom =
+          extras.isRandomNumber === true || extras.isRandomNumber === 'true';
+        const rawPhone = ben.phone || (extras.phone as string) || '';
+        const phone = isRandom
+          ? undefined
+          : (rawPhone.startsWith('+977') ? rawPhone.slice(4) : rawPhone) ||
+            undefined;
+
+        const ward =
+          extras.ward_no != null ? String(extras.ward_no) : undefined;
+        const location =
+          typeof extras.tole_name === 'string' && extras.tole_name.trim()
+            ? extras.tole_name.trim()
+            : undefined;
+        const district =
+          typeof extras.district === 'string' && extras.district.trim()
+            ? extras.district.trim()
+            : undefined;
+
+        const govIdType =
+          typeof extras.interviewee_government_id_type === 'string' &&
+          extras.interviewee_government_id_type.trim()
+            ? extras.interviewee_government_id_type.trim()
+            : undefined;
+        const govIdNumber =
+          typeof extras.ssa_id_number === 'string' &&
+          extras.ssa_id_number.trim()
+            ? extras.ssa_id_number.trim()
+            : undefined;
+
         cards.push({
           walletAddress: ben.walletAddress || '',
           name,
-          phone: ben.phone || extras.phone as string || '',
+          phone,
           otp,
+          ward,
+          location,
+          district,
+          governmentIdType: govIdType,
+          governmentIdNumber: govIdNumber,
         });
       }
 
@@ -171,7 +224,9 @@ export class QrPdfService implements OnModuleInit {
     return cards;
   }
 
-  private async buildOtpMap(walletAddresses: string[]): Promise<Record<string, string>> {
+  private async buildOtpMap(
+    walletAddresses: string[]
+  ): Promise<Record<string, string>> {
     if (walletAddresses.length === 0) return {};
 
     const otps = await this.prisma.otp.findMany({

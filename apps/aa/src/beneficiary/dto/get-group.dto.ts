@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { GroupPurpose } from '@prisma/client';
 
 export class GetBenfGroupDto {
   @IsBoolean()
@@ -22,6 +23,10 @@ export class GetBenfGroupDto {
   @IsOptional()
   @IsBoolean()
   tokenAssigned?: boolean;
+
+  @IsOptional()
+  @IsString()
+  excludeGroupPurpose?: GroupPurpose;
 
   @ApiProperty({
     example: 1,

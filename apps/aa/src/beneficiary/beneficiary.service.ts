@@ -17,7 +17,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
-import { GroupPurpose, Prisma } from '@prisma/client';
+import { GroupPurpose, PayoutType, Prisma } from '@prisma/client';
 import { QrPdfService } from './qr-pdf.service';
 import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
@@ -167,8 +167,16 @@ export class BeneficiaryService {
 
   async getAllGroups(dto: GetBenfGroupDto) {
     this.logger.log('Getting all beneficiary groups data');
-    const { page, perPage, sort, order, tokenAssigned, search, hasPayout } =
-      dto;
+    const {
+      page,
+      perPage,
+      sort,
+      order,
+      tokenAssigned,
+      search,
+      hasPayout,
+      excludeGroupPurpose,
+    } = dto;
 
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
@@ -210,6 +218,11 @@ export class BeneficiaryService {
             },
           }),
         },
+        {
+          ...(excludeGroupPurpose && {
+            groupPurpose: { not: excludeGroupPurpose },
+          }),
+        },
       ],
     };
 
@@ -239,27 +252,28 @@ export class BeneficiaryService {
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
-        benfGroups
-      )
-    );
+    // this code effect performance and this data is not needed for getAllGroups API, so commenting out for now. We can revisit if project service needs this data.
+    // const res = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'rahat.jobs.beneficiary.list_group_by_project' },
+    //     benfGroups
+    //   )
+    // );
 
-    res.data = res.data.map((group) => {
-      let updatedGroup = group;
-      benfGroups.data.forEach((benfGroup: any) => {
-        if (group?.uuid === benfGroup?.uuid) {
-          updatedGroup = {
-            ...group,
-            tokensReserved: benfGroup.tokensReserved,
-          };
-        }
-      });
-      return updatedGroup;
-    });
+    // res.data = res.data.map((group) => {
+    //   let updatedGroup = group;
+    //   benfGroups.data.forEach((benfGroup: any) => {
+    //     if (group?.uuid === benfGroup?.uuid) {
+    //       updatedGroup = {
+    //         ...group,
+    //         tokensReserved: benfGroup.tokensReserved,
+    //       };
+    //     }
+    //   });
+    //   return updatedGroup;
+    // });
 
-    return res;
+    return benfGroups;
   }
 
   async getAllGroupsByUuids(payload: getGroupByUuidDto) {
@@ -602,7 +616,16 @@ export class BeneficiaryService {
       throw new RpcException('Beneficiary group not found.');
     }
 
+    const isVendorWithGeneral =
+      params?.type === PayoutType.VENDOR &&
+      benfGroup.groupPurpose === GroupPurpose.GENERAL;
+
+    const isNoPayoutWithGeneral =
+      !isPayoutIntegrated && benfGroup.groupPurpose === GroupPurpose.GENERAL;
+
     if (
+      !isVendorWithGeneral &&
+      !isNoPayoutWithGeneral &&
       benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
       benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
     ) {
@@ -610,7 +633,7 @@ export class BeneficiaryService {
         `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
       );
       throw new RpcException(
-        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER and MOBILE_MONEY are allowed.`
+        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER, MOBILE_MONEY, and GENERAL are allowed.`
       );
     }
 
@@ -822,7 +845,7 @@ export class BeneficiaryService {
     const isDev = process.env.NODE_ENV !== 'production';
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234:0', BCRYPT_ROUNDS);
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
     }
 
     const otpRecords: Array<{
@@ -1410,5 +1433,104 @@ export class BeneficiaryService {
       );
       throw new Error(`Database transaction failed: ${errMsg}`);
     }
+  }
+
+  async syncBeneficiaryGroupData(dto: {
+    groupUuid: string;
+    isLastBatch?: boolean;
+    beneficiariesData: {
+      uuid: string;
+      walletAddress: string;
+      gender?: string;
+      isVerified?: boolean;
+      extras?: any;
+      phone?: string;
+    }[];
+  }) {
+    const { groupUuid, beneficiariesData, isLastBatch } = dto;
+
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: groupUuid },
+    });
+    if (!group) throw new Error(`Beneficiary group not found: ${groupUuid}`);
+
+    const BCRYPT_ROUNDS = 8;
+    const isDev = process.env.NODE_ENV !== 'production';
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let devHash: string | null = null;
+    if (isDev) {
+      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const benf of beneficiariesData) {
+        await tx.beneficiary.upsert({
+          where: { uuid: benf.uuid },
+          update: {
+            walletAddress: benf.walletAddress,
+            gender: (benf.gender as any) || 'UNKNOWN',
+            isVerified: benf.isVerified ?? false,
+            extras: benf.extras,
+            phone: benf.phone || null,
+          },
+          create: {
+            uuid: benf.uuid,
+            walletAddress: benf.walletAddress,
+            gender: (benf.gender as any) || 'UNKNOWN',
+            isVerified: benf.isVerified ?? false,
+            extras: benf.extras,
+            phone: benf.phone || null,
+          },
+        });
+
+        await tx.beneficiaryToGroup.upsert({
+          where: {
+            beneficiaryId_groupId: {
+              beneficiaryId: benf.uuid,
+              groupId: groupUuid,
+            },
+          },
+          update: {},
+          create: { beneficiaryId: benf.uuid, groupId: groupUuid },
+        });
+
+        if (benf.phone && benf.walletAddress) {
+          const otp = isDev
+            ? '1234'
+            : Math.floor(1000 + Math.random() * 9000).toString();
+          const otpHash = isDev
+            ? devHash!
+            : await bcrypt.hash(otp, BCRYPT_ROUNDS);
+
+          await tx.otp.upsert({
+            where: { walletAddress: benf.walletAddress },
+            update: {
+              phoneNumber: benf.phone,
+              otp,
+              otpHash,
+              expiresAt,
+            },
+            create: {
+              phoneNumber: benf.phone,
+              walletAddress: benf.walletAddress,
+              otp,
+              otpHash,
+              amount: 0,
+              expiresAt,
+            },
+          });
+        }
+      }
+    });
+
+    this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
+
+    if (isLastBatch) {
+      await this.initiateQrPdf(groupUuid);
+      this.logger.log(`Last batch processed, PDF generation triggered for group: ${groupUuid}`);
+    }
+
+    return { message: 'Sync process completed successfully' };
   }
 }
