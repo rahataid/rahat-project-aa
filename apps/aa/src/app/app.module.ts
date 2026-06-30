@@ -25,6 +25,7 @@ import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
 import { FundallocationModule } from '../fundallocation/fundallocation.module';
+import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
     CashTrackerModule,
     GrievancesModule,
     InkindsModule,
+    GroupCashTransferModule,
     OtpModule,
     FundallocationModule,
   ],

@@ -621,13 +621,13 @@ model OfflineBeneficiary {
 
 // ============== Start OTP SCHEMAS ================
 model Otp {
-  id          Int      @id @default(autoincrement())
-  phoneNumber String   @unique
-  walletAddress String?   @unique
-  otp         String?
-  otpHash     String
-  amount      Float
-  expiresAt   DateTime
+  id            Int      @id @default(autoincrement())
+  phoneNumber   String   @unique
+  walletAddress String?  @unique
+  otp           String?
+  otpHash       String
+  amount        Float
+  expiresAt     DateTime
 
   isVerified Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -778,9 +778,8 @@ model GroupInkind {
   redemptions    BeneficiaryInkindRedemption[]
   stockMovements InkindStockMovement[]
 
-  mode   PayoutMode?
-  payoutProcessorId     String? //
-
+  mode              PayoutMode?
+  payoutProcessorId String? //
 
   createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt()
@@ -809,7 +808,7 @@ model BeneficiaryInkindRedemption {
   redeemedAt DateTime @default(now())
 
   txHash String?
-  status String @default("PENDING")
+  status String  @default("PENDING")
   otpExemptionReason String? 
 
   vendorUid String? @db.Uuid()
@@ -865,27 +864,71 @@ model VendorInkindRedemption {
 
 // ============== End Inkind SCHEMAS ================
 
-
 //===============Transfer SCHEMAS ===================
 model Transfer {
-  id                 Int @id @default(autoincrement())
-  transactionId      String @unique()
-  from               String 
-  to                 String
-  transactionHash    String 
-  blockNumber        String
-  value              String
-  blockTimeStamp     String
-  transactionType    TransactionType
-  status             String
-  createdAt          DateTime @default(now())
+  id              Int             @id @default(autoincrement())
+  transactionId   String          @unique()
+  from            String
+  to              String
+  transactionHash String
+  blockNumber     String
+  value           String
+  blockTimeStamp  String
+  transactionType TransactionType
+  status          String
+  createdAt       DateTime        @default(now())
 
   @@map("tbl_transfer")
 }
 
-enum TransactionType{
+enum TransactionType {
   TREASURY
   VENDOR
   OFFRAMP
 }
+
 //==================End Transfer Schemas================
+
+//=============== Start Group Cash Transfer Schemas ================
+model GroupCashTransferDetail {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  name        String
+  phone       String?
+  bankDetails Json?
+
+  extras Json?
+
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime?                 @updatedAt()
+  deletedAt                DateTime?
+  groupCashTransferRecords GroupCashTransferRecord[]
+
+  @@map("tbl_group_cash_transfer_details")
+}
+
+model GroupCashTransferRecord {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  title               String
+  groupCashTransferId String
+
+  amount              Float?  @default(0)
+  payoutProcessorId   String? 
+
+  status String @default("NOT_STARTED")
+  disbursedAt DateTime?
+
+  createdBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+  deletedAt DateTime?
+
+  groupCashTransfer GroupCashTransferDetail @relation(fields: [groupCashTransferId], references: [uuid])
+
+  @@map("tbl_group_cash_transfer_records")
+}
+
+// ============== End Group Cash Transfer Schemas ================
