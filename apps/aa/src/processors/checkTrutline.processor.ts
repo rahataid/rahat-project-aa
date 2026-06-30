@@ -1,4 +1,6 @@
 // Run in 'dry' mode before 'live' mode
+// TODO: STELLAR DETACH - this processor is no longer registered in
+// ProcessorsModule.providers. Rewrite/re-register alongside the stellar module.
 import { Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';

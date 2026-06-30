@@ -37,7 +37,9 @@ import {
   FSPManualPayoutDetails,
   ManualPayoutBatchTransferDto,
 } from '../processors/types';
-import { StellarService } from '../stellar/stellar.service';
+// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
+// equivalent token transfer queue methods.
+// import { StellarService } from '../stellar/stellar.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import {
   calculatePayoutStatus,
@@ -66,10 +68,11 @@ export class PayoutsService {
     private prisma: PrismaService,
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
-    private stellarService: StellarService,
+    // TODO: STELLAR DETACH - re-add once stellar module is rewritten.
+    // private stellarService: StellarService,
     private readonly eventEmitter: EventEmitter2,
-    @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue,
+    // @InjectQueue(BQUEUE.STELLAR)
+    // private readonly stellarQueue: Queue,
     private configService: ConfigService,
     private appService: AppService,
     @Inject(forwardRef(() => BeneficiaryService))
@@ -917,9 +920,12 @@ export class PayoutsService {
         offrampType,
       }));
 
-    const d = await this.stellarService.addBulkToTokenTransferQueue(
-      stellerOfframpQueuePayload
-    );
+    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
+    // an equivalent token transfer queue method.
+    // const d = await this.stellarService.addBulkToTokenTransferQueue(
+    //   stellerOfframpQueuePayload
+    // );
+    const d = null;
 
     return d;
   }
@@ -977,9 +983,11 @@ export class PayoutsService {
         offrampType: payoutExtras.paymentProviderType,
       }));
 
-    await this.stellarService.addBulkToTokenTransferQueue(
-      stellerOfframpQueuePayload
-    );
+    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
+    // an equivalent token transfer queue method.
+    // await this.stellarService.addBulkToTokenTransferQueue(
+    //   stellerOfframpQueuePayload
+    // );
     this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
       payload: {
         title: `Payout Triggered`,
@@ -1132,7 +1140,9 @@ export class PayoutsService {
 
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
-      await this.stellarService.addBulkToTokenTransferQueue(failedTokenPayouts);
+      // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and
+      // exposes an equivalent token transfer queue method.
+      // await this.stellarService.addBulkToTokenTransferQueue(failedTokenPayouts);
 
       await this.beneficiaryService.updateBeneficiaryRedeemBulk(
         failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
@@ -1387,7 +1397,9 @@ export class PayoutsService {
       beneficiaryRedeemUuid
     );
 
-    await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
+    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and
+    // exposes an equivalent token transfer queue method.
+    // await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
 
     // update the beneficiary redeem status to pending
     await this.beneficiaryService.updateBeneficiaryRedeem(

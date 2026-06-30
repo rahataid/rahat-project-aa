@@ -1,3 +1,5 @@
+// TODO: STELLAR DETACH - this processor is no longer registered in
+// ProcessorsModule.providers. Rewrite/re-register alongside the stellar module.
 import { InjectQueue, Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
 import { Job, Queue } from 'bull';
