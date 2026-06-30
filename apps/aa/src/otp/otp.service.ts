@@ -21,6 +21,8 @@ export class OtpService {
 
     this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
 
+    this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
+
     if (process.env.NODE_ENV !== 'production') {
       this.logger.log(`[DEV] OTP for ${number}: ${otp}`);
       return { otp };
