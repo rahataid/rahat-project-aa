@@ -1,3 +1,5 @@
+// TODO: STELLAR DETACH - this service is no longer registered in
+// ChainModule/ChainServiceRegistry. Rewrite alongside the stellar module.
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';

@@ -59,6 +59,18 @@ node tools/deployment-scripts/5.setup-fundManagement.js
 node tools/deployment-scripts/6.setup-offramp-settings.js
 ```
 
+8. Setup disbursement methods:
+
+```bash
+node tools/deployment-scripts/8.setup-disbursement-methods.js
+```
+
+9. Setup Cloudflare R2 settings:
+
+```bash
+node tools/deployment-scripts/9.setup-cloudflare-r2.js
+```
+
 Each script will prompt you to select the deployment file first, collect required inputs, and ask final confirmation before writing changes.
 
 ## Final Step: Update Settings via Prisma

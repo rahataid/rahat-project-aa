@@ -17,7 +17,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { StellarModule } from '../stellar/stellar.module';
+// TODO: STELLAR DETACH - re-import StellarModule once it is rewritten and wired back in.
+// import { StellarModule } from '../stellar/stellar.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
@@ -25,6 +26,7 @@ import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
 import { FundallocationModule } from '../fundallocation/fundallocation.module';
+import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
 
 @Module({
   imports: [
@@ -82,13 +84,16 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     BullModule.registerQueue({ name: BQUEUE.QR_PDF }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SPONSOR }),
     ProcessorsModule,
+    StellarSponsorModule,
     BeneficiaryModule,
     StakeholdersModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
-    StellarModule,
+    // TODO: STELLAR DETACH - re-add StellarModule once it is rewritten and wired back in.
+    // StellarModule,
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,

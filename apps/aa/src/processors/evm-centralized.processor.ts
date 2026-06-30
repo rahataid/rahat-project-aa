@@ -49,6 +49,16 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    const chainSettings = await this.prismaService.setting.findFirst({
+      where: { name: 'CHAIN_SETTINGS' },
+    });
+    const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
+    if (typeof chainType !== 'string' || chainType.toLowerCase() !== 'evm') {
+      this.logger.log(
+        `Chain type is "${chainType ?? 'unset'}", skipping EVM provider initialization`
+      );
+      return;
+    }
     await this.initializeProvider();
   }
 
