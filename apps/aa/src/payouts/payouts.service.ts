@@ -37,9 +37,7 @@ import {
   FSPManualPayoutDetails,
   ManualPayoutBatchTransferDto,
 } from '../processors/types';
-// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
-// equivalent token transfer queue methods.
-// import { StellarService } from '../stellar/stellar.service';
+import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import {
   calculatePayoutStatus,
@@ -68,11 +66,8 @@ export class PayoutsService {
     private prisma: PrismaService,
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
-    // TODO: STELLAR DETACH - re-add once stellar module is rewritten.
-    // private stellarService: StellarService,
+    private readonly stellarTransferService: StellarTransferService,
     private readonly eventEmitter: EventEmitter2,
-    // @InjectQueue(BQUEUE.STELLAR)
-    // private readonly stellarQueue: Queue,
     private configService: ConfigService,
     private appService: AppService,
     @Inject(forwardRef(() => BeneficiaryService))
@@ -894,41 +889,6 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-  async registerTokenTransferRequest(payload: {
-    uuid: string;
-    offrampWalletAddress: string;
-    BeneficiaryPayoutDetails: BeneficiaryPayoutDetails[];
-    payoutProcessorId: string;
-    offrampType: string;
-  }) {
-    const {
-      uuid,
-      offrampWalletAddress,
-      BeneficiaryPayoutDetails,
-      payoutProcessorId,
-      offrampType,
-    } = payload;
-
-    const stellerOfframpQueuePayload: FSPPayoutDetails[] =
-      BeneficiaryPayoutDetails.map((beneficiary) => ({
-        amount: beneficiary.amount,
-        beneficiaryWalletAddress: beneficiary.walletAddress,
-        beneficiaryBankDetails: beneficiary.bankDetails,
-        payoutUUID: uuid,
-        payoutProcessorId: payoutProcessorId,
-        offrampWalletAddress,
-        offrampType,
-      }));
-
-    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
-    // an equivalent token transfer queue method.
-    // const d = await this.stellarService.addBulkToTokenTransferQueue(
-    //   stellerOfframpQueuePayload
-    // );
-    const d = null;
-
-    return d;
-  }
 
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
@@ -983,11 +943,9 @@ export class PayoutsService {
         offrampType: payoutExtras.paymentProviderType,
       }));
 
-    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
-    // an equivalent token transfer queue method.
-    // await this.stellarService.addBulkToTokenTransferQueue(
-    //   stellerOfframpQueuePayload
-    // );
+    await this.stellarTransferService.addBulkToTokenTransferQueue(
+      stellerOfframpQueuePayload
+    );
     this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
       payload: {
         title: `Payout Triggered`,
@@ -1140,9 +1098,7 @@ export class PayoutsService {
 
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
-      // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and
-      // exposes an equivalent token transfer queue method.
-      // await this.stellarService.addBulkToTokenTransferQueue(failedTokenPayouts);
+      await this.stellarTransferService.addBulkToTokenTransferQueue(failedTokenPayouts);
 
       await this.beneficiaryService.updateBeneficiaryRedeemBulk(
         failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
@@ -1397,9 +1353,7 @@ export class PayoutsService {
       beneficiaryRedeemUuid
     );
 
-    // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and
-    // exposes an equivalent token transfer queue method.
-    // await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
+    await this.stellarTransferService.addToTokenTransferQueue(offrampQueuePayload);
 
     // update the beneficiary redeem status to pending
     await this.beneficiaryService.updateBeneficiaryRedeem(
