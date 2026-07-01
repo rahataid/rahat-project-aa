@@ -323,7 +323,7 @@ export class StellarChainService implements IChainService {
         AND: [
           { numberOfTokens: { gt: 0 } },
           { isDisbursed: false },
-          { payout: { is: null } },
+          // { payout: { is: null } },
         ],
       },
       select: { uuid: true, groupId: true },

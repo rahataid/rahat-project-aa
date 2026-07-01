@@ -124,6 +124,7 @@ export const JOBS = {
     DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   WALLET: {
+    GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
     GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
   },
   OFFRAMP: {
@@ -378,6 +379,7 @@ export const BQUEUE = {
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
   STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
   STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
+  STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {
