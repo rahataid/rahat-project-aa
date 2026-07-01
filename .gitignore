@@ -68,7 +68,9 @@ mainnet-stellar-seed.md
 .cursor
 .data
 
-/tools/deployment-scripts/deployments/ 
+/tools/deployment-scripts/deployments/
+
+/scripts/output/
 .claude
 .claude-flow
 CLAUDE.md
