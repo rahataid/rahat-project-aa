@@ -25,6 +25,8 @@ export class OfframpService {
   constructor(
     @InjectQueue(BQUEUE.OFFRAMP)
     private readonly offrampQueue: Queue,
+    @InjectQueue(BQUEUE.MANUAL_PAYOUT)
+    private readonly manualPayoutQueue: Queue,
     private appService: AppService,
     private httpService: HttpService
   ) {}
@@ -187,7 +189,7 @@ export class OfframpService {
   }
 
   async addBulkToVerifyManualPayoutQueue(payload: any[]) {
-    return await this.offrampQueue.addBulk(
+    return await this.manualPayoutQueue.addBulk(
       payload.map((payload) => ({
         name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT,
         data: payload,
@@ -197,7 +199,7 @@ export class OfframpService {
   }
 
   async addBulkToManualPayoutQueue(payload: { payoutUUID: string }) {
-    const result = await this.offrampQueue.add(
+    const result = await this.manualPayoutQueue.add(
       JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT,
       payload,
       { ...this.offrampQueueOpts, delay: 2000 }

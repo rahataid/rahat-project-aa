@@ -44,6 +44,9 @@ import { StellarTransferModule } from '../stellar-transfer/stellar-transfer.modu
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
+      name: BQUEUE.MANUAL_PAYOUT,
+    }),
+    BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,
     }),
   ],

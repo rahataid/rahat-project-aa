@@ -5,6 +5,7 @@ import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
 import { SdpStellarProcessor } from './sdp-stellar.processor';
 import { OfframpProcessor } from './offramp.processor';
+import { ManualPayoutProcessor } from './manual-payout.processor';
 import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
 import { VendorOfflinePayoutProcessor } from './vendor-cva-payout.processor';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -43,6 +44,9 @@ import { ChainModule } from '../chain/chain.module';
       name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
+      name: BQUEUE.MANUAL_PAYOUT,
+    }),
+    BullModule.registerQueue({
       name: BQUEUE.VENDOR_CVA,
     }),
     BullModule.registerQueue({
@@ -75,6 +79,7 @@ import { ChainModule } from '../chain/chain.module';
     SdpStellarProcessor,
     NotificationProcessor,
     OfframpProcessor,
+    ManualPayoutProcessor,
     VendorOfflinePayoutProcessor,
     BatchTokenTransferProcessor,
     EVMCentralizedProcessor,
