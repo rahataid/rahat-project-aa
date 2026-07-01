@@ -320,11 +320,7 @@ export class StellarChainService implements IChainService {
     this.logger.debug('Fetching disbursable group UUIDs');
     const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
-        AND: [
-          { numberOfTokens: { gt: 0 } },
-          { isDisbursed: false },
-          // { payout: { is: null } },
-        ],
+        status: 'NOT_DISBURSED',
       },
       select: { uuid: true, groupId: true },
     });
