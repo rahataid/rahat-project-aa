@@ -117,6 +117,9 @@ export class OfframpProcessor {
           numberOfAttempts: attemptsMade,
           cipsResponseData: result,
         });
+        this.logger.log(
+          `Offramp request successful for beneficiary redeem UUID: ${log.uuid}, transaction hash: ${fspOfframpDetails.transactionHash}`
+        );
         // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         //   payload: {
         //     title: `Fiat Transaction Completed`,
@@ -132,6 +135,10 @@ export class OfframpProcessor {
       }
 
       console.log('Offramp request failed from cips', result);
+
+      this.logger.log(
+        `Offramp request failed for beneficiary redeem`
+      );
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
@@ -165,6 +172,7 @@ export class OfframpProcessor {
         log.info
       );
       if (job.attemptsMade === job.opts.attempts) {
+        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
         // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
         //   payload: {
         //     title: `Fiat Transaction Failed`,
