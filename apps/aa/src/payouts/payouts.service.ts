@@ -889,7 +889,6 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
@@ -1098,7 +1097,9 @@ export class PayoutsService {
 
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
-      await this.stellarTransferService.addBulkToTokenTransferQueue(failedTokenPayouts);
+      await this.stellarTransferService.addBulkToTokenTransferQueue(
+        failedTokenPayouts
+      );
 
       await this.beneficiaryService.updateBeneficiaryRedeemBulk(
         failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
@@ -1353,7 +1354,9 @@ export class PayoutsService {
       beneficiaryRedeemUuid
     );
 
-    await this.stellarTransferService.addToTokenTransferQueue(offrampQueuePayload);
+    await this.stellarTransferService.addToTokenTransferQueue(
+      offrampQueuePayload
+    );
 
     // update the beneficiary redeem status to pending
     await this.beneficiaryService.updateBeneficiaryRedeem(
@@ -1917,6 +1920,11 @@ export class PayoutsService {
             select: {
               numberOfTokens: true,
               status: true,
+              beneficiaryGroup: {
+                select: {
+                  _count: { select: { beneficiaries: true } },
+                },
+              },
             },
           },
         },
@@ -1947,22 +1955,22 @@ export class PayoutsService {
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
-          'Payout Status': redeemLog.payout?.status || '',
+          'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
-          'Created At': redeemLog.createdAt
-            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Updated At': redeemLog.updatedAt
-            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Actual Budget':
-            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+          'Updated At': redeemLog.updatedAt,
+          'Actual Budget': (() => {
+            const totalTokens = log?.beneficiaryGroupToken?.numberOfTokens || 0;
+            const beneficiaryCount =
+              log?.beneficiaryGroupToken?.beneficiaryGroup?._count
+                ?.beneficiaries || 1;
+            return (totalTokens / beneficiaryCount) * ONE_TOKEN_VALUE;
+          })(),
           'Amount Disbursed': [
             'COMPLETED',
             'FIAT_TRANSACTION_COMPLETED',
             'TOKEN_TRANSACTION_COMPLETED',
           ].includes(redeemLog?.status)
-            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
             : 0,
         };
 
