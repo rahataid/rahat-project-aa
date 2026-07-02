@@ -889,7 +889,6 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
@@ -1098,7 +1097,9 @@ export class PayoutsService {
 
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
-      await this.stellarTransferService.addBulkToTokenTransferQueue(failedTokenPayouts);
+      await this.stellarTransferService.addBulkToTokenTransferQueue(
+        failedTokenPayouts
+      );
 
       await this.beneficiaryService.updateBeneficiaryRedeemBulk(
         failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
@@ -1353,7 +1354,9 @@ export class PayoutsService {
       beneficiaryRedeemUuid
     );
 
-    await this.stellarTransferService.addToTokenTransferQueue(offrampQueuePayload);
+    await this.stellarTransferService.addToTokenTransferQueue(
+      offrampQueuePayload
+    );
 
     // update the beneficiary redeem status to pending
     await this.beneficiaryService.updateBeneficiaryRedeem(
@@ -1949,20 +1952,17 @@ export class PayoutsService {
           'Transaction Hash': info?.transactionHash || '',
           'Payout Status': redeemLog.payout?.status || '',
           'Transaction Type': redeemLog.transactionType || '',
-          'Created At': redeemLog.createdAt
-            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Updated At': redeemLog.updatedAt
-            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
-            : '',
+          'Created At': redeemLog.createdAt,
+          'Updated At': redeemLog.updatedAt,
           'Actual Budget':
-            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+            (log?.beneficiaryGroupToken?.numberOfTokens || 0) * ONE_TOKEN_VALUE,
           'Amount Disbursed': [
             'COMPLETED',
             'FIAT_TRANSACTION_COMPLETED',
             'TOKEN_TRANSACTION_COMPLETED',
           ].includes(redeemLog?.status)
-            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            ? (log?.beneficiaryGroupToken?.numberOfTokens || 0) *
+              ONE_TOKEN_VALUE
             : 0,
         };
 
