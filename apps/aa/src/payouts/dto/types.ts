@@ -125,12 +125,15 @@ export type DownloadPayoutLogsType = {
 };
 
 // Manual Payout Verification Types
+export type ManualPayoutMatchBy = 'bankAccount' | 'phoneNumber';
+
 export interface ManualPayoutRowData {
   Amount: number;
   Remark: string;
   'Bank Name': string;
   'Bank Account Number': string;
   'Bank Account Holder Name ': string;
+  'Phone Number'?: string;
   'Approval Date': string;
   'Transaction Status': string;
   Date: string;

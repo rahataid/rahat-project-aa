@@ -105,6 +105,6 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   verifyManualPayout(@Payload() payload: any) {
-    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data);
+    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data, payload?.matchBy);
   }
 }
