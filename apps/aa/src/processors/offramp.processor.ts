@@ -27,10 +27,10 @@ export class OfframpProcessor {
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
-    const projectName = await this.appService.getSettings({
-      name: 'PROJECTINFO',
-    });
-    const projectId = this.configService.get('PROJECT_ID');
+    // const projectName = await this.appService.getSettings({
+    //   name: 'PROJECTINFO',
+    // });
+    // const projectId = this.configService.get('PROJECT_ID');
 
     this.logger.log(
       `Processing offramp request of type ${fspOfframpDetails.offrampType} for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
@@ -117,21 +117,28 @@ export class OfframpProcessor {
           numberOfAttempts: attemptsMade,
           cipsResponseData: result,
         });
-        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-          payload: {
-            title: `Fiat Transaction Completed`,
-            description: `Fiat Transaction has been completed in ${
-              projectName.value['project_name'] || process.env.PROJECT_ID
-            }`,
-            group: 'Payout',
-            projectId: process.env.PROJECT_ID,
-            notify: true,
-          },
-        });
+        this.logger.log(
+          `Offramp request successful for beneficiary redeem UUID: ${log.uuid}, transaction hash: ${fspOfframpDetails.transactionHash}`
+        );
+        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        //   payload: {
+        //     title: `Fiat Transaction Completed`,
+        //     description: `Fiat Transaction has been completed in ${
+        //       projectName.value['project_name'] || process.env.PROJECT_ID
+        //     }`,
+        //     group: 'Payout',
+        //     projectId: process.env.PROJECT_ID,
+        //     notify: true,
+        //   },
+        // });
         return result;
       }
 
       console.log('Offramp request failed from cips', result);
+
+      this.logger.log(
+        `Offramp request failed for beneficiary redeem`
+      );
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
@@ -140,17 +147,17 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-        payload: {
-          title: `Fiat Transaction Failed`,
-          description: `Fiat Transaction has been failed in ${
-            projectName.value['project_name'] || projectId
-          }`,
-          group: 'Payout',
-          projectId: projectId,
-          notify: true,
-        },
-      });
+      // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+      //   payload: {
+      //     title: `Fiat Transaction Failed`,
+      //     description: `Fiat Transaction has been failed in ${
+      //       projectName.value['project_name'] || projectId
+      //     }`,
+      //     group: 'Payout',
+      //     projectId: projectId,
+      //     notify: true,
+      //   },
+      // });
       return result;
     } catch (error) {
       this.logger.error(
@@ -165,17 +172,18 @@ export class OfframpProcessor {
         log.info
       );
       if (job.attemptsMade === job.opts.attempts) {
-        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-          payload: {
-            title: `Fiat Transaction Failed`,
-            description: `Fiat Transaction has been failed in ${
-              projectName.value['project_name'] || process.env.PROJECT_ID
-            }`,
-            group: 'Payout',
-            notify: true,
-            projectId: process.env.PROJECT_ID,
-          },
-        });
+        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
+        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        //   payload: {
+        //     title: `Fiat Transaction Failed`,
+        //     description: `Fiat Transaction has been failed in ${
+        //       projectName.value['project_name'] || process.env.PROJECT_ID
+        //     }`,
+        //     group: 'Payout',
+        //     notify: true,
+        //     projectId: process.env.PROJECT_ID,
+        //   },
+        // });
       }
       throw error(`Failed to process instant offramp: ${error.message}`);
     }
