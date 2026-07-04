@@ -1,0 +1,26 @@
+{
+  "name": "stellar",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/stellar/src",
+  "projectType": "library",
+  "tags": ["stellar", "blockchain"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/stellar",
+        "main": "libs/stellar/src/index.ts",
+        "tsConfig": "libs/stellar/tsconfig.lib.json",
+        "assets": ["libs/stellar/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "libs/stellar/jest.config.ts"
+      }
+    }
+  }
+}

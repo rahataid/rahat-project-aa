@@ -1,4 +1,7 @@
-import { IDisbursementResultDto } from '../../stellar/dto/disburse.dto';
+export interface IDisbursementResultDto {
+  disbursementID: string;
+  assetIssuer: string;
+}
 
 export interface IDisbursementStatusJob extends IDisbursementResultDto {
   groupUuid: string;
