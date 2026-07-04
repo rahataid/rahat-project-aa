@@ -20,16 +20,56 @@
 const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
+const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
-
-const DEPLOYMENT_DIR = path.resolve(__dirname, 'deployments');
 const SETTING_NAME = 'INKIND_APP_CONSTS';
 
-const INKIND_APP_CONSTS_VALUE = {
-	idTypeLabels: [{ title: 'Citizenship (Nagarikta)', value: 'citizenship' }],
-	otpSkipReasons: ['No Network'],
-	vulnerabilityGistData: ['Displacement'],
+const ID_TYPE_LABELS = [
+	{ title: 'Citizenship (Nagarikta)', value: 'citizenship' },
+	{ title: 'License', value: 'license' },
+	{ title: 'National ID (NID)', value: 'nid' },
+	{ title: 'SSA ID', value: 'ssa' },
+	{ title: 'Other', value: 'other' },
+];
+
+const OTP_SKIP_REASONS = [
+	'No Network',
+	'Shared Phone Access/Ownership',
+	'Forgot Mobile Phone',
+	'Incorrect Phone Number Registered',
+	'Mobile Phone Damaged',
+	'OTP Not Received',
+	'Mobile Phone Lost',
+	'SMS Storage Full',
+	'Other',
+];
+
+const PRESETS = {
+	FLOOD: {
+		idTypeLabels: ID_TYPE_LABELS,
+		otpSkipReasons: OTP_SKIP_REASONS,
+		vulnerabilityGistData: [
+			'Displacement',
+			'Loss of livelihood',
+			'Food insecurity',
+			'Water contamination',
+			'Health risk',
+			'Others',
+		],
+	},
+	HEATWAVE: {
+		idTypeLabels: ID_TYPE_LABELS,
+		otpSkipReasons: OTP_SKIP_REASONS,
+		vulnerabilityGistData: [
+			'Heat stress',
+			'Dehydration',
+			'Elderly vulnerability',
+			'Child vulnerability',
+			'Livestock loss',
+			'Others',
+		],
+	},
 };
 
 function buildSettingEntry(value) {
@@ -41,32 +81,6 @@ function buildSettingEntry(value) {
 		isReadOnly: false,
 		isPrivate: false,
 	};
-}
-
-async function getDeploymentFiles() {
-	await fs.mkdir(DEPLOYMENT_DIR, { recursive: true });
-	const entries = await fs.readdir(DEPLOYMENT_DIR, { withFileTypes: true });
-
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right));
-}
-
-async function askTargetFile(deploymentFiles) {
-	const answers = await prompt([
-		{
-			type: 'list',
-			name: 'selectedFile',
-			message: 'Select one deployment file to update:',
-			choices: deploymentFiles.map((fileName) => ({
-				name: fileName,
-				value: fileName,
-			})),
-		},
-	]);
-
-	return answers.selectedFile;
 }
 
 async function confirmSelection(selectedFile, value) {
@@ -106,22 +120,30 @@ async function updateDeploymentFile(fileName, entry) {
 	return existingIndex >= 0 ? 'updated' : 'added';
 }
 
+async function askProjectType() {
+	const { projectType } = await prompt([
+		{
+			type: 'list',
+			name: 'projectType',
+			message: 'Select project type:',
+			choices: Object.keys(PRESETS).map((k) => ({ name: k, value: k })),
+		},
+	]);
+	return projectType;
+}
+
 async function main() {
-	const deploymentFiles = await getDeploymentFiles();
-
-	if (!deploymentFiles.length) {
-		throw new Error(`No deployment files found in ${DEPLOYMENT_DIR}`);
-	}
-
-	const selectedFile = await askTargetFile(deploymentFiles);
-	const confirmed = await confirmSelection(selectedFile, INKIND_APP_CONSTS_VALUE);
+	const selectedFile = await selectDeploymentFile();
+	const projectType = await askProjectType();
+	const value = PRESETS[projectType];
+	const confirmed = await confirmSelection(selectedFile, value);
 
 	if (!confirmed) {
 		console.log('No deployment files were modified.');
 		return;
 	}
 
-	const entry = buildSettingEntry(INKIND_APP_CONSTS_VALUE);
+	const entry = buildSettingEntry(value);
 	const action = await updateDeploymentFile(selectedFile, entry);
 	console.log(`${action.toUpperCase()}: ${SETTING_NAME} in ${selectedFile}`);
 }
