@@ -30,6 +30,7 @@
     "manageaccess": "ts-node ./tools/project-scripts/manageAccess",
     "seed:all": "ts-node prisma/seed.ts",
     "seed:stellar": "ts-node prisma/seed-stellar.ts",
+    "seed:stellar-sponsor": "ts-node prisma/seed-stellar-sponsor-settings.ts",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "prisma:generate:watch": "prisma generate --watch",

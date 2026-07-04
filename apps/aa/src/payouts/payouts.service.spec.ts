@@ -3,7 +3,6 @@ import { ONE_TOKEN_VALUE, PayoutsService } from './payouts.service';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { VendorsService } from '../vendors/vendors.service';
 import { OfframpService } from './offramp.service';
-import { StellarService } from '../stellar/stellar.service';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { AppService } from '../app/app.service';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
@@ -29,7 +28,6 @@ describe('PayoutsService', () => {
   let prismaService: PrismaService;
   let vendorsService: VendorsService;
   let offrampService: OfframpService;
-  let stellarService: StellarService;
   let beneficiaryService: BeneficiaryService;
   let appService: AppService;
   let clientProxy: ClientProxy;
@@ -128,6 +126,7 @@ describe('PayoutsService', () => {
     addToManualPayoutQueue: jest.fn(),
   };
 
+  // TODO: STELLAR DETACH - re-enable once stellar module is rewritten.
   const mockStellarService = {
     addToTokenTransferQueue: jest.fn(),
     getBeneficiaryTokenBalance: jest.fn(),
@@ -192,10 +191,6 @@ describe('PayoutsService', () => {
           useValue: mockOfframpService,
         },
         {
-          provide: StellarService,
-          useValue: mockStellarService,
-        },
-        {
           provide: BeneficiaryService,
           useValue: mockBeneficiaryService,
         },
@@ -234,7 +229,6 @@ describe('PayoutsService', () => {
     prismaService = module.get<PrismaService>(PrismaService);
     vendorsService = module.get<VendorsService>(VendorsService);
     offrampService = module.get<OfframpService>(OfframpService);
-    stellarService = module.get<StellarService>(StellarService);
     beneficiaryService = module.get<BeneficiaryService>(BeneficiaryService);
     appService = module.get<AppService>(AppService);
     clientProxy = module.get<ClientProxy>(CORE_MODULE);

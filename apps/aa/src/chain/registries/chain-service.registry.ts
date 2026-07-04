@@ -23,7 +23,6 @@ export class ChainServiceRegistry {
   private registerServices(): void {
     this.chainServices.set('stellar', this.stellarChainService);
     this.chainServices.set('evm', this.evmChainService);
-
     this.logger.log('Registered chain services: stellar, evm');
   }
 
@@ -49,8 +48,8 @@ export class ChainServiceRegistry {
         typeof chainSettings.value !== 'object' ||
         !('type' in chainSettings.value)
       ) {
-        this.logger.warn('Chain settings not found, defaulting to stellar');
-        return 'stellar';
+        this.logger.warn('Chain settings not found, defaulting to evm');
+        return 'evm';
       }
 
       const chainType = (
@@ -59,16 +58,16 @@ export class ChainServiceRegistry {
 
       if (!this.isValidChainType(chainType)) {
         this.logger.warn(
-          `Invalid chain type: ${chainType}, defaulting to stellar`
+          `Invalid chain type: ${chainType}, defaulting to evm`
         );
-        return 'stellar';
+        return 'evm';
       }
 
       this.logger.log(`Detected chain type: ${chainType}`);
       return chainType;
     } catch (error) {
       this.logger.error('Error detecting chain from settings:', error);
-      return 'stellar'; // Default fallback
+      return 'evm';
     }
   }
 
@@ -91,15 +90,11 @@ export class ChainServiceRegistry {
   }
 
   async getChainServiceByAddress(address: string): Promise<IChainService> {
-    // Try to detect chain type by address format
     if (address.length === 56 && address.startsWith('G')) {
-      // Stellar address format
       return this.getChainService('stellar');
     } else if (address.startsWith('0x') && address.length === 42) {
-      // Ethereum address format
       return this.getChainService('evm');
     } else {
-      // Fallback to settings detection
       return this.getChainService();
     }
   }

@@ -1,0 +1,26 @@
+{
+  "name": "stellar-sdp",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/stellar-sdp/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/stellar-sdp",
+        "main": "libs/stellar-sdp/src/index.ts",
+        "tsConfig": "libs/stellar-sdp/tsconfig.lib.json",
+        "assets": ["libs/stellar-sdp/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "libs/stellar-sdp/jest.config.ts"
+      }
+    }
+  }
+}
