@@ -1,3 +1,5 @@
+import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
+
 export type StellarNetwork = 'testnet' | 'mainnet';
 
 export interface StellarClientConfig {
@@ -32,6 +34,20 @@ export interface CreateSponsoredAccountsBatchResult extends TransactionResult {
 }
 
 export type PaymentResult = TransactionResult;
+
+/** Context for sponsor-mediated payment operations (sendToSponsored, sendFromSponsored). */
+export interface PaymentOpContext {
+  server: Horizon.Server;
+  networkPassphrase: string;
+  sponsorKeypair: Keypair;
+  asset: Asset;
+}
+
+/** Context for a plain, non-sponsored send (sendPayment) — no sponsor keypair or fixed asset needed. */
+export interface SendPaymentContext {
+  server: Horizon.Server;
+  networkPassphrase: string;
+}
 
 export interface StellarOperationErrorOptions {
   resultCodes?: unknown;

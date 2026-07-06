@@ -1,5 +1,6 @@
 import { Account, Asset, Horizon, Keypair, Networks } from '@stellar/stellar-sdk';
-import { SendPaymentContext, sendPayment } from './payment';
+import { sendPayment } from './payment';
+import { SendPaymentContext } from '../types';
 
 describe('sendPayment', () => {
   const senderKeypair = Keypair.random();
