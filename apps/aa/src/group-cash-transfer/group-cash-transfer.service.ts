@@ -10,6 +10,9 @@ import {
   UpdateGroupCashTransferDto,
   UpdateGroupCashTransferRecordDto,
 } from './dto/group-cash-transfer.dto';
+import { GctTreasuryService } from './gct-treasury.service';
+import { GctOfframpClient } from './gct-offramp.client';
+import { getBankId } from '../utils/bank';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -19,7 +22,11 @@ export class GroupCashTransferService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly db: any;
 
-  constructor(prisma: PrismaService) {
+  constructor(
+    prisma: PrismaService,
+    private readonly treasuryService: GctTreasuryService,
+    private readonly offrampClient: GctOfframpClient
+  ) {
     this.db = prisma;
   }
 
@@ -377,9 +384,9 @@ export class GroupCashTransferService {
     }
   }
 
-  async disburse(recordUuid: string) {
+  async disburse(recordUuid: string, payoutProcessorId?: string) {
     try {
-      this.logger.log(`Disbursing group cash transfer record: ${recordUuid}`);
+      this.logger.log(`Initiating disbursement for group cash transfer record: ${recordUuid}`);
 
       const record = await this.db.groupCashTransferRecord.findFirst({
         where: { uuid: recordUuid, deletedAt: null },
@@ -389,15 +396,136 @@ export class GroupCashTransferService {
         throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
       }
 
+      if (record.status === 'COMPLETED') {
+        throw new RpcException(`Record ${recordUuid} has already been disbursed`);
+      }
+
+      if (record.txHash) {
+        this.logger.log(`Record ${recordUuid} already has a transfer, ready to confirm`);
+        return {
+          success: true,
+          message: 'Transfer already initiated, ready to confirm',
+          recordUuid,
+          txHash: record.txHash,
+        };
+      }
+
+      if (!payoutProcessorId) {
+        throw new RpcException('payoutProcessorId is required to initiate disbursement');
+      }
+
+      const balance = await this.treasuryService.getBalance();
+      if (balance < (record.amount ?? 0)) {
+        throw new RpcException(
+          `Insufficient budget: treasury balance ${balance} is less than requested amount ${record.amount}`
+        );
+      }
+
+      const offrampWallet = await this.offrampClient.getOfframpWalletAddress();
+
+      let txHash: string;
+      try {
+        txHash = await this.treasuryService.transfer(offrampWallet, record.amount ?? 0);
+      } catch (error: any) {
+        await this.db.groupCashTransferRecord.update({
+          where: { uuid: recordUuid },
+          data: {
+            status: 'TOKEN_TRANSFER_FAILED',
+            disbursementInfo: { error: error.message },
+          },
+        });
+        throw new RpcException(`Token transfer failed: ${error.message}`);
+      }
+
       await this.db.groupCashTransferRecord.update({
         where: { uuid: recordUuid },
-        data: { status: 'PENDING' },
+        data: { txHash, status: 'TOKEN_TRANSFERRED', payoutProcessorId },
       });
 
-      this.logger.log(`Disburse initiated for record=${recordUuid}, status set to PENDING`);
-      return { success: true, message: 'Disburse initiated', recordUuid };
+      this.logger.log(`Token transferred for record=${recordUuid}, txHash=${txHash}`);
+      return {
+        success: true,
+        message: 'Token transferred, ready to confirm disbursement',
+        recordUuid,
+        txHash,
+      };
     } catch (error: any) {
       this.logger.error(`Failed to disburse: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async confirmDisburse(recordUuid: string) {
+    try {
+      this.logger.log(`Confirming disbursement for group cash transfer record: ${recordUuid}`);
+
+      const record = await this.db.groupCashTransferRecord.findFirst({
+        where: { uuid: recordUuid, deletedAt: null },
+        include: { groupCashTransfer: true },
+      });
+
+      if (!record) {
+        throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
+      }
+
+      if (record.status === 'COMPLETED') {
+        throw new RpcException(`Record ${recordUuid} has already been disbursed`);
+      }
+
+      if (!record.txHash) {
+        throw new RpcException('Transfer not initiated — call disburse first');
+      }
+
+      if (!record.payoutProcessorId) {
+        throw new RpcException('payoutProcessorId not set — call disburse with a payoutProcessorId first');
+      }
+
+      const bankDetails = (record.groupCashTransfer?.bankDetails as any) || {};
+      const payload = {
+        tokenAmount: record.amount,
+        transactionHash: record.txHash,
+        paymentProviderId: record.payoutProcessorId,
+        xref: record.uuid,
+        paymentDetails: {
+          creditorAgent: bankDetails.bankName ? getBankId(bankDetails.bankName) : null,
+          creditorAccount: bankDetails.accountNumber,
+          creditorName: bankDetails.accountName,
+        },
+      };
+
+      try {
+        const result = await this.offrampClient.instantOfframp(payload);
+        await this.db.groupCashTransferRecord.update({
+          where: { uuid: recordUuid },
+          data: {
+            status: 'COMPLETED',
+            disbursedAt: new Date(),
+            disbursementInfo: { result },
+          },
+        });
+        this.logger.log(`Disbursement completed for record=${recordUuid}`);
+        return { success: true, message: 'Disbursement completed', recordUuid };
+      } catch (error: any) {
+        await this.db.groupCashTransferRecord.update({
+          where: { uuid: recordUuid },
+          data: {
+            status: 'OFFRAMP_FAILED',
+            disbursementInfo: { error: error.message },
+          },
+        });
+        throw new RpcException(`Offramp request failed: ${error.message}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to confirm disburse: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
+  }
+
+  async getTreasuryInfo() {
+    try {
+      return await this.treasuryService.getTreasuryInfo();
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch treasury info: ${error.message}`, error.stack);
       throw new RpcException(error.message);
     }
   }
@@ -438,14 +566,25 @@ export class GroupCashTransferService {
         return acc;
       }, {} as Record<string, number>);
 
+      let treasuryBalance: number | null = null;
+      try {
+        treasuryBalance = await this.treasuryService.getBalance();
+      } catch (error: any) {
+        this.logger.warn(`Could not fetch treasury balance for GCT overview: ${error.message}`);
+      }
+
+      const totalAllocatedAmount = recordStats._sum.amount ?? 0;
+
       return {
         totalGroups,
-        totalAllocatedAmount: recordStats._sum.amount ?? 0,
+        totalAllocatedAmount,
         totalDisbursedAmount: disbursedStats._sum.amount ?? 0,
         disbursedCount,
         pendingCount: byStatus['PENDING'] ?? 0,
         notStartedCount: byStatus['NOT_STARTED'] ?? 0,
         failedCount: byStatus['FAILED'] ?? 0,
+        treasuryBalance,
+        remainingBudget: treasuryBalance !== null ? treasuryBalance - totalAllocatedAmount : null,
       };
     } catch (error: any) {
       this.logger.error(`Failed to fetch GCT overview data: ${error.message}`, error.stack);

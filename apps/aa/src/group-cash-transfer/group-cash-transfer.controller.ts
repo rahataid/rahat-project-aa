@@ -69,8 +69,24 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
-  disburse(@Payload() payload: { uuid: string }) {
-    return this.groupCashTransferService.disburse(payload.uuid);
+  disburse(@Payload() payload: { uuid: string; payoutProcessorId?: string }) {
+    return this.groupCashTransferService.disburse(payload.uuid, payload.payoutProcessorId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.CONFIRM_DISBURSE,
+    uuid: process.env.PROJECT_ID,
+  })
+  confirmDisburse(@Payload() payload: { uuid: string }) {
+    return this.groupCashTransferService.confirmDisburse(payload.uuid);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.GET_TREASURY_INFO,
+    uuid: process.env.PROJECT_ID,
+  })
+  getTreasuryInfo() {
+    return this.groupCashTransferService.getTreasuryInfo();
   }
 
   @MessagePattern({

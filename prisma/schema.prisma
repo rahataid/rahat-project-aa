@@ -916,10 +916,12 @@ model GroupCashTransferRecord {
   groupCashTransferId String
 
   amount              Float?  @default(0)
-  payoutProcessorId   String? 
+  payoutProcessorId   String?
 
   status String @default("NOT_STARTED")
   disbursedAt DateTime?
+  txHash String?
+  disbursementInfo Json?
 
   createdBy String?
   createdAt DateTime  @default(now())
