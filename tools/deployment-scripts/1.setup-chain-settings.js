@@ -24,10 +24,10 @@
 const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
+const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 
-const DEPLOYMENT_DIR = path.resolve(__dirname, 'deployments');
 const CHAIN_SETTINGS_NAME = 'CHAIN_SETTINGS';
 
 const EVM_PRESETS = {
@@ -158,16 +158,6 @@ function formatPresetChoice(preset) {
 	};
 }
 
-async function getDeploymentFiles() {
-	await fs.mkdir(DEPLOYMENT_DIR, { recursive: true });
-	const entries = await fs.readdir(DEPLOYMENT_DIR, { withFileTypes: true });
-
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right));
-}
-
 async function askChainType() {
 	const answers = await prompt([
 		{
@@ -221,22 +211,6 @@ async function askPreset(chainType, networkTier) {
 	return presets.find((preset) => preset.key === answers.presetKey);
 }
 
-async function askTargetFile(deploymentFiles) {
-	const answers = await prompt([
-		{
-			type: 'list',
-			name: 'selectedFile',
-			message: 'Select one deployment file to update:',
-			choices: deploymentFiles.map((fileName) => ({
-				name: fileName,
-				value: fileName,
-			})),
-		},
-	]);
-
-	return answers.selectedFile;
-}
-
 async function confirmSelection(selectedFile, preset) {
 	console.log('Selected CHAIN_SETTINGS value:');
 	console.log(JSON.stringify(preset.setting, null, 2));
@@ -275,13 +249,7 @@ async function updateDeploymentFile(fileName, chainSettingsEntry) {
 }
 
 async function main() {
-	const deploymentFiles = await getDeploymentFiles();
-
-	if (!deploymentFiles.length) {
-		throw new Error(`No deployment files found in ${DEPLOYMENT_DIR}`);
-	}
-
-	const selectedFile = await askTargetFile(deploymentFiles);
+	const selectedFile = await selectDeploymentFile();
 	const chainType = await askChainType();
 	const networkTier = await askNetworkTier(chainType);
 	const preset = await askPreset(chainType, networkTier);
