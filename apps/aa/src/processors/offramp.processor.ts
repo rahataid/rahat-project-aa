@@ -169,18 +169,18 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      if (job.attemptsMade === job.opts.attempts) {
-      //   this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-      //     payload: {
-      //       title: `Fiat Transaction Failed`,
-      //       description: `Fiat Transaction has been failed in ${
-      //         projectName.value['project_name'] || process.env.PROJECT_ID
-      //       }`,
-      //       group: 'Payout',
-      //       notify: true,
-      //       projectId: process.env.PROJECT_ID,
-      //     },
-      //   });
+      // if (job.attemptsMade === job.opts.attempts) {
+      // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+      //   payload: {
+      //     title: `Fiat Transaction Failed`,
+      //     description: `Fiat Transaction has been failed in ${
+      //       projectName.value['project_name'] || process.env.PROJECT_ID
+      //     }`,
+      //     group: 'Payout',
+      //     notify: true,
+      //     projectId: process.env.PROJECT_ID,
+      //   },
+      // });
       // }
       throw error(`Failed to process instant offramp: ${error.message}`);
     }
