@@ -208,6 +208,10 @@ export class OfframpService {
     return result;
   }
 
+  async validateCIPSAccount(bankId: string, accountId: string, accountName: string): Promise<any> {
+    
+  }
+
   async addToManualPayoutQueue(payload: { payoutUUID: string }) {
     return await this.addBulkToManualPayoutQueue(payload);
   }

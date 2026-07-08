@@ -9,11 +9,13 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { AppService } from '../app/app.service';
 import { BullModule } from '@nestjs/bull';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
     PrismaModule,
     HttpModule,
+    OtpModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,

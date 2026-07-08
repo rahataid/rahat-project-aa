@@ -341,6 +341,8 @@ export const JOBS = {
     GET_GCT_DATA: 'aa.jobs.groupCashTransfer.getGCTData',
     CONFIRM_DISBURSE: 'aa.jobs.groupCashTransfer.confirmDisburse',
     GET_TREASURY_INFO: 'aa.jobs.groupCashTransfer.getTreasuryInfo',
+    SEND_OTP: 'aa.jobs.groupCashTransfer.sendOtp',
+    VERIFY_OTP: 'aa.jobs.groupCashTransfer.verifyOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',

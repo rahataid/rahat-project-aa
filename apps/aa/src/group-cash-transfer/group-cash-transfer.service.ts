@@ -12,7 +12,7 @@ import {
 } from './dto/group-cash-transfer.dto';
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
-import { getBankId } from '../utils/bank';
+import { OtpService } from '../otp/otp.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -25,7 +25,8 @@ export class GroupCashTransferService {
   constructor(
     prisma: PrismaService,
     private readonly treasuryService: GctTreasuryService,
-    private readonly offrampClient: GctOfframpClient
+    private readonly offrampClient: GctOfframpClient,
+    private readonly otpService: OtpService
   ) {
     this.db = prisma;
   }
@@ -252,13 +253,17 @@ export class GroupCashTransferService {
         `Assigning fund: groupCashTransferId=${groupCashTransferId}, amount=${amount}`
       );
 
-      await this.findOneOrThrow(groupCashTransferId);
+      const gctDetail = await this.findOneOrThrow(groupCashTransferId);
 
-      const existingFund = await this.db.groupCashTransferRecord.findFirst({
-        where: { groupCashTransferId, deletedAt: null },
-      });
-      if (existingFund) {
-        throw new RpcException('Funds have already been reserved for this group. Duplicate assignment is not allowed.');
+      // const existingFund = await this.db.groupCashTransferRecord.findFirst({
+      //   where: { groupCashTransferId, deletedAt: null },
+      // });
+      // if (existingFund) {
+      //   throw new RpcException('Funds have already been reserved for this group. Duplicate assignment is not allowed.');
+      // }
+
+      if (!gctDetail.extras.isBankValidated) {
+        throw new RpcException('Bank account for this group has not been validated. Please validate the bank account before assigning funds.');
       }
 
       const record = await this.db.groupCashTransferRecord.create({
@@ -285,20 +290,23 @@ export class GroupCashTransferService {
     try {
       this.logger.log(`Fetching records for groupCashTransferName=${groupCashTransferName}`);
 
-      const group = await this.db.groupCashTransferDetail.findFirst({
-        where: { name: { contains: groupCashTransferName, mode: 'insensitive' }, deletedAt: null },
-      });
-      if (!group) {
-        throw new RpcException(`Group cash transfer '${groupCashTransferName}' not found`);
+      let groupCashTransferId: string | undefined;
+      if (groupCashTransferName) {
+        const group = await this.db.groupCashTransferDetail.findFirst({
+          where: { name: { contains: groupCashTransferName, mode: 'insensitive' }, deletedAt: null },
+        });
+        if (!group) {
+          throw new RpcException(`Group cash transfer '${groupCashTransferName}' not found`);
+        }
+        groupCashTransferId = group.uuid;
       }
-      const groupCashTransferId = group.uuid;
 
       const allowedSortFields = ['createdAt', 'title', 'amount'];
       const safeSort = allowedSortFields.includes(sort) ? sort : 'createdAt';
       const safeOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
 
       const where: Record<string, any> = {
-        groupCashTransferId,
+        ...(groupCashTransferId && { groupCashTransferId }),
         deletedAt: null,
         ...(status && { status }),
         ...(search && {
@@ -384,7 +392,7 @@ export class GroupCashTransferService {
     }
   }
 
-  async disburse(recordUuid: string, payoutProcessorId?: string) {
+  async disburse(recordUuid: string, user: any) {
     try {
       this.logger.log(`Initiating disbursement for group cash transfer record: ${recordUuid}`);
 
@@ -410,9 +418,10 @@ export class GroupCashTransferService {
         };
       }
 
-      if (!payoutProcessorId) {
-        throw new RpcException('payoutProcessorId is required to initiate disbursement');
-      }
+      // if (!payoutProcessorId) {
+      //   throw new RpcException('payoutProcessorId is required to initiate disbursement');
+      // }
+
 
       const balance = await this.treasuryService.getBalance();
       if (balance < (record.amount ?? 0)) {
@@ -439,7 +448,7 @@ export class GroupCashTransferService {
 
       await this.db.groupCashTransferRecord.update({
         where: { uuid: recordUuid },
-        data: { txHash, status: 'TOKEN_TRANSFERRED', payoutProcessorId },
+        data: { txHash, status: 'TOKEN_TRANSFERRED', disbursementInfo: { disbursedBy: user.name } },
       });
 
       this.logger.log(`Token transferred for record=${recordUuid}, txHash=${txHash}`);
@@ -455,7 +464,7 @@ export class GroupCashTransferService {
     }
   }
 
-  async confirmDisburse(recordUuid: string) {
+  async confirmDisburse(recordUuid: string, paymentProviderId: string) {
     try {
       this.logger.log(`Confirming disbursement for group cash transfer record: ${recordUuid}`);
 
@@ -476,7 +485,7 @@ export class GroupCashTransferService {
         throw new RpcException('Transfer not initiated — call disburse first');
       }
 
-      if (!record.payoutProcessorId) {
+      if (!paymentProviderId) {
         throw new RpcException('payoutProcessorId not set — call disburse with a payoutProcessorId first');
       }
 
@@ -484,33 +493,49 @@ export class GroupCashTransferService {
       const payload = {
         tokenAmount: record.amount,
         transactionHash: record.txHash,
-        paymentProviderId: record.payoutProcessorId,
+        paymentProviderId: paymentProviderId,
+        senderAddress: await this.treasuryService.getTreasuryInfo().then(info => info.publicKey),
         xref: record.uuid,
         paymentDetails: {
-          creditorAgent: bankDetails.bankName ? getBankId(bankDetails.bankName) : null,
+          creditorAgent: bankDetails.bankCode,
           creditorAccount: bankDetails.accountNumber,
           creditorName: bankDetails.accountName,
         },
       };
 
       try {
+        await this.db.groupCashTransferRecord.update({
+          where: { uuid: recordUuid },
+          data: { status: 'PENDING', payoutProcessorId: paymentProviderId },
+        });
+
         const result = await this.offrampClient.instantOfframp(payload);
+        const offrampStatus = result?.offrampRequest?.status;
+        const isRejected = offrampStatus === 'REJECTED';
+
         await this.db.groupCashTransferRecord.update({
           where: { uuid: recordUuid },
           data: {
-            status: 'COMPLETED',
-            disbursedAt: new Date(),
-            disbursementInfo: { result },
+            status: isRejected ? 'REJECTED' : 'COMPLETED',
+            disbursedAt: isRejected ? null : new Date(),
+            disbursementInfo: { result }
           },
         });
+
+        if (isRejected) {
+          this.logger.warn(`Offramp rejected for record=${recordUuid}, status=${offrampStatus}`);
+          return { success: false, message: `Disbursement rejected by offramp: ${offrampStatus}`, recordUuid };
+        }
+
         this.logger.log(`Disbursement completed for record=${recordUuid}`);
         return { success: true, message: 'Disbursement completed', recordUuid };
       } catch (error: any) {
         await this.db.groupCashTransferRecord.update({
           where: { uuid: recordUuid },
           data: {
-            status: 'OFFRAMP_FAILED',
+            status: 'FAILED',
             disbursementInfo: { error: error.message },
+            payoutProcessorId: paymentProviderId,
           },
         });
         throw new RpcException(`Offramp request failed: ${error.message}`);
@@ -545,6 +570,7 @@ export class GroupCashTransferService {
         this.db.groupCashTransferRecord.aggregate({
           where: { deletedAt: null },
           _sum: { amount: true },
+          _count: { _all: true },
         }),
         this.db.groupCashTransferRecord.aggregate({
           where: { deletedAt: null, disbursedAt: { not: null } },
@@ -573,16 +599,20 @@ export class GroupCashTransferService {
         this.logger.warn(`Could not fetch treasury balance for GCT overview: ${error.message}`);
       }
 
-      const totalAllocatedAmount = recordStats._sum.amount ?? 0;
+      const totalDisbursedAmount = disbursedStats._sum.amount ?? 0;
+      const totalAllocatedAmount = recordStats._sum.amount ? recordStats._sum.amount - totalDisbursedAmount : 0;
 
       return {
         totalGroups,
+        totalRecords: recordStats._count?._all ?? 0,
         totalAllocatedAmount,
-        totalDisbursedAmount: disbursedStats._sum.amount ?? 0,
+        totalDisbursedAmount,
         disbursedCount,
         pendingCount: byStatus['PENDING'] ?? 0,
         notStartedCount: byStatus['NOT_STARTED'] ?? 0,
         failedCount: byStatus['FAILED'] ?? 0,
+        tokenDisbursedCount: byStatus['TOKEN_TRANSFERRED'] ?? 0,
+        rejectedCount: byStatus['REJECTED'] ?? 0,
         treasuryBalance,
         remainingBudget: treasuryBalance !== null ? treasuryBalance - totalAllocatedAmount : null,
       };
@@ -592,18 +622,72 @@ export class GroupCashTransferService {
     }
   }
 
-  async validateBankAccount(_dto: unknown) {
-    return { valid: true };
+  async validateBankAccount(dto: {
+    groupUuid: string;
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    bankId: string;
+  }) {
+    try {
+      this.logger.log(`Validating bank account for group: ${dto.groupUuid}`);
+      const record = await this.findOneOrThrow(dto.groupUuid);
+
+      if (!dto.bankId) throw new RpcException(`Bank not found: ${dto.bankName}`);
+
+      const result = await this.offrampClient.validateBankAccount({
+        bankId: dto.bankId,
+        accountName: dto.accountName,
+        accountId: dto.accountNumber,
+      });
+
+      const isValid = result?.isValid === true;
+      const existingExtras = (record.extras as Record<string, unknown>) ?? {};
+
+      if (!isValid) {
+        const errorMessage = result?.cipsData?.responseMessage ?? 'Bank account validation failed';
+        this.logger.error(`Bank account validation failed for group ${dto.groupUuid}: ${errorMessage}`);
+        await this.db.groupCashTransferDetail.update({
+          where: { uuid: dto.groupUuid },
+          data: {
+            extras: {
+              ...existingExtras,
+              isBankValidated: false,
+              validationError: errorMessage,
+             bankValidatedAt: null 
+            },
+          },
+        });
+        return { valid: false, message: errorMessage, result };
+      }
+
+      await this.db.groupCashTransferDetail.update({
+        where: { uuid: dto.groupUuid },
+        data: {
+          extras: {
+            ...existingExtras,
+            isBankValidated: true,
+            bankValidatedAt: new Date().toISOString(),
+            validationError: null,
+          },
+        },
+      });
+
+      return { valid: true, result };
+    } catch (error: any) {
+      this.logger.error(`Failed to validate bank account: ${error.message}`, error.stack);
+      throw new RpcException(error.message);
+    }
   }
 
   async getAllValidGroupTransfers() {
     try {
-      this.logger.log('Fetching all valid group transfers (no funds assigned)');
+      this.logger.log('Fetching all valid group transfers (bank validated, no funds assigned)');
       return this.db.groupCashTransferDetail.findMany({
         where: {
           deletedAt: null,
-          groupCashTransferRecords: { none: { deletedAt: null } },
-        },
+          extras: { path: ['bankValidatedAt'], not: Prisma.JsonNull },
+         },
         orderBy: { createdAt: 'desc' },
       });
     } catch (error: any) {
@@ -630,10 +714,17 @@ export class GroupCashTransferService {
     }
 
     const accountNumber = (dto.bankDetails as any)?.accountNumber;
-    if (accountNumber) {
+    const bankName = (dto.bankDetails as any)?.bankName;
+    if (accountNumber && bankName) {
       checks.push({
-        field: 'account number',
-        where: { ...base, bankDetails: { path: ['accountNumber'], equals: accountNumber } },
+        field: 'account number and bank name',
+        where: {
+          ...base,
+          AND: [
+            { bankDetails: { path: ['accountNumber'], equals: accountNumber } },
+            { bankDetails: { path: ['bankName'], equals: bankName } },
+          ],
+        },
       });
     }
 
@@ -645,12 +736,11 @@ export class GroupCashTransferService {
       });
     }
 
-    for (const { field, where } of checks) {
-      const existing = await this.db.groupCashTransferDetail.findFirst({ where });
-      if (existing) {
-        throw new RpcException(`A group with this ${field} already exists`);
-      }
-    }
+    const results = await Promise.all(
+      checks.map(({ where }) => this.db.groupCashTransferDetail.findFirst({ where, select: { uuid: true } }))
+    );
+    const hit = results.findIndex((r) => r !== null);
+    if (hit !== -1) throw new RpcException(`A group with this ${checks[hit].field} already exists`);
   }
 
   private async findOneOrThrow(uuid: string) {
