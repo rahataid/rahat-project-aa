@@ -1712,7 +1712,9 @@ export class PayoutsService {
       if (matchBy === 'phoneNumber') {
         if (!row['Phone Number']) {
           throw new RpcException(
-            `Payout verification failed: Missing phone number in row ${index + 1}`
+            `Payout verification failed: Missing phone number in row ${
+              index + 1
+            }`
           );
         }
       } else {
@@ -1965,6 +1967,15 @@ export class PayoutsService {
             select: {
               numberOfTokens: true,
               status: true,
+              beneficiaryGroup: {
+                select: {
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -1995,22 +2006,22 @@ export class PayoutsService {
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
-          'Payout Status': redeemLog.payout?.status || '',
+          'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
-          'Created At': redeemLog.createdAt
-            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Updated At': redeemLog.updatedAt
-            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Actual Budget':
-            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+          'Updated At': redeemLog.updatedAt,
+          'Actual Budget': (() => {
+            const totalTokens = log?.beneficiaryGroupToken?.numberOfTokens || 0;
+            const beneficiaryCount =
+              log?.beneficiaryGroupToken?.beneficiaryGroup?._count
+                ?.beneficiaries || 1;
+            return (totalTokens / beneficiaryCount) * ONE_TOKEN_VALUE;
+          })(),
           'Amount Disbursed': [
             'COMPLETED',
             'FIAT_TRANSACTION_COMPLETED',
             'TOKEN_TRANSACTION_COMPLETED',
           ].includes(redeemLog?.status)
-            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
             : 0,
         };
 
