@@ -540,8 +540,10 @@ export class BeneficiaryService {
     );
 
     const tokenAssignedBenfWallet: string[] = [];
+    const foundAssignedBenf: string[] = [];
 
     for (const benf of benfIdsAndWalletAddress) {
+      // Step 1: check if beneficiary belongs to any group with tokensReserved
       const tokenAssignedGroups = await this.prisma.beneficiaryGroups.findMany({
         where: {
           tokensReserved: { isNot: null },
@@ -549,23 +551,50 @@ export class BeneficiaryService {
             some: { beneficiaryId: { equals: benf.uuid } },
           },
         },
+        include: { tokensReserved: true },
       });
 
-      if (tokenAssignedGroups.length > 0) {
+      if (tokenAssignedGroups.length === 0) continue;
+
+      // Step 2: check the token status on those groups
+      const hasDisbursed = tokenAssignedGroups.some(
+        (g) => g.tokensReserved?.status === 'DISBURSED'
+      );
+      const hasNotDisbursed = tokenAssignedGroups.some(
+        (g) => g.tokensReserved?.status === 'NOT_DISBURSED'
+      );
+
+      if (hasNotDisbursed) {
         tokenAssignedBenfWallet.push(benf.walletAddress);
+        continue;
+      }
+
+      if (hasDisbursed) {
+        // Step 3: check if beneficiary has a completed redeem record
+        const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress: benf.walletAddress,
+            status: { in: ['FIAT_TRANSACTION_COMPLETED', 'COMPLETED'] },
+          },
+        });
+
+        if (!completedRedeem) {
+          foundAssignedBenf.push(benf.walletAddress);
+        }
       }
     }
 
-    if (tokenAssignedBenfWallet.length > 0) {
+    if (tokenAssignedBenfWallet.length > 0 || foundAssignedBenf.length > 0) {
       this.logger.warn(
-        `Token already assigned to ${tokenAssignedBenfWallet.length} beneficiaries in group: ${groupId}`
+        `Token conflict found for group: ${groupId} — NOT_DISBURSED: ${tokenAssignedBenfWallet.length}, pending redeem: ${foundAssignedBenf.length}`
       );
       return {
         isAssignable: false,
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
-        wallets: tokenAssignedBenfWallet,
+        tokenAssignedBenfWallet,
+        foundAssignedBenf,
         groupName: group.name,
       };
     }
@@ -1528,7 +1557,9 @@ export class BeneficiaryService {
 
     if (isLastBatch) {
       await this.initiateQrPdf(groupUuid);
-      this.logger.log(`Last batch processed, PDF generation triggered for group: ${groupUuid}`);
+      this.logger.log(
+        `Last batch processed, PDF generation triggered for group: ${groupUuid}`
+      );
     }
 
     return { message: 'Sync process completed successfully' };
