@@ -1,0 +1,22 @@
+{
+  "version": "1",
+  "name": "Rahat Core( AA )",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ],
+  "scripts": {
+    "moduleWhitelist": [
+      "crypto",
+      "events",
+      "net",
+      "tls",
+      "buffer",
+      "util"
+    ],
+    "filesystemAccess": {
+      "allow": true
+    }
+  }
+}

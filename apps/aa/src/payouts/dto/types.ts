@@ -115,7 +115,7 @@ export type DownloadPayoutLogsType = {
   'Transaction Hash': string;
   'Payout Status': string;
   'Transaction Type': string;
-  'Created At'?: string;
+  'Created At'?: string | Date;
   'Updated At': string | Date | null;
   'Actual Budget': number;
   'Amount Disbursed': number;
