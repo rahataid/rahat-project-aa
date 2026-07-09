@@ -83,7 +83,7 @@ export class GctOfframpClient {
       return data;
     } catch (error: any) {
       throw new RpcException(
-        `Failed to initiate instant offramp: ${error?.response?.data?.message || error?.message}`
+        `Failed to initiate instant offramp v2: ${error?.response?.data?.message || error?.message}`
       );
     }
   }
