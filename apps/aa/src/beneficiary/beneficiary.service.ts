@@ -189,7 +189,10 @@ export class BeneficiaryService {
             ? { tokensReserved: { isNot: null } }
             : tokenAssigned === false
             ? {
-                tokensReserved: null,
+                OR: [
+                  { tokensReserved: null },
+                  { tokensReserved: { is: { isDisbursed: true } } },
+                ],
                 groupPurpose: { not: GroupPurpose.COMMUNICATION },
               }
             : {}),
@@ -558,10 +561,10 @@ export class BeneficiaryService {
 
       // Step 2: check the token status on those groups
       const hasDisbursed = tokenAssignedGroups.some(
-        (g) => g.tokensReserved?.status === 'DISBURSED'
+        (g) => g.tokensReserved?.isDisbursed === true
       );
       const hasNotDisbursed = tokenAssignedGroups.some(
-        (g) => g.tokensReserved?.status === 'NOT_DISBURSED'
+        (g) => g.tokensReserved?.isDisbursed === false
       );
 
       if (hasNotDisbursed) {
