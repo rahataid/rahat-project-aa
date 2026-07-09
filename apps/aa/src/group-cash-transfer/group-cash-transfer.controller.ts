@@ -69,16 +69,21 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
-  disburse(@Payload() payload: { uuid: string; payoutProcessorId?: string }) {
-    return this.groupCashTransferService.disburse(payload.uuid, payload.payoutProcessorId);
+  disburse(@Payload() payload: { uuid: string; user: any }) {
+    return this.groupCashTransferService.disburse(payload.uuid, payload.user);
   }
 
   @MessagePattern({
     cmd: JOBS.GROUP_CASH_TRANSFER.CONFIRM_DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
-  confirmDisburse(@Payload() payload: { uuid: string }) {
-    return this.groupCashTransferService.confirmDisburse(payload.uuid);
+  confirmDisburse(
+    @Payload() payload: { uuid: string; paymentProviderId: string }
+  ) {
+    return this.groupCashTransferService.confirmDisburse(
+      payload.uuid,
+      payload.paymentProviderId
+    );
   }
 
   @MessagePattern({
@@ -109,7 +114,16 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.VALIDATE_BANK_ACCOUNT,
     uuid: process.env.PROJECT_ID,
   })
-  validateBankAccount(@Payload() payload: unknown) {
+  validateBankAccount(
+    @Payload()
+    payload: {
+      groupUuid: string;
+      bankId: string;
+      bankName: string;
+      accountName: string;
+      accountNumber: string;
+    }
+  ) {
     return this.groupCashTransferService.validateBankAccount(payload);
   }
 

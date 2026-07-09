@@ -1004,6 +1004,18 @@ export class BeneficiaryService {
     }
   }
 
+  async getBeneficiaryBankAccount(payload: {
+    uuid?: string;
+    walletAddress?: string;
+  }) {
+    return lastValueFrom(
+      this.client.send(
+        { cmd: JOBS.BENEFICIARY.GET_BENEFICIARY_BANK_ACCOUNT },
+        payload
+      )
+    );
+  }
+
   /**
    * Get failed beneficiary redeem by payout UUID
    * This is used to get failed beneficiary redeem by payout UUID grouped by status

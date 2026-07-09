@@ -109,8 +109,9 @@ export class ListGroupCashTransferRecordDto {
   @IsOptional()
   perPage?: number;
 
+  @IsOptional()
   @IsString()
-  groupCashTransferName!: string;
+  groupCashTransferName?: string;
 
   @IsOptional()
   @IsString()

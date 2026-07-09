@@ -37,6 +37,25 @@ export class GctOfframpClient {
     }
   }
 
+  async validateBankAccount(params: { bankId: string; accountName: string; accountId: string }): Promise<any> {
+    const { url, appId } = await this.fetchOfframpSettings();
+    try {
+      const { data: { data } } = await this.httpService.axiosRef.post(
+        `${url}/payment-provider/json-rpc`,
+        { provider: 'cips', method: 'validateAccount', params },
+        { headers: { APP_ID: appId } }
+      );
+
+      this.logger.log(`Bank account validation response: ${JSON.stringify(data)}`);
+      
+      return data;
+    } catch (error: any) {
+      throw new RpcException(
+        `Failed to validate bank account: ${error?.response?.data?.message || error?.message}`
+      );
+    }
+  }
+
   async instantOfframp(offrampPayload: unknown): Promise<any> {
     const { url, appId } = await this.fetchOfframpSettings();
     try {
@@ -49,6 +68,22 @@ export class GctOfframpClient {
     } catch (error: any) {
       throw new RpcException(
         `Failed to initiate instant offramp: ${error?.response?.data?.message || error?.message}`
+      );
+    }
+  }
+
+   async instantOfframpV2(offrampPayload: unknown): Promise<any> {
+    const { url, appId } = await this.fetchOfframpSettings();
+    try {
+      const {
+        data: { data },
+      } = await this.httpService.axiosRef.post(`${url}/offramp-request/instant-v2`, offrampPayload, {
+        headers: { APP_ID: appId },
+      });
+      return data;
+    } catch (error: any) {
+      throw new RpcException(
+        `Failed to initiate instant offramp v2: ${error?.response?.data?.message || error?.message}`
       );
     }
   }

@@ -64,6 +64,8 @@ export const JOBS = {
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
     GET_ONE_BENEFICIARY: 'rahat.jobs.beneficiary.find_one_beneficiary',
+    GET_BENEFICIARY_BANK_ACCOUNT:
+      'rahat.jobs.beneficiary.get_beneficiary_bank_account',
     UPDATE: 'rahat.jobs.beneficiary.update',
     REFER: 'rahat.jobs.beneficiary.get_referred',
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
@@ -341,6 +343,8 @@ export const JOBS = {
     GET_GCT_DATA: 'aa.jobs.groupCashTransfer.getGCTData',
     CONFIRM_DISBURSE: 'aa.jobs.groupCashTransfer.confirmDisburse',
     GET_TREASURY_INFO: 'aa.jobs.groupCashTransfer.getTreasuryInfo',
+    SEND_OTP: 'aa.jobs.groupCashTransfer.sendOtp',
+    VERIFY_OTP: 'aa.jobs.groupCashTransfer.verifyOtp',
   },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
