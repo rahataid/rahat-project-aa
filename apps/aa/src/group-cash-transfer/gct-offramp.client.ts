@@ -71,4 +71,20 @@ export class GctOfframpClient {
       );
     }
   }
+
+   async instantOfframpV2(offrampPayload: unknown): Promise<any> {
+    const { url, appId } = await this.fetchOfframpSettings();
+    try {
+      const {
+        data: { data },
+      } = await this.httpService.axiosRef.post(`${url}/offramp-request/instant-v2`, offrampPayload, {
+        headers: { APP_ID: appId },
+      });
+      return data;
+    } catch (error: any) {
+      throw new RpcException(
+        `Failed to initiate instant offramp: ${error?.response?.data?.message || error?.message}`
+      );
+    }
+  }
 }

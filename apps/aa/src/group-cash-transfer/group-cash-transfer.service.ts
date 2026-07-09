@@ -526,7 +526,7 @@ export class GroupCashTransferService {
           data: { status: 'PENDING', payoutProcessorId: paymentProviderId },
         });
 
-        const result = await this.offrampClient.instantOfframp(payload);
+        const result = await this.offrampClient.instantOfframpV2(payload);
         const offrampStatus = result?.offrampRequest?.status;
         const isRejected = offrampStatus === 'REJECTED';
 
