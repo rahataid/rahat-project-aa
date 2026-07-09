@@ -61,10 +61,26 @@ export class GroupCashTransferService {
       await this.findOneOrThrow(uuid);
 
       await this.checkUniqueness(dto, uuid);
+      
+      const isBankDetailsChanged = data.bankDetails !== undefined;
+
+      let baseExtras: Record<string, unknown>;
+      if (data.extras !== undefined) {
+        baseExtras = (data.extras as Record<string, unknown>) ?? {};
+      } else {
+        const existing = await this.db.groupCashTransferDetail.findUnique({ where: { uuid }, select: { extras: true } });
+        baseExtras = (existing?.extras as Record<string, unknown>) ?? {};
+      }
 
       const record = await this.db.groupCashTransferDetail.update({
         where: { uuid },
-        data,
+        data: {
+          ...data,
+          extras: {
+            ...baseExtras,
+            ...(isBankDetailsChanged ? { isBankValidated: false } : {}),
+          }
+        },
       });
 
       this.logger.log(`Group cash transfer updated: ${uuid}`);
@@ -500,6 +516,7 @@ export class GroupCashTransferService {
           creditorAgent: bankDetails.bankCode,
           creditorAccount: bankDetails.accountNumber,
           creditorName: bankDetails.accountName,
+          creditorBranch: bankDetails.branchId
         },
       };
 
@@ -641,8 +658,11 @@ export class GroupCashTransferService {
         accountId: dto.accountNumber,
       });
 
+      this.logger.log(`Bank account validation result for group ${dto.groupUuid}: ${JSON.stringify(result)}`);
+
       const isValid = result?.isValid === true;
       const existingExtras = (record.extras as Record<string, unknown>) ?? {};
+      const existingBankDetails = (record.bankDetails as Record<string, unknown>) ?? {};
 
       if (!isValid) {
         const errorMessage = result?.cipsData?.responseMessage ?? 'Bank account validation failed';
@@ -664,6 +684,10 @@ export class GroupCashTransferService {
       await this.db.groupCashTransferDetail.update({
         where: { uuid: dto.groupUuid },
         data: {
+          bankDetails: {
+            ...existingBankDetails,
+            branchId: result?.cipsData?.branchId,
+          },
           extras: {
             ...existingExtras,
             isBankValidated: true,
