@@ -1,13 +1,7 @@
-import { Asset, BASE_FEE, Horizon, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
-import { PaymentResult } from '../types';
+import { Asset, BASE_FEE, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { PaymentOpContext, PaymentResult, SendPaymentContext, StellarOperationError } from '../types';
+import { describePaymentError } from '../utils/errors';
 import { submitTransaction } from './submit';
-
-export interface PaymentOpContext {
-  server: Horizon.Server;
-  networkPassphrase: string;
-  sponsorKeypair: Keypair;
-  asset: Asset;
-}
 
 /**
  * Sponsor sends the configured asset to a (sponsored) account. Only the
@@ -75,4 +69,49 @@ export async function sendFromSponsored(
   const result = await submitTransaction(ctx.server, tx);
 
   return { hash: result.hash, successful: result.successful, ledger: result.ledger };
+}
+
+/**
+ * A plain, non-sponsored send: the sender account pays its own fee and is
+ * the sole signer. Works for any asset, including native XLM via
+ * Asset.native(). Use this when no sponsor relationship is involved.
+ */
+export async function sendPayment(
+  ctx: SendPaymentContext,
+  senderSecret: string,
+  destinationPublicKey: string,
+  asset: Asset,
+  amount: string
+): Promise<PaymentResult> {
+  const senderKeypair = Keypair.fromSecret(senderSecret);
+
+  let senderAccount;
+  try {
+    senderAccount = await ctx.server.loadAccount(senderKeypair.publicKey());
+  } catch (error) {
+    if ((error as { response?: { status?: number } })?.response?.status === 404) {
+      throw new StellarOperationError(
+        `Sender account ${senderKeypair.publicKey()} does not exist or is not funded on the network.`,
+        { cause: error }
+      );
+    }
+    throw error;
+  }
+
+  const tx = new TransactionBuilder(senderAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: ctx.networkPassphrase,
+  })
+    .addOperation(Operation.payment({ destination: destinationPublicKey, asset, amount }))
+    .setTimeout(100)
+    .build();
+
+  tx.sign(senderKeypair);
+
+  try {
+    const result = await submitTransaction(ctx.server, tx);
+    return { hash: result.hash, successful: result.successful, ledger: result.ledger };
+  } catch (error) {
+    throw describePaymentError(error, asset);
+  }
 }
