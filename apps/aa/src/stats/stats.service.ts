@@ -61,7 +61,11 @@ export class StatsService {
     group: string,
     select: { name?: boolean; data?: boolean; group?: boolean } | null = null
   ) {
-    this.logger.log(`Fetching stats for group: ${group} with select: ${JSON.stringify(select)}`);
+    this.logger.log(
+      `Fetching stats for group: ${group} with select: ${JSON.stringify(
+        select
+      )}`
+    );
     return this.prismaService.stats.findMany({
       where: { group },
       select,
@@ -75,9 +79,11 @@ export class StatsService {
       const triggeersStats = await firstValueFrom(
         this.client.send({ cmd: JOBS.STATS.MS_TRIGGERS_STATS }, payload)
       );
+      const tokenStats = await this.getTokenStats();
       return {
         benefStats,
         triggeersStats,
+        tokenStats,
       };
     } catch (error) {
       this.logger.error('Error from microservice:', error);
@@ -122,5 +128,54 @@ export class StatsService {
     return this.prismaService.stats.delete({
       where: { name },
     });
+  }
+
+  async getTokenStats() {
+    const REDEEMED_LEGS = [
+      { transactionType: 'VENDOR_REIMBURSEMENT', status: 'COMPLETED' },
+      {
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      },
+    ] as const;
+    let assignedTokens = 0;
+    let disbursedTokens = 0;
+    let redeemedTokens = 0;
+
+    const groupTokens =
+      await this.prismaService.beneficiaryGroupTokens.findMany({
+        select: {
+          numberOfTokens: true,
+          isDisbursed: true,
+          payout: { select: { type: true, mode: true } },
+        },
+      });
+    for (const gt of groupTokens) {
+      const tokens = gt.numberOfTokens || 0;
+      assignedTokens += tokens;
+      if (gt.isDisbursed) disbursedTokens += tokens;
+    }
+    const pendingDisbursement = assignedTokens - disbursedTokens;
+
+    const redeemRecords = await this.prismaService.beneficiaryRedeem.findMany({
+      where: { OR: [...REDEEMED_LEGS] },
+      select: {
+        amount: true,
+        transactionType: true,
+        beneficiaryWalletAddress: true,
+        payout: { select: { mode: true } },
+      },
+    });
+
+    for (const r of redeemRecords) {
+      redeemedTokens += r.amount;
+    }
+    const result = {
+      assignedTokens,
+      disbursedTokens,
+      pendingDisbursement,
+      redeemedTokens,
+    };
+    return result;
   }
 }

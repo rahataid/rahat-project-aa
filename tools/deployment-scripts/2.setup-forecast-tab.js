@@ -22,10 +22,10 @@
 const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
+const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 
-const DEPLOYMENT_DIR = path.resolve(__dirname, 'deployments');
 const SETTING_NAME = 'FORECAST_TAB_CONFIG';
 
 const ALL_TABS = [
@@ -35,6 +35,7 @@ const ALL_TABS = [
   { label: 'Daily Monitoring', value: 'dailyMonitoring' },
   { label: 'Gauge Reading', value: 'gaugeReading', hasDatePicker: true },
   { label: 'External Links', value: 'externalLinks' },
+  { label: 'Google Flood Hub', value: 'gfh' },
 ];
 
 function buildForecastTabEntry(tabs) {
@@ -48,22 +49,13 @@ function buildForecastTabEntry(tabs) {
   };
 }
 
-async function getDeploymentFiles() {
-  await fs.mkdir(DEPLOYMENT_DIR, { recursive: true });
-  const entries = await fs.readdir(DEPLOYMENT_DIR, { withFileTypes: true });
-
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right));
-}
-
 async function askTabs() {
   const answers = await prompt([
     {
       type: 'checkbox',
       name: 'selectedValues',
-      message: 'Select forecast tabs to include (space to select, enter to confirm):',
+      message:
+        'Select forecast tabs to include (space to select, enter to confirm):',
       choices: ALL_TABS.map((tab) => ({
         name: tab.label,
         value: tab.value,
@@ -75,22 +67,6 @@ async function askTabs() {
   ]);
 
   return ALL_TABS.filter((tab) => answers.selectedValues.includes(tab.value));
-}
-
-async function askTargetFile(deploymentFiles) {
-  const answers = await prompt([
-    {
-      type: 'list',
-      name: 'selectedFile',
-      message: 'Select one deployment file to update:',
-      choices: deploymentFiles.map((fileName) => ({
-        name: fileName,
-        value: fileName,
-      })),
-    },
-  ]);
-
-  return answers.selectedFile;
 }
 
 async function confirmSelection(selectedFile, tabs) {
@@ -131,13 +107,7 @@ async function updateDeploymentFile(fileName, entry) {
 }
 
 async function main() {
-  const deploymentFiles = await getDeploymentFiles();
-
-  if (!deploymentFiles.length) {
-    throw new Error(`No deployment files found in ${DEPLOYMENT_DIR}`);
-  }
-
-  const selectedFile = await askTargetFile(deploymentFiles);
+  const selectedFile = await selectDeploymentFile();
   const selectedTabs = await askTabs();
   const confirmed = await confirmSelection(selectedFile, selectedTabs);
 
