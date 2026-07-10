@@ -24,7 +24,7 @@ export class OfframpProcessor {
     private configService: ConfigService
   ) {}
 
-  @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 5 })
+  @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 2 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
     // const projectName = await this.appService.getSettings({
