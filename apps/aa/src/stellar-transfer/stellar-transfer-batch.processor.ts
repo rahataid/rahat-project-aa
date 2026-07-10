@@ -25,10 +25,14 @@ export class StellarTransferBatchProcessor {
   async transferToOfframpBatch(job: Job<StellarTransferBatchPayload>) {
     const { transfers } = job.data;
     this.logger.log(`[Job ${job.id}] Processing batch of ${transfers.length} transfer(s) to offramp`);
+    this.logger.debug(`[Job ${job.id}] Attempt ${job.attemptsMade + 1}, payload: ${JSON.stringify(transfers)}`);
 
     // Step 1 — Create or fetch a BeneficiaryRedeem record per transfer (mirrors transferToOfframp)
     const resolvedOrNull: ({ payload: FSPPayoutDetails; log: BeneficiaryRedeem } | null)[] = await Promise.all(
       transfers.map(async (payload) => {
+        this.logger.debug(
+          `[Job ${job.id}] ${payload.beneficiaryRedeemUUID ? `Fetching existing redeem ${payload.beneficiaryRedeemUUID}` : `Creating new redeem for wallet ${payload.beneficiaryWalletAddress}`}`
+        );
         const log = payload.beneficiaryRedeemUUID
           ? await this.beneficiaryService.getBeneficiaryRedeem(payload.beneficiaryRedeemUUID)
           : await this.beneficiaryService.createBeneficiaryRedeem({
@@ -58,6 +62,9 @@ export class StellarTransferBatchProcessor {
     const resolved = resolvedOrNull.filter(
       (r): r is { payload: FSPPayoutDetails; log: BeneficiaryRedeem } => r !== null
     );
+    this.logger.debug(
+      `[Job ${job.id}] Resolved ${resolved.length}/${transfers.length} redeem record(s) (${transfers.length - resolved.length} skipped)`
+    );
 
     // Step 2 — Persist resolved beneficiaryRedeemUUIDs back to the job so a Bull-level
     // retry of this same job doesn't re-create duplicate redeem rows.
@@ -82,9 +89,11 @@ export class StellarTransferBatchProcessor {
       this.logger.log(`[Job ${job.id}] Nothing to process — all items already completed`);
       return;
     }
+    this.logger.debug(`[Job ${job.id}] ${pending.length} item(s) pending processing`);
 
     // Step 4 — Bulk-fetch beneficiary wallet secrets in a single RPC call.
     const walletAddresses = pending.map((p) => p.payload.beneficiaryWalletAddress);
+    this.logger.debug(`[Job ${job.id}] Fetching wallet secrets for ${walletAddresses.length} wallet(s)`);
     const walletDetails: { address: string; privateKey: string }[] = await lastValueFrom(
       this.client.send(
         { cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET },
@@ -92,6 +101,9 @@ export class StellarTransferBatchProcessor {
       )
     );
     const secretByWallet = new Map(walletDetails.map((w) => [w.address, w.privateKey]));
+    this.logger.debug(
+      `[Job ${job.id}] Received ${walletDetails.length}/${walletAddresses.length} wallet secret(s)`
+    );
 
     // Step 5 — Pre-validate every item before building the transaction. A Stellar
     // transaction is atomic — one bad operation fails the whole batch — so any item
@@ -101,35 +113,29 @@ export class StellarTransferBatchProcessor {
       pending.map(async (item) => {
         const secret = secretByWallet.get(item.payload.beneficiaryWalletAddress);
         if (!secret) {
-          await this.updateBeneficiaryRedeemAsFailed(
-            item.log.uuid,
-            `Beneficiary wallet secret not found for ${item.payload.beneficiaryWalletAddress}`,
-            item.attemptsMade,
-            item.log.info
-          );
+          const message = `Beneficiary wallet secret not found for ${item.payload.beneficiaryWalletAddress}`;
+          this.logger.warn(`[Job ${job.id}] [Redeem ${item.log.uuid}] ${message}`);
+          await this.updateBeneficiaryRedeemAsFailed(item.log.uuid, message, item.attemptsMade, item.log.info);
           return;
         }
 
         const balanceStr = await this.stellarClient.getBalance(item.payload.beneficiaryWalletAddress);
         const balance = Math.floor(parseFloat(balanceStr ?? '0'));
+        this.logger.debug(
+          `[Job ${job.id}] [Redeem ${item.log.uuid}] Wallet ${item.payload.beneficiaryWalletAddress} balance: ${balance}`
+        );
 
         if (balance <= 0) {
-          await this.updateBeneficiaryRedeemAsFailed(
-            item.log.uuid,
-            `Beneficiary has ${balance} rahat balance with wallet ${item.payload.beneficiaryWalletAddress}`,
-            item.attemptsMade,
-            item.log.info
-          );
+          const message = `Beneficiary has ${balance} rahat balance with wallet ${item.payload.beneficiaryWalletAddress}`;
+          this.logger.warn(`[Job ${job.id}] [Redeem ${item.log.uuid}] ${message}`);
+          await this.updateBeneficiaryRedeemAsFailed(item.log.uuid, message, item.attemptsMade, item.log.info);
           return;
         }
 
         if (balance < item.payload.amount) {
-          await this.updateBeneficiaryRedeemAsFailed(
-            item.log.uuid,
-            `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${item.payload.amount}`,
-            item.attemptsMade,
-            item.log.info
-          );
+          const message = `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${item.payload.amount}`;
+          this.logger.warn(`[Job ${job.id}] [Redeem ${item.log.uuid}] ${message}`);
+          await this.updateBeneficiaryRedeemAsFailed(item.log.uuid, message, item.attemptsMade, item.log.info);
           return;
         }
 
@@ -145,6 +151,9 @@ export class StellarTransferBatchProcessor {
     // Step 6 — Submit ONE transaction covering every validated transfer.
     try {
       this.logger.log(`[Job ${job.id}] Submitting batch transfer for ${validated.length} beneficiary(ies)`);
+      this.logger.debug(
+        `[Job ${job.id}] Batch destinations: ${validated.map((item) => `${item.payload.beneficiaryWalletAddress}->${item.payload.offrampWalletAddress}:${item.payload.amount}`).join(', ')}`
+      );
 
       const result = await this.stellarClient.sendFromSponsoredBatch(
         validated.map((item) => ({
@@ -160,6 +169,9 @@ export class StellarTransferBatchProcessor {
       // its fiat-side offramp leg.
       await Promise.all(
         validated.map(async (item) => {
+          this.logger.debug(
+            `[Job ${job.id}] [Redeem ${item.log.uuid}] Marking completed and queuing offramp for wallet ${item.payload.beneficiaryWalletAddress}`
+          );
           await this.beneficiaryService.updateBeneficiaryRedeem(item.log.uuid, {
             status: 'TOKEN_TRANSACTION_COMPLETED',
             isCompleted: true,
@@ -198,6 +210,9 @@ export class StellarTransferBatchProcessor {
       return result;
     } catch (error: any) {
       this.logger.error(`[Job ${job.id}] Batch transfer failed: ${error.message}`, error.stack);
+      this.logger.debug(
+        `[Job ${job.id}] Marking ${validated.length} redeem(s) as failed: ${validated.map((item) => item.log.uuid).join(', ')}`
+      );
 
       await Promise.all(
         validated.map((item) =>
