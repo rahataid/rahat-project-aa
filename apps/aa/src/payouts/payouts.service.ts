@@ -20,6 +20,7 @@ import {
   IPaymentProvider,
   PayoutStats,
   ManualPayoutRowData,
+  ManualPayoutMatchBy,
   EnrichedManualPayoutRow,
   ManualPayoutVerificationResult,
   EntityConfig,
@@ -1543,16 +1544,17 @@ export class PayoutsService {
    */
   async verifyManualPayout(
     payoutUUID: string,
-    data?: Record<string, ManualPayoutRowData>
+    data?: Record<string, ManualPayoutRowData>,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): Promise<ManualPayoutVerificationResult> {
     this.validatePayoutUUID(payoutUUID);
 
     this.logger.log(
-      `Starting manual payout verification for payout UUID: '${payoutUUID}'`
+      `Starting manual payout verification for payout UUID: '${payoutUUID}' (matchBy: ${matchBy})`
     );
 
     const payout = await this.fetchPayoutWithBeneficiaries(payoutUUID);
-    const payoutRows = this.parseManualPayoutData(data);
+    const payoutRows = this.parseManualPayoutData(data, matchBy);
     const beneficiaries = await this.fetchBeneficiariesWithIncompleteRedeems(
       payoutUUID,
       payout
@@ -1566,7 +1568,8 @@ export class PayoutsService {
     const verificationResult = this.matchBeneficiariesWithPayoutRows(
       payoutRows,
       beneficiaries,
-      payoutUUID
+      payoutUUID,
+      matchBy
     );
 
     this.logVerificationStats(verificationResult, payoutRows.length);
@@ -1656,7 +1659,8 @@ export class PayoutsService {
    * Parses and validates manual payout data
    */
   private parseManualPayoutData(
-    data?: Record<string, ManualPayoutRowData>
+    data?: Record<string, ManualPayoutRowData>,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): ManualPayoutRowData[] {
     if (!data || typeof data !== 'object') {
       throw new RpcException(
@@ -1674,19 +1678,29 @@ export class PayoutsService {
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
-      if (!row['Bank Account Number']) {
-        throw new RpcException(
-          `Payout verification failed: Missing bank account number in row ${
-            index + 1
-          }`
-        );
-      }
-      if (!row['Bank Account Holder Name ']) {
-        throw new RpcException(
-          `Payout verification failed: Missing bank account holder name in row ${
-            index + 1
-          }`
-        );
+      if (matchBy === 'phoneNumber') {
+        if (!row['Phone Number']) {
+          throw new RpcException(
+            `Payout verification failed: Missing phone number in row ${
+              index + 1
+            }`
+          );
+        }
+      } else {
+        if (!row['Bank Account Number']) {
+          throw new RpcException(
+            `Payout verification failed: Missing bank account number in row ${
+              index + 1
+            }`
+          );
+        }
+        if (!row['Bank Account Holder Name ']) {
+          throw new RpcException(
+            `Payout verification failed: Missing bank account holder name in row ${
+              index + 1
+            }`
+          );
+        }
       }
     });
 
@@ -1709,12 +1723,14 @@ export class PayoutsService {
   private matchBeneficiariesWithPayoutRows(
     payoutRows: ManualPayoutRowData[],
     beneficiaries: BeneficiaryPayoutDetails[],
-    payoutUUID: string
+    payoutUUID: string,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): ManualPayoutVerificationResult {
     const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
-      const matchedBeneficiary = beneficiaries.find(
-        (beneficiary) =>
-          beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+      const matchedBeneficiary = beneficiaries.find((beneficiary) =>
+        matchBy === 'phoneNumber'
+          ? beneficiary.phoneNumber === row['Phone Number']
+          : beneficiary.bankDetails.accountNumber === row['Bank Account Number']
       );
 
       return {
@@ -1922,7 +1938,11 @@ export class PayoutsService {
               status: true,
               beneficiaryGroup: {
                 select: {
-                  _count: { select: { beneficiaries: true } },
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
+                  },
                 },
               },
             },
