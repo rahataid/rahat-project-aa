@@ -14,14 +14,15 @@ export class StellarTransferService {
   };
 
   constructor(
-    @InjectQueue(BQUEUE.STELLAR_TRANSFER) private readonly queue: Queue
+    @InjectQueue(BQUEUE.STELLAR_TRANSFER) private readonly queue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_TRANSFER_BATCH) private readonly batchQueue: Queue
   ) {}
 
   async addBulkToTokenTransferQueue(payloads: FSPPayoutDetails[]): Promise<Job[]> {
     const batches = chunkArray(payloads, STELLAR_TRANSFER_BATCH_SIZE);
     return Promise.all(
       batches.map((transfers) =>
-        this.queue.add(
+        this.batchQueue.add(
           JOBS.STELLAR.TRANSFER_TO_OFFRAMP_BATCH,
           { transfers } as StellarTransferBatchPayload,
           this.queueOpts
