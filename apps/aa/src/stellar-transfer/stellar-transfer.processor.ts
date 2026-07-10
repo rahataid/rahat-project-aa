@@ -21,7 +21,7 @@ export class StellarTransferProcessor {
     @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue
   ) {}
 
-  @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 1 })
+  @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 3 })
   async transferToOfframp(job: Job<FSPPayoutDetails>) {
     this.logger.log(`[Job ${job.id}] Processing transfer to offramp for wallet ${job.data.beneficiaryWalletAddress}`);
 
