@@ -4,7 +4,7 @@ import { Job } from 'bull';
 import { BQUEUE, EVENTS, JOBS } from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
-import { getBankId } from '../utils/bank';
+import { RpcException } from '@nestjs/microservices';
 import { BeneficiaryRedeem } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { CipsResponseData } from '../payouts/dto/types';
@@ -96,16 +96,46 @@ export class OfframpProcessor {
         )}`
       );
 
+      const isVpa = fspOfframpDetails.offrampType.toLocaleLowerCase() === 'vpa';
+
+      let beneficiaryBankAccount = null;
+      if (!isVpa) {
+        beneficiaryBankAccount =
+          await this.beneficiaryService.getBeneficiaryBankAccount({
+            walletAddress: fspOfframpDetails.beneficiaryWalletAddress,
+          });
+
+        if (!beneficiaryBankAccount) {
+          throw new RpcException('Beneficiary bank account not found.');
+        }
+        if (!beneficiaryBankAccount.isValid) {
+          throw new RpcException(
+            `Bank account validation failed: ${
+              beneficiaryBankAccount.info || 'Invalid bank account.'
+            }`
+          );
+        }
+
+        this.logger.log(
+          `Fetched beneficiary bank account: ${JSON.stringify(
+            beneficiaryBankAccount
+          )}`
+        );
+      }
+
       const offrampRequest = await this.generateOfframpPayload(
         fspOfframpDetails.offrampType,
-        fspOfframpDetails
+        fspOfframpDetails,
+        beneficiaryBankAccount
       );
 
       this.logger.log(
         `Offramp request payload: ${JSON.stringify(offrampRequest)}`
       );
 
-      const result = await this.offrampService.instantOfframp(offrampRequest);
+      const result = isVpa
+        ? await this.offrampService.instantOfframp(offrampRequest)
+        : await this.offrampService.instantOfframpV2(offrampRequest);
 
       if (result.offrampRequest.status === 'SUCCESS') {
         // update the transaction record
@@ -171,20 +201,21 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      // if (job.attemptsMade === job.opts.attempts) {
-      // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-      //   payload: {
-      //     title: `Fiat Transaction Failed`,
-      //     description: `Fiat Transaction has been failed in ${
-      //       projectName.value['project_name'] || process.env.PROJECT_ID
-      //     }`,
-      //     group: 'Payout',
-      //     notify: true,
-      //     projectId: process.env.PROJECT_ID,
-      //   },
-      // });
-      // }
-      throw error(`Failed to process instant offramp: ${error.message}`);
+      if (job.attemptsMade === job.opts.attempts) {
+        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
+        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        //   payload: {
+        //     title: `Fiat Transaction Failed`,
+        //     description: `Fiat Transaction has been failed in ${
+        //       projectName.value['project_name'] || process.env.PROJECT_ID
+        //     }`,
+        //     group: 'Payout',
+        //     notify: true,
+        //     projectId: process.env.PROJECT_ID,
+        //   },
+        // });
+      }
+      throw error;
     }
   }
 
@@ -207,7 +238,13 @@ export class OfframpProcessor {
 
   private async generateOfframpPayload(
     offrampType: string,
-    fspOfframpDetails: FSPOfframpDetails
+    fspOfframpDetails: FSPOfframpDetails,
+    beneficiaryBankAccount?: {
+      bankId: string;
+      accountNumber: string;
+      accountName: string;
+      branchId: string;
+    }
   ): Promise<any> {
     this.logger.log(
       `Generating offramp payload for ${offrampType} with details: ${JSON.stringify(
@@ -222,11 +259,10 @@ export class OfframpProcessor {
       senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
       xref: fspOfframpDetails.payoutUUID,
       paymentDetails: {
-        creditorAgent: getBankId(
-          fspOfframpDetails.beneficiaryBankDetails.bankName
-        ),
-        creditorAccount: fspOfframpDetails.beneficiaryBankDetails.accountNumber,
-        creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
+        creditorAgent: beneficiaryBankAccount?.bankId,
+        creditorAccount: beneficiaryBankAccount?.accountNumber,
+        creditorName: beneficiaryBankAccount?.accountName,
+        creditorBranch: beneficiaryBankAccount?.branchId,
       },
     };
 

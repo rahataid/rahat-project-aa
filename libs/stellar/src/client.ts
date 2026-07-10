@@ -2,7 +2,7 @@ import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
 import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
 import { createSponsoredAccount, createSponsoredAccountsBatch } from './operations/account';
-import { sendFromSponsored, sendToSponsored } from './operations/payment';
+import { sendFromSponsored, sendPayment, sendToSponsored } from './operations/payment';
 import {
   CreateSponsoredAccountResult,
   CreateSponsoredAccountsBatchResult,
@@ -72,6 +72,25 @@ export class StellarClient {
     amount: string
   ): Promise<PaymentResult> {
     return sendFromSponsored(this.opContext, sponsoredSecret, destinationPublicKey, amount);
+  }
+
+  /**
+   * A plain, non-sponsored send: the sender pays its own fee and is the
+   * sole signer. Works for any asset, including native XLM (Asset.native()).
+   */
+  async sendPayment(
+    senderSecret: string,
+    destinationPublicKey: string,
+    asset: Asset,
+    amount: string
+  ): Promise<PaymentResult> {
+    return sendPayment(
+      { server: this.server, networkPassphrase: this.networkPassphrase },
+      senderSecret,
+      destinationPublicKey,
+      asset,
+      amount
+    );
   }
 
   async accountExists(publicKey: string): Promise<boolean> {

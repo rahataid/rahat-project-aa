@@ -56,11 +56,46 @@ export class OtpService {
     }
   }
 
+  async sendEmail(email: string, subject: string, message: string, defaultOtp?: string | null) {
+    const otp = defaultOtp || (await this.getOtp());
+    this.logger.log(`Generated OTP ${otp} for email ${email}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(`[DEV] OTP for ${email}: ${otp}`);
+      return { otp };
+    }
+
+    try {
+      const { data } = await this.commsClient.transport.list();
+      const appId = this.commsClient.apiClient.client.defaults.headers['app-id'];
+      const transportId = data.find((item) => item.name === 'EMAIL')?.cuid;
+
+      if (!transportId || !appId) {
+        throw new RpcException('EMAIL transport not configured');
+      }
+
+      await this.commsClient.broadcast.create({
+        transport: transportId,
+        addresses: [email],
+        message: { content: `${message} ${otp}`, meta: { subject } },
+        maxAttempts: 1,
+        trigger: 'DIRECT' as any,
+        options: {},
+      });
+
+      this.logger.log(`OTP sent to email: ${email}`);
+      return { otp };
+    } catch (error: any) {
+      this.logger.error(`Error sending email: ${error.message}`);
+      throw new RpcException('Failed to send email');
+    }
+  }
+
   async getOtp() {
     if (process.env.NODE_ENV !== 'production') {
-      return '1234';
+      return '123456';
     }
-    return Math.floor(1000 + Math.random() * 9000).toString();
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   private async loadSmsModule(provider) {
