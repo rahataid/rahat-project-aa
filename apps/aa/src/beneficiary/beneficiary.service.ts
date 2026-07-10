@@ -629,17 +629,17 @@ export class BeneficiaryService {
       `Reserving ${totalTokensReserved} tokens for group: ${beneficiaryGroupId}`
     );
 
-    const isAlreadyReserved =
-      await this.prisma.beneficiaryGroupTokens.findUnique({
-        where: { groupId: beneficiaryGroupId },
-      });
+    // const isAlreadyReserved =
+    //   await this.prisma.beneficiaryGroupTokens.findUnique({
+    //     where: { groupId: beneficiaryGroupId },
+    //   });
 
-    if (isAlreadyReserved) {
-      this.logger.warn(
-        `Token already reserved for group: ${beneficiaryGroupId}`
-      );
-      throw new RpcException('Token already reserved.');
-    }
+    // if (isAlreadyReserved) {
+    //   this.logger.warn(
+    //     `Token already reserved for group: ${beneficiaryGroupId}`
+    //   );
+    //   throw new RpcException('Token already reserved.');
+    // }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
