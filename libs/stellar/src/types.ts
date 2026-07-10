@@ -35,6 +35,18 @@ export interface CreateSponsoredAccountsBatchResult extends TransactionResult {
 
 export type PaymentResult = TransactionResult;
 
+/** One leg of a batched sponsored payment: the beneficiary's own secret authorizes their transfer. */
+export interface SponsoredBatchTransferItem {
+  secret: string;
+  destination: string;
+  amount: string;
+}
+
+export interface SendFromSponsoredBatchResult extends TransactionResult {
+  /** All items share the single transaction hash above. */
+  items: { sourcePublicKey: string; destination: string; amount: string }[];
+}
+
 /** Context for sponsor-mediated payment operations (sendToSponsored, sendFromSponsored). */
 export interface PaymentOpContext {
   server: Horizon.Server;

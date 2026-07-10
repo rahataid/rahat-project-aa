@@ -5,6 +5,8 @@ export const NAMESPACE = 'rahat.projects';
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
+// Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
+export const STELLAR_TRANSFER_BATCH_SIZE = 12;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -117,6 +119,7 @@ export const JOBS = {
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
     TRANSFER_TO_OFFRAMP: `aa.jobs.stellar.transferToOfframp`,
+    TRANSFER_TO_OFFRAMP_BATCH: `aa.jobs.stellar.transferToOfframpBatch`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',

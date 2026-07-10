@@ -1,4 +1,4 @@
-import { Keypair } from '@stellar/stellar-sdk';
+import { Account, Keypair } from '@stellar/stellar-sdk';
 import { StellarClient } from './client';
 
 describe('StellarClient', () => {
@@ -38,5 +38,29 @@ describe('StellarClient', () => {
     });
 
     expect(client.horizonUrl).toBe('https://horizon.stellar.org');
+  });
+
+  it('delegates sendFromSponsoredBatch to the batched payment operation', async () => {
+    const client = new StellarClient({
+      network: 'testnet',
+      sponsorSecret: sponsorKeypair.secret(),
+      assetCode,
+      assetIssuer,
+    });
+
+    const beneficiary = Keypair.random();
+    const account = new Account(sponsorKeypair.publicKey(), '1');
+    client.server.loadAccount = jest.fn().mockResolvedValue(account);
+    client.server.submitTransaction = jest
+      .fn()
+      .mockResolvedValue({ hash: 'batch123', successful: true, ledger: 7 });
+
+    const result = await client.sendFromSponsoredBatch([
+      { secret: beneficiary.secret(), destination: Keypair.random().publicKey(), amount: '5' },
+    ]);
+
+    expect(result.hash).toBe('batch123');
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].sourcePublicKey).toBe(beneficiary.publicKey());
   });
 });

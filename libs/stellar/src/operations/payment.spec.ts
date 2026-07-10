@@ -1,6 +1,6 @@
-import { Account, Asset, Horizon, Keypair, Networks } from '@stellar/stellar-sdk';
-import { sendPayment } from './payment';
-import { SendPaymentContext } from '../types';
+import { Account, Asset, BASE_FEE, Horizon, Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
+import { MAX_TRANSFERS_PER_BATCH, sendFromSponsoredBatch, sendPayment } from './payment';
+import { PaymentOpContext, SendPaymentContext } from '../types';
 
 describe('sendPayment', () => {
   const senderKeypair = Keypair.random();
@@ -102,5 +102,74 @@ describe('sendPayment', () => {
       message: expect.stringContaining('Stellar transaction submission failed'),
       resultCodes: { transaction: 'tx_failed', operations: ['op_bad_auth'] },
     });
+  });
+});
+
+describe('sendFromSponsoredBatch', () => {
+  const sponsorKeypair = Keypair.random();
+  const asset = new Asset('RAHAT', 'GAVSXFHUI5YWS3YI2RFQV7SB3KKVFERKWWY2QSVJNDTROKQZRWEPXLWG');
+
+  function makeCtx(server: Partial<Horizon.Server>): PaymentOpContext {
+    return {
+      server: server as unknown as Horizon.Server,
+      networkPassphrase: Networks.TESTNET,
+      sponsorKeypair,
+      asset,
+    };
+  }
+
+  it('rejects an empty items array', async () => {
+    await expect(sendFromSponsoredBatch(makeCtx({}), [])).rejects.toThrow(RangeError);
+  });
+
+  it('rejects an items array exceeding MAX_TRANSFERS_PER_BATCH', async () => {
+    const items = Array.from({ length: MAX_TRANSFERS_PER_BATCH + 1 }, () => ({
+      secret: Keypair.random().secret(),
+      destination: Keypair.random().publicKey(),
+      amount: '1',
+    }));
+    await expect(sendFromSponsoredBatch(makeCtx({}), items)).rejects.toThrow(RangeError);
+  });
+
+  it('combines every item into a single sponsor-signed transaction', async () => {
+    const beneficiaries = Array.from({ length: 3 }, () => Keypair.random());
+    const items = beneficiaries.map((kp, idx) => ({
+      secret: kp.secret(),
+      destination: Keypair.random().publicKey(),
+      amount: `${idx + 1}`,
+    }));
+
+    const account = new Account(sponsorKeypair.publicKey(), '1');
+    let submittedTx: Transaction | undefined;
+    const submitTransaction = jest.fn().mockImplementation(async (tx: Transaction) => {
+      submittedTx = tx;
+      return { hash: 'batch123', successful: true, ledger: 7 };
+    });
+    const ctx = makeCtx({
+      loadAccount: jest.fn().mockResolvedValue(account),
+      submitTransaction,
+    });
+
+    const result = await sendFromSponsoredBatch(ctx, items);
+
+    expect(result.hash).toBe('batch123');
+    expect(result.items).toEqual(
+      beneficiaries.map((kp, idx) => ({
+        sourcePublicKey: kp.publicKey(),
+        destination: items[idx].destination,
+        amount: items[idx].amount,
+      }))
+    );
+
+    expect(submitTransaction).toHaveBeenCalledTimes(1);
+    expect(submittedTx?.operations).toHaveLength(items.length);
+    submittedTx?.operations.forEach((op, idx) => {
+      expect(op.type).toBe('payment');
+      expect(op.source).toBe(beneficiaries[idx].publicKey());
+    });
+    expect(submittedTx?.fee).toBe((Number(BASE_FEE) * items.length).toString());
+    // (fee param is per-operation; the SDK multiplies it by operation count internally)
+    // sponsor signature + one per beneficiary
+    expect(submittedTx?.signatures).toHaveLength(items.length + 1);
   });
 });

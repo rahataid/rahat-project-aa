@@ -1,5 +1,12 @@
 import { Asset, BASE_FEE, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
-import { PaymentOpContext, PaymentResult, SendPaymentContext, StellarOperationError } from '../types';
+import {
+  PaymentOpContext,
+  PaymentResult,
+  SendFromSponsoredBatchResult,
+  SendPaymentContext,
+  SponsoredBatchTransferItem,
+  StellarOperationError,
+} from '../types';
 import { describePaymentError } from '../utils/errors';
 import { submitTransaction } from './submit';
 
@@ -69,6 +76,72 @@ export async function sendFromSponsored(
   const result = await submitTransaction(ctx.server, tx);
 
   return { hash: result.hash, successful: result.successful, ledger: result.ledger };
+}
+
+/**
+ * Stellar caps a transaction at 100 operations and 20 signatures. A batched
+ * payment needs 1 operation and 1 signature per beneficiary (no reserve is
+ * touched by moving an already-held balance, so unlike sendFromSponsored no
+ * begin/endSponsoringFutureReserves wrapper is needed here), plus the
+ * sponsor's signature - so signatures are the binding constraint well before
+ * operations are. 12 keeps a wide margin under that cap.
+ */
+export const MAX_TRANSFERS_PER_BATCH = 12;
+
+/**
+ * Combines up to MAX_TRANSFERS_PER_BATCH sponsored-account payments into a
+ * single sponsor-signed transaction, consuming exactly one sponsor sequence
+ * number for the whole batch. Each beneficiary still signs their own payment
+ * operation. All returned items share the one transaction hash.
+ */
+export async function sendFromSponsoredBatch(
+  ctx: PaymentOpContext,
+  items: SponsoredBatchTransferItem[]
+): Promise<SendFromSponsoredBatchResult> {
+  if (items.length < 1 || items.length > MAX_TRANSFERS_PER_BATCH) {
+    throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${items.length})`);
+  }
+
+  const keypairs = items.map((item) => Keypair.fromSecret(item.secret));
+  const sponsorAccount = await ctx.server.loadAccount(ctx.sponsorKeypair.publicKey());
+
+  // TransactionBuilder's `fee` is the max fee per operation - it multiplies
+  // this by the operation count itself, so pass BASE_FEE unscaled.
+  let builder = new TransactionBuilder(sponsorAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: ctx.networkPassphrase,
+  });
+
+  items.forEach((item, idx) => {
+    builder = builder.addOperation(
+      Operation.payment({
+        source: keypairs[idx].publicKey(),
+        destination: item.destination,
+        asset: ctx.asset,
+        amount: item.amount,
+      })
+    );
+  });
+
+  const tx = builder.setTimeout(100).build();
+
+  tx.sign(ctx.sponsorKeypair);
+  for (const kp of keypairs) {
+    tx.sign(kp);
+  }
+
+  const result = await submitTransaction(ctx.server, tx);
+
+  return {
+    hash: result.hash,
+    successful: result.successful,
+    ledger: result.ledger,
+    items: items.map((item, idx) => ({
+      sourcePublicKey: keypairs[idx].publicKey(),
+      destination: item.destination,
+      amount: item.amount,
+    })),
+  };
 }
 
 /**
