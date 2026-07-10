@@ -12,6 +12,7 @@ import { GetBenfGroupDto } from './dto/get-group.dto';
 import { GroupPurpose } from '@prisma/client';
 import { of } from 'rxjs';
 import { PayoutsService } from '../payouts/payouts.service';
+import { QrPdfService } from './qr-pdf.service';
 
 describe('BeneficiaryService', () => {
   let service: BeneficiaryService;
@@ -54,6 +55,7 @@ describe('BeneficiaryService', () => {
     beneficiaryRedeem: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -91,6 +93,11 @@ describe('BeneficiaryService', () => {
     create: jest.fn(),
   };
 
+  const mockQrPdfService = {
+    initiateQrPdf: jest.fn(),
+    getJobStatus: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -122,6 +129,10 @@ describe('BeneficiaryService', () => {
         {
           provide: PayoutsService,
           useValue: mockPayoutsService,
+        },
+        {
+          provide: QrPdfService,
+          useValue: mockQrPdfService,
         },
       ],
     }).compile();
@@ -1250,7 +1261,7 @@ describe('BeneficiaryService', () => {
       ).toHaveBeenCalledTimes(2);
     });
 
-    it('should return error when some beneficiaries already have tokens assigned', async () => {
+    it('should return error with tokenAssignedBenfWallet when token is NOT_DISBURSED', async () => {
       const mockGroupData = {
         name: 'Test Group',
         groupedBeneficiaries: [
@@ -1261,9 +1272,11 @@ describe('BeneficiaryService', () => {
 
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
 
-      // First beneficiary has a token-assigned group, second does not
+      // benf-1 has NOT_DISBURSED token, benf-2 has no token
       mockPrismaService.beneficiaryGroups.findMany
-        .mockResolvedValueOnce([{ uuid: 'other-group', name: 'Other Group' }])
+        .mockResolvedValueOnce([
+          { uuid: 'other-group', tokensReserved: { status: 'NOT_DISBURSED' } },
+        ])
         .mockResolvedValueOnce([]);
 
       const result = await service.checkIsTokenAlreadyAssigned(groupId);
@@ -1273,12 +1286,13 @@ describe('BeneficiaryService', () => {
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
-        wallets: ['WALLET-1'],
+        tokenAssignedBenfWallet: ['WALLET-1'],
+        foundAssignedBenf: [],
         groupName: 'Test Group',
       });
     });
 
-    it('should return error listing all wallets when all beneficiaries have tokens assigned', async () => {
+    it('should return error listing all wallets when all beneficiaries have NOT_DISBURSED tokens', async () => {
       const mockGroupData = {
         name: 'Test Group',
         groupedBeneficiaries: [
@@ -1289,9 +1303,8 @@ describe('BeneficiaryService', () => {
 
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
 
-      // Both beneficiaries have token-assigned groups
       mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
-        { uuid: 'other-group' },
+        { uuid: 'other-group', tokensReserved: { status: 'NOT_DISBURSED' } },
       ]);
 
       const result = await service.checkIsTokenAlreadyAssigned(groupId);
@@ -1301,7 +1314,8 @@ describe('BeneficiaryService', () => {
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
-        wallets: ['WALLET-1', 'WALLET-2'],
+        tokenAssignedBenfWallet: ['WALLET-1', 'WALLET-2'],
+        foundAssignedBenf: [],
         groupName: 'Test Group',
       });
       expect(
@@ -1309,7 +1323,91 @@ describe('BeneficiaryService', () => {
       ).toHaveBeenCalledTimes(2);
     });
 
-    it('should query findMany with correct filter for each beneficiary', async () => {
+    it('should return success when token is DISBURSED and redeem is COMPLETED', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
+        { uuid: 'other-group', tokensReserved: { status: 'DISBURSED' } },
+      ]);
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
+        uuid: 'redeem-1',
+        status: 'COMPLETED',
+      });
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: true,
+        status: 'success',
+        message: 'No tokens have been assigned yet. Tokens can be assigned.',
+        groupName: 'Test Group',
+      });
+    });
+
+    it('should return success when token is DISBURSED and redeem is FIAT_TRANSACTION_COMPLETED', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
+        { uuid: 'other-group', tokensReserved: { status: 'DISBURSED' } },
+      ]);
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
+        uuid: 'redeem-1',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      });
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: true,
+        status: 'success',
+        message: 'No tokens have been assigned yet. Tokens can be assigned.',
+        groupName: 'Test Group',
+      });
+    });
+
+    it('should return error with foundAssignedBenf when token is DISBURSED but redeem is not completed', async () => {
+      const mockGroupData = {
+        name: 'Test Group',
+        groupedBeneficiaries: [
+          { Beneficiary: { uuid: 'benf-1', walletAddress: 'WALLET-1' } },
+        ],
+      };
+
+      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupData);
+
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
+        { uuid: 'other-group', tokensReserved: { status: 'DISBURSED' } },
+      ]);
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(null);
+
+      const result = await service.checkIsTokenAlreadyAssigned(groupId);
+
+      expect(result).toEqual({
+        isAssignable: false,
+        status: 'error',
+        message:
+          'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        tokenAssignedBenfWallet: [],
+        foundAssignedBenf: ['WALLET-1'],
+        groupName: 'Test Group',
+      });
+    });
+
+    it('should query findMany with correct filter including tokensReserved for each beneficiary', async () => {
       const mockGroupData = {
         name: 'Test Group',
         groupedBeneficiaries: [
@@ -1330,6 +1428,7 @@ describe('BeneficiaryService', () => {
               some: { beneficiaryId: { equals: 'benf-uuid-1' } },
             },
           },
+          include: { tokensReserved: true },
         }
       );
     });
@@ -1535,8 +1634,10 @@ describe('BeneficiaryService', () => {
       );
       jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroup);
 
-      // Simulate beneficiary already in a group with tokens reserved
-      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([{}]);
+      // Simulate beneficiary already in a group with NOT_DISBURSED token
+      mockPrismaService.beneficiaryGroups.findMany.mockResolvedValue([
+        { uuid: 'other-group', tokensReserved: { status: 'NOT_DISBURSED' } },
+      ]);
 
       // $transaction should NOT be called — we return early before reaching it
       const result = await service.reserveTokenToGroup(payload);
@@ -1544,7 +1645,8 @@ describe('BeneficiaryService', () => {
       expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
       expect(result.status).toBe('error');
       expect((result as any).isAssignable).toBe(false);
-      expect((result as any).wallets).toEqual(['WALLET-1']);
+      expect((result as any).tokenAssignedBenfWallet).toEqual(['WALLET-1']);
+      expect((result as any).foundAssignedBenf).toEqual([]);
       expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });

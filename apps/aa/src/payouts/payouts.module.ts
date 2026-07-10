@@ -10,14 +10,14 @@ import { HttpModule} from '@nestjs/axios';
 import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { StellarModule } from '../stellar/stellar.module';
+import { StellarTransferModule } from '../stellar-transfer/stellar-transfer.module';
 
 @Module({
   imports: [
     VendorsModule,
     HttpModule,
     forwardRef(() => BeneficiaryModule),
-    StellarModule,
+    StellarTransferModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',
@@ -41,10 +41,10 @@ import { StellarModule } from '../stellar/stellar.module';
       },
     ]),
     BullModule.registerQueue({
-      name: BQUEUE.STELLAR,
+      name: BQUEUE.OFFRAMP,
     }),
     BullModule.registerQueue({
-      name: BQUEUE.OFFRAMP,
+      name: BQUEUE.MANUAL_PAYOUT,
     }),
     BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,

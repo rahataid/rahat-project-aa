@@ -3,18 +3,14 @@ import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, EVENTS, JOBS } from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
-import { FSPManualPayoutDetails, FSPOfframpDetails } from './types';
-import { getBankId } from '../utils/bank';
-import { BeneficiaryRedeem, Prisma } from '@prisma/client';
+import { FSPOfframpDetails } from './types';
+import { RpcException } from '@nestjs/microservices';
+import { BeneficiaryRedeem } from '@prisma/client';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import {
-  CipsResponseData,
-  EnrichedManualPayoutRow,
-} from '../payouts/dto/types';
+import { CipsResponseData } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
-import { PayoutsService } from '../payouts/payouts.service';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -23,7 +19,6 @@ export class OfframpProcessor {
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly payoutService: PayoutsService,
     private readonly eventEmitter: EventEmitter2,
     private readonly appService: AppService,
     private configService: ConfigService
@@ -32,10 +27,10 @@ export class OfframpProcessor {
   @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 1 })
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
-    const projectName = await this.appService.getSettings({
-      name: 'PROJECTINFO',
-    });
-    const projectId = this.configService.get('PROJECT_ID');
+    // const projectName = await this.appService.getSettings({
+    //   name: 'PROJECTINFO',
+    // });
+    // const projectId = this.configService.get('PROJECT_ID');
 
     this.logger.log(
       `Processing offramp request of type ${fspOfframpDetails.offrampType} for amount: ${fspOfframpDetails.amount}, beneficiary wallet address: ${fspOfframpDetails.beneficiaryWalletAddress}`
@@ -101,16 +96,46 @@ export class OfframpProcessor {
         )}`
       );
 
+      const isVpa = fspOfframpDetails.offrampType.toLocaleLowerCase() === 'vpa';
+
+      let beneficiaryBankAccount = null;
+      if (!isVpa) {
+        beneficiaryBankAccount =
+          await this.beneficiaryService.getBeneficiaryBankAccount({
+            walletAddress: fspOfframpDetails.beneficiaryWalletAddress,
+          });
+
+        if (!beneficiaryBankAccount) {
+          throw new RpcException('Beneficiary bank account not found.');
+        }
+        if (!beneficiaryBankAccount.isValid) {
+          throw new RpcException(
+            `Bank account validation failed: ${
+              beneficiaryBankAccount.info || 'Invalid bank account.'
+            }`
+          );
+        }
+
+        this.logger.log(
+          `Fetched beneficiary bank account: ${JSON.stringify(
+            beneficiaryBankAccount
+          )}`
+        );
+      }
+
       const offrampRequest = await this.generateOfframpPayload(
         fspOfframpDetails.offrampType,
-        fspOfframpDetails
+        fspOfframpDetails,
+        beneficiaryBankAccount
       );
 
       this.logger.log(
         `Offramp request payload: ${JSON.stringify(offrampRequest)}`
       );
 
-      const result = await this.offrampService.instantOfframp(offrampRequest);
+      const result = isVpa
+        ? await this.offrampService.instantOfframp(offrampRequest)
+        : await this.offrampService.instantOfframpV2(offrampRequest);
 
       if (result.offrampRequest.status === 'SUCCESS') {
         // update the transaction record
@@ -122,21 +147,28 @@ export class OfframpProcessor {
           numberOfAttempts: attemptsMade,
           cipsResponseData: result,
         });
-        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-          payload: {
-            title: `Fiat Transaction Completed`,
-            description: `Fiat Transaction has been completed in ${
-              projectName.value['project_name'] || process.env.PROJECT_ID
-            }`,
-            group: 'Payout',
-            projectId: process.env.PROJECT_ID,
-            notify: true,
-          },
-        });
+        this.logger.log(
+          `Offramp request successful for beneficiary redeem UUID: ${log.uuid}, transaction hash: ${fspOfframpDetails.transactionHash}`
+        );
+        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        //   payload: {
+        //     title: `Fiat Transaction Completed`,
+        //     description: `Fiat Transaction has been completed in ${
+        //       projectName.value['project_name'] || process.env.PROJECT_ID
+        //     }`,
+        //     group: 'Payout',
+        //     projectId: process.env.PROJECT_ID,
+        //     notify: true,
+        //   },
+        // });
         return result;
       }
 
       console.log('Offramp request failed from cips', result);
+
+      this.logger.log(
+        `Offramp request failed for beneficiary redeem`
+      );
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
@@ -145,17 +177,17 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-        payload: {
-          title: `Fiat Transaction Failed`,
-          description: `Fiat Transaction has been failed in ${
-            projectName.value['project_name'] || projectId
-          }`,
-          group: 'Payout',
-          projectId: projectId,
-          notify: true,
-        },
-      });
+      // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+      //   payload: {
+      //     title: `Fiat Transaction Failed`,
+      //     description: `Fiat Transaction has been failed in ${
+      //       projectName.value['project_name'] || projectId
+      //     }`,
+      //     group: 'Payout',
+      //     projectId: projectId,
+      //     notify: true,
+      //   },
+      // });
       return result;
     } catch (error) {
       this.logger.error(
@@ -170,94 +202,20 @@ export class OfframpProcessor {
         log.info
       );
       if (job.attemptsMade === job.opts.attempts) {
-        this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-          payload: {
-            title: `Fiat Transaction Failed`,
-            description: `Fiat Transaction has been failed in ${
-              projectName.value['project_name'] || process.env.PROJECT_ID
-            }`,
-            group: 'Payout',
-            notify: true,
-            projectId: process.env.PROJECT_ID,
-          },
-        });
+        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
+        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
+        //   payload: {
+        //     title: `Fiat Transaction Failed`,
+        //     description: `Fiat Transaction has been failed in ${
+        //       projectName.value['project_name'] || process.env.PROJECT_ID
+        //     }`,
+        //     group: 'Payout',
+        //     notify: true,
+        //     projectId: process.env.PROJECT_ID,
+        //   },
+        // });
       }
-      throw error(`Failed to process instant offramp: ${error.message}`);
-    }
-  }
-
-  @Process({ name: JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT, concurrency: 1 })
-  async sendInstantManualPayoutRequest(job: Job<{ payoutUUID: string }>) {
-    const { payoutUUID } = job.data;
-
-    const fspManualPayoutDetailsArray =
-      await this.payoutService.getFSPManualPayoutDetails(payoutUUID);
-
-    this.logger.log(
-      `Processing instant manual payout request for ${fspManualPayoutDetailsArray.length} beneficiaries`
-    );
-
-    try {
-      const payload: Prisma.BeneficiaryRedeemCreateManyInput[] =
-        fspManualPayoutDetailsArray.map((fspManualPayoutDetails) => ({
-          status: 'FIAT_TRANSACTION_INITIATED',
-          transactionType: 'FIAT_TRANSFER',
-          beneficiaryWalletAddress:
-            fspManualPayoutDetails.beneficiaryWalletAddress,
-          fspId: fspManualPayoutDetails.payoutProcessorId,
-          amount: +fspManualPayoutDetails.amount,
-          payoutId: fspManualPayoutDetails.payoutUUID,
-          info: {
-            paymentProviderType: 'manual_bank_transfer',
-            beneficiaryWalletAddress:
-              fspManualPayoutDetails.beneficiaryWalletAddress,
-            beneficiaryBankDetails:
-              fspManualPayoutDetails.beneficiaryBankDetails,
-            beneficiaryPhoneNumber:
-              fspManualPayoutDetails.beneficiaryPhoneNumber,
-            numberOfAttempts: 1,
-            message:
-              'Manual bank transfer initiated - requires manual processing',
-          },
-        }));
-
-      await this.beneficiaryService.createBeneficiaryRedeemBulk(payload);
-
-      this.logger.log(
-        `Successfully processed ${fspManualPayoutDetailsArray.length} manual payout requests`
-      );
-
-      return {
-        success: true,
-        message: `Processed ${fspManualPayoutDetailsArray.length} manual payout requests`,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Instant manual payout failed: ${error.message}`,
-        error.stack
-      );
-
-      throw new Error(
-        `Failed to process instant manual payout: ${error.message}`
-      );
-    }
-  }
-
-  @Process({ name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT, concurrency: 1 })
-  async verifyManualPayout(job: Job<EnrichedManualPayoutRow>) {
-    const data = job.data;
-    console.log('data in verify manual payout', data);
-
-    try {
-      // match tranfer to benf
-      // mark benf as token redeemed and burn the token
-      return data;
-    } catch (error) {
-      this.logger.error(
-        `Failed to verify manual payout: ${error.message}`,
-        error.stack
-      );
-      throw new Error(`Failed to verify manual payout: ${error.message}`);
+      throw error;
     }
   }
 
@@ -280,7 +238,13 @@ export class OfframpProcessor {
 
   private async generateOfframpPayload(
     offrampType: string,
-    fspOfframpDetails: FSPOfframpDetails
+    fspOfframpDetails: FSPOfframpDetails,
+    beneficiaryBankAccount?: {
+      bankId: string;
+      accountNumber: string;
+      accountName: string;
+      branchId: string;
+    }
   ): Promise<any> {
     this.logger.log(
       `Generating offramp payload for ${offrampType} with details: ${JSON.stringify(
@@ -295,11 +259,10 @@ export class OfframpProcessor {
       senderAddress: fspOfframpDetails.beneficiaryWalletAddress,
       xref: fspOfframpDetails.payoutUUID,
       paymentDetails: {
-        creditorAgent: getBankId(
-          fspOfframpDetails.beneficiaryBankDetails.bankName
-        ),
-        creditorAccount: fspOfframpDetails.beneficiaryBankDetails.accountNumber,
-        creditorName: fspOfframpDetails.beneficiaryBankDetails.accountName,
+        creditorAgent: beneficiaryBankAccount?.bankId,
+        creditorAccount: beneficiaryBankAccount?.accountNumber,
+        creditorName: beneficiaryBankAccount?.accountName,
+        creditorBranch: beneficiaryBankAccount?.branchId,
       },
     };
 

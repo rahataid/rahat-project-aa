@@ -25,6 +25,8 @@ export class OfframpService {
   constructor(
     @InjectQueue(BQUEUE.OFFRAMP)
     private readonly offrampQueue: Queue,
+    @InjectQueue(BQUEUE.MANUAL_PAYOUT)
+    private readonly manualPayoutQueue: Queue,
     private appService: AppService,
     private httpService: HttpService
   ) {}
@@ -126,7 +128,7 @@ export class OfframpService {
     }
   }
 
-  async instantOfframp(offrampPayload): Promise<CipsResponseData> {
+  async instantOfframp(offrampPayload: any): Promise<CipsResponseData> {
     const offrampSettings = await this.fetchOfframpSettings();
     const url = offrampSettings.url;
     const appId = offrampSettings.appId;
@@ -162,6 +164,36 @@ export class OfframpService {
     }
   }
 
+  async instantOfframpV2(offrampPayload: any): Promise<CipsResponseData> {
+    const offrampSettings = await this.fetchOfframpSettings();
+    const url = offrampSettings.url;
+    const appId = offrampSettings.appId;
+    this.logger.log(
+      `Initiating instant offramp v2 to ${url}/offramp-request/instant-v2`
+    );
+    try {
+      const {
+        data: { data },
+      } = await this.httpService.axiosRef.post<CipsApiResponse>(
+        `${url}/offramp-request/instant-v2`,
+        offrampPayload,
+        {
+          headers: {
+            APP_ID: appId,
+          },
+        }
+      );
+
+      return data;
+    } catch (error) {
+      throw new RpcException(
+        `Failed to initiate instant offramp: ${
+          error?.response?.data?.message || error?.message
+        }`
+      );
+    }
+  }
+
   async addBulkToOfframpQueue(
     payload: (FSPOfframpDetails | FSPPayoutDetails)[]
   ) {
@@ -187,7 +219,7 @@ export class OfframpService {
   }
 
   async addBulkToVerifyManualPayoutQueue(payload: any[]) {
-    return await this.offrampQueue.addBulk(
+    return await this.manualPayoutQueue.addBulk(
       payload.map((payload) => ({
         name: JOBS.OFFRAMP.VERIFY_MANUAL_PAYOUT,
         data: payload,
@@ -197,13 +229,17 @@ export class OfframpService {
   }
 
   async addBulkToManualPayoutQueue(payload: { payoutUUID: string }) {
-    const result = await this.offrampQueue.add(
+    const result = await this.manualPayoutQueue.add(
       JOBS.OFFRAMP.INSTANT_MANUAL_PAYOUT,
       payload,
       { ...this.offrampQueueOpts, delay: 2000 }
     );
 
     return result;
+  }
+
+  async validateCIPSAccount(bankId: string, accountId: string, accountName: string): Promise<any> {
+    
   }
 
   async addToManualPayoutQueue(payload: { payoutUUID: string }) {
