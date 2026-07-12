@@ -54,6 +54,12 @@ describe('StellarClient', () => {
     client.server.submitTransaction = jest
       .fn()
       .mockResolvedValue({ hash: 'batch123', successful: true, ledger: 7 });
+    client.server.operations = jest.fn().mockReturnValue({
+      forTransaction: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      call: jest.fn().mockResolvedValue({ records: [{ id: '900', type: 'payment', from: beneficiary.publicKey() }] }),
+    });
 
     const result = await client.sendFromSponsoredBatch([
       { secret: beneficiary.secret(), destination: Keypair.random().publicKey(), amount: '5' },
@@ -62,5 +68,6 @@ describe('StellarClient', () => {
     expect(result.hash).toBe('batch123');
     expect(result.items).toHaveLength(1);
     expect(result.items[0].sourcePublicKey).toBe(beneficiary.publicKey());
+    expect(result.items[0].paymentId).toBe('900');
   });
 });

@@ -43,8 +43,8 @@ export interface SponsoredBatchTransferItem {
 }
 
 export interface SendFromSponsoredBatchResult extends TransactionResult {
-  /** All items share the single transaction hash above. */
-  items: { sourcePublicKey: string; destination: string; amount: string }[];
+  /** All items share the single transaction hash above; paymentId is the Horizon operation ID for that item's own payment operation within it. */
+  items: { sourcePublicKey: string; destination: string; amount: string; paymentId: string }[];
 }
 
 /** Context for sponsor-mediated payment operations (sendToSponsored, sendFromSponsored). */

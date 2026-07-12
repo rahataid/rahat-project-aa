@@ -109,6 +109,16 @@ describe('sendFromSponsoredBatch', () => {
   const sponsorKeypair = Keypair.random();
   const asset = new Asset('RAHAT', 'GAVSXFHUI5YWS3YI2RFQV7SB3KKVFERKWWY2QSVJNDTROKQZRWEPXLWG');
 
+  function makeOperationsBuilder(records: { id: string; type: string; from?: string }[]) {
+    const builder: any = {
+      forTransaction: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      call: jest.fn().mockResolvedValue({ records }),
+    };
+    return builder;
+  }
+
   function makeCtx(server: Partial<Horizon.Server>): PaymentOpContext {
     return {
       server: server as unknown as Horizon.Server,
@@ -131,7 +141,7 @@ describe('sendFromSponsoredBatch', () => {
     await expect(sendFromSponsoredBatch(makeCtx({}), items)).rejects.toThrow(RangeError);
   });
 
-  it('combines every item into a single sponsor-signed transaction', async () => {
+  it('combines every item into a single sponsor-signed transaction and attaches each payment operation ID', async () => {
     const beneficiaries = Array.from({ length: 3 }, () => Keypair.random());
     const items = beneficiaries.map((kp, idx) => ({
       secret: kp.secret(),
@@ -145,9 +155,17 @@ describe('sendFromSponsoredBatch', () => {
       submittedTx = tx;
       return { hash: 'batch123', successful: true, ledger: 7 };
     });
+    // Records are returned out of item order to prove matching is driven by
+    // `from`, not by array position.
+    const operationsBuilder = makeOperationsBuilder([
+      { id: '102', type: 'payment', from: beneficiaries[2].publicKey() },
+      { id: '100', type: 'payment', from: beneficiaries[0].publicKey() },
+      { id: '101', type: 'payment', from: beneficiaries[1].publicKey() },
+    ]);
     const ctx = makeCtx({
       loadAccount: jest.fn().mockResolvedValue(account),
       submitTransaction,
+      operations: jest.fn().mockReturnValue(operationsBuilder),
     });
 
     const result = await sendFromSponsoredBatch(ctx, items);
@@ -158,8 +176,12 @@ describe('sendFromSponsoredBatch', () => {
         sourcePublicKey: kp.publicKey(),
         destination: items[idx].destination,
         amount: items[idx].amount,
+        paymentId: ['100', '101', '102'][idx],
       }))
     );
+
+    expect(operationsBuilder.forTransaction).toHaveBeenCalledWith('batch123');
+    expect(operationsBuilder.limit).toHaveBeenCalledWith(items.length);
 
     expect(submitTransaction).toHaveBeenCalledTimes(1);
     expect(submittedTx?.operations).toHaveLength(items.length);
@@ -171,5 +193,55 @@ describe('sendFromSponsoredBatch', () => {
     // (fee param is per-operation; the SDK multiplies it by operation count internally)
     // sponsor signature + one per beneficiary
     expect(submittedTx?.signatures).toHaveLength(items.length + 1);
+  });
+
+  it('throws when the number of resolved payment operations does not match the item count', async () => {
+    const beneficiaries = Array.from({ length: 2 }, () => Keypair.random());
+    const items = beneficiaries.map((kp) => ({
+      secret: kp.secret(),
+      destination: Keypair.random().publicKey(),
+      amount: '1',
+    }));
+
+    const account = new Account(sponsorKeypair.publicKey(), '1');
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'batch456', successful: true, ledger: 8 });
+    const operationsBuilder = makeOperationsBuilder([{ id: '200', type: 'payment' }]);
+    const ctx = makeCtx({
+      loadAccount: jest.fn().mockResolvedValue(account),
+      submitTransaction,
+      operations: jest.fn().mockReturnValue(operationsBuilder),
+    });
+
+    await expect(sendFromSponsoredBatch(ctx, items)).rejects.toMatchObject({
+      name: 'StellarOperationError',
+      message: expect.stringContaining('Expected 2 payment operation(s)'),
+    });
+  });
+
+  it("throws when a resolved payment operation's from address does not match any beneficiary", async () => {
+    const beneficiaries = Array.from({ length: 2 }, () => Keypair.random());
+    const items = beneficiaries.map((kp) => ({
+      secret: kp.secret(),
+      destination: Keypair.random().publicKey(),
+      amount: '1',
+    }));
+
+    const account = new Account(sponsorKeypair.publicKey(), '1');
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'batch789', successful: true, ledger: 9 });
+    const operationsBuilder = makeOperationsBuilder([
+      { id: '300', type: 'payment', from: beneficiaries[0].publicKey() },
+      // Wrong `from` - does not belong to either beneficiary in this batch.
+      { id: '301', type: 'payment', from: Keypair.random().publicKey() },
+    ]);
+    const ctx = makeCtx({
+      loadAccount: jest.fn().mockResolvedValue(account),
+      submitTransaction,
+      operations: jest.fn().mockReturnValue(operationsBuilder),
+    });
+
+    await expect(sendFromSponsoredBatch(ctx, items)).rejects.toMatchObject({
+      name: 'StellarOperationError',
+      message: expect.stringContaining('No payment operation found from beneficiary'),
+    });
   });
 });

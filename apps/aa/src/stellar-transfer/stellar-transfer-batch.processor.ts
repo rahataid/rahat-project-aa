@@ -165,21 +165,37 @@ export class StellarTransferBatchProcessor {
 
       this.logger.log(`[Job ${job.id}] Batch transfer successful, txHash: ${result.hash}`);
 
-      // Step 7 — Mark each validated item completed (sharing the one txHash) and queue
-      // its fiat-side offramp leg.
+      // Step 7 — Mark each validated item completed and queue its fiat-side offramp
+      // leg. Each beneficiary gets its own `txHash:paymentId` reference — sharing just
+      // `result.hash` across the batch would let the offramp service correctly attribute
+      // one payment but not the rest, since several beneficiaries were paid in this one
+      // Stellar transaction. Look each paymentId up by beneficiaryWalletAddress rather
+      // than trusting index alignment with `result.items`; consume each match so two
+      // items for the same wallet in one batch each get their own distinct paymentId.
+      const unmatchedResultItems = [...result.items];
       await Promise.all(
         validated.map(async (item) => {
+          const matchIdx = unmatchedResultItems.findIndex(
+            (resultItem) => resultItem.sourcePublicKey === item.payload.beneficiaryWalletAddress
+          );
+          if (matchIdx === -1) {
+            throw new Error(
+              `[Job ${job.id}] [Redeem ${item.log.uuid}] No payment operation found for beneficiary wallet ${item.payload.beneficiaryWalletAddress} in batch transaction ${result.hash}`
+            );
+          }
+          const [matchedResultItem] = unmatchedResultItems.splice(matchIdx, 1);
+          const compositeTxHash = `${result.hash}:${matchedResultItem.paymentId}`;
           this.logger.debug(
-            `[Job ${job.id}] [Redeem ${item.log.uuid}] Marking completed and queuing offramp for wallet ${item.payload.beneficiaryWalletAddress}`
+            `[Job ${job.id}] [Redeem ${item.log.uuid}] Marking completed and queuing offramp for wallet ${item.payload.beneficiaryWalletAddress}, txHash: ${compositeTxHash}`
           );
           await this.beneficiaryService.updateBeneficiaryRedeem(item.log.uuid, {
             status: 'TOKEN_TRANSACTION_COMPLETED',
             isCompleted: true,
             amount: item.payload.amount,
-            txHash: result.hash,
+            txHash: compositeTxHash,
             info: {
               message: 'Token transfer to offramp successful',
-              transactionHash: result.hash,
+              transactionHash: compositeTxHash,
               offrampWalletAddress: item.payload.offrampWalletAddress,
               beneficiaryWalletAddress: item.payload.beneficiaryWalletAddress,
               numberOfAttempts: item.attemptsMade,
@@ -193,7 +209,7 @@ export class StellarTransferBatchProcessor {
             JOBS.OFFRAMP.INSTANT_OFFRAMP,
             {
               ...offrampPayload,
-              transactionHash: result.hash,
+              transactionHash: compositeTxHash,
               amount: item.payload.amount.toString(),
             },
             {

@@ -1,4 +1,4 @@
-import { Asset, BASE_FEE, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Asset, BASE_FEE, Horizon, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 import {
   PaymentOpContext,
   PaymentResult,
@@ -132,16 +132,52 @@ export async function sendFromSponsoredBatch(
 
   const result = await submitTransaction(ctx.server, tx);
 
+  // Horizon operation IDs within a single transaction are assigned in
+  // submission order, but we don't just trust that ordering blindly - each
+  // resolved payment operation's `from` is matched against the beneficiary
+  // (source) public key it's supposed to belong to, so a paymentId can never
+  // be attributed to the wrong beneficiary.
+  const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(items.length).call();
+  const paymentOps = opPage.records.filter(isPaymentOperationRecord);
+
+  if (paymentOps.length !== items.length) {
+    throw new StellarOperationError(
+      `Expected ${items.length} payment operation(s) for batch transaction ${result.hash}, found ${paymentOps.length}`,
+      { raw: opPage.records }
+    );
+  }
+
+  const unmatchedOps = [...paymentOps];
+
   return {
     hash: result.hash,
     successful: result.successful,
     ledger: result.ledger,
-    items: items.map((item, idx) => ({
-      sourcePublicKey: keypairs[idx].publicKey(),
-      destination: item.destination,
-      amount: item.amount,
-    })),
+    items: items.map((item, idx) => {
+      const sourcePublicKey = keypairs[idx].publicKey();
+      const opIndex = unmatchedOps.findIndex((op) => op.from === sourcePublicKey);
+      if (opIndex === -1) {
+        throw new StellarOperationError(
+          `No payment operation found from beneficiary ${sourcePublicKey} in batch transaction ${result.hash}`,
+          { raw: paymentOps }
+        );
+      }
+      const [op] = unmatchedOps.splice(opIndex, 1);
+
+      return {
+        sourcePublicKey,
+        destination: item.destination,
+        amount: item.amount,
+        paymentId: op.id,
+      };
+    }),
   };
+}
+
+function isPaymentOperationRecord(
+  record: Horizon.ServerApi.OperationRecord
+): record is Horizon.ServerApi.PaymentOperationRecord {
+  return record.type === 'payment';
 }
 
 /**
