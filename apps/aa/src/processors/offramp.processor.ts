@@ -170,10 +170,10 @@ export class OfframpProcessor {
         `Offramp request failed for beneficiary redeem`
       );
 
+
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
-        result.transaction.cipsBatchResponse.responseMessage ||
-          'Offramp request failed from CIPS.',
+        this.buildCipsErrorMessage(result.transaction),
         attemptsMade,
         log.info
       );
@@ -217,6 +217,23 @@ export class OfframpProcessor {
       }
       throw error;
     }
+  }
+
+  private buildCipsErrorMessage(
+    transaction: CipsResponseData['transaction']
+  ): string {
+    const { cipsBatchResponse, cipsTxnResponseList } = transaction;
+
+    const parts = [
+      `debitStatus:${cipsBatchResponse.debitStatus},${
+        cipsBatchResponse.responseMessage || 'Offramp request failed from CIPS.'
+      }`,
+      ...(cipsTxnResponseList || []).map(
+        (txn) => `creditStatus:${txn.creditStatus},${txn.responseMessage || 'FAILED'}`
+      ),
+    ];
+
+    return parts.join(' AND ');
   }
 
   private async updateBeneficiaryRedeemAsFailed(
