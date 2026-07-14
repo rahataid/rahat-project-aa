@@ -371,12 +371,17 @@ export class EvmChainService implements IChainService, OnModuleInit {
     
     let count = 0;
     for (const { uuid, tokensReserved } of groups) {
-      this.logger.log(`loop counter: ${count++}`);  
-      this.logger.log(`Adding disbursement job for group ${uuid} with ${tokensReserved.numberOfTokens} tokens reserved`);
+      const activeToken = tokensReserved.find((t) => t.status === 'NOT_DISBURSED');
+      if (!activeToken) {
+        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
+        continue;
+      }
+      this.logger.log(`loop counter: ${count++}`);
+      this.logger.log(`Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`);
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
-          dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
+          dName: `${activeToken.title.toLocaleLowerCase()}_${data.dName}`,
           groups: uuid,
         },
         {
@@ -1302,12 +1307,16 @@ export class EvmChainService implements IChainService, OnModuleInit {
         throw new RpcException('Beneficiary group not found');
       }
 
-      if (!beneficiaryGroups.tokensReserved) {
+      const activeToken = beneficiaryGroups.tokensReserved.find(
+        (t) => t.status === 'NOT_DISBURSED'
+      );
+
+      if (!activeToken) {
         this.logger.error('Tokens not reserved for the group');
         throw new RpcException('Tokens not reserved for the group');
       }
 
-      return beneficiaryGroups.tokensReserved.payout;
+      return activeToken.payout;
     } catch (error) {
       throw new RpcException(
         `Failed to retrieve payout type: ${error.message}`

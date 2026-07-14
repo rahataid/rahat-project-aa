@@ -76,8 +76,9 @@ export class SdpStellarProcessor {
         return;
       }
 
-      const benData =
-        await this.stellarChainService.getBeneficiaryTokenBalance([groupUuid]);
+      const benData = await this.stellarChainService.getBeneficiaryTokenBalance(
+        [groupUuid]
+      );
 
       if (!benData.length) {
         this.logger.warn(`No beneficiaries found for group ${groupUuid}`);
@@ -94,15 +95,13 @@ export class SdpStellarProcessor {
       const sdpSettings = await this.getSdpSettings();
       console.log('SDP Settings retrieved:', sdpSettings);
 
-
-      this.logger.log(
-        {
+      this.logger.log({
         name: dName,
         wallet_id: sdpSettings.walletId,
         asset_id: sdpSettings.assetId,
         verification_field: sdpSettings.verificationField,
         filename: `${dName}_instructions.csv`,
-      })
+      });
       const disbursement = await sdpClient.disbursements.create({
         name: dName,
         wallet_id: sdpSettings.walletId,
@@ -171,7 +170,10 @@ export class SdpStellarProcessor {
     }
   }
 
-  @Process({ name: JOBS.STELLAR_SDP.DISBURSEMENT_STATUS_UPDATE, concurrency: 1 })
+  @Process({
+    name: JOBS.STELLAR_SDP.DISBURSEMENT_STATUS_UPDATE,
+    concurrency: 1,
+  })
   async handleStatusUpdate(
     job: Job<{
       disbursementId: string;
@@ -190,9 +192,7 @@ export class SdpStellarProcessor {
       const disbursement = await sdpClient.disbursements.get(disbursementId);
       const status = disbursement.status?.toUpperCase();
 
-      this.logger.log(
-        `SDP disbursement ${disbursementId} status: ${status}`
-      );
+      this.logger.log(`SDP disbursement ${disbursementId} status: ${status}`);
 
       if (status === 'COMPLETED') {
         const disbursementTimeTaken = Date.now() - startedAt;
@@ -210,9 +210,7 @@ export class SdpStellarProcessor {
 
         this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
 
-        this.logger.log(
-          `SDP disbursement completed for group ${groupUuid}`
-        );
+        this.logger.log(`SDP disbursement completed for group ${groupUuid}`);
         return;
       }
 
@@ -228,9 +226,7 @@ export class SdpStellarProcessor {
           },
         });
 
-        this.logger.error(
-          `SDP disbursement ${status} for group ${groupUuid}`
-        );
+        this.logger.error(`SDP disbursement ${status} for group ${groupUuid}`);
         return;
       }
 
@@ -255,7 +251,9 @@ export class SdpStellarProcessor {
       }
 
       this.logger.log(
-        `SDP disbursement ${disbursementId} still in progress, re-checking in ${STATUS_CHECK_DELAY_MS / 1000}s`
+        `SDP disbursement ${disbursementId} still in progress, re-checking in ${
+          STATUS_CHECK_DELAY_MS / 1000
+        }s`
       );
 
       await this.stellarSdpQueue.add(

@@ -75,13 +75,14 @@ export class StellarChainService implements IChainService {
     this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
 
     for (const { uuid, tokensReserved } of groups) {
-      if (!tokensReserved) {
-        this.logger.warn(`Group ${uuid} has no token reservation, skipping`);
+      const activeToken = tokensReserved.find((t) => t.status === 'NOT_DISBURSED');
+      if (!activeToken) {
+        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
         continue;
       }
-      const dName = `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`;
+      const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
       this.logger.debug(
-        `Queuing SDP disbursement job for group ${uuid} with ${tokensReserved.numberOfTokens} tokens, dName: ${dName}`
+        `Queuing SDP disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens, dName: ${dName}`
       );
       await this.stellarSdpQueue.add(
         JOBS.STELLAR_SDP.DISBURSE,
