@@ -22,6 +22,10 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { getFormattedTimeDiff } from '../../utils/date';
 import { lastValueFrom } from 'rxjs';
+import { getBalance } from 'libs/stellar/src/utils/account';
+import { StellarClient } from 'libs/stellar/src/client';
+import { StellarClientConfig } from 'libs/stellar/src/types';
+import bcrypt from 'bcryptjs';
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -52,7 +56,9 @@ export class StellarChainService implements IChainService {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'}`
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
+        data.groups || 'all'
+      }`
     );
 
     const groupUuids =
@@ -60,7 +66,9 @@ export class StellarChainService implements IChainService {
         ? data.groups
         : await this.getDisbursableGroupsUuids();
 
-    this.logger.debug(`Resolved ${groupUuids.length} group UUIDs for disbursement`);
+    this.logger.debug(
+      `Resolved ${groupUuids.length} group UUIDs for disbursement`
+    );
 
     if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
@@ -119,10 +127,13 @@ export class StellarChainService implements IChainService {
 
     const oneTokenPrice =
       Number(await this.getFromSettings('ONE_TOKEN_PRICE')) || 1;
-    const tokenName =
-      String((await this.getFromSettings('ASSETCODE')) ?? 'RAHAT');
+    const tokenName = String(
+      (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT'
+    );
 
-    this.logger.debug(`Token price: ${oneTokenPrice}, Token name: ${tokenName}`);
+    this.logger.debug(
+      `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
+    );
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
       include: {
@@ -210,6 +221,25 @@ export class StellarChainService implements IChainService {
     ];
   }
 
+  async getRahatTokenBalance(data: { address: string }): Promise<any> {
+    this.logger.debug(`getRahatTokenBalance address=${data.address}`);
+    if (!this.validateAddress(data.address)) {
+      throw new RpcException(`Invalid Stellar address: ${data.address}`);
+    }
+    const stellarSettings = await this.getFromSettings(
+      'STELLAR_SPONSOR_SETTINGS'
+    );
+    const client = new StellarClient(
+      stellarSettings as unknown as StellarClientConfig
+    );
+    return getBalance(
+      client.server,
+      data.address,
+      client.config.assetCode,
+      client.config.assetIssuer
+    );
+  }
+
   // --- Public helpers (used by SDP processor) ---
 
   async getBeneficiaryTokenBalance(groupUuids: string[]) {
@@ -272,12 +302,75 @@ export class StellarChainService implements IChainService {
     throw new RpcException('Not supported on Stellar SDP chain');
   }
 
-  async sendOtp(_data: SendOtpDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+  async sendOtp(data: SendOtpDto): Promise<any> {
+    this.logger.log(`Sending OTP to ${data.phoneNumber} for amount ${data.amount}`);
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(data.phoneNumber);
+
+    if (!payoutType) {
+      this.logger.error('Payout not initiated');
+      throw new RpcException('Payout not initiated');
+    }
+
+    if (payoutType.type !== 'VENDOR') {
+      this.logger.error('Payout type is not VENDOR');
+      throw new RpcException('Payout type is not VENDOR');
+    }
+
+    if (payoutType.mode !== 'ONLINE') {
+      this.logger.error('Payout mode is not ONLINE');
+      throw new RpcException('Payout mode is not ONLINE');
+    }
+
+    return this.sendOtpByPhone(data, payoutType.uuid);
   }
 
-  async sendAssetToVendor(_data: SendAssetDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+  async sendAssetToVendor(data: SendAssetDto): Promise<any> {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { walletAddress: data.receiverAddress },
+    });
+    if (!vendor) throw new RpcException('Vendor not found');
+
+    const amount = data.amount;
+    await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+
+    const keys = await this.getSecretByPhone(data.phoneNumber) as { address: string; privateKey: string } | null;
+    if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
+
+    const walletAddress = keys.address;
+
+    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+
+    const tokenBalance = await getBalance(
+      stellarClient.server,
+      walletAddress,
+      stellarClient.config.assetCode,
+      stellarClient.config.assetIssuer
+    );
+
+    if (parseFloat(tokenBalance) <= 0) {
+      throw new RpcException('Beneficiary has no tokens available for transfer');
+    }
+
+    const result = await stellarClient.sendFromSponsored(
+      keys.privateKey,
+      data.receiverAddress,
+      amount.toString()
+    );
+
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { beneficiaryWalletAddress: walletAddress, status: 'PENDING', isCompleted: false, txHash: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!existingRedeem) throw new RpcException('No pending BeneficiaryRedeem record found');
+
+    await this.prisma.beneficiaryRedeem.update({
+      where: { uuid: existingRedeem.uuid },
+      data: { vendorUid: vendor.uuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
+    });
+
+    return { txHash: result.hash };
   }
 
   async fundAccount(_data: FundAccountDto): Promise<any> {
@@ -381,8 +474,7 @@ export class StellarChainService implements IChainService {
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
         const phone = Beneficiary.pii?.phone || Beneficiary.phone || '';
         const walletAddress = Beneficiary.walletAddress;
-        const name =
-          Beneficiary.pii?.name || Beneficiary.name || walletAddress;
+        const name = Beneficiary.pii?.name || Beneficiary.name || walletAddress;
         const amount = tokenPerBeneficiary;
 
         if (csvData[walletAddress]) {
@@ -402,8 +494,138 @@ export class StellarChainService implements IChainService {
     });
 
     const result = Object.values(csvData);
-    this.logger.debug(`Token distribution computed for ${result.length} beneficiaries`);
+    this.logger.debug(
+      `Token distribution computed for ${result.length} beneficiaries`
+    );
     return result;
+  }
+
+  private async getSecretByPhone(phoneNumber: string) {
+    try {
+      const ben = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.wallet.getSecretByPhone' },
+          { phoneNumber, chain: 'stellar' }
+        )
+      );
+      this.logger.log(`Beneficiary found: ${ben.address}`);
+      return ben;
+    } catch {
+      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+    }
+  }
+
+  private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
+    const record = await this.prisma.otp.findUnique({ where: { phoneNumber } });
+    if (!record) throw new RpcException('OTP record not found');
+    if (record.isVerified) throw new RpcException('OTP already verified');
+    if (record.expiresAt < new Date()) throw new RpcException('OTP has expired');
+
+    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    if (!isValid) throw new RpcException('Invalid OTP or amount mismatch');
+
+    await this.prisma.otp.update({ where: { phoneNumber }, data: { isVerified: true } });
+    return true;
+  }
+
+  private async storeOTP(otp: string, phoneNumber: string, amount: number) {
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+
+    const otpRes = await this.prisma.otp.upsert({
+      where: { phoneNumber },
+      update: { otpHash, amount, expiresAt, isVerified: false, updatedAt: new Date() },
+      create: { phoneNumber, otpHash, amount, expiresAt },
+    });
+
+    const { otpHash: _, ...safeRes } = otpRes;
+    return safeRes;
+  }
+
+  private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
+    const beneficiary = await lastValueFrom(
+      this.client.send(
+        { cmd: 'rahat.jobs.beneficiary.get_by_phone' },
+        { phone, projectUUID: process.env.PROJECT_ID }
+      )
+    );
+
+    if (!beneficiary) throw new RpcException('Beneficiary not found');
+    if (!beneficiary.groupedBeneficiaries) throw new RpcException('Beneficiary has no grouped beneficiaries');
+
+    const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
+      (g: any) => g.groupPurpose !== 'COMMUNICATION'
+    );
+
+    if (!payoutEligibleGroups.length) throw new RpcException('No payout-eligible group found for beneficiary');
+    if (payoutEligibleGroups.length > 1) throw new RpcException('Multiple payout-eligible groups found for beneficiary');
+
+    const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
+      include: { tokensReserved: { include: { payout: true } } },
+    });
+
+    if (!beneficiaryGroups) throw new RpcException('Beneficiary group not found');
+    if (!beneficiaryGroups.tokensReserved) throw new RpcException('Tokens not reserved for the group');
+
+    return beneficiaryGroups.tokensReserved.payout;
+  }
+
+  private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {
+    const vendor = await this.prisma.vendor.findUnique({ where: { uuid: data.vendorUuid } });
+    if (!vendor) throw new RpcException('Vendor not found');
+
+    const keys = await this.getSecretByPhone(data.phoneNumber) as any;
+    if (!keys) throw new RpcException('Beneficiary address not found');
+
+    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+
+    const tokenBalance = await getBalance(
+      stellarClient.server,
+      keys.address,
+      stellarClient.config.assetCode,
+      stellarClient.config.assetIssuer
+    );
+
+    const beneficiaryTokenBalance = parseFloat(tokenBalance);
+    if (!beneficiaryTokenBalance) throw new RpcException('Beneficiary token balance not found');
+
+    const amount = data.amount || beneficiaryTokenBalance;
+    if (Number(amount) > beneficiaryTokenBalance) throw new RpcException(`Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`);
+    if (Number(amount) <= 0) throw new RpcException('Amount must be greater than 0');
+
+    const res = await lastValueFrom(
+      this.client.send({ cmd: 'rahat.jobs.otp.send_otp' }, { phoneNumber: data.phoneNumber, amount })
+    );
+
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { beneficiaryWalletAddress: keys.address },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingRedeem) {
+      await this.prisma.beneficiaryRedeem.update({
+        where: { uuid: existingRedeem.uuid },
+        data: { vendorUid: data.vendorUuid, amount: amount as number, status: 'PENDING', isCompleted: false, txHash: null, payoutId },
+      });
+    } else {
+      await this.prisma.beneficiaryRedeem.create({
+        data: {
+          beneficiaryWalletAddress: keys.address,
+          amount: amount as number,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          vendorUid: data.vendorUuid,
+          payoutId,
+        },
+      });
+    }
+
+    return this.storeOTP(res.otp, data.phoneNumber, amount as number);
   }
 
   private async getFromSettings(key: string) {

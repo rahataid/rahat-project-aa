@@ -3,6 +3,7 @@ import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
 import { createSponsoredAccount, createSponsoredAccountsBatch } from './operations/account';
 import { sendFromSponsored, sendPayment, sendToSponsored } from './operations/payment';
+import { fundAccountWithXlm } from './operations/fundAccount';
 import {
   CreateSponsoredAccountResult,
   CreateSponsoredAccountsBatchResult,
@@ -89,6 +90,15 @@ export class StellarClient {
       senderSecret,
       destinationPublicKey,
       asset,
+      amount
+    );
+  }
+
+  /** Fund `destination` with XLM from the sponsor; creates the account if it doesn't exist. */
+  async fundAccountWithXlm(destination: string, amount: string): Promise<PaymentResult> {
+    return fundAccountWithXlm(
+      { server: this.server, networkPassphrase: this.networkPassphrase, sponsorKeypair: this.sponsorKeypair },
+      destination,
       amount
     );
   }

@@ -7,9 +7,11 @@ import { BQUEUE, TRIGGGERS_MODULE } from '../constants';
 import { CvaDisbursementService } from '@rahat-project/cva';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
+import { SettingsModule } from '@rumsan/settings';
 
 @Module({
   imports: [
+    SettingsModule,
     BullModule.registerQueue({
       name: BQUEUE.SCHEDULE,
     }),

@@ -6,6 +6,8 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { SettingsService } from '@rumsan/settings';
+import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
 
 @Injectable()
 export class ListernersService {
@@ -17,7 +19,8 @@ export class ListernersService {
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
-    private disbService: CvaDisbursementService
+    private disbService: CvaDisbursementService,
+    private readonly settingsService: SettingsService
   ) {}
 
   private statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -77,6 +80,22 @@ export class ListernersService {
     } catch (error) {
       this.logger.error('❌ Notification emit failed:', error);
       throw error;
+    }
+  }
+
+  @OnEvent(CVA_EVENTS.VENDOR.CREATED)
+  async handleVendorAssignment(event: { walletAddress: string }) {
+    this.logger.log(`[VENDOR CREATION EVENT]✅ Vendor assignment event emitted with walletAddress: ${event.walletAddress}`);
+    try {
+      const settings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
+      if (!settings?.value) {
+        this.logger.warn('STELLAR_SPONSOR_SETTINGS not configured — skipping XLM send');
+        return;
+      }
+      const result = await new StellarClient(settings.value as unknown as StellarClientConfig).fundAccountWithXlm(event.walletAddress, '5');
+      this.logger.log(`[VENDOR CREATION EVENT] Sent 5 XLM to ${event.walletAddress}, tx: ${result.hash}`);
+    } catch (err) {
+      this.logger.error(`[VENDOR CREATION EVENT] Failed to send 5 XLM to ${event.walletAddress}`, err);
     }
   }
 }
