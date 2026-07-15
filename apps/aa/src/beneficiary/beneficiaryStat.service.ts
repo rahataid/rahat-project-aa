@@ -1,8 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@rumsan/prisma';
+import { SettingsService } from '@rumsan/settings';
 import { StatsService } from '../stats';
 import { mapVulnerabilityStatusCount } from '../utils/vulnerabilityCountHelpers';
-import { AGE_GROUPS, VULNERABILITY_FIELD } from '../constants';
+import {
+  AGE_GROUPS,
+  BENEF_STATS_BY_PROJECT_TYPE,
+  ProjectType,
+  VULNERABILITY_FIELD,
+} from '../constants';
 import {
   countBySSAType,
   countResult,
@@ -13,12 +19,66 @@ import {
   toPascalCase,
 } from '../utils';
 
+// Every stat name that appears in BENEF_STATS_BY_PROJECT_TYPE, across all
+// project types. Used to tell "a gated stat that isn't allowed for this
+// project type" apart from "a dynamic/ungated stat (e.g. WARD3)".
+const ALL_KNOWN_STAT_NAMES = new Set(
+  Object.values(BENEF_STATS_BY_PROJECT_TYPE).flat()
+);
+
 @Injectable()
 export class BeneficiaryStatService {
+  private readonly logger = new Logger(BeneficiaryStatService.name);
+
   constructor(
     protected prisma: PrismaService,
-    private readonly statsService: StatsService
+    private readonly statsService: StatsService,
+    private readonly settingsService: SettingsService
   ) {}
+
+  // Resolves the current project's type from the PROJECTINFO setting
+  // (value.PROJECT_TYPE, set at project setup time). Returns null when it
+  // can't be determined, in which case callers should treat all stats as
+  // allowed rather than silently dropping data.
+  async getProjectType(): Promise<ProjectType | null> {
+    try {
+      const projectInfo = await this.settingsService.getPublic('PROJECTINFO');
+      const projectType = (projectInfo?.value as any)?.PROJECT_TYPE;
+      return projectType
+        ? (String(projectType).toUpperCase() as ProjectType)
+        : null;
+    } catch (error) {
+      this.logger.warn(
+        `Could not resolve PROJECT_TYPE from settings, skipping project-type stat filtering: ${
+          (error as Error)?.message
+        }`
+      );
+      return null;
+    }
+  }
+
+  // Keeps only the stats that are relevant to the current project's type.
+  // A stat is gated only if its name is registered in
+  // BENEF_STATS_BY_PROJECT_TYPE (apps/aa/src/constants/index.ts) for at
+  // least one project type; anything else (e.g. dynamic WARD* location
+  // stats) always passes through. To add or remove a stat for a project
+  // type, edit that registry — no changes needed here.
+  async filterStatsByProjectType<T extends { name: string }>(
+    stats: T[]
+  ): Promise<T[]> {
+    const projectType = await this.getProjectType();
+    if (!projectType) return stats;
+
+    const allowedNames = new Set(
+      BENEF_STATS_BY_PROJECT_TYPE[projectType] ?? []
+    );
+
+    return stats.filter((stat) => {
+      const key = stat.name.toUpperCase();
+      if (!ALL_KNOWN_STAT_NAMES.has(key)) return true;
+      return allowedNames.has(key);
+    });
+  }
 
   async totalBeneficiaries() {
     return {
@@ -479,7 +539,9 @@ export class BeneficiaryStatService {
       ...extrasStats,
     ];
 
-    await this.statsService.saveMany(allStats);
+    const statsForProjectType = await this.filterStatsByProjectType(allStats);
+
+    await this.statsService.saveMany(statsForProjectType);
 
     return {
       total,

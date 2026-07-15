@@ -436,3 +436,52 @@ export const FIELD_MAP = {
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
 };
+
+export type ProjectType = 'FLOOD' | 'HEAT_WAVE';
+
+// Single source of truth for which beneficiary stat names are calculated
+// (and therefore saved/readable) for each project type. To add or remove a
+// stat for a project type, add/remove its name here and register/deregister
+// the matching calculator in BENEFICIARY_STAT_CALCULATORS
+// (apps/aa/src/beneficiary/beneficiaryStat.calculators.ts).
+export const BENEF_STATS_BY_PROJECT_TYPE: Record<ProjectType, string[]> = {
+  FLOOD: [
+    'TOTAL_RESPONDENTS',
+    'TOTAL_NUMBER_FAMILY_MEMBERS',
+    'STAKEHOLDERS_TOTAL',
+    'BENEFICIARY_GENDER',
+    'BENEFICIARY_AGEGROUPS',
+    'BENEFICIARY_COUNTBYBANK',
+    'HAVE_ACTIVE_BANK_AC',
+    'USE_DIGITAL_WALLETS',
+    'DO_YOU_HAVE_ACCESS_TO_INTERNET',
+    'DO_YOU_HAVE_ACCESS_TO_MOBILE_PHONES',
+    'TYPE_OF_PHONE',
+    'CHANNEL_USAGE_STATS',
+    'RECEIVE_DISASTER_INFO',
+    'SSA_RECIPIENT_IN_HH',
+    'TYPE_OF_SSA',
+    'FIELD_MAP_RESULT',
+    'UNIQUE_WARDS',
+    'FLOOD_AFFECTED_IN_5_YEARS',
+  ],
+  HEAT_WAVE: [
+    'TOTAL_RESPONDENTS',
+    'TOTAL_NUMBER_FAMILY_MEMBERS',
+    'STAKEHOLDERS_TOTAL',
+    'BENEFICIARY_GENDER',
+    'BENEFICIARY_AGEGROUPS',
+    'BENEFICIARY_COUNTBYBANK',
+    'HAVE_ACTIVE_BANK_AC',
+    'USE_DIGITAL_WALLETS',
+    'DO_YOU_HAVE_ACCESS_TO_INTERNET',
+    'DO_YOU_HAVE_ACCESS_TO_MOBILE_PHONES',
+    'TYPE_OF_PHONE',
+    'CHANNEL_USAGE_STATS',
+    'RECEIVE_DISASTER_INFO',
+    'SSA_RECIPIENT_IN_HH',
+    'TYPE_OF_SSA',
+    'FIELD_MAP_RESULT',
+    'UNIQUE_WARDS',
+  ],
+};

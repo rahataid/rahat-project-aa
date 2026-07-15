@@ -72,9 +72,13 @@ export class StatsService {
     });
   }
 
-  async findAll(payload) {
+  async findAll(payload: any) {
     this.logger.log('Received payload for findAll:', payload);
     try {
+      // Beneficiary stats are already calculated and saved per-project-type
+      // (see BeneficiaryStatService.saveAllStats), so the table only ever
+      // holds stats relevant to the current project. No further filtering
+      // by projectType is needed here.
       const benefStats = await this.prismaService.stats.findMany();
       const triggeersStats = await firstValueFrom(
         this.client.send({ cmd: JOBS.STATS.MS_TRIGGERS_STATS }, payload)
