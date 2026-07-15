@@ -218,6 +218,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    BACK_FILL: 'aa.jobs.stats.backFill',
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
@@ -485,5 +486,6 @@ export const BENEF_STATS_BY_PROJECT_TYPE: Record<ProjectType, string[]> = {
     'TYPE_OF_SSA',
     'FIELD_MAP_RESULT',
     'UNIQUE_WARDS',
+    'ACTIVITIES_STATUS',
   ],
 };
