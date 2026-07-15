@@ -123,7 +123,8 @@ export const JOBS = {
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
-    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+    DISBURSEMENT_STATUS_UPDATE:
+      'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   WALLET: {
     GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
@@ -374,7 +375,8 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
