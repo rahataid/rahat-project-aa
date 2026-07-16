@@ -195,7 +195,10 @@ export class PayoutsService {
         );
       }
       const existingPayout = await prismaService.payouts.findFirst({
-        where: { beneficiaryGroupToken: { uuid: groupId } },
+        where: {
+          beneficiaryGroupToken: { uuid: groupId },
+          status: { not: 'COMPLETED' },
+        },
       });
 
       if (existingPayout) {
