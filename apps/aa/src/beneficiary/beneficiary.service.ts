@@ -531,7 +531,7 @@ export class BeneficiaryService {
           tokensReserved: { some: {} },
           beneficiaries: { some: { beneficiaryId: { equals: benf.uuid } } },
         },
-        include: { tokensReserved: true },
+        include: { tokensReserved: { include: { payout: true } } },
       });
 
       if (tokenAssignedGroups.length === 0) continue;
@@ -546,16 +546,43 @@ export class BeneficiaryService {
         continue;
       }
 
-      // Step 3: all tokens are DISBURSED — check if benf has a completed redeem
-      const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
-        where: {
-          beneficiaryWalletAddress: benf.walletAddress,
-          status: { in: ['FIAT_TRANSACTION_COMPLETED', 'COMPLETED'] },
-        },
-      });
+      // Step 3: all tokens are DISBURSED — check payout status for each disbursed token
+      const disbursedTokens = tokenAssignedGroups.flatMap((g) =>
+        g.tokensReserved.filter((t) => t.isDisbursed)
+      );
 
-      if (!completedRedeem) {
-        foundAssignedBenf.push(benf.walletAddress);
+      for (const token of disbursedTokens) {
+        // no payout created yet → still blocked
+        if (!token.payoutId) {
+          tokenAssignedBenfWallet.push(benf.walletAddress);
+          break;
+        }
+
+        const payout = token.payout;
+
+        if (!payout || payout.status === 'NOT_STARTED') {
+          tokenAssignedBenfWallet.push(benf.walletAddress);
+          break;
+        }
+
+        if (payout.status === 'COMPLETED') {
+          // this cycle is fully done — benf is eligible for a new assignment
+          continue;
+        }
+
+        // payout exists and is in progress — check BeneficiaryRedeem for this specific payout
+        const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress: benf.walletAddress,
+            payoutId: payout.uuid,
+            status: { in: ['FIAT_TRANSACTION_COMPLETED', 'COMPLETED'] },
+          },
+        });
+
+        if (!completedRedeem) {
+          foundAssignedBenf.push(benf.walletAddress);
+          break;
+        }
       }
     }
 
