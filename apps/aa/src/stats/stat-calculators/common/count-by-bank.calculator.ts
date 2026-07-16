@@ -1,4 +1,8 @@
-import { BeneficiaryExtrasRecord, StatCalcContext, StatCalculator } from '../types';
+import {
+  BeneficiaryExtrasRecord,
+  StatCalcContext,
+  StatCalculator,
+} from '../types';
 
 function countByBank(records: BeneficiaryExtrasRecord[]) {
   return records.reduce((result, current) => {
@@ -19,7 +23,6 @@ export const countByBankCalculator: StatCalculator = {
       id,
       count: bankCounts[id],
     }));
-
     return { name: 'beneficiary_countByBank', data, group: 'beneficiary' };
   },
 };

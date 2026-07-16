@@ -6,6 +6,7 @@ import { fieldMapResultCalculator } from './field-map-result.calculator';
 import { genderCalculator } from './gender.calculator';
 import { haveActiveBankAcCalculator } from './have-active-bank-ac.calculator';
 import { internetAccessCalculator } from './internet-access.calculator';
+
 import { mobilePhoneAccessCalculator } from './mobile-phone-access.calculator';
 import { receiveDisasterInfoCalculator } from './receive-disaster-info.calculator';
 import { ssaRecipientCalculator } from './ssa-recipient.calculator';
@@ -49,7 +50,7 @@ export const COMMON_CALCULATORS: StatCalculator[] = [
   countByBankCalculator,
   haveActiveBankAcCalculator,
   useDigitalWalletsCalculator,
-  // internetAccessCalculator,
+  internetAccessCalculator,
   // mobilePhoneAccessCalculator,
   // typeOfPhoneCalculator,
   // channelUsageCalculator,

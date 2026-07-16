@@ -10,6 +10,10 @@ export const internetAccessCalculator: StatCalculator = {
       ['yes', 'no']
     );
 
-    return { name: 'do_you_have_access_to_internet', data, group: 'beneficiary' };
+    return {
+      name: 'do_you_have_access_to_internet',
+      data,
+      group: 'beneficiary',
+    };
   },
 };

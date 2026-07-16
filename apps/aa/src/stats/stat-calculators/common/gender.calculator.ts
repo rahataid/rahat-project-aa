@@ -12,7 +12,6 @@ export const genderCalculator: StatCalculator = {
       id: stat.gender,
       count: stat._count.gender,
     }));
-
     return { name: 'beneficiary_gender', data, group: 'beneficiary' };
   },
 };

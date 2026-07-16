@@ -9,7 +9,6 @@ export const haveActiveBankAcCalculator: StatCalculator = {
       'have_active_bank_ac',
       ['yes', 'no']
     );
-
     return { name: 'have_active_bank_ac', data, group: 'beneficiary' };
   },
 };

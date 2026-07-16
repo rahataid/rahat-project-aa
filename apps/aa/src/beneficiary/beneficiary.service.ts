@@ -158,7 +158,6 @@ export class BeneficiaryService {
         perPage,
       }
     );
-
     return this.client.send(
       { cmd: 'rahat.jobs.beneficiary.list_by_project' },
       projectData

@@ -9,7 +9,6 @@ export const floodAffected5YearsCalculator: StatCalculator = {
       'flood_affected_in_5_years',
       ['yes', 'no']
     );
-
     return { name: 'flood_affected_in_5_years', data, group: 'beneficiary' };
   },
 };
