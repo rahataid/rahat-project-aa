@@ -1281,9 +1281,7 @@ export class BeneficiaryService {
         return;
       }
 
-      const activeToken = beneficiaryGroup.tokensReserved.find(
-        (t) => t.status === 'NOT_DISBURSED'
-      );
+      const activeToken = beneficiaryGroup.tokensReserved.find((t) => t.isDisbursed === false);
 
       if (!activeToken) {
         this.logger.warn(

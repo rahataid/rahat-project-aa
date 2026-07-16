@@ -52,7 +52,9 @@ export class StellarChainService implements IChainService {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'}`
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
+        data.groups || 'all'
+      }`
     );
 
     const groupUuids =
@@ -60,7 +62,9 @@ export class StellarChainService implements IChainService {
         ? data.groups
         : await this.getDisbursableGroupsUuids();
 
-    this.logger.debug(`Resolved ${groupUuids.length} group UUIDs for disbursement`);
+    this.logger.debug(
+      `Resolved ${groupUuids.length} group UUIDs for disbursement`
+    );
 
     if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
@@ -75,9 +79,11 @@ export class StellarChainService implements IChainService {
     this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
 
     for (const { uuid, tokensReserved } of groups) {
-      const activeToken = tokensReserved.find((t) => t.status === 'NOT_DISBURSED');
+      const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
-        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
+        this.logger.warn(
+          `Group ${uuid} has no active token reservation, skipping`
+        );
         continue;
       }
       const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
@@ -120,10 +126,13 @@ export class StellarChainService implements IChainService {
 
     const oneTokenPrice =
       Number(await this.getFromSettings('ONE_TOKEN_PRICE')) || 1;
-    const tokenName =
-      String((await this.getFromSettings('ASSETCODE')) ?? 'RAHAT');
+    const tokenName = String(
+      (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT'
+    );
 
-    this.logger.debug(`Token price: ${oneTokenPrice}, Token name: ${tokenName}`);
+    this.logger.debug(
+      `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
+    );
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
       include: {
@@ -382,8 +391,7 @@ export class StellarChainService implements IChainService {
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
         const phone = Beneficiary.pii?.phone || Beneficiary.phone || '';
         const walletAddress = Beneficiary.walletAddress;
-        const name =
-          Beneficiary.pii?.name || Beneficiary.name || walletAddress;
+        const name = Beneficiary.pii?.name || Beneficiary.name || walletAddress;
         const amount = tokenPerBeneficiary;
 
         if (csvData[walletAddress]) {
@@ -403,7 +411,9 @@ export class StellarChainService implements IChainService {
     });
 
     const result = Object.values(csvData);
-    this.logger.debug(`Token distribution computed for ${result.length} beneficiaries`);
+    this.logger.debug(
+      `Token distribution computed for ${result.length} beneficiaries`
+    );
     return result;
   }
 

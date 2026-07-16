@@ -371,7 +371,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
     
     let count = 0;
     for (const { uuid, tokensReserved } of groups) {
-      const activeToken = tokensReserved.find((t) => t.status === 'NOT_DISBURSED');
+      const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
         this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
         continue;
@@ -1308,7 +1308,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       }
 
       const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.status === 'NOT_DISBURSED'
+        (t) => t.isDisbursed === false
       );
 
       if (!activeToken) {
