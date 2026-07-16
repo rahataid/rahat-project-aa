@@ -647,25 +647,35 @@ export class BeneficiaryService {
       throw new RpcException('Beneficiary group not found.');
     }
 
-    const isVendorWithGeneral =
-      params?.type === PayoutType.VENDOR &&
-      benfGroup.groupPurpose === GroupPurpose.GENERAL;
+    const allowedPurposes: (GroupPurpose | null)[] = [
+      GroupPurpose.BANK_TRANSFER,
+      GroupPurpose.MOBILE_MONEY,
+      GroupPurpose.GENERAL,
+    ];
 
-    const isNoPayoutWithGeneral =
-      !isPayoutIntegrated && benfGroup.groupPurpose === GroupPurpose.GENERAL;
-
-    if (
-      !isVendorWithGeneral &&
-      !isNoPayoutWithGeneral &&
-      benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
-      benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
-    ) {
+    if (!allowedPurposes.includes(benfGroup.groupPurpose)) {
       this.logger.warn(
         `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
       );
       throw new RpcException(
-        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER, MOBILE_MONEY, and GENERAL are allowed.`
+        `Invalid group purpose ${benfGroup.groupPurpose}. Allowed purposes: BANK_TRANSFER, MOBILE_MONEY, GENERAL.`
       );
+    }
+
+    if (benfGroup.groupPurpose === GroupPurpose.GENERAL) {
+      const isVendorWithGeneral = params?.type === PayoutType.VENDOR;
+      const isNoPayoutWithGeneral = !isPayoutIntegrated;
+
+      if (!isVendorWithGeneral && !isNoPayoutWithGeneral) {
+        this.logger.warn(
+          `Group purpose GENERAL not allowed for group: ${beneficiaryGroupId} with payout type: ${params?.type}, isPayoutIntegrated: ${isPayoutIntegrated}`
+        );
+        throw new RpcException(
+          `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${
+            params?.type ?? 'none'
+          }, `
+        );
+      }
     }
 
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
@@ -1281,7 +1291,9 @@ export class BeneficiaryService {
         return;
       }
 
-      const activeToken = beneficiaryGroup.tokensReserved.find((t) => t.isDisbursed === false);
+      const activeToken = beneficiaryGroup.tokensReserved.find(
+        (t) => t.isDisbursed === false
+      );
 
       if (!activeToken) {
         this.logger.warn(
