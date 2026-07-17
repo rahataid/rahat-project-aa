@@ -6,7 +6,7 @@ export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
 export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 // Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
-export const STELLAR_TRANSFER_BATCH_SIZE = 12;
+export const STELLAR_TRANSFER_BATCH_SIZE = 6;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
