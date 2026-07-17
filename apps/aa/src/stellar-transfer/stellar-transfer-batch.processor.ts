@@ -173,11 +173,15 @@ export class StellarTransferBatchProcessor {
       // than trusting index alignment with `result.items`; consume each match so two
       // items for the same wallet in one batch each get their own distinct paymentId.
       const unmatchedResultItems = [...result.items];
+      console.log(result.items)
+      console.log(unmatchedResultItems);
       await Promise.all(
         validated.map(async (item) => {
           const matchIdx = unmatchedResultItems.findIndex(
             (resultItem) => resultItem.sourcePublicKey === item.payload.beneficiaryWalletAddress
           );
+          console.log({item})
+          console.log({matchIdx});
           if (matchIdx === -1) {
             throw new Error(
               `[Job ${job.id}] [Redeem ${item.log.uuid}] No payment operation found for beneficiary wallet ${item.payload.beneficiaryWalletAddress} in batch transaction ${result.hash}`
