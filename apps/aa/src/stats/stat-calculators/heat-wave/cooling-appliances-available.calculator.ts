@@ -1,4 +1,8 @@
-import { BeneficiaryExtrasRecord, StatCalcContext, StatCalculator } from '../types';
+import {
+  BeneficiaryExtrasRecord,
+  StatCalcContext,
+  StatCalculator,
+} from '../types';
 
 function countCoolingAppliances(records: BeneficiaryExtrasRecord[]) {
   return records.reduce((result, current) => {
@@ -14,7 +18,7 @@ export const coolingAppliancesAvailableCalculator: StatCalculator = {
   key: 'COOLING_APPLIANCES_AVAILABLE',
   async run({ allExtras }: StatCalcContext) {
     const records = allExtras.filter(
-      (item) => item.extras?.cooling_appliances_available_at_home,
+      (item) => item.extras?.cooling_appliances_available_at_home
     );
     const counts = countCoolingAppliances(records);
     const data = Object.entries(counts).map(([key, count]) => ({

@@ -3,7 +3,11 @@ import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import { StatDto } from './dto/stat.dto';
 import { StatsService } from './stats.service';
-import { resolveCalculators, StatCalcContext, UnknownStatTypeError } from './stat-calculators';
+import {
+  resolveCalculators,
+  StatCalcContext,
+  UnknownStatTypeError,
+} from './stat-calculators';
 
 @Injectable()
 export class StatsCalculationService {
@@ -26,7 +30,9 @@ export class StatsCalculationService {
       return statType ? String(statType).toUpperCase() : null;
     } catch (error) {
       this.logger.warn(
-        `Could not resolve PROJECT_TYPE from settings: ${(error as Error)?.message}`
+        `Could not resolve PROJECT_TYPE from settings: ${
+          (error as Error)?.message
+        }`
       );
       return null;
     }
@@ -72,7 +78,9 @@ export class StatsCalculationService {
         stats.push(...[result.value].flat());
       } else {
         this.logger.error(
-          `Calculator "${calculators[i].key}" failed, skipping it for this run: ${
+          `Calculator "${
+            calculators[i].key
+          }" failed, skipping it for this run: ${
             (result.reason as Error)?.message ?? result.reason
           }`
         );
