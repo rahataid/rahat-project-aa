@@ -324,6 +324,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
     throw new Error('Transfer tokens not implemented for EVM');
   }
 
+  async preDisburse(_data: DisburseDto): Promise<any> {
+    throw new RpcException('Disburse-on-create not supported on EVM chain');
+  }
+
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
       `Starting disbursement for ${data.dName} with groups: ${data.groups}`

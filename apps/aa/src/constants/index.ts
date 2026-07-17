@@ -370,6 +370,7 @@ export const EVENTS = {
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
   AUTOMATED_TRIGGERED: 'events.automated_triggered',
   TOKEN_RESERVED: 'events.token_reserved',
+  GROUP_TOKEN_RESERVED_FOR_DISBURSE: 'events.group_token_reserved_for_disburse',
   STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',

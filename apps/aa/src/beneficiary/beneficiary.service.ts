@@ -721,6 +721,11 @@ export class BeneficiaryService {
       }
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
+      this.eventEmitter.emit(EVENTS.GROUP_TOKEN_RESERVED_FOR_DISBURSE, {
+        groupUuid: beneficiaryGroupId,
+        groupName: benfGroup.name,
+        title,
+      });
 
       return {
         status: 'success',

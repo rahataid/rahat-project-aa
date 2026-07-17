@@ -86,26 +86,19 @@ export class StellarChainService implements IChainService {
         );
         continue;
       }
+
+      const existingDisbursementId = (activeToken.info as any)?.disbursement
+        ?.id;
+      if (existingDisbursementId) {
+        this.logger.log(
+          `Group ${uuid} was already sent to SDP via disburse-on-create (disbursement ${existingDisbursementId}), queuing status check only`
+        );
+        await this.queueDisbursementStatusUpdate(existingDisbursementId, uuid);
+        continue;
+      }
+
       const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
-      this.logger.debug(
-        `Queuing SDP disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens, dName: ${dName}`
-      );
-      await this.stellarSdpQueue.add(
-        JOBS.STELLAR_SDP.DISBURSE,
-        {
-          dName,
-          groups: [uuid],
-        },
-        {
-          attempts: 3,
-          delay: 2000,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        }
-      );
+      await this.queueGroupDisbursement(uuid, dName, activeToken.numberOfTokens);
     }
 
     this.logger.log(
@@ -119,6 +112,73 @@ export class StellarChainService implements IChainService {
         status: 'PENDING',
       })),
     };
+  }
+
+  async preDisburse(data: DisburseDto): Promise<any> {
+    const groupUuid = data.groups?.[0];
+    if (!groupUuid) {
+      throw new RpcException('preDisburse requires a single group uuid');
+    }
+
+    this.logger.log(
+      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid}`
+    );
+
+    await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+
+    return {
+      message: `Disbursement job added for group ${groupUuid}`,
+      groups: [{ uuid: groupUuid, status: 'PENDING' }],
+    };
+  }
+
+  private async queueGroupDisbursement(
+    groupUuid: string,
+    dName: string,
+    numberOfTokens?: number,
+    skipStatusUpdate = false
+  ): Promise<void> {
+    this.logger.debug(
+      `Queuing SDP disbursement job for group ${groupUuid}${
+        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      }, dName: ${dName}`
+    );
+    await this.stellarSdpQueue.add(
+      JOBS.STELLAR_SDP.DISBURSE,
+      {
+        dName,
+        groups: [groupUuid],
+        skipStatusUpdate,
+      },
+      {
+        attempts: 3,
+        delay: 2000,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+  }
+
+  private async queueDisbursementStatusUpdate(
+    disbursementId: string,
+    groupUuid: string
+  ): Promise<void> {
+    await this.stellarSdpQueue.add(
+      JOBS.STELLAR_SDP.DISBURSEMENT_STATUS_UPDATE,
+      {
+        disbursementId,
+        groupUuid,
+        startedAt: Date.now(),
+      },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: { type: 'exponential', delay: 5000 },
+      }
+    );
   }
 
   async getDisbursementStats(): Promise<any> {
@@ -368,7 +428,7 @@ export class StellarChainService implements IChainService {
 
   private async fetchGroupTokenAmounts(groupUuids: string[]) {
     return this.prisma.beneficiaryGroupTokens.findMany({
-      where: { groupId: { in: groupUuids } },
+      where: { groupId: { in: groupUuids }, isDisbursed: false },
       select: { numberOfTokens: true, groupId: true },
     });
   }
