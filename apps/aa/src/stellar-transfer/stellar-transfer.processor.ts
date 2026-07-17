@@ -24,10 +24,14 @@ export class StellarTransferProcessor {
   @Process({ name: JOBS.STELLAR.TRANSFER_TO_OFFRAMP, concurrency: 1 })
   async transferToOfframp(job: Job<FSPPayoutDetails>) {
     this.logger.log(`[Job ${job.id}] Processing transfer to offramp for wallet ${job.data.beneficiaryWalletAddress}`);
+    this.logger.debug(`[Job ${job.id}] Attempt ${job.attemptsMade + 1}, payload: ${JSON.stringify(job.data)}`);
 
     const payload = { ...job.data };
 
     // Step 1 — Create or fetch BeneficiaryRedeem record
+    this.logger.debug(
+      `[Job ${job.id}] ${payload.beneficiaryRedeemUUID ? `Fetching existing redeem ${payload.beneficiaryRedeemUUID}` : `Creating new redeem for wallet ${payload.beneficiaryWalletAddress}`}`
+    );
     const log = payload.beneficiaryRedeemUUID
       ? await this.beneficiaryService.getBeneficiaryRedeem(payload.beneficiaryRedeemUUID)
       : await this.beneficiaryService.createBeneficiaryRedeem({
@@ -71,6 +75,7 @@ export class StellarTransferProcessor {
 
     try {
       // Step 6 — Get beneficiary wallet secret
+      this.logger.debug(`[Job ${job.id}] Fetching wallet secret for ${payload.beneficiaryWalletAddress}`);
       const keys: { address: string; privateKey: string } | null = await lastValueFrom(
         this.client.send(
           { cmd: JOBS.WALLET.GET_SECRET_BY_WALLET },
@@ -80,12 +85,9 @@ export class StellarTransferProcessor {
 
       if (!keys) {
         markedFailed = true;
-        await this.updateBeneficiaryRedeemAsFailed(
-          log.uuid,
-          `Beneficiary wallet secret not found for ${payload.beneficiaryWalletAddress}`,
-          attemptsMade,
-          log.info
-        );
+        const message = `Beneficiary wallet secret not found for ${payload.beneficiaryWalletAddress}`;
+        this.logger.warn(`[Job ${job.id}] [Redeem ${log.uuid}] ${message}`);
+        await this.updateBeneficiaryRedeemAsFailed(log.uuid, message, attemptsMade, log.info);
         throw new Error(`No secret found for wallet ${payload.beneficiaryWalletAddress}`);
       }
 
@@ -97,23 +99,17 @@ export class StellarTransferProcessor {
 
       if (balance <= 0) {
         markedFailed = true;
-        await this.updateBeneficiaryRedeemAsFailed(
-          log.uuid,
-          `Beneficiary has ${balance} rahat balance with wallet ${payload.beneficiaryWalletAddress}`,
-          attemptsMade,
-          log.info
-        );
+        const message = `Beneficiary has ${balance} rahat balance with wallet ${payload.beneficiaryWalletAddress}`;
+        this.logger.warn(`[Job ${job.id}] [Redeem ${log.uuid}] ${message}`);
+        await this.updateBeneficiaryRedeemAsFailed(log.uuid, message, attemptsMade, log.info);
         throw new Error(`Zero balance for ${payload.beneficiaryWalletAddress}`);
       }
 
       if (balance < payload.amount) {
         markedFailed = true;
-        await this.updateBeneficiaryRedeemAsFailed(
-          log.uuid,
-          `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`,
-          attemptsMade,
-          log.info
-        );
+        const message = `Balance is less than the amount to be transferred. Current balance: ${balance}, Amount to be transferred: ${payload.amount}`;
+        this.logger.warn(`[Job ${job.id}] [Redeem ${log.uuid}] ${message}`);
+        await this.updateBeneficiaryRedeemAsFailed(log.uuid, message, attemptsMade, log.info);
         throw new Error(`Insufficient balance for ${payload.beneficiaryWalletAddress}`);
       }
 
@@ -131,6 +127,7 @@ export class StellarTransferProcessor {
       this.logger.log(`[Job ${job.id}] Transfer successful, txHash: ${result.hash}`);
 
       // Step 9 — Mark redeem as completed in DB
+      this.logger.debug(`[Job ${job.id}] [Redeem ${log.uuid}] Marking completed`);
       await this.beneficiaryService.updateBeneficiaryRedeem(log.uuid, {
         status: 'TOKEN_TRANSACTION_COMPLETED',
         isCompleted: true,
@@ -170,6 +167,7 @@ export class StellarTransferProcessor {
       this.logger.error(`[Job ${job.id}] Transfer failed: ${error.message}`, error.stack);
 
       if (!markedFailed) {
+        this.logger.debug(`[Job ${job.id}] [Redeem ${log.uuid}] Marking failed`);
         await this.updateBeneficiaryRedeemAsFailed(
           log.uuid,
           error.message,

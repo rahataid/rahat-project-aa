@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue, Job } from 'bull';
-import { BQUEUE, JOBS } from '../constants';
-import { FSPPayoutDetails } from '../processors/types';
+import { BQUEUE, JOBS, STELLAR_TRANSFER_BATCH_SIZE } from '../constants';
+import { FSPPayoutDetails, StellarTransferBatchPayload } from '../processors/types';
+import { chunkArray } from '../utils/utility';
 
 @Injectable()
 export class StellarTransferService {
@@ -13,11 +14,21 @@ export class StellarTransferService {
   };
 
   constructor(
-    @InjectQueue(BQUEUE.STELLAR_TRANSFER) private readonly queue: Queue
+    @InjectQueue(BQUEUE.STELLAR_TRANSFER) private readonly queue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_TRANSFER_BATCH) private readonly batchQueue: Queue
   ) {}
 
   async addBulkToTokenTransferQueue(payloads: FSPPayoutDetails[]): Promise<Job[]> {
-    return Promise.all(payloads.map((p) => this.addToTokenTransferQueue(p)));
+    const batches = chunkArray(payloads, STELLAR_TRANSFER_BATCH_SIZE);
+    return Promise.all(
+      batches.map((transfers) =>
+        this.batchQueue.add(
+          JOBS.STELLAR.TRANSFER_TO_OFFRAMP_BATCH,
+          { transfers } as StellarTransferBatchPayload,
+          this.queueOpts
+        )
+      )
+    );
   }
 
   async addToTokenTransferQueue(payload: FSPPayoutDetails): Promise<Job> {
