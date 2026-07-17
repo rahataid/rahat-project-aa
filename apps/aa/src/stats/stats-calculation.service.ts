@@ -20,9 +20,7 @@ export class StatsCalculationService {
   ) {}
 
   // Resolves the current project's stat type from the PROJECTINFO setting
-  // (value.PROJECT_TYPE, set once at project setup time — see
-  // tools/deployment-scripts/0.setup-project.js). Returns null when it
-  // can't be determined.
+  //  Returns null when it can't be determined.
   async getStatType(): Promise<string | null> {
     try {
       const projectInfo = await this.settingsService.getPublic('PROJECTINFO');
@@ -38,10 +36,6 @@ export class StatsCalculationService {
     }
   }
 
-  // Resolves the calculator set for the current (or given) stat type, runs
-  // it, and saves the results. This is the single place that turns
-  // "a project's beneficiaries changed" into "the right dashboard stats are
-  // up to date" — see apps/aa/src/stats/stat-calculators for the registry.
   async runAndSave(statType?: string): Promise<StatDto[]> {
     const type = statType ?? (await this.getStatType());
     if (!type) {

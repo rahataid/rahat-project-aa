@@ -17,18 +17,15 @@ export class StatsController {
   }
 
   // Manual re-run: recalculates every stat for the project's current stat
-  // type and overwrites what's in the stats table, for when someone spots
-  // bad/stale data and wants it fixed without waiting for the next
-  // beneficiary change event.
+  // type and overwrites what's in the stats table
   @MessagePattern({ cmd: JOBS.STATS.BACK_FILL, uuid: process.env.PROJECT_ID })
   async backFill(@Payload() payload) {
     const stats = await this.statsCalculationService.runAndSave(
       payload?.statType
     );
     return {
-      success: true,
-      message: 'Stats recalculated',
-      count: stats.length,
+      message: 'Stats Synced Successfully',
+      data: stats,
     };
   }
 
