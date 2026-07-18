@@ -1,29 +1,35 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
-import { BQUEUE } from '../constants';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { BQUEUE, CORE_MODULE } from '../constants';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 
-// Services
 import { ChainQueueService } from './chain-queue.service';
 import { ChainServiceRegistry } from './registries/chain-service.registry';
 import { StellarChainService } from './chain-services/stellar-chain.service';
 import { EvmChainService } from './chain-services/evm-chain.service';
 
-// Existing services that we depend on
-import { StellarService } from '../stellar/stellar.service';
-import { StellarModule } from '../stellar/stellar.module';
-
 @Module({
   imports: [
-    // Import queue modules for both chains
-    BullModule.registerQueue(
-      { name: BQUEUE.STELLAR },
-      { name: BQUEUE.CONTRACT }
-    ),
-    // Import stellar module for stellar service dependencies
-    StellarModule,
+    ClientsModule.register([
+      {
+        name: CORE_MODULE,
+        transport: Transport.REDIS,
+        options: {
+          host: process.env.REDIS_HOST,
+          port: +process.env.REDIS_PORT,
+          password: process.env.REDIS_PASSWORD,
+        },
+      },
+    ]),
+    BullModule.registerQueue({ name: BQUEUE.CONTRACT }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
+    BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
   ],
   providers: [
+    PrismaService,
     SettingsService,
     ChainQueueService,
     ChainServiceRegistry,

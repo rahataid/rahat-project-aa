@@ -115,8 +115,8 @@ export type DownloadPayoutLogsType = {
   'Transaction Hash': string;
   'Payout Status': string;
   'Transaction Type': string;
-  'Created At': string;
-  'Updated At': string;
+  'Created At'?: string | Date;
+  'Updated At': string | Date | null;
   'Actual Budget': number;
   'Amount Disbursed': number;
   'Bank a/c name'?: string;
@@ -125,12 +125,15 @@ export type DownloadPayoutLogsType = {
 };
 
 // Manual Payout Verification Types
+export type ManualPayoutMatchBy = 'bankAccount' | 'phoneNumber';
+
 export interface ManualPayoutRowData {
   Amount: number;
   Remark: string;
   'Bank Name': string;
   'Bank Account Number': string;
   'Bank Account Holder Name ': string;
+  'Phone Number'?: string;
   'Approval Date': string;
   'Transaction Status': string;
   Date: string;

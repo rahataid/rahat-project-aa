@@ -7,7 +7,9 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
 import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and re-exports a
+// ReceiveService/equivalent. Was used to fetch vendor on-chain balance.
+// import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import {
@@ -37,7 +39,8 @@ export class VendorsService {
   constructor(
     private prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly receiveService: ReceiveService,
+    // TODO: STELLAR DETACH - re-add once ReceiveService-equivalent is available.
+    // private readonly receiveService: ReceiveService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue,
     @InjectQueue(BQUEUE.VENDOR_CVA)
@@ -116,15 +119,18 @@ export class VendorsService {
         throw new RpcException(`Vendor with id ${vendorWallet.uuid} not found`);
       }
 
-      const vendorBalance = await this.receiveService.getAccountBalance(
-        vendor.walletAddress
-      );
-
-      if (!vendorBalance) {
-        throw new RpcException(
-          `Failed to get balance for vendor with id ${vendorWallet.uuid}`
-        );
-      }
+      // TODO: STELLAR DETACH - re-enable vendor on-chain balance lookup once the
+      // stellar module is rewritten and exposes a ReceiveService-equivalent.
+      // const vendorBalance = await this.receiveService.getAccountBalance(
+      //   vendor.walletAddress
+      // );
+      //
+      // if (!vendorBalance) {
+      //   throw new RpcException(
+      //     `Failed to get balance for vendor with id ${vendorWallet.uuid}`
+      //   );
+      // }
+      const vendorBalance = null;
 
       return {
         assignedTokens: await this.getVendorAssignedTokens(

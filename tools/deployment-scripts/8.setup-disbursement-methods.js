@@ -22,10 +22,9 @@
 const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
+const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
-
-const DEPLOYMENT_DIR = path.resolve(__dirname, 'deployments');
 const SETTING_NAME = 'DISBURSHMENT_METHODS';
 
 const DISBURSEMENT_METHOD_CHOICES = [
@@ -43,32 +42,6 @@ function buildSettingEntry(selectedMethods) {
 		isReadOnly: false,
 		isPrivate: false,
 	};
-}
-
-async function getDeploymentFiles() {
-	await fs.mkdir(DEPLOYMENT_DIR, { recursive: true });
-	const entries = await fs.readdir(DEPLOYMENT_DIR, { withFileTypes: true });
-
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right));
-}
-
-async function askTargetFile(deploymentFiles) {
-	const answers = await prompt([
-		{
-			type: 'list',
-			name: 'selectedFile',
-			message: 'Select one deployment file to update:',
-			choices: deploymentFiles.map((fileName) => ({
-				name: fileName,
-				value: fileName,
-			})),
-		},
-	]);
-
-	return answers.selectedFile;
 }
 
 async function askDisbursementMethods() {
@@ -125,13 +98,7 @@ async function updateDeploymentFile(fileName, setting) {
 }
 
 async function main() {
-	const deploymentFiles = await getDeploymentFiles();
-
-	if (!deploymentFiles.length) {
-		throw new Error(`No deployment files found in ${DEPLOYMENT_DIR}`);
-	}
-
-	const selectedFile = await askTargetFile(deploymentFiles);
+	const selectedFile = await selectDeploymentFile();
 	const selectedMethods = await askDisbursementMethods();
 	const confirmed = await confirmSelection(selectedFile, selectedMethods);
 

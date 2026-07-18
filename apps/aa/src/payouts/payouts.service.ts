@@ -3,6 +3,7 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import {
   BeneficiaryRedeem,
+  GroupPurpose,
   Payouts,
   PayoutTransactionStatus,
   PayoutTransactionType,
@@ -20,6 +21,7 @@ import {
   IPaymentProvider,
   PayoutStats,
   ManualPayoutRowData,
+  ManualPayoutMatchBy,
   EnrichedManualPayoutRow,
   ManualPayoutVerificationResult,
   EntityConfig,
@@ -37,7 +39,7 @@ import {
   FSPManualPayoutDetails,
   ManualPayoutBatchTransferDto,
 } from '../processors/types';
-import { StellarService } from '../stellar/stellar.service';
+import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import {
   calculatePayoutStatus,
@@ -66,10 +68,8 @@ export class PayoutsService {
     private prisma: PrismaService,
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
-    private stellarService: StellarService,
+    private readonly stellarTransferService: StellarTransferService,
     private readonly eventEmitter: EventEmitter2,
-    @InjectQueue(BQUEUE.STELLAR)
-    private readonly stellarQueue: Queue,
     private configService: ConfigService,
     private appService: AppService,
     @Inject(forwardRef(() => BeneficiaryService))
@@ -178,7 +178,7 @@ export class PayoutsService {
         `Creating new payout for group: ${JSON.stringify(createPayoutDto)}`
       );
 
-      const beneficiaryGroup =
+      const beneficiaryGroupTokens =
         await prismaService.beneficiaryGroupTokens.findFirst({
           where: { uuid: groupId },
           include: {
@@ -190,13 +190,23 @@ export class PayoutsService {
           },
         });
 
-      if (!beneficiaryGroup) {
+      if (!beneficiaryGroupTokens) {
         throw new RpcException(
           `Beneficiary group tokens with UUID '${groupId}' not found`
         );
       }
+
+      this.validateGroupPurposeForPayoutType(
+        beneficiaryGroupTokens.beneficiaryGroup.groupPurpose,
+        createPayoutDto.type,
+        groupId
+      );
+
       const existingPayout = await prismaService.payouts.findFirst({
-        where: { beneficiaryGroupToken: { uuid: groupId } },
+        where: {
+          beneficiaryGroupToken: { uuid: groupId },
+          status: { not: 'COMPLETED' },
+        },
       });
 
       if (existingPayout) {
@@ -263,13 +273,13 @@ export class PayoutsService {
       if (payout.type === 'VENDOR') {
         if (createPayoutDto.mode === 'OFFLINE') {
           await this.vendorsService.processVendorOfflinePayout({
-            beneficiaryGroupUuid: beneficiaryGroup.groupId,
-            amount: String(beneficiaryGroup.numberOfTokens),
+            beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
+            amount: String(beneficiaryGroupTokens.numberOfTokens),
           });
         } else {
           await this.vendorsService.processVendorOnlinePayout({
-            beneficiaryGroupUuid: beneficiaryGroup.groupId,
-            amount: String(beneficiaryGroup.numberOfTokens),
+            beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
+            amount: String(beneficiaryGroupTokens.numberOfTokens),
           });
         }
       } else {
@@ -290,11 +300,11 @@ export class PayoutsService {
           title: `Payout Created`,
           description: `Payout has been created by ${user?.name} in ${
             projectName.value['project_name'] || projectId
-          } for ${beneficiaryGroup.beneficiaryGroup.name}, with ${
-            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
+          } for ${beneficiaryGroupTokens.beneficiaryGroup.name}, with ${
+            beneficiaryGroupTokens?.beneficiaryGroup.beneficiaries.length
           } beneficiaries with Rs ${
-            (beneficiaryGroup?.numberOfTokens * ONE_TOKEN_VALUE) /
-            beneficiaryGroup?.beneficiaryGroup.beneficiaries.length
+            (beneficiaryGroupTokens?.numberOfTokens * ONE_TOKEN_VALUE) /
+            beneficiaryGroupTokens?.beneficiaryGroup.beneficiaries.length
           } each`,
           group: 'Payout',
           projectId: projectId,
@@ -302,12 +312,34 @@ export class PayoutsService {
         },
       });
       return payout;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to create payout: ${error.message}`,
         error.stack
       );
       throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Validates that a beneficiary group's purpose is compatible with the payout type.
+   * GENERAL purpose groups can only receive VENDOR payouts.
+   */
+  private validateGroupPurposeForPayoutType(
+    groupPurpose: GroupPurpose | null,
+    payoutType: PayoutType,
+    groupId: string
+  ): void {
+    if (
+      groupPurpose === GroupPurpose.GENERAL &&
+      payoutType !== PayoutType.VENDOR
+    ) {
+      this.logger.warn(
+        `Group purpose GENERAL not allowed for group: ${groupId} with payout type: ${payoutType}`
+      );
+      throw new RpcException(
+        `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${payoutType}.`
+      );
     }
   }
 
@@ -891,39 +923,6 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-  async registerTokenTransferRequest(payload: {
-    uuid: string;
-    offrampWalletAddress: string;
-    BeneficiaryPayoutDetails: BeneficiaryPayoutDetails[];
-    payoutProcessorId: string;
-    offrampType: string;
-  }) {
-    const {
-      uuid,
-      offrampWalletAddress,
-      BeneficiaryPayoutDetails,
-      payoutProcessorId,
-      offrampType,
-    } = payload;
-
-    const stellerOfframpQueuePayload: FSPPayoutDetails[] =
-      BeneficiaryPayoutDetails.map((beneficiary) => ({
-        amount: beneficiary.amount,
-        beneficiaryWalletAddress: beneficiary.walletAddress,
-        beneficiaryBankDetails: beneficiary.bankDetails,
-        payoutUUID: uuid,
-        payoutProcessorId: payoutProcessorId,
-        offrampWalletAddress,
-        offrampType,
-      }));
-
-    const d = await this.stellarService.addBulkToTokenTransferQueue(
-      stellerOfframpQueuePayload
-    );
-
-    return d;
-  }
-
   async triggerPayout(uuid: string, user?: any): Promise<any> {
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
@@ -977,7 +976,7 @@ export class PayoutsService {
         offrampType: payoutExtras.paymentProviderType,
       }));
 
-    await this.stellarService.addBulkToTokenTransferQueue(
+    await this.stellarTransferService.addBulkToTokenTransferQueue(
       stellerOfframpQueuePayload
     );
     this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
@@ -1132,7 +1131,9 @@ export class PayoutsService {
 
       await this.offrampService.addBulkToOfframpQueue(failedFiatPayouts);
 
-      await this.stellarService.addBulkToTokenTransferQueue(failedTokenPayouts);
+      await this.stellarTransferService.addBulkToTokenTransferQueue(
+        failedTokenPayouts
+      );
 
       await this.beneficiaryService.updateBeneficiaryRedeemBulk(
         failedFiatRecords.beneficiaryRedeems.map((r) => r.uuid),
@@ -1387,7 +1388,9 @@ export class PayoutsService {
       beneficiaryRedeemUuid
     );
 
-    await this.stellarService.addToTokenTransferQueue(offrampQueuePayload);
+    await this.stellarTransferService.addToTokenTransferQueue(
+      offrampQueuePayload
+    );
 
     // update the beneficiary redeem status to pending
     await this.beneficiaryService.updateBeneficiaryRedeem(
@@ -1574,16 +1577,17 @@ export class PayoutsService {
    */
   async verifyManualPayout(
     payoutUUID: string,
-    data?: Record<string, ManualPayoutRowData>
+    data?: Record<string, ManualPayoutRowData>,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): Promise<ManualPayoutVerificationResult> {
     this.validatePayoutUUID(payoutUUID);
 
     this.logger.log(
-      `Starting manual payout verification for payout UUID: '${payoutUUID}'`
+      `Starting manual payout verification for payout UUID: '${payoutUUID}' (matchBy: ${matchBy})`
     );
 
     const payout = await this.fetchPayoutWithBeneficiaries(payoutUUID);
-    const payoutRows = this.parseManualPayoutData(data);
+    const payoutRows = this.parseManualPayoutData(data, matchBy);
     const beneficiaries = await this.fetchBeneficiariesWithIncompleteRedeems(
       payoutUUID,
       payout
@@ -1597,7 +1601,8 @@ export class PayoutsService {
     const verificationResult = this.matchBeneficiariesWithPayoutRows(
       payoutRows,
       beneficiaries,
-      payoutUUID
+      payoutUUID,
+      matchBy
     );
 
     this.logVerificationStats(verificationResult, payoutRows.length);
@@ -1687,7 +1692,8 @@ export class PayoutsService {
    * Parses and validates manual payout data
    */
   private parseManualPayoutData(
-    data?: Record<string, ManualPayoutRowData>
+    data?: Record<string, ManualPayoutRowData>,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): ManualPayoutRowData[] {
     if (!data || typeof data !== 'object') {
       throw new RpcException(
@@ -1705,19 +1711,29 @@ export class PayoutsService {
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
-      if (!row['Bank Account Number']) {
-        throw new RpcException(
-          `Payout verification failed: Missing bank account number in row ${
-            index + 1
-          }`
-        );
-      }
-      if (!row['Bank Account Holder Name ']) {
-        throw new RpcException(
-          `Payout verification failed: Missing bank account holder name in row ${
-            index + 1
-          }`
-        );
+      if (matchBy === 'phoneNumber') {
+        if (!row['Phone Number']) {
+          throw new RpcException(
+            `Payout verification failed: Missing phone number in row ${
+              index + 1
+            }`
+          );
+        }
+      } else {
+        if (!row['Bank Account Number']) {
+          throw new RpcException(
+            `Payout verification failed: Missing bank account number in row ${
+              index + 1
+            }`
+          );
+        }
+        if (!row['Bank Account Holder Name ']) {
+          throw new RpcException(
+            `Payout verification failed: Missing bank account holder name in row ${
+              index + 1
+            }`
+          );
+        }
       }
     });
 
@@ -1740,12 +1756,14 @@ export class PayoutsService {
   private matchBeneficiariesWithPayoutRows(
     payoutRows: ManualPayoutRowData[],
     beneficiaries: BeneficiaryPayoutDetails[],
-    payoutUUID: string
+    payoutUUID: string,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): ManualPayoutVerificationResult {
     const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
-      const matchedBeneficiary = beneficiaries.find(
-        (beneficiary) =>
-          beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+      const matchedBeneficiary = beneficiaries.find((beneficiary) =>
+        matchBy === 'phoneNumber'
+          ? beneficiary.phoneNumber === row['Phone Number']
+          : beneficiary.bankDetails.accountNumber === row['Bank Account Number']
       );
 
       return {
@@ -1951,6 +1969,15 @@ export class PayoutsService {
             select: {
               numberOfTokens: true,
               status: true,
+              beneficiaryGroup: {
+                select: {
+                  _count: {
+                    select: {
+                      beneficiaries: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -1981,22 +2008,22 @@ export class PayoutsService {
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
-          'Payout Status': redeemLog.payout?.status || '',
+          'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
-          'Created At': redeemLog.createdAt
-            ? format(new Date(redeemLog.createdAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Updated At': redeemLog.updatedAt
-            ? format(new Date(redeemLog.updatedAt), 'yyyy-MM-dd HH:mm')
-            : '',
-          'Actual Budget':
-            log.beneficiaryGroupToken.numberOfTokens * ONE_TOKEN_VALUE,
+          'Updated At': redeemLog.updatedAt,
+          'Actual Budget': (() => {
+            const totalTokens = log?.beneficiaryGroupToken?.numberOfTokens || 0;
+            const beneficiaryCount =
+              log?.beneficiaryGroupToken?.beneficiaryGroup?._count
+                ?.beneficiaries || 1;
+            return (totalTokens / beneficiaryCount) * ONE_TOKEN_VALUE;
+          })(),
           'Amount Disbursed': [
             'COMPLETED',
             'FIAT_TRANSACTION_COMPLETED',
             'TOKEN_TRANSACTION_COMPLETED',
           ].includes(redeemLog?.status)
-            ? (log.beneficiaryGroupToken.numberOfTokens || 0) * ONE_TOKEN_VALUE
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
             : 0,
         };
 

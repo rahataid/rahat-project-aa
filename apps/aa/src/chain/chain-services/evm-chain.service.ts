@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
@@ -11,7 +11,6 @@ import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import { ContractProcessor } from '../../processors/contract.processor';
 import { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
 import {
   AddTriggerDto,
   AssignTokensDto,
@@ -21,6 +20,7 @@ import {
   IChainService,
   RedeemInkindDto,
   RedeemInkindTokenForCashDto,
+  SendAssetDto,
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
@@ -41,7 +41,7 @@ export interface EVMChainConfig {
 }
 
 @Injectable()
-export class EvmChainService implements IChainService {
+export class EvmChainService implements IChainService, OnModuleInit {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
   private _evmProcessor: EVMCentralizedProcessor | null = null;
@@ -55,8 +55,21 @@ export class EvmChainService implements IChainService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly moduleRef: ModuleRef
-  ) {
-    this.initializeProvider();
+  ) {}
+
+  async onModuleInit() {
+    const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+    const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
+    if (typeof chainType === 'string' && chainType.toLowerCase() !== 'evm') {
+      this.logger.log(
+        `Chain type is "${chainType}", skipping EVM provider initialization`,
+        EvmChainService.name
+      );
+      return;
+    }
+    await this.initializeProvider().catch((err) =>
+      this.logger.error(`Failed to initialize EVM provider: ${err.message}`, err.stack, EvmChainService.name)
+    );
   }
 
   private get evmProcessor(): EVMCentralizedProcessor {
@@ -297,6 +310,7 @@ export class EvmChainService implements IChainService {
 
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
+    this.logger.log(`Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`);
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.ASSIGN_TOKENS,
@@ -308,6 +322,10 @@ export class EvmChainService implements IChainService {
 
   async transferTokens(data: TransferTokensDto): Promise<any> {
     throw new Error('Transfer tokens not implemented for EVM');
+  }
+
+  async preDisburse(_data: DisburseDto): Promise<any> {
+    throw new RpcException('Disburse-on-create not supported on EVM chain');
   }
 
   async disburse(data: DisburseDto): Promise<any> {
@@ -357,12 +375,17 @@ export class EvmChainService implements IChainService {
     
     let count = 0;
     for (const { uuid, tokensReserved } of groups) {
-      this.logger.log(`loop counter: ${count++}`);  
-      this.logger.log(`Adding disbursement job for group ${uuid} with ${tokensReserved.numberOfTokens} tokens reserved`);
+      const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
+      if (!activeToken) {
+        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
+        continue;
+      }
+      this.logger.log(`loop counter: ${count++}`);
+      this.logger.log(`Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`);
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
-          dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
+          dName: `${activeToken.title.toLocaleLowerCase()}_${data.dName}`,
           groups: uuid,
         },
         {
@@ -789,6 +812,7 @@ export class EvmChainService implements IChainService {
   }
 
   async fundAccount(data: FundAccountDto): Promise<any> {
+    this.logger.log(`Funding account ${data.walletAddress} with amount ${data.amount}`);
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.FUND_ACCOUNT,
@@ -834,7 +858,9 @@ export class EvmChainService implements IChainService {
   }
 
   validateAddress(address: string): boolean {
-    return ethers.isAddress(address);
+    const isValid = ethers.isAddress(address);
+    this.logger.debug(`Address validation for ${address}: ${isValid}`);
+    return isValid;
   }
 
   // Helper methods
@@ -926,6 +952,7 @@ export class EvmChainService implements IChainService {
   }
 
   private async getDisbursableGroupsUuids() {
+    this.logger.debug('Fetching disbursable group UUIDs');
     const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
         AND: [
@@ -939,6 +966,7 @@ export class EvmChainService implements IChainService {
       },
       select: { uuid: true, groupId: true },
     });
+    this.logger.debug(`Found ${benGroups.length} disbursable groups`);
     return benGroups.map((group) => group.groupId);
   }
 
@@ -1283,12 +1311,16 @@ export class EvmChainService implements IChainService {
         throw new RpcException('Beneficiary group not found');
       }
 
-      if (!beneficiaryGroups.tokensReserved) {
+      const activeToken = beneficiaryGroups.tokensReserved.find(
+        (t) => t.isDisbursed === false
+      );
+
+      if (!activeToken) {
         this.logger.error('Tokens not reserved for the group');
         throw new RpcException('Tokens not reserved for the group');
       }
 
-      return beneficiaryGroups.tokensReserved.payout;
+      return activeToken.payout;
     } catch (error) {
       throw new RpcException(
         `Failed to retrieve payout type: ${error.message}`
@@ -1329,6 +1361,7 @@ export class EvmChainService implements IChainService {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
+    this.logger.log(`Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`);
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
       {
@@ -1344,6 +1377,7 @@ export class EvmChainService implements IChainService {
   }
 
   async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto) {
+    this.logger.log(`Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`);
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH, ...redeemVendorInkindDto },
       {
