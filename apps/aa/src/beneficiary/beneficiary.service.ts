@@ -186,12 +186,12 @@ export class BeneficiaryService {
         { deletedAt: null },
         {
           ...(tokenAssigned === true
-            ? { tokensReserved: { isNot: null } }
+            ? { tokensReserved: { some: { isDisbursed: true } } }
             : tokenAssigned === false
             ? {
                 OR: [
-                  { tokensReserved: null },
-                  { tokensReserved: { is: { isDisbursed: true } } },
+                  { tokensReserved: { none: {} } },
+                  { tokensReserved: { some: { isDisbursed: true } } },
                 ],
                 groupPurpose: { not: GroupPurpose.COMMUNICATION },
               }
@@ -199,17 +199,10 @@ export class BeneficiaryService {
         },
         {
           ...(hasPayout === true
-            ? {
-                tokensReserved: {
-                  payoutId: { not: null },
-                },
-              }
+            ? { tokensReserved: { some: { payoutId: { not: null } } } }
             : hasPayout === false
             ? {
-                tokensReserved: {
-                  payoutId: null,
-                  isDisbursed: true,
-                },
+                tokensReserved: { some: { payoutId: null, isDisbursed: true } },
               }
             : {}),
         },
@@ -479,24 +472,6 @@ export class BeneficiaryService {
       )
     );
 
-    const totalBenf = data?.groupedBeneficiaries?.length ?? 0;
-    this.logger.debug(`Group ${uuid} has ${totalBenf} beneficiaries`);
-
-    data.benfGroupTokensStatus = benfGroup?.tokensReserved?.status;
-
-    data.groupedBeneficiaries = data.groupedBeneficiaries.map((benf) => {
-      let token = null;
-
-      if (benfGroup.tokensReserved) {
-        token = Math.floor(benfGroup.tokensReserved.numberOfTokens / totalBenf);
-      }
-
-      return {
-        ...benf,
-        tokensReserved: token,
-      };
-    });
-
     return data;
   }
 
@@ -550,25 +525,20 @@ export class BeneficiaryService {
     const foundAssignedBenf: string[] = [];
 
     for (const benf of benfIdsAndWalletAddress) {
-      // Step 1: check if beneficiary belongs to any group with tokensReserved
+      // Step 1: get all groups this benf belongs to that have any token record
       const tokenAssignedGroups = await this.prisma.beneficiaryGroups.findMany({
         where: {
-          tokensReserved: { isNot: null },
-          beneficiaries: {
-            some: { beneficiaryId: { equals: benf.uuid } },
-          },
+          tokensReserved: { some: {} },
+          beneficiaries: { some: { beneficiaryId: { equals: benf.uuid } } },
         },
-        include: { tokensReserved: true },
+        include: { tokensReserved: { include: { payout: true } } },
       });
 
       if (tokenAssignedGroups.length === 0) continue;
 
-      // Step 2: check the token status on those groups
-      const hasDisbursed = tokenAssignedGroups.some(
-        (g) => g.tokensReserved?.isDisbursed === true
-      );
-      const hasNotDisbursed = tokenAssignedGroups.some(
-        (g) => g.tokensReserved?.isDisbursed === false
+      // Step 2: check across all groups - if ANY group has a NOT_DISBURSED token → blocked
+      const hasNotDisbursed = tokenAssignedGroups.some((g) =>
+        g.tokensReserved.some((t) => t.isDisbursed === false)
       );
 
       if (hasNotDisbursed) {
@@ -576,17 +546,42 @@ export class BeneficiaryService {
         continue;
       }
 
-      if (hasDisbursed) {
-        // Step 3: check if beneficiary has a completed redeem record
+      // Step 3: all tokens are DISBURSED — check payout status for each disbursed token
+      const disbursedTokens = tokenAssignedGroups.flatMap((g) =>
+        g.tokensReserved.filter((t) => t.isDisbursed)
+      );
+
+      for (const token of disbursedTokens) {
+        // no payout created yet → still blocked
+        if (!token.payoutId) {
+          tokenAssignedBenfWallet.push(benf.walletAddress);
+          break;
+        }
+
+        const payout = token.payout;
+
+        if (!payout || payout.status === 'NOT_STARTED') {
+          tokenAssignedBenfWallet.push(benf.walletAddress);
+          break;
+        }
+
+        if (payout.status === 'COMPLETED') {
+          // this cycle is fully done — benf is eligible for a new assignment
+          continue;
+        }
+
+        // payout exists and is in progress — check BeneficiaryRedeem for this specific payout
         const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
           where: {
             beneficiaryWalletAddress: benf.walletAddress,
+            payoutId: payout.uuid,
             status: { in: ['FIAT_TRANSACTION_COMPLETED', 'COMPLETED'] },
           },
         });
 
         if (!completedRedeem) {
           foundAssignedBenf.push(benf.walletAddress);
+          break;
         }
       }
     }
@@ -630,8 +625,8 @@ export class BeneficiaryService {
     );
 
     const isAlreadyReserved =
-      await this.prisma.beneficiaryGroupTokens.findUnique({
-        where: { groupId: beneficiaryGroupId },
+      await this.prisma.beneficiaryGroupTokens.findFirst({
+        where: { groupId: beneficiaryGroupId, status: 'NOT_DISBURSED' },
       });
 
     if (isAlreadyReserved) {
@@ -652,25 +647,35 @@ export class BeneficiaryService {
       throw new RpcException('Beneficiary group not found.');
     }
 
-    const isVendorWithGeneral =
-      params?.type === PayoutType.VENDOR &&
-      benfGroup.groupPurpose === GroupPurpose.GENERAL;
+    const allowedPurposes: (GroupPurpose | null)[] = [
+      GroupPurpose.BANK_TRANSFER,
+      GroupPurpose.MOBILE_MONEY,
+      GroupPurpose.GENERAL,
+    ];
 
-    const isNoPayoutWithGeneral =
-      !isPayoutIntegrated && benfGroup.groupPurpose === GroupPurpose.GENERAL;
-
-    if (
-      !isVendorWithGeneral &&
-      !isNoPayoutWithGeneral &&
-      benfGroup.groupPurpose !== GroupPurpose.BANK_TRANSFER &&
-      benfGroup.groupPurpose !== GroupPurpose.MOBILE_MONEY
-    ) {
+    if (!allowedPurposes.includes(benfGroup.groupPurpose)) {
       this.logger.warn(
         `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
       );
       throw new RpcException(
-        `Invalid group purpose ${benfGroup.groupPurpose}. Only BANK_TRANSFER, MOBILE_MONEY, and GENERAL are allowed.`
+        `Invalid group purpose ${benfGroup.groupPurpose}. Allowed purposes: BANK_TRANSFER, MOBILE_MONEY, GENERAL.`
       );
+    }
+
+    if (benfGroup.groupPurpose === GroupPurpose.GENERAL) {
+      const isVendorWithGeneral = params?.type === PayoutType.VENDOR;
+      const isNoPayoutWithGeneral = !isPayoutIntegrated;
+
+      if (!isVendorWithGeneral && !isNoPayoutWithGeneral) {
+        this.logger.warn(
+          `Group purpose GENERAL not allowed for group: ${beneficiaryGroupId} with payout type: ${params?.type}, isPayoutIntegrated: ${isPayoutIntegrated}`
+        );
+        throw new RpcException(
+          `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${
+            params?.type ?? 'none'
+          }, `
+        );
+      }
     }
 
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
@@ -716,6 +721,11 @@ export class BeneficiaryService {
       }
 
       this.eventEmitter.emit(EVENTS.TOKEN_RESERVED);
+      this.eventEmitter.emit(EVENTS.GROUP_TOKEN_RESERVED_FOR_DISBURSE, {
+        groupUuid: beneficiaryGroupId,
+        groupName: benfGroup.name,
+        title,
+      });
 
       return {
         status: 'success',
@@ -785,11 +795,12 @@ export class BeneficiaryService {
 
   async getOneTokenReservationByGroupId(groupId: string) {
     this.logger.debug(`Fetching token reservation for group: ${groupId}`);
-    const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findUnique({
+    const benfGroupToken = await this.prisma.beneficiaryGroupTokens.findFirst({
       where: { groupId: groupId },
       include: {
         beneficiaryGroup: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
     return benfGroupToken;
@@ -842,8 +853,16 @@ export class BeneficiaryService {
       const { groupUuid, ...data } = payload;
       this.logger.debug(`Updating group token for group: ${groupUuid}`);
 
+      const activeToken = await this.prisma.beneficiaryGroupTokens.findFirst({
+        where: { groupId: groupUuid, isDisbursed: false },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!activeToken)
+        throw new RpcException('No active token found for group.');
+
       const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
-        where: { groupId: groupUuid },
+        where: { uuid: activeToken.uuid },
         data: {
           ...data,
           updatedAt: new Date(),
@@ -1277,15 +1296,19 @@ export class BeneficiaryService {
         return;
       }
 
-      if (!beneficiaryGroup.tokensReserved) {
+      const activeToken = beneficiaryGroup.tokensReserved.find(
+        (t) => t.isDisbursed === false
+      );
+
+      if (!activeToken) {
         this.logger.warn(
-          `No tokens reserved for group with UUID ${groupUuid}.`
+          `No active tokens reserved for group with UUID ${groupUuid}.`
         );
         return;
       }
 
       if (
-        !beneficiaryGroup.beneficiaries &&
+        !beneficiaryGroup.beneficiaries ||
         beneficiaryGroup.beneficiaries.length === 0
       ) {
         this.logger.warn(
@@ -1299,8 +1322,7 @@ export class BeneficiaryService {
       );
 
       const tokensPerBeneficiary = Math.floor(
-        beneficiaryGroup.tokensReserved.numberOfTokens /
-          beneficiaryGroup.beneficiaries.length
+        activeToken.numberOfTokens / beneficiaryGroup.beneficiaries.length
       );
 
       this.logger.debug(
