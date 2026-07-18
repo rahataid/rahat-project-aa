@@ -3,42 +3,109 @@ name: ALL DEV CI/CD
 on:
   workflow_dispatch:
     inputs:
-      image_name:
-        description: 'Docker image name (e.g., rahat-project-aa)'
-        required: true
-        default: 'rahat-project-aa'
+      apps_to_build:
+        description: "Apps to build (comma-separated: rahat-ui,community-tool-ui). Leave empty for all."
+        required: false
+        default: ""
         type: string
-      dockerfile_path:
-        description: 'Path to Dockerfile'
+      tag_suffix:
+        description: "Tag suffix (e.g., mcn-demo-2026,nrcs-training)"
         required: true
-        default: 'Dockerfile.aa'
+        default: "mcn-training"
         type: string
-      tag_prefix:
-        description: 'Tag prefix (e.g., Img tag)'
+      vault_secret_path:
+        description: "Vault secret path"
         required: true
-        default: 'mcn-demo-2026'
+        type: choice
+        options:
+          # Dev folder
+          - "[DEV] github/data/rahat/rahat-ui/dev/aa/dev"
+          - "[DEV] github/data/rahat/rahat-ui/dev/aa/dev-qa"
+          - "[DEV] github/data/rahat/rahat-ui/dev/aa/stellar"
+          - "[DEV] github/data/rahat/rahat-ui/dev/aa/unicef"
+          - "[DEV] github/data/rahat/rahat-ui/dev/el/crm"
+          - "[DEV] github/data/rahat/rahat-ui/dev/unicef/aidlink"
+          - "[DEV] github/data/rahat/rahat-ui/demo/aa/stellar"
+
+          # Training
+          - "[TRAIN] github/data/rahat/rahat-ui/traning/aa/mcn"
+          - "[TRAIN] github/data/rahat/rahat-ui/traning/aa/nrcs"
+
+          # Demo folder
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/mcn"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/redcross"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/testload"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/unicef"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aidlink"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/c2c/xcapita"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/dry-run-pin"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/gsma"
+          - "[DEMO] github/data/rahat/rahat-ui/demo/aa/mcn-2026"
+
+          # Main folder
+          - "[MAIN] github/data/rahat/rahat-ui/main/aa/geruwa"
+          - "[MAIN] github/data/rahat/rahat-ui/main/aa/geruwarm"
+          - "[MAIN] github/data/rahat/rahat-ui/main/aa/mcn"
+          - "[MAIN] github/data/rahat/rahat-ui/main/cam-ken-merge"
+          - "[MAIN] github/data/rahat/rahat-ui/prod/aa/demo"
+
+
+      vault_secret_key:
+        description: "Key within the Vault secret that holds the env (e.g., rahat-ui)"
+        required: true
+        default: "rahat-ui"
         type: string
 
 env:
   CI: false
-  NODE_VERSION: '20.10.0'
-  PNPM_VERSION: '8.14.1'
+  REGISTRY: docker.io
+  IMAGE_NAMESPACE: esatya
 
 jobs:
-  deploy:
-    name: Build & Push Docker Image
+  setup:
+    name: Setup Build Matrix
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Checkout code
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          APPS="${{ inputs.apps_to_build }}"
+          if [ -z "$APPS" ]; then
+            APPS="rahat-ui,community-tool-ui"
+          fi
+          JSON=$(printf '%s\n' "$APPS" | awk -F',' '{printf "["; for(i=1;i<=NF;i++) printf "\"%s\"%s",$i,(i==NF?"":","); printf "]"}')
+          echo "matrix={\"app\":$JSON}" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build & Push - ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get short SHA and timestamp
-        id: vars
+      # -----------------------------
+      # Strip prefix from Vault secret path
+      # -----------------------------
+      - name: Strip prefix from Vault path
+        id: vault-path
         run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
-          
-      #Import vault Secrets
+          RAW_PATH="${{ inputs.vault_secret_path }}"
+          CLEAN_PATH="${RAW_PATH#*] }"
+          echo "VAULT_PATH=${CLEAN_PATH}" >> $GITHUB_OUTPUT
+
+      # -----------------------------
+      # Vault Secret Import
+      # -----------------------------
       - name: Import Secrets from Vault
         id: vault
         uses: hashicorp/vault-action@v2.4.0
@@ -47,125 +114,85 @@ jobs:
           token: ${{ secrets.VAULT_TOKEN }}
           secrets: |
             github/data/general/docker/esatya username | DOCKERHUB_USERNAME ;
-            github/data/general/docker/esatya password | DOCKERHUB_TOKEN ;
+            github/data/general/docker/esatya pat | DOCKERHUB_TOKEN ;
+            ${{ steps.vault-path.outputs.VAULT_PATH }} ${{ inputs.vault_secret_key }} | ENV ;
 
-      # Install pnpm FIRST
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
-      # Setup Node.js with pnpm cache
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      # Get pnpm store path
-      - name: Get pnpm store directory
-        shell: bash
+      # -----------------------------
+      # Environment Injection
+      # -----------------------------
+      - name: Create environment file
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      # Cache pnpm store
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      # Cache node_modules
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            **/node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-node-modules-
-
-      # # Cache Nx build cache
-      # - name: Cache Nx
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: .nx/cache
-      #     key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
-      #       ${{ runner.os }}-nx-
-
-      # Install dependencies with lockfile handling
-      - name: Install dependencies
-        run: |
-          if [ -f pnpm-lock.yaml ]; then
-            echo "pnpm-lock.yaml found, checking compatibility..."
-            if pnpm install --frozen-lockfile 2>/dev/null; then
-              echo "✅ Lockfile is compatible"
-            else
-              echo "⚠️  Lockfile is incompatible, regenerating..."
-              rm pnpm-lock.yaml
-              pnpm install
-              echo "⚠️  WARNING: Lockfile was regenerated. Please commit the new pnpm-lock.yaml"
-            fi
-          else
-            echo "⚠️  No pnpm-lock.yaml found, installing fresh..."
-            pnpm install
-            echo "⚠️  WARNING: Lockfile was generated. Please commit pnpm-lock.yaml"
+          if [ -z "$ENV" ]; then
+            echo "ERROR: Vault secret is empty!"
+            exit 1
           fi
+          tee ./.env <<< "$ENV"
 
-      # Generate Prisma client
-      - name: Generate Prisma client
-        run: pnpm prisma:generate
+      # -----------------------------
+      # Node + PNPM Setup
+      # -----------------------------
+      # - name: Enable pnpm via Corepack
+      #   run: corepack enable && corepack prepare pnpm@8.14.1 --activate
 
-      # Build all apps (Nx will use cache)
-      - name: Build applications
-        run: pnpm build:all
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 20.10.0
+      #     cache: "pnpm"
 
-      # Set up Docker Buildx
+      # - name: Install dependencies
+      #   run: pnpm install --frozen-lockfile
+
+      # - name: Build application
+      #   run: pnpm build:all
+
+      # -----------------------------
+      # Docker Setup
+      # -----------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Login to Docker Hub with secrets
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ steps.vault.outputs.DOCKERHUB_USERNAME }}
-          password: ${{ steps.vault.outputs.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
-      # Build and push with layer caching
+      - name: Extract Git metadata
+        id: meta
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "run_number=${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+
+      # -----------------------------
+      # Docker Build & Push
+      # -----------------------------
       - name: Build and Push Docker Image
-        id: build-push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ inputs.dockerfile_path }}
+          file: Dockerfile.${{ matrix.app }}
           push: true
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
           tags: |
-            esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}
-            esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}
-            esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.timestamp }}
-          cache-from: type=registry,ref=esatya/${{ inputs.image_name }}:buildcache
-          cache-to: type=registry,ref=esatya/${{ inputs.image_name }}:buildcache,mode=max
-          provenance: false
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ steps.vars.outputs.timestamp }}
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.app }}:${{ inputs.tag_suffix }}
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.app }}:${{ inputs.tag_suffix }}-${{ steps.meta.outputs.short_sha }}-${{ steps.meta.outputs.run_number }}
 
-      # Output image digest
-      - name: Image digest
-        run: |
-          echo "Image digest: ${{ steps.build-push.outputs.digest }}"
-          echo "Image tags:"
-          echo "  - esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}"
-          echo "  - esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}"
-
-    outputs:
-      sha_short: ${{ steps.vars.outputs.sha_short }}
-      image_tag: esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}
-      digest: ${{ steps.build-push.outputs.digest }}
+      - name: Send Slack Alert on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_COLOR: '#ff0000'
+          SLACK_TITLE: 'Build Failed — ${{ matrix.app }}'
+          SLACK_MESSAGE: |
+            *App:* `${{ matrix.app }}`
+            *Tag:* `${{ inputs.tag_suffix }}`
+            *Branch:* `${{ github.ref_name }}`
+            *Actor:* `${{ github.actor }}`
+            *Vault path:* `${{ steps.vault-path.outputs.VAULT_PATH }}`
+      
+            :point_right: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View full logs>
+          SLACK_FOOTER: ''
+          
