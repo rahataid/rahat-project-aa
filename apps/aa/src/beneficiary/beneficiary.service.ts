@@ -523,6 +523,7 @@ export class BeneficiaryService {
 
     const tokenAssignedBenfWallet: string[] = [];
     const foundAssignedBenf: string[] = [];
+    const fiatRedeemNotCompleted: string[] = [];
 
     for (const benf of benfIdsAndWalletAddress) {
       // Step 1: get all groups this benf belongs to that have any token record
@@ -570,8 +571,22 @@ export class BeneficiaryService {
           continue;
         }
 
-        // payout exists and is in progress — check BeneficiaryRedeem for this specific payout
-        const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        // payout in progress — first check token transaction is completed
+        const tokenRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress: benf.walletAddress,
+            payoutId: payout.uuid,
+            status: 'TOKEN_TRANSACTION_COMPLETED',
+          },
+        });
+
+        if (!tokenRedeem) {
+          foundAssignedBenf.push(benf.walletAddress);
+          break;
+        }
+
+        // token done — check fiat/cash redeem is also completed
+        const fiatRedeem = await this.prisma.beneficiaryRedeem.findFirst({
           where: {
             beneficiaryWalletAddress: benf.walletAddress,
             payoutId: payout.uuid,
@@ -579,16 +594,16 @@ export class BeneficiaryService {
           },
         });
 
-        if (!completedRedeem) {
-          foundAssignedBenf.push(benf.walletAddress);
+        if (!fiatRedeem) {
+          fiatRedeemNotCompleted.push(benf.walletAddress);
           break;
         }
       }
     }
 
-    if (tokenAssignedBenfWallet.length > 0 || foundAssignedBenf.length > 0) {
+    if (tokenAssignedBenfWallet.length > 0 || foundAssignedBenf.length > 0 || fiatRedeemNotCompleted.length > 0) {
       this.logger.warn(
-        `Token conflict found for group: ${groupId} — NOT_DISBURSED: ${tokenAssignedBenfWallet.length}, pending redeem: ${foundAssignedBenf.length}`
+        `Token conflict found for group: ${groupId} — NOT_DISBURSED: ${tokenAssignedBenfWallet.length}, pending token redeem: ${foundAssignedBenf.length}, pending fiat redeem: ${fiatRedeemNotCompleted.length}`
       );
       return {
         isAssignable: false,
@@ -597,6 +612,7 @@ export class BeneficiaryService {
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
         tokenAssignedBenfWallet,
         foundAssignedBenf,
+        fiatRedeemNotCompleted,
         groupName: group.name,
       };
     }
