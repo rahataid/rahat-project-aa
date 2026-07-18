@@ -1596,12 +1596,12 @@ export class BeneficiaryService {
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
 
-    if (isLastBatch) {
-      await this.initiateQrPdf(groupUuid);
-      this.logger.log(
-        `Last batch processed, PDF generation triggered for group: ${groupUuid}`
-      );
-    }
+    //THIS IS TAKING TOO MUCH RESOURCES, SO COMMENTING OUT FOR NOW. WILL REVISIT LATER
+
+    // if (isLastBatch) {
+    //   await this.initiateQrPdf(groupUuid);
+    //   this.logger.log(`Last batch processed, PDF generation triggered for group: ${groupUuid}`);
+    // }
 
     return { message: 'Sync process completed successfully' };
   }
