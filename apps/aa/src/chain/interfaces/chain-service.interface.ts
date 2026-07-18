@@ -1,4 +1,9 @@
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+export class SendAssetDto {
+  amount: string | number;
+  phoneNumber: string;
+  receiverAddress: string;
+  otp: string;
+}
 
 export interface IChainService {
   // Token operations
