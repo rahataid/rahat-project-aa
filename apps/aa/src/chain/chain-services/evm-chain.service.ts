@@ -1334,8 +1334,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
         throw new RpcException('Beneficiary group not found');
       }
 
+      // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
       const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === false
+        (t) => t.isDisbursed === true 
       );
 
       if (!activeToken) {
