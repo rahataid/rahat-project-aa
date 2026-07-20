@@ -780,11 +780,16 @@ export class BeneficiaryService {
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
     > = [];
 
-    const isPayoutPhaseActive = await this.isTokenPayoutPhaseActive();
+    const disburseOnCreate = await this.settingsService.getPublic(
+      'DISBURSED_ON_CREATE'
+    );
+    const shouldSyncFromSdp =
+      disburseOnCreate?.value === true &&
+      (await this.isTokenPayoutPhaseActive());
 
     for (const d of data) {
       const group = await this.getOneGroup(d['groupId'] as UUID);
-      const synced = isPayoutPhaseActive
+      const synced = shouldSyncFromSdp
         ? await this.syncDisbursementStatusFromSdp(d)
         : null;
 
