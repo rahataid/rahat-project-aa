@@ -658,7 +658,16 @@ export class StellarChainService implements IChainService {
     if (!beneficiaryGroups) throw new RpcException('Beneficiary group not found');
     if (!beneficiaryGroups.tokensReserved) throw new RpcException('Tokens not reserved for the group');
 
-    return beneficiaryGroups.tokensReserved.payout;
+    const activeToken = beneficiaryGroups.tokensReserved.find(
+        (t) => t.isDisbursed === false
+      );
+
+    if (!activeToken) {
+        this.logger.error('Tokens not reserved for the group');
+        throw new RpcException('Tokens not reserved for the group');
+      }
+
+      return activeToken.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {
