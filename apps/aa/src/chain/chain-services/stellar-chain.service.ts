@@ -17,6 +17,8 @@ import {
   UpdateTriggerDto,
   RedeemInkindDto,
   RedeemInkindTokenForCashDto,
+  OfflineTransferItem,
+  OfflineTransferResult,
 } from '../interfaces/chain-service.interface';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
@@ -371,6 +373,30 @@ export class StellarChainService implements IChainService {
     });
 
     return { txHash: result.hash };
+  }
+
+  async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
+    const walletAddresses = items.map((i) => i.beneficiaryWalletAddress);
+    const secrets: { address: string; privateKey: string }[] = await lastValueFrom(
+      this.client.send({ cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET }, { walletAddresses, chain: 'stellar' })
+    );
+    const secretByWallet = new Map(secrets.map((s) => [s.address, s.privateKey]));
+
+    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+
+    const results: OfflineTransferResult[] = [];
+    for (const item of items) {
+      try {
+        const secret = secretByWallet.get(item.beneficiaryWalletAddress);
+        if (!secret) throw new Error(`No secret found for wallet ${item.beneficiaryWalletAddress}`);
+        const result = await stellarClient.sendFromSponsored(secret, item.vendorWalletAddress, item.amount.toString());
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, txHash: result.hash });
+      } catch (err: any) {
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, error: err?.message });
+      }
+    }
+    return results;
   }
 
   async fundAccount(_data: FundAccountDto): Promise<any> {

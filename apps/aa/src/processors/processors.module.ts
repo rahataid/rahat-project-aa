@@ -20,6 +20,7 @@ import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatche
 import { InkindProcessor } from './inkind.processor';
 import { OtpModule } from '../otp/otp.module';
 import { ChainModule } from '../chain/chain.module';
+import { OfflineRedemptionProcessor } from './offline-redemption.processor';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { ChainModule } from '../chain/chain.module';
     forwardRef(() => InkindsModule),
     PayoutsModule,
     StakeholdersModule,
-    ChainModule,
+    forwardRef(() => ChainModule),
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -69,6 +70,7 @@ import { ChainModule } from '../chain/chain.module';
       },
     }),
     BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
+    BullModule.registerQueue({ name: BQUEUE.OFFLINE_REDEEM }),
     OtpModule,
   ],
   providers: [
@@ -85,6 +87,7 @@ import { ChainModule } from '../chain/chain.module';
     EVMCentralizedProcessor,
     EVMTxDispatcher,
     EVMQueryDispatcher,
+    OfflineRedemptionProcessor,
   ],
   exports: [EVMCentralizedProcessor, EVMTxDispatcher, EVMQueryDispatcher, ContractProcessor],
 })

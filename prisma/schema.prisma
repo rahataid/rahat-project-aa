@@ -837,6 +837,21 @@ model TempOfflineInkindRedemption {
   @@map("tbl_temp_offline_inkind_redemptions")
 }
 
+model TempOfflineRedemption {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  chainType String // 'evm' | 'stellar'
+  vendorId  String?
+  payoutId  String?
+  payloads  Json // [{ redeemUuid, beneficiaryWalletAddress, vendorWalletAddress, amount }]
+  status    String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("tbl_temp_offline_redemptions")
+}
+
 model VendorInkindRedemption {
   id   Int    @id @default(autoincrement())
   uuid String @unique @default(uuid())

@@ -9,8 +9,8 @@ import { Queue } from 'bull';
 import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
-import { ContractProcessor } from '../../processors/contract.processor';
-import { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
+import type { ContractProcessor } from '../../processors/contract.processor';
+import type { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
 import {
   AddTriggerDto,
   AssignTokensDto,
@@ -24,6 +24,8 @@ import {
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
+  OfflineTransferItem,
+  OfflineTransferResult,
 } from '../interfaces/chain-service.interface';
 
 export interface EVMChainConfig {
@@ -44,8 +46,8 @@ export interface EVMChainConfig {
 export class EvmChainService implements IChainService, OnModuleInit {
   private readonly logger = new Logger(EvmChainService.name);
   private provider: ethers.Provider;
-  private _evmProcessor: EVMCentralizedProcessor | null = null;
-  private _contractProcessor: ContractProcessor | null = null;
+  private _evmProcessor?: EVMCentralizedProcessor;
+  private _contractProcessor?: ContractProcessor;
   name = 'evm';
 
   constructor(
@@ -74,20 +76,24 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   private get evmProcessor(): EVMCentralizedProcessor {
     if (!this._evmProcessor) {
-      this._evmProcessor = this.moduleRef.get(EVMCentralizedProcessor, {
+      // To prevent circular dependency issues, we are using dynamic import and moduleRef to get the processor instance.
+      const mod = require('../../processors/evm-centralized.processor');
+      this._evmProcessor = this.moduleRef.get(mod.EVMCentralizedProcessor, {
         strict: false,
       });
     }
-    return this._evmProcessor!;
+    return this._evmProcessor;
   }
 
   private get contractProcessor(): ContractProcessor {
     if (!this._contractProcessor) {
-      this._contractProcessor = this.moduleRef.get(ContractProcessor, {
+      // To prevent circular dependency issues, we are using dynamic import and moduleRef to get the processor instance.
+      const mod = require('../../processors/contract.processor');
+      this._contractProcessor = this.moduleRef.get(mod.ContractProcessor, {
         strict: false,
       });
     }
-    return this._contractProcessor!;
+    return this._contractProcessor;
   }
 
   getChainType(): ChainType {
@@ -746,6 +752,23 @@ export class EvmChainService implements IChainService, OnModuleInit {
       );
       throw error;
     }
+  }
+
+  async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
+    const results: OfflineTransferResult[] = [];
+    for (const item of items) {
+      try {
+        const result = await this.evmProcessor.transferBeneficiaryTokenToVendor(
+          item.beneficiaryWalletAddress,
+          item.vendorWalletAddress,
+          item.amount.toString()
+        );
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, txHash: result.txHash });
+      } catch (err: any) {
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, error: err?.message });
+      }
+    }
+    return results;
   }
 
   async getWalletBalance(data: { address: string }): Promise<any> {

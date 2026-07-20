@@ -64,6 +64,7 @@ export class PayoutsService {
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private prisma: PrismaService,
+    @Inject(forwardRef(() => VendorsService))
     private vendorsService: VendorsService,
     private offrampService: OfframpService,
     private readonly stellarTransferService: StellarTransferService,

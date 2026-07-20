@@ -44,6 +44,21 @@ export interface IChainService {
   // Inkind redemption
   redeemInkind?(redeemDto: RedeemInkindDto): Promise<any>;
   redeemVendorInkindTokens?(redeemVendorInkindDto: RedeemInkindTokenForCashDto): Promise<any>;
+
+  // Offline redemption (batched, no OTP)
+  transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]>;
+}
+
+export interface OfflineTransferItem {
+  beneficiaryWalletAddress: string;
+  vendorWalletAddress: string;
+  amount: string | number;
+}
+
+export interface OfflineTransferResult {
+  beneficiaryWalletAddress: string;
+  txHash?: string;
+  error?: string;
 }
 
 export type ChainType = 'stellar' | 'evm';

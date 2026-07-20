@@ -39,6 +39,6 @@ import { PrismaService } from '@rumsan/prisma';
     EvmChainService,
     PrismaService,
   ],
-  exports: [ChainService, CHAIN_SERVICE, StellarChainService],
+  exports: [ChainService, CHAIN_SERVICE, ChainServiceRegistry, StellarChainService, EvmChainService],
 })
 export class ChainModule {}
