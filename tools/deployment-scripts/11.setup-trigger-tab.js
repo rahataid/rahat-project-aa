@@ -1,44 +1,48 @@
 /**
- * 2.setup-forecast-tab.js
+ * 11.setup-trigger-tab.js
  *
  * Step 2 of the deployment setup workflow.
  *
- * Configures the FORECAST_TAB_CONFIG setting for a project deployment file.
- * This setting controls which forecast data tabs are visible in the project UI
- * (e.g., DHM, GLOFAS, Daily Monitoring, Gauge Reading, External Links).
+ * Configures the TRIGGER_TAB setting for a project deployment file.
+ * This setting controls which trigger data tabs are visible in the project UI
+ * (e.g., Manual Triggers, Automated Triggers).
  *
  * What it does:
  *   - Prompts to select the target deployment file
- *   - Presents a checkbox list of available forecast tabs
- *   - Upserts the FORECAST_TAB_CONFIG entry in the selected deployment file
+ *   - Presents a checkbox list of available trigger tabs
+ *   - Upserts the TRIGGER_TAB entry in the selected deployment file
  *
  * Prerequisites:
  *   - A deployment file must exist (run 0.setup-project.js first)
  *
  * Usage:
- *   node tools/deployment-scripts/2.setup-forecast-tab.js
+ *   node tools/deployment-scripts/11.setup-trigger-tab.js
  */
 
 const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
-const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const {
+  selectDeploymentFile,
+  DEPLOYMENT_DIR,
+} = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 
-const SETTING_NAME = 'FORECAST_TAB_CONFIG';
+const SETTING_NAME = 'TRIGGER_TAB';
 
 const ALL_TABS = [
-  { label: 'DHM', value: 'dhm' },
-  { label: 'NWP-DHM', value: 'dhm' },
-  { label: 'GLOFAS', value: 'glofas' },
-  { label: 'Daily Monitoring', value: 'dailyMonitoring' },
-  { label: 'Gauge Reading', value: 'gaugeReading', hasDatePicker: true },
-  { label: 'External Links', value: 'externalLinks' },
-  { label: 'Google Flood Hub', value: 'gfh' },
+  {
+    label: 'Manual Trigger',
+    value: 'manual',
+  },
+  {
+    label: 'Automated Trigger',
+    value: 'automated',
+  },
 ];
 
-function buildForecastTabEntry(tabs) {
+function buildTriggerTabEntry(tabs) {
   return {
     name: SETTING_NAME,
     value: JSON.stringify({ tabs }),
@@ -55,7 +59,7 @@ async function askTabs() {
       type: 'checkbox',
       name: 'selectedValues',
       message:
-        'Select forecast tabs to include (space to select, enter to confirm):',
+        'Select trigger tabs to include (space to select, enter to confirm):',
       choices: ALL_TABS.map((tab) => ({
         name: tab.label,
         value: tab.value,
@@ -70,7 +74,7 @@ async function askTabs() {
 }
 
 async function confirmSelection(selectedFile, tabs) {
-  console.log('\nSelected FORECAST_TAB_CONFIG tabs:');
+  console.log('\nSelected TRIGGER_TAB tabs:');
   console.log(JSON.stringify({ tabs }, null, 2));
 
   const answers = await prompt([
@@ -116,13 +120,13 @@ async function main() {
     return;
   }
 
-  const entry = buildForecastTabEntry(selectedTabs);
+  const entry = buildTriggerTabEntry(selectedTabs);
   const action = await updateDeploymentFile(selectedFile, entry);
   console.log(`${action.toUpperCase()}: ${SETTING_NAME} in ${selectedFile}`);
 }
 
 main().catch((error) => {
-  console.error('Failed to update FORECAST_TAB_CONFIG in deployment files.');
+  console.error('Failed to update TRIGGER_TAB in deployment files.');
   console.error(error.message || error);
   process.exit(1);
 });

@@ -25,6 +25,33 @@ function askQuestion(query: string): Promise<string> {
   });
 }
 
+type ProjectType = 'flood' | 'heatwave';
+
+const CATEGORIES: Record<ProjectType, string[]> = {
+  flood: [
+    'General Action',
+    'Early Warning Communication',
+    'Cleaning The Drains',
+    'Strengthening Embankments By Placing Sand Bags',
+    'Support For Early Harvesting',
+    'People, Livestock And Property Evacuation',
+    'Complaints Handling Mechanism',
+    'Managing Drinking Water',
+    'Cash Transfer',
+  ],
+  heatwave: [
+    'Health and Care',
+    'Early Warning Communication',
+    'PGI',
+    'Risk Reduction, Climate Adaption and Recovery',
+    'Cash Transfer',
+    'CEA',
+    'Secretariat Services',
+    'National Society Strengthening',
+    'Partnership and Coordination',
+  ],
+};
+
 const envPath = process.argv[2];
 const argProjectName = process.argv[3];
 const argProjectDescription = process.argv[4];
@@ -136,6 +163,19 @@ async function main() {
     const envVariables = await readEnvFile(envPath);
 
     // Use CLI arguments if provided, otherwise prompt interactively
+    let projectType: ProjectType;
+    const projectTypeInput = await askQuestion(
+      'Select project type (1: Flood, 2: Heatwave): '
+    );
+    if (projectTypeInput === '1') {
+      projectType = 'flood';
+    } else if (projectTypeInput === '2') {
+      projectType = 'heatwave';
+    } else {
+      throw new Error('Invalid project type selection. Please enter 1 or 2.');
+    }
+    console.log(`Selected project type: ${projectType}`);
+
     const name = argProjectName || (await askQuestion('Enter project name: '));
     const description =
       argProjectDescription ||
@@ -200,7 +240,7 @@ async function main() {
     console.log('--------------------------------');
     await modifyEnvAndSettings(uuid, privateKey, txManager);
     console.log('--------------------------------');
-    await seedTriggers(uuid, txManager);
+    await seedTriggers(uuid, txManager, projectType);
     console.log('--------------------------------');
     await txManager.prepareAll();
     console.log('--------------------------------');
@@ -218,23 +258,14 @@ async function main() {
 
 async function seedTriggers(
   projectUuid: string,
-  txManager: RawDistributedTransactionManager
+  txManager: RawDistributedTransactionManager,
+  projectType: ProjectType
 ) {
   try {
     console.log('#########################');
     console.log('Seeding Triggers');
     console.log('#########################');
-    const categories = [
-      'General Action',
-      'Early Warning Communication',
-      'Cleaning The Drains',
-      'Strengthening Embankments By Placing Sand Bags',
-      'Support For Early Harvesting',
-      'People, Livestock And Property Evacuation',
-      'Complaints Handling Mechanism',
-      'Managing Drinking Water',
-      'Cash Transfer',
-    ];
+    const categories = CATEGORIES[projectType];
 
     for (const category of categories) {
       await txManager.executeRaw(

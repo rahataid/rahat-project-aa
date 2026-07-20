@@ -24,6 +24,14 @@
     "isPrivate": false
   },
   {
+    "name": "TRIGGER_TAB",
+    "value": "{\"tabs\":[{\"label\":\"Manual Trigger\",\"value\":\"manual\"},{\"label\":\"Automated Trigger\",\"value\":\"automated\"}]}",
+    "dataType": "OBJECT",
+    "requiredFields": "{}",
+    "isReadOnly": false,
+    "isPrivate": false
+  },
+  {
     "name": "PROJECT_NAV_CONFIG",
     "value": "{\"navsettings\": [{\"icon\": \"LayoutDashboard\", \"path\": \"\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Dashboard\"}, {\"icon\": \"UsersRound\", \"path\": \"beneficiary\", \"title\": \"Project Beneficiaries\"}, {\"icon\": \"CircleUserRound\", \"path\": \"stakeholders\", \"title\": \"Stakeholders\"}, {\"icon\": \"HardDrive\", \"path\": \"data-sources\", \"title\": \"Forecast Data\"}, {\"icon\": \"SquareActivity\", \"path\": \"activities\", \"title\": \"Activities\"}, {\"icon\": \"CloudAlert\", \"path\": \"trigger-statements\", \"title\": \"Trigger Statements\"}, {\"icon\": \"Coins\", \"path\": \"fund-management\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Fund Management\"}, {\"icon\": \"HandCoinsIcon\", \"path\": \"payout\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Payout\"}, {\"icon\": \"Box\", \"path\": \"inkind-management\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Inkind Management\"}, {\"icon\": \"Store\", \"path\": \"vendors\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Vendors\"}, {\"icon\": \"SmartphoneNfc\", \"path\": \"communication-logs\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Communication Logs\"}, {\"icon\": \"SmartphoneNfc\", \"path\": \"grievances\", \"roles\": [\"ADMIN\", \"MANAGER\", \"UNICEFNepalCO\", \"Municipality\"], \"title\": \"Grievances\"}]}",
     "dataType": "OBJECT",

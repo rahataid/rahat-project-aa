@@ -8,6 +8,7 @@ import { CvaDisbursementService } from '@rahat-project/cva';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { SettingsModule } from '@rumsan/settings';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
@@ -30,6 +31,8 @@ import { SettingsModule } from '@rumsan/settings';
       },
     ]),
     StakeholdersModule,
+    SettingsModule,
+    ChainModule,
   ],
   providers: [
     ListernersService,

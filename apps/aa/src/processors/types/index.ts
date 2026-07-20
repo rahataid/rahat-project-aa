@@ -29,4 +29,8 @@ export interface FSPOfframpDetails extends FSPPayoutDetails {
   transactionHash: string;
 }
 
+export interface StellarTransferBatchPayload {
+  transfers: FSPPayoutDetails[];
+}
+
 export * from './batch-transfer.dto';

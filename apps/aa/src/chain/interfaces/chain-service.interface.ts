@@ -12,6 +12,7 @@ export interface IChainService {
 
   // Disbursement operations
   disburse(data: DisburseDto): Promise<any>;
+  preDisburse?(data: DisburseDto): Promise<any>;
   getDisbursementStatus(id: string): Promise<any>;
 
   // Send otp operations

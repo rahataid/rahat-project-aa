@@ -7,12 +7,14 @@ import { BQUEUE, CORE_MODULE, STELLAR_CLIENT } from '../constants';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StellarTransferService } from './stellar-transfer.service';
 import { StellarTransferProcessor } from './stellar-transfer.processor';
+import { StellarTransferBatchProcessor } from './stellar-transfer-batch.processor';
 
 @Module({
   imports: [
     SettingsModule,
     forwardRef(() => BeneficiaryModule),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_TRANSFER }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_TRANSFER_BATCH }),
     BullModule.registerQueue({ name: BQUEUE.OFFRAMP }),
     ClientsModule.register([
       {
@@ -29,6 +31,7 @@ import { StellarTransferProcessor } from './stellar-transfer.processor';
   providers: [
     StellarTransferService,
     StellarTransferProcessor,
+    StellarTransferBatchProcessor,
     {
       provide: STELLAR_CLIENT,
       useFactory: async (settingsService: SettingsService) => {
