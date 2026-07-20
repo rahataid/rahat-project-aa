@@ -848,6 +848,8 @@ export class BeneficiaryService {
         ? 'DISBURSED'
         : sdpStatus === 'FAILED' || sdpStatus === 'ERROR'
         ? 'FAILED'
+        : sdpStatus === 'STARTED'
+        ? 'STARTED'
         : tokenReservation['status'];
 
       if (status === tokenReservation['status']) return null;
