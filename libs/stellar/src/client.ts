@@ -2,11 +2,13 @@ import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
 import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
 import { createSponsoredAccount, createSponsoredAccountsBatch } from './operations/account';
-import { sendFromSponsored, sendPayment, sendToSponsored } from './operations/payment';
+import { sendFromSponsored, sendFromSponsoredBatch, sendPayment, sendToSponsored } from './operations/payment';
 import {
   CreateSponsoredAccountResult,
   CreateSponsoredAccountsBatchResult,
   PaymentResult,
+  SendFromSponsoredBatchResult,
+  SponsoredBatchTransferItem,
   StellarClientConfig,
 } from './types';
 
@@ -72,6 +74,11 @@ export class StellarClient {
     amount: string
   ): Promise<PaymentResult> {
     return sendFromSponsored(this.opContext, sponsoredSecret, destinationPublicKey, amount);
+  }
+
+  /** Combines up to MAX_TRANSFERS_PER_BATCH sponsored payments into a single sponsor-signed transaction. */
+  async sendFromSponsoredBatch(items: SponsoredBatchTransferItem[]): Promise<SendFromSponsoredBatchResult> {
+    return sendFromSponsoredBatch(this.opContext, items);
   }
 
   /**
