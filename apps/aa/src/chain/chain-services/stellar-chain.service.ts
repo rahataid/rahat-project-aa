@@ -52,7 +52,9 @@ export class StellarChainService implements IChainService {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'}`
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
+        data.groups || 'all'
+      }`
     );
 
     const groupUuids =
@@ -60,7 +62,9 @@ export class StellarChainService implements IChainService {
         ? data.groups
         : await this.getDisbursableGroupsUuids();
 
-    this.logger.debug(`Resolved ${groupUuids.length} group UUIDs for disbursement`);
+    this.logger.debug(
+      `Resolved ${groupUuids.length} group UUIDs for disbursement`
+    );
 
     if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
@@ -75,30 +79,26 @@ export class StellarChainService implements IChainService {
     this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
 
     for (const { uuid, tokensReserved } of groups) {
-      if (!tokensReserved) {
-        this.logger.warn(`Group ${uuid} has no token reservation, skipping`);
+      const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
+      if (!activeToken) {
+        this.logger.warn(
+          `Group ${uuid} has no active token reservation, skipping`
+        );
         continue;
       }
-      const dName = `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`;
-      this.logger.debug(
-        `Queuing SDP disbursement job for group ${uuid} with ${tokensReserved.numberOfTokens} tokens, dName: ${dName}`
-      );
-      await this.stellarSdpQueue.add(
-        JOBS.STELLAR_SDP.DISBURSE,
-        {
-          dName,
-          groups: [uuid],
-        },
-        {
-          attempts: 3,
-          delay: 2000,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        }
-      );
+
+      const existingDisbursementId = (activeToken.info as any)?.disbursement
+        ?.id;
+      if (existingDisbursementId) {
+        this.logger.log(
+          `Group ${uuid} was already sent to SDP via disburse-on-create (disbursement ${existingDisbursementId}), queuing status check only`
+        );
+        await this.queueDisbursementStatusUpdate(existingDisbursementId, uuid);
+        continue;
+      }
+
+      const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
+      await this.queueGroupDisbursement(uuid, dName, activeToken.numberOfTokens);
     }
 
     this.logger.log(
@@ -114,15 +114,85 @@ export class StellarChainService implements IChainService {
     };
   }
 
+  async preDisburse(data: DisburseDto): Promise<any> {
+    const groupUuid = data.groups?.[0];
+    if (!groupUuid) {
+      throw new RpcException('preDisburse requires a single group uuid');
+    }
+
+    this.logger.log(
+      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid}`
+    );
+
+    await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+
+    return {
+      message: `Disbursement job added for group ${groupUuid}`,
+      groups: [{ uuid: groupUuid, status: 'PENDING' }],
+    };
+  }
+
+  private async queueGroupDisbursement(
+    groupUuid: string,
+    dName: string,
+    numberOfTokens?: number,
+    skipStatusUpdate = false
+  ): Promise<void> {
+    this.logger.debug(
+      `Queuing SDP disbursement job for group ${groupUuid}${
+        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      }, dName: ${dName}`
+    );
+    await this.stellarSdpQueue.add(
+      JOBS.STELLAR_SDP.DISBURSE,
+      {
+        dName,
+        groups: [groupUuid],
+        skipStatusUpdate,
+      },
+      {
+        attempts: 3,
+        delay: 2000,
+        removeOnComplete: true,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      }
+    );
+  }
+
+  private async queueDisbursementStatusUpdate(
+    disbursementId: string,
+    groupUuid: string
+  ): Promise<void> {
+    await this.stellarSdpQueue.add(
+      JOBS.STELLAR_SDP.DISBURSEMENT_STATUS_UPDATE,
+      {
+        disbursementId,
+        groupUuid,
+        startedAt: Date.now(),
+      },
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        backoff: { type: 'exponential', delay: 5000 },
+      }
+    );
+  }
+
   async getDisbursementStats(): Promise<any> {
     this.logger.log('Fetching disbursement stats for Stellar SDP chain');
 
     const oneTokenPrice =
       Number(await this.getFromSettings('ONE_TOKEN_PRICE')) || 1;
-    const tokenName =
-      String((await this.getFromSettings('ASSETCODE')) ?? 'RAHAT');
+    const tokenName = String(
+      (await this.getFromSettings('ASSETCODE')) ?? 'RAHAT'
+    );
 
-    this.logger.debug(`Token price: ${oneTokenPrice}, Token name: ${tokenName}`);
+    this.logger.debug(
+      `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
+    );
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
       include: {
@@ -358,7 +428,7 @@ export class StellarChainService implements IChainService {
 
   private async fetchGroupTokenAmounts(groupUuids: string[]) {
     return this.prisma.beneficiaryGroupTokens.findMany({
-      where: { groupId: { in: groupUuids } },
+      where: { groupId: { in: groupUuids }, isDisbursed: false },
       select: { numberOfTokens: true, groupId: true },
     });
   }
@@ -381,8 +451,7 @@ export class StellarChainService implements IChainService {
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
         const phone = Beneficiary.pii?.phone || Beneficiary.phone || '';
         const walletAddress = Beneficiary.walletAddress;
-        const name =
-          Beneficiary.pii?.name || Beneficiary.name || walletAddress;
+        const name = Beneficiary.pii?.name || Beneficiary.name || walletAddress;
         const amount = tokenPerBeneficiary;
 
         if (csvData[walletAddress]) {
@@ -402,7 +471,9 @@ export class StellarChainService implements IChainService {
     });
 
     const result = Object.values(csvData);
-    this.logger.debug(`Token distribution computed for ${result.length} beneficiaries`);
+    this.logger.debug(
+      `Token distribution computed for ${result.length} beneficiaries`
+    );
     return result;
   }
 

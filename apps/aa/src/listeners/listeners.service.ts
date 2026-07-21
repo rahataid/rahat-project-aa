@@ -6,6 +6,8 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { SettingsService } from '@rumsan/settings';
+import { ChainService } from '../chain/chain.service';
 
 @Injectable()
 export class ListernersService {
@@ -17,7 +19,9 @@ export class ListernersService {
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
-    private disbService: CvaDisbursementService
+    private disbService: CvaDisbursementService,
+    private readonly settingsService: SettingsService,
+    private readonly chainService: ChainService
   ) {}
 
   private statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -30,9 +34,9 @@ export class ListernersService {
     if (this.statsDebounceTimer) clearTimeout(this.statsDebounceTimer);
     this.statsDebounceTimer = setTimeout(() => {
       this.statsDebounceTimer = null;
-      this.aaStats.saveAllStats().catch((err) =>
-        this.logger.error('saveAllStats failed', err)
-      );
+      this.aaStats
+        .saveAllStats()
+        .catch((err) => this.logger.error('saveAllStats failed', err));
     }, 2000);
   }
   @OnEvent(EVENTS.STAKEHOLDER_CREATED)
@@ -42,6 +46,30 @@ export class ListernersService {
   async onstakeholderChanged() {
     await this.stakeholderStats.stakeholdersCount();
   }
+
+  @OnEvent(EVENTS.GROUP_TOKEN_RESERVED_FOR_DISBURSE)
+  async onTokenReservedDisburseOnCreate(payload: {
+    groupUuid: string;
+    groupName: string;
+    title: string;
+  }) {
+    try {
+      const disburseOnCreate = await this.settingsService.getPublic(
+        'DISBURSED_ON_CREATE'
+      );
+
+      if (disburseOnCreate?.value !== true) return;
+
+      const { groupUuid, groupName, title } = payload;
+      const dName = `${title.toLowerCase()}_${groupName}_${Date.now()}`;
+      await this.chainService.preDisburse({ dName, groups: [groupUuid] });
+    } catch (error) {
+      this.logger.error(
+        `Failed to trigger disburse-on-create for group ${payload.groupUuid}: ${error}`
+      );
+    }
+  }
+
   @OnEvent(EVENTS.AUTOMATED_TRIGGERED)
   async handleAutomatedTrigger(payload: { repeatKey: string }) {
     const allJobs = await this.scheduleQueue.getRepeatableJobs();
