@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '@rumsan/prisma';
 import { BullModule } from '@nestjs/bull';
 import { VendorsService } from './vendors.service';
@@ -12,10 +12,12 @@ import { CORE_MODULE, BQUEUE } from '../constants';
 // import { SettingsService } from '@rumsan/settings';
 // import { StellarModule } from '../stellar/stellar.module';
 import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedemption.processor';
+import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
     PrismaModule,
+    forwardRef(() => ChainModule),
     // TODO: STELLAR DETACH - re-add StellarModule once it is rewritten.
     // StellarModule,
     BullModule.registerQueue({
@@ -37,6 +39,9 @@ import { VendorTokenRedemptionProcessor } from '../processors/vendorTokenRedempt
     }),
     BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.OFFLINE_REDEEM,
     }),
   ],
   providers: [

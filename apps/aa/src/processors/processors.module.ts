@@ -4,6 +4,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
 import { SdpStellarProcessor } from './sdp-stellar.processor';
+import { StellarSendAssetProcessor } from './stellar-send-asset.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { ManualPayoutProcessor } from './manual-payout.processor';
 import { BatchTokenTransferProcessor } from './batch-token-transfer.processor';
@@ -20,6 +21,7 @@ import { EVMTxDispatcher, EVMQueryDispatcher } from '../dispatcher/evm.dispatche
 import { InkindProcessor } from './inkind.processor';
 import { OtpModule } from '../otp/otp.module';
 import { ChainModule } from '../chain/chain.module';
+import { OfflineRedemptionProcessor } from './offline-redemption.processor';
 
 @Module({
   imports: [
@@ -27,7 +29,7 @@ import { ChainModule } from '../chain/chain.module';
     forwardRef(() => InkindsModule),
     PayoutsModule,
     StakeholdersModule,
-    ChainModule,
+    forwardRef(() => ChainModule),
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -40,6 +42,7 @@ import { ChainModule } from '../chain/chain.module';
       },
     ]),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
     }),
@@ -69,6 +72,7 @@ import { ChainModule } from '../chain/chain.module';
       },
     }),
     BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
+    BullModule.registerQueue({ name: BQUEUE.OFFLINE_REDEEM }),
     OtpModule,
   ],
   providers: [
@@ -77,6 +81,7 @@ import { ChainModule } from '../chain/chain.module';
     InkindProcessor,
     StatsProcessor,
     SdpStellarProcessor,
+    StellarSendAssetProcessor,
     NotificationProcessor,
     OfframpProcessor,
     ManualPayoutProcessor,
@@ -85,6 +90,7 @@ import { ChainModule } from '../chain/chain.module';
     EVMCentralizedProcessor,
     EVMTxDispatcher,
     EVMQueryDispatcher,
+    OfflineRedemptionProcessor,
   ],
   exports: [EVMCentralizedProcessor, EVMTxDispatcher, EVMQueryDispatcher, ContractProcessor],
 })
