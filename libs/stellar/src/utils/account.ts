@@ -38,7 +38,13 @@ export async function getBalance(
   assetCode: string,
   assetIssuer: string
 ): Promise<string> {
-  const account = await server.loadAccount(publicKey);
+  let account: Horizon.AccountResponse;
+  try {
+    account = await server.loadAccount(publicKey);
+  } catch (e: unknown) {
+    if ((e as { response?: { status?: number } })?.response?.status === 404) return '0';
+    throw e;
+  }
 
   const balance = account.balances.find(
     (b) => isAssetBalance(b) && b.asset_code === assetCode && b.asset_issuer === assetIssuer

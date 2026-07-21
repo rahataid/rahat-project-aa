@@ -81,6 +81,16 @@ export interface BeneficiaryOtpData {
   txHash?: string | null;
 }
 
+export class QueueOfflineRedemptionDto {
+  @ApiProperty({
+    description: 'Vendor UUID whose pending offline redemptions should be settled on-chain',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  vendorUuid: string;
+}
+
 export class TestVendorOfflinePayoutDto {
   @ApiProperty({
     description: 'Beneficiary group UUID to test offline payout',

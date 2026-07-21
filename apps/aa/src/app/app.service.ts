@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import { lowerCaseObjectKeys } from '../utils/utility';
+import { sanitizeSettingValue } from './settings-sanitizer';
 
 @Injectable()
 export class AppService {
@@ -18,8 +19,11 @@ export class AppService {
 
   async listSettings() {
     const res = await this.settingService.listAll();
-    const lowerCaseRes = lowerCaseObjectKeys(res);
-    return lowerCaseRes;
+    const sanitized = res.map((setting: any) => ({
+      ...setting,
+      value: sanitizeSettingValue(setting.name, setting.value),
+    }));
+    return lowerCaseObjectKeys(sanitized);
   }
   async getSettings(dto: any) {
     const { name } = dto;

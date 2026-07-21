@@ -28,6 +28,7 @@ import { PrismaService } from '@rumsan/prisma';
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
   ],
   controllers: [ChainController],
   providers: [
@@ -39,6 +40,6 @@ import { PrismaService } from '@rumsan/prisma';
     EvmChainService,
     PrismaService,
   ],
-  exports: [ChainService, CHAIN_SERVICE, StellarChainService],
+  exports: [ChainService, CHAIN_SERVICE, ChainServiceRegistry, StellarChainService, EvmChainService],
 })
 export class ChainModule {}
