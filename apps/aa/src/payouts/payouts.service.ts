@@ -438,10 +438,19 @@ export class PayoutsService {
 
       const enrichedData = await Promise.all(
         result.data.map(async (eachPayout: PayoutWithRelations) => {
+          const { beneficiaryRedeem, ...rest } = eachPayout;
+
+          if (!eachPayout.beneficiaryGroupToken) {
+            this.logger.warn(
+              `[findAll] payout=${eachPayout.uuid} has no beneficiaryGroupToken, skipping amount calculation`
+            );
+            return { ...rest, totalSuccessAmount: 0 };
+          }
+
           //  Skip calculation if already completed
           if (eachPayout.status === 'COMPLETED') {
             return {
-              ...eachPayout,
+              ...rest,
               totalSuccessAmount:
                 eachPayout.beneficiaryGroupToken.numberOfTokens *
                 ONE_TOKEN_VALUE,
@@ -451,6 +460,9 @@ export class PayoutsService {
           await this.syncPayoutStatus(eachPayout, calculatedStatus);
 
           let totalSuccessAmount = 0;
+          const beneficiariesCount =
+            eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
+              .beneficiaries;
 
           if (calculatedStatus === 'COMPLETED') {
             totalSuccessAmount =
@@ -460,10 +472,10 @@ export class PayoutsService {
               (redeem) => redeem.status === 'FIAT_TRANSACTION_COMPLETED'
             );
 
-            const eachBeneficiaryTokenCount =
-              eachPayout.beneficiaryGroupToken.numberOfTokens /
-              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
-                .beneficiaries;
+            const eachBeneficiaryTokenCount = beneficiariesCount
+              ? eachPayout.beneficiaryGroupToken.numberOfTokens /
+                beneficiariesCount
+              : 0;
 
             totalSuccessAmount =
               successRequests.length *
@@ -474,10 +486,10 @@ export class PayoutsService {
               (redeem) => redeem.status === 'COMPLETED'
             );
 
-            const eachBeneficiaryTokenCount =
-              eachPayout.beneficiaryGroupToken.numberOfTokens /
-              eachPayout.beneficiaryGroupToken.beneficiaryGroup._count
-                .beneficiaries;
+            const eachBeneficiaryTokenCount = beneficiariesCount
+              ? eachPayout.beneficiaryGroupToken.numberOfTokens /
+                beneficiariesCount
+              : 0;
 
             totalSuccessAmount =
               successRequests.length *
@@ -485,8 +497,6 @@ export class PayoutsService {
               eachBeneficiaryTokenCount;
           }
 
-          // Remove beneficiaryRedeem from result, add redeemStatus
-          const { beneficiaryRedeem, ...rest } = eachPayout;
           return {
             ...rest,
             totalSuccessAmount,

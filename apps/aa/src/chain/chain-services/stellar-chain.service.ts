@@ -661,17 +661,16 @@ export class StellarChainService implements IChainService {
     this.logger.log(`Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`);
     if (!beneficiaryGroups.tokensReserved) throw new RpcException('Tokens not reserved for the group');
 
-    // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
     const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true
+        (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
     );
 
     if (!activeToken) {
-        this.logger.error('Tokens not reserved for the group');
-        throw new RpcException('No Active tokens not reserved for the group');
-      }
+        this.logger.error('No active payout found for the group');
+        throw new RpcException('No active payout found for the group');
+    }
 
-      return activeToken.payout;
+    return activeToken.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {

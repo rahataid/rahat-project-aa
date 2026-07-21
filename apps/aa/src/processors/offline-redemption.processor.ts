@@ -99,7 +99,7 @@ export class OfflineRedemptionProcessor implements OnModuleInit {
           data: {
             txHash: result.txHash,
             isCompleted: true,
-            status: 'TOKEN_TRANSACTION_COMPLETED',
+            status: 'COMPLETED',
             vendorUid: batch.vendorId,
           },
         });
