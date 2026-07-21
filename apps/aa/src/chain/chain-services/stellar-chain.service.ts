@@ -43,6 +43,7 @@ export class StellarChainService implements IChainService {
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_SEND_ASSET) private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
@@ -401,6 +402,38 @@ export class StellarChainService implements IChainService {
     const keys = await this.getSecretByPhone(data.phoneNumber) as { address: string; privateKey: string } | null;
     if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
 
+    // ponytail: dedicated queue (concurrency: 1) to serialize sponsored-account sends —
+    // concurrent sends on the same sponsor wallet race the sequence number.
+    try {
+      const job = await this.stellarSendAssetQueue.add(
+        JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
+        {
+          phoneNumber: data.phoneNumber,
+          receiverAddress: data.receiverAddress,
+          amount,
+          vendorUuid: vendor.uuid,
+        },
+        { attempts: 3, backoff: { type: 'exponential', delay: 1000 } }
+      );
+      return await job.finished();
+    } catch (err) {
+      throw err instanceof RpcException ? err : new RpcException(err.message);
+    }
+  }
+
+  async processSendAssetToVendor(payload: {
+    phoneNumber: string;
+    receiverAddress: string;
+    amount: number;
+    vendorUuid: string;
+  }): Promise<{ txHash: string }> {
+    const { phoneNumber, receiverAddress, amount, vendorUuid } = payload;
+
+    // ponytail: re-fetch secret in the job handler instead of passing privateKey through the
+    // Redis-persisted job payload.
+    const keys = await this.getSecretByPhone(phoneNumber) as { address: string; privateKey: string } | null;
+    if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
+
     const walletAddress = keys.address;
 
     const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
@@ -419,7 +452,7 @@ export class StellarChainService implements IChainService {
 
     const result = await stellarClient.sendFromSponsored(
       keys.privateKey,
-      data.receiverAddress,
+      receiverAddress,
       amount.toString()
     );
 
@@ -432,7 +465,7 @@ export class StellarChainService implements IChainService {
 
     await this.prisma.beneficiaryRedeem.update({
       where: { uuid: existingRedeem.uuid },
-      data: { vendorUid: vendor.uuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
+      data: { vendorUid: vendorUuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
     });
 
     return { txHash: result.hash };
