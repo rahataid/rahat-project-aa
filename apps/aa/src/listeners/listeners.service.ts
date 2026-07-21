@@ -58,7 +58,7 @@ export class ListernersService {
         'DISBURSED_ON_CREATE'
       );
 
-      if (!disburseOnCreate?.value) return;
+      if (disburseOnCreate?.value !== true) return;
 
       const { groupUuid, groupName, title } = payload;
       const dName = `${title.toLowerCase()}_${groupName}_${Date.now()}`;

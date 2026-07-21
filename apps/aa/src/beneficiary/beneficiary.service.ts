@@ -1,6 +1,7 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { SdpClient } from '@rahataid/stellar-sdp';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
@@ -41,6 +42,7 @@ interface PaginateResult<T> {
 export class BeneficiaryService {
   private rsprisma;
   private readonly logger = new Logger(BeneficiaryService.name);
+  private sdpClient: SdpClient | null = null;
   constructor(
     protected prisma: PrismaService,
     private readonly settingsService: SettingsService,
@@ -523,6 +525,7 @@ export class BeneficiaryService {
 
     const tokenAssignedBenfWallet: string[] = [];
     const foundAssignedBenf: string[] = [];
+    const fiatRedeemNotCompleted: string[] = [];
 
     for (const benf of benfIdsAndWalletAddress) {
       // Step 1: get all groups this benf belongs to that have any token record
@@ -570,8 +573,22 @@ export class BeneficiaryService {
           continue;
         }
 
-        // payout exists and is in progress — check BeneficiaryRedeem for this specific payout
-        const completedRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        // payout in progress — first check token transaction is completed
+        const tokenRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress: benf.walletAddress,
+            payoutId: payout.uuid,
+            status: 'TOKEN_TRANSACTION_COMPLETED',
+          },
+        });
+
+        if (!tokenRedeem) {
+          foundAssignedBenf.push(benf.walletAddress);
+          break;
+        }
+
+        // token done — check fiat/cash redeem is also completed
+        const fiatRedeem = await this.prisma.beneficiaryRedeem.findFirst({
           where: {
             beneficiaryWalletAddress: benf.walletAddress,
             payoutId: payout.uuid,
@@ -579,8 +596,8 @@ export class BeneficiaryService {
           },
         });
 
-        if (!completedRedeem) {
-          foundAssignedBenf.push(benf.walletAddress);
+        if (!fiatRedeem) {
+          fiatRedeemNotCompleted.push(benf.walletAddress);
           break;
         }
       }
@@ -588,7 +605,7 @@ export class BeneficiaryService {
 
     if (tokenAssignedBenfWallet.length > 0 || foundAssignedBenf.length > 0) {
       this.logger.warn(
-        `Token conflict found for group: ${groupId} — NOT_DISBURSED: ${tokenAssignedBenfWallet.length}, pending redeem: ${foundAssignedBenf.length}`
+        `Token conflict found for group: ${groupId} — NOT_DISBURSED: ${tokenAssignedBenfWallet.length}, pending token redeem: ${foundAssignedBenf.length}, pending fiat redeem: ${fiatRedeemNotCompleted.length}`
       );
       return {
         isAssignable: false,
@@ -607,6 +624,7 @@ export class BeneficiaryService {
       status: 'success',
       message: 'No tokens have been assigned yet. Tokens can be assigned.',
       groupName: group.name,
+      fiatRedeemNotCompleted,
     };
   }
 
@@ -762,10 +780,22 @@ export class BeneficiaryService {
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
     > = [];
 
+    const disburseOnCreate = await this.settingsService.getPublic(
+      'DISBURSED_ON_CREATE'
+    );
+    const shouldSyncFromSdp =
+      disburseOnCreate?.value === true &&
+      (await this.isTokenPayoutPhaseActive());
+
     for (const d of data) {
       const group = await this.getOneGroup(d['groupId'] as UUID);
+      const synced = shouldSyncFromSdp
+        ? await this.syncDisbursementStatusFromSdp(d)
+        : null;
+
       formattedData.push({
         ...d,
+        ...synced,
         group,
       });
     }
@@ -774,6 +804,104 @@ export class BeneficiaryService {
       data: formattedData,
       meta,
     };
+  }
+
+  private async isTokenPayoutPhaseActive(): Promise<boolean> {
+    try {
+      const projectInfo = await this.settingsService.getPublic('PROJECTINFO');
+      const activeYear = (projectInfo?.value as any)?.['ACTIVE_YEAR'];
+      const riverBasin = (projectInfo?.value as any)?.['RIVER_BASIN'];
+
+      if (!activeYear || !riverBasin) {
+        this.logger.warn(
+          'Active year or river basin not found in PROJECTINFO settings'
+        );
+        return false;
+      }
+
+      const { isPayoutMethodPhaseActivated } = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+          { activeYear, riverBasin, disbursementMethod: 'TOKEN' }
+        )
+      );
+
+      return Boolean(isPayoutMethodPhaseActivated);
+    } catch (error) {
+      this.logger.error(`Failed to check token payout phase status: ${error}`);
+      return false;
+    }
+  }
+
+  private async syncDisbursementStatusFromSdp(
+    tokenReservation: DataItem
+  ): Promise<Partial<DataItem> | null> {
+    if (tokenReservation['status'] === 'DISBURSED') return null;
+
+    const disbursementId = (tokenReservation['info'] as any)?.disbursement?.id;
+    if (!disbursementId) return null;
+
+    try {
+      const sdpClient = await this.getSdpClient();
+      const disbursement = await sdpClient.disbursements.get(disbursementId);
+      const sdpStatus = disbursement.status?.toUpperCase();
+
+      if (!sdpStatus || sdpStatus === tokenReservation['status']) return null;
+
+      const isDisbursed = sdpStatus === 'COMPLETED';
+      const status = isDisbursed
+        ? 'DISBURSED'
+        : sdpStatus === 'FAILED' || sdpStatus === 'ERROR'
+        ? 'FAILED'
+        : sdpStatus === 'STARTED'
+        ? 'STARTED'
+        : tokenReservation['status'];
+
+      if (status === tokenReservation['status']) return null;
+
+      const groupUuid = tokenReservation['groupId'];
+      const updatePayload = {
+        groupUuid,
+        status,
+        isDisbursed,
+        info: {
+          ...(tokenReservation['info'] as any),
+          disbursement,
+          ...(isDisbursed && { completedAt: new Date().toISOString() }),
+        },
+      };
+
+      this.updateGroupToken(updatePayload).catch((error) =>
+        this.logger.error(
+          `Failed to persist synced disbursement status for group ${groupUuid}: ${error}`
+        )
+      );
+
+      return { status, isDisbursed };
+    } catch (error) {
+      this.logger.error(
+        `Failed to sync SDP disbursement status for ${disbursementId}: ${error}`
+      );
+      return null;
+    }
+  }
+
+  private async getSdpClient(): Promise<SdpClient> {
+    if (this.sdpClient) return this.sdpClient;
+
+    const sdpSettings = await this.settingsService.getPublic('SDP_SETTINGS');
+    if (!sdpSettings?.value) {
+      throw new Error('SDP_SETTINGS not found in settings table');
+    }
+
+    const config = sdpSettings.value as Record<string, string>;
+    this.sdpClient = new SdpClient({
+      sdpUrl: config.sdpUrl,
+      tenantName: config.tenantName,
+      apiKey: config.apiKey,
+    });
+
+    return this.sdpClient;
   }
 
   async getOneTokenReservation(payload) {
@@ -1596,12 +1724,12 @@ export class BeneficiaryService {
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
 
-    if (isLastBatch) {
-      await this.initiateQrPdf(groupUuid);
-      this.logger.log(
-        `Last batch processed, PDF generation triggered for group: ${groupUuid}`
-      );
-    }
+    //THIS IS TAKING TOO MUCH RESOURCES, SO COMMENTING OUT FOR NOW. WILL REVISIT LATER
+
+    // if (isLastBatch) {
+    //   await this.initiateQrPdf(groupUuid);
+    //   this.logger.log(`Last batch processed, PDF generation triggered for group: ${groupUuid}`);
+    // }
 
     return { message: 'Sync process completed successfully' };
   }
