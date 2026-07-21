@@ -1025,7 +1025,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private async fetchGroupTokenAmounts(groupUuid: string) {
     return this.prismaService.beneficiaryGroupTokens.findMany({
-      where: { groupId: groupUuid },
+      where: { groupId: groupUuid, isDisbursed: false },
       select: { numberOfTokens: true, groupId: true },
     });
   }

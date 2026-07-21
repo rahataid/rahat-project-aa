@@ -41,7 +41,7 @@ export class VendorOfflinePayoutProcessor {
       // Fetch beneficiary group tokens and payout details
       const beneficiaryGroupTokens =
         await this.prismaService.beneficiaryGroupTokens.findFirst({
-          where: { groupId: data.beneficiaryGroupUuid },
+          where: { groupId: data.beneficiaryGroupUuid, status: 'NOT_DISBURSED' },
           include: {
             payout: true,
             beneficiaryGroup: {
@@ -137,7 +137,7 @@ export class VendorOfflinePayoutProcessor {
       // Fetch beneficiary group tokens and payout details
       const beneficiaryGroupTokens =
         await this.prismaService.beneficiaryGroupTokens.findFirst({
-          where: { groupId: data.beneficiaryGroupUuid },
+          where: { groupId: data.beneficiaryGroupUuid, status: 'NOT_DISBURSED' },
           include: {
             payout: true,
             beneficiaryGroup: {

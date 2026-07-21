@@ -9,7 +9,7 @@ import { SettingsService } from '@rumsan/settings';
 import { CreateBeneficiaryDto } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { GetBenfGroupDto } from './dto/get-group.dto';
-import { GroupPurpose } from '@prisma/client';
+import { GroupPurpose, PayoutMode, PayoutType } from '@prisma/client';
 import { of } from 'rxjs';
 import { PayoutsService } from '../payouts/payouts.service';
 import { QrPdfService } from './qr-pdf.service';
@@ -44,6 +44,7 @@ describe('BeneficiaryService', () => {
     beneficiaryGroupTokens: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -1584,7 +1585,7 @@ describe('BeneficiaryService', () => {
         groupPurpose: GroupPurpose.COMMUNICATION,
       };
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
         null
       );
       mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
@@ -1593,7 +1594,37 @@ describe('BeneficiaryService', () => {
 
       await expect(service.reserveTokenToGroup(payload)).rejects.toThrow(
         new RpcException(
-          'Invalid group purpose COMMUNICATION. Only BANK_TRANSFER and MOBILE_MONEY are allowed.'
+          'Invalid group purpose COMMUNICATION. Allowed purposes: BANK_TRANSFER, MOBILE_MONEY, GENERAL.'
+        )
+      );
+    });
+
+    it('should throw error for GENERAL group purpose with non-vendor integrated payout', async () => {
+      const payload = {
+        beneficiaryGroupId: 'group-123',
+        numberOfTokens: 100,
+        totalTokensReserved: 1000,
+        title: 'Test Token Reservation',
+        user: { name: 'Admin User' },
+        isPayoutIntegrated: true,
+        params: { type: PayoutType.FSP, mode: PayoutMode.ONLINE },
+      };
+
+      const mockBenfGroup = {
+        uuid: 'group-123',
+        groupPurpose: GroupPurpose.GENERAL,
+      };
+
+      mockPrismaService.beneficiaryGroupTokens.findFirst.mockResolvedValue(
+        null
+      );
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(
+        mockBenfGroup
+      );
+
+      await expect(service.reserveTokenToGroup(payload)).rejects.toThrow(
+        new RpcException(
+          'Group purpose GENERAL is only allowed for VENDOR payouts or non-integrated payout flows. Received payout type: FSP, isPayoutIntegrated: true.'
         )
       );
     });
