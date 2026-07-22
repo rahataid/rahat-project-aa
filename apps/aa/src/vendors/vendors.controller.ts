@@ -12,7 +12,10 @@ import {
   VerifyVendorOfflineOtpDto,
   VendorOfflineSyncDto,
 } from './dto/vendor-offline-beneficiaries.dto';
-import { TestVendorOfflinePayoutDto } from './dto/vendor-offline-payout.dto';
+import {
+  TestVendorOfflinePayoutDto,
+  QueueOfflineRedemptionDto,
+} from './dto/vendor-offline-payout.dto';
 import {
   CreateVendorTokenRedemptionDto,
   UpdateVendorTokenRedemptionDto,
@@ -102,6 +105,15 @@ export class VendorsController {
   })
   async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
     return this.vendorService.testVendorOfflinePayout(payload);
+  }
+
+  // Kick off crash-safe batched settlement of a vendor's pending offline redemptions
+  @MessagePattern({
+    cmd: JOBS.VENDOR.QUEUE_OFFLINE_REDEMPTION,
+    uuid: process.env.PROJECT_ID,
+  })
+  async queueOfflineRedemption(payload: QueueOfflineRedemptionDto) {
+    return this.vendorService.queueOfflineRedemption(payload);
   }
 
   // Sync vendor offline data when they come back online

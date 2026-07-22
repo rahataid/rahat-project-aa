@@ -12,6 +12,7 @@ import { ChainModule } from '../chain/chain.module';
 
 @Module({
   imports: [
+    SettingsModule,
     BullModule.registerQueue({
       name: BQUEUE.SCHEDULE,
     }),
