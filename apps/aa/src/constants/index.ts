@@ -254,6 +254,8 @@ export const JOBS = {
     SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
     PROCESS_OFFLINE_TOKEN_TRANSFER:
       'aa.jobs.vendor.process_offline_token_transfer',
+    OFFLINE_REDEEM_BATCH: 'aa.jobs.vendor.offline_redeem_batch',
+    QUEUE_OFFLINE_REDEMPTION: 'aa.jobs.vendor.queue_offline_redemption',
     SYNC_OFFLINE_DATA: 'aa.jobs.vendor.sync_offline_data',
     SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
@@ -390,6 +392,7 @@ export const BQUEUE = {
   CONTRACT: `CONTRACT_${process.env.PROJECT_ID}`,
   COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
+  STELLAR_SEND_ASSET: `STELLAR_SEND_ASSET_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
@@ -407,6 +410,7 @@ export const BQUEUE = {
   STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
   MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,
+  OFFLINE_REDEEM: `OFFLINE_REDEEM_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

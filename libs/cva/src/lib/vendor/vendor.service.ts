@@ -33,7 +33,7 @@ export class CvaVendorService {
     const row = await this.rsprisma.vendor.create({
       data: payload,
     });
-    this.eventEmitter.emit(CVA_EVENTS.VENDOR.CREATED);
+    this.eventEmitter.emit(CVA_EVENTS.VENDOR.CREATED, { walletAddress: dto.walletAddress });
     return row;
   }
 

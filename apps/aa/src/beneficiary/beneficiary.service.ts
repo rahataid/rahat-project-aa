@@ -780,9 +780,10 @@ export class BeneficiaryService {
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
     > = [];
 
-    const disburseOnCreate = await this.settingsService.getPublic(
-      'DISBURSED_ON_CREATE'
-    );
+    const disburseOnCreate = await this.settingsService
+      .getPublic('DISBURSED_ON_CREATE')
+      .catch(() => null);
+
     const shouldSyncFromSdp =
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
