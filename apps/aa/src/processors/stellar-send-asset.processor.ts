@@ -22,9 +22,11 @@ export class StellarSendAssetProcessor {
   async handleSendAssetToVendor(
     job: Job<SendAssetToVendorJobData>
   ): Promise<{ txHash: string }> {
+    const maxAttempts = job.opts.attempts ?? 1;
+    const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
     this.logger.log(
-      `Processing SEND_ASSET_TO_VENDOR for vendor ${job.data.vendorUuid}, amount ${job.data.amount}`
+      `Processing SEND_ASSET_TO_VENDOR for vendor ${job.data.vendorUuid}, amount ${job.data.amount} (attempt ${job.attemptsMade + 1}/${maxAttempts})`
     );
-    return this.stellarChainService.processSendAssetToVendor(job.data);
+    return this.stellarChainService.processSendAssetToVendor(job.data, isLastAttempt);
   }
 }
