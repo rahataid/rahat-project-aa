@@ -402,10 +402,11 @@ export class StellarChainService implements IChainService {
     const keys = await this.getSecretByPhone(data.phoneNumber) as { address: string; privateKey: string } | null;
     if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
 
-    // ponytail: dedicated queue (concurrency: 1) to serialize sponsored-account sends —
-    // concurrent sends on the same sponsor wallet race the sequence number.
+    // ponytail: redeem-and-forget — queue the transfer and return immediately with a null
+    // txHash. Dedicated queue (concurrency: 1) serializes sponsored-account sends in the
+    // background since concurrent sends on the same sponsor wallet race the sequence number.
     try {
-      const job = await this.stellarSendAssetQueue.add(
+      await this.stellarSendAssetQueue.add(
         JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
         {
           phoneNumber: data.phoneNumber,
@@ -415,18 +416,17 @@ export class StellarChainService implements IChainService {
         },
         { attempts: 3, backoff: { type: 'exponential', delay: 1000 } }
       );
-      return await job.finished();
     } catch (err) {
       throw err instanceof RpcException ? err : new RpcException(err.message);
     }
+
+    return { txHash: null, status: 'PROCESSING' };
   }
 
-  async processSendAssetToVendor(payload: {
-    phoneNumber: string;
-    receiverAddress: string;
-    amount: number;
-    vendorUuid: string;
-  }): Promise<{ txHash: string }> {
+  async processSendAssetToVendor(
+    payload: { phoneNumber: string; receiverAddress: string; amount: number; vendorUuid: string },
+    isLastAttempt = true
+  ): Promise<{ txHash: string }> {
     const { phoneNumber, receiverAddress, amount, vendorUuid } = payload;
 
     // ponytail: re-fetch secret in the job handler instead of passing privateKey through the
@@ -436,26 +436,6 @@ export class StellarChainService implements IChainService {
 
     const walletAddress = keys.address;
 
-    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
-    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
-
-    const tokenBalance = await getBalance(
-      stellarClient.server,
-      walletAddress,
-      stellarClient.config.assetCode,
-      stellarClient.config.assetIssuer
-    );
-
-    if (parseFloat(tokenBalance) <= 0) {
-      throw new RpcException('Beneficiary has no tokens available for transfer');
-    }
-
-    const result = await stellarClient.sendFromSponsored(
-      keys.privateKey,
-      receiverAddress,
-      amount.toString()
-    );
-
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
       where: { beneficiaryWalletAddress: walletAddress, status: 'PENDING', isCompleted: false, txHash: null },
       orderBy: { createdAt: 'desc' },
@@ -463,12 +443,56 @@ export class StellarChainService implements IChainService {
 
     if (!existingRedeem) throw new RpcException('No pending BeneficiaryRedeem record found');
 
-    await this.prisma.beneficiaryRedeem.update({
-      where: { uuid: existingRedeem.uuid },
-      data: { vendorUid: vendorUuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
-    });
+    try {
+      const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+      const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
 
-    return { txHash: result.hash };
+      const tokenBalance = await getBalance(
+        stellarClient.server,
+        walletAddress,
+        stellarClient.config.assetCode,
+        stellarClient.config.assetIssuer
+      );
+
+      if (parseFloat(tokenBalance) <= 0) {
+        throw new RpcException('Beneficiary has no tokens available for transfer');
+      }
+
+      const result = await stellarClient.sendFromSponsored(
+        keys.privateKey,
+        receiverAddress,
+        amount.toString()
+      );
+
+      await this.prisma.beneficiaryRedeem.update({
+        where: { uuid: existingRedeem.uuid },
+        data: { vendorUid: vendorUuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
+      });
+
+      this.logger.log(
+        `sendAssetToVendor COMPLETED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount} txHash=${result.hash}`
+      );
+
+      return { txHash: result.hash };
+    } catch (err) {
+      // ponytail: only mark FAILED on the last retry — earlier attempts must leave the record
+      // PENDING so the next job attempt still finds it via the status: 'PENDING' filter above.
+      if (isLastAttempt) {
+        await this.prisma.beneficiaryRedeem.update({
+          where: { uuid: existingRedeem.uuid },
+          data: { status: 'FAILED', info: { error: err.message } },
+        });
+        this.logger.error(
+          `sendAssetToVendor FAILED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount}: ${err.message}`,
+          err.stack
+        );
+      } else {
+        this.logger.warn(
+          `sendAssetToVendor attempt failed, will retry redeem=${existingRedeem.uuid} vendor=${vendorUuid}: ${err.message}`
+        );
+      }
+      throw err;
+    }
   }
 
   async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
