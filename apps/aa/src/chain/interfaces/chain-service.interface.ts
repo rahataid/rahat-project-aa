@@ -3,6 +3,7 @@ export class SendAssetDto {
   phoneNumber: string;
   receiverAddress: string;
   otp: string;
+  mediaUrl?: string;
 }
 
 export interface IChainService {
