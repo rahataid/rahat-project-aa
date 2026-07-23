@@ -276,8 +276,154 @@ export class StellarChainService implements IChainService {
     throw new RpcException('Not supported on Stellar SDP chain');
   }
 
+<<<<<<< Updated upstream
   async sendAssetToVendor(_data: SendAssetDto): Promise<any> {
     throw new RpcException('Not supported on Stellar SDP chain');
+=======
+  async sendAssetToVendor(data: SendAssetDto): Promise<any> {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { walletAddress: data.receiverAddress },
+    });
+    if (!vendor) throw new RpcException('Vendor not found');
+
+    const amount = data.amount;
+    await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+
+    const keys = await this.getSecretByPhone(data.phoneNumber) as { address: string; privateKey: string } | null;
+    if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
+
+    if (data.mediaUrl) {
+      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        where: { beneficiaryWalletAddress: keys.address, status: 'PENDING', isCompleted: false, txHash: null },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      this.logger.log(`Updating mediaUrl for redeem record ${existingRedeem?.uuid} to ${data.mediaUrl}`);
+      if (existingRedeem) {
+        const info = (existingRedeem.info as Record<string, any>) ?? {};
+        await this.prisma.beneficiaryRedeem.update({
+          where: { uuid: existingRedeem.uuid },
+          data: { info: { ...info, mediaUrl: data.mediaUrl } },
+        });
+      }
+    }
+
+    // ponytail: redeem-and-forget — queue the transfer and return immediately with a null
+    // txHash. Dedicated queue (concurrency: 1) serializes sponsored-account sends in the
+    // background since concurrent sends on the same sponsor wallet race the sequence number.
+    try {
+      await this.stellarSendAssetQueue.add(
+        JOBS.STELLAR.SEND_ASSET_TO_VENDOR,
+        {
+          phoneNumber: data.phoneNumber,
+          receiverAddress: data.receiverAddress,
+          amount,
+          vendorUuid: vendor.uuid,
+        },
+        { attempts: 3, backoff: { type: 'exponential', delay: 1000 } }
+      );
+    } catch (err) {
+      throw err instanceof RpcException ? err : new RpcException(err.message);
+    }
+
+    return { txHash: null, status: 'PROCESSING' };
+  }
+
+  async processSendAssetToVendor(
+    payload: { phoneNumber: string; receiverAddress: string; amount: number; vendorUuid: string },
+    isLastAttempt = true
+  ): Promise<{ txHash: string }> {
+    const { phoneNumber, receiverAddress, amount, vendorUuid } = payload;
+
+    // ponytail: re-fetch secret in the job handler instead of passing privateKey through the
+    // Redis-persisted job payload.
+    const keys = await this.getSecretByPhone(phoneNumber) as { address: string; privateKey: string } | null;
+    if (!keys?.privateKey) throw new RpcException('Beneficiary secret not found');
+
+    const walletAddress = keys.address;
+
+    const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { beneficiaryWalletAddress: walletAddress, status: 'PENDING', isCompleted: false, txHash: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!existingRedeem) throw new RpcException('No pending BeneficiaryRedeem record found');
+
+    try {
+      const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+      const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+
+      const tokenBalance = await getBalance(
+        stellarClient.server,
+        walletAddress,
+        stellarClient.config.assetCode,
+        stellarClient.config.assetIssuer
+      );
+
+      if (parseFloat(tokenBalance) <= 0) {
+        throw new RpcException('Beneficiary has no tokens available for transfer');
+      }
+
+      const result = await stellarClient.sendFromSponsored(
+        keys.privateKey,
+        receiverAddress,
+        amount.toString()
+      );
+
+      await this.prisma.beneficiaryRedeem.update({
+        where: { uuid: existingRedeem.uuid },
+        data: { vendorUid: vendorUuid, txHash: result.hash, isCompleted: true, status: 'COMPLETED' },
+      });
+
+      this.logger.log(
+        `sendAssetToVendor COMPLETED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount} txHash=${result.hash}`
+      );
+
+      return { txHash: result.hash };
+    } catch (err) {
+      // ponytail: only mark FAILED on the last retry — earlier attempts must leave the record
+      // PENDING so the next job attempt still finds it via the status: 'PENDING' filter above.
+      if (isLastAttempt) {
+        await this.prisma.beneficiaryRedeem.update({
+          where: { uuid: existingRedeem.uuid },
+          data: { status: 'FAILED', info: { error: err.message } },
+        });
+        this.logger.error(
+          `sendAssetToVendor FAILED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount}: ${err.message}`,
+          err.stack
+        );
+      } else {
+        this.logger.warn(
+          `sendAssetToVendor attempt failed, will retry redeem=${existingRedeem.uuid} vendor=${vendorUuid}: ${err.message}`
+        );
+      }
+      throw err;
+    }
+  }
+
+  async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
+    const walletAddresses = items.map((i) => i.beneficiaryWalletAddress);
+    const secrets: { address: string; privateKey: string }[] = await lastValueFrom(
+      this.client.send({ cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET }, { walletAddresses, chain: 'stellar' })
+    );
+    const secretByWallet = new Map(secrets.map((s) => [s.address, s.privateKey]));
+
+    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+
+    const results: OfflineTransferResult[] = [];
+    for (const item of items) {
+      try {
+        const secret = secretByWallet.get(item.beneficiaryWalletAddress);
+        if (!secret) throw new Error(`No secret found for wallet ${item.beneficiaryWalletAddress}`);
+        const result = await stellarClient.sendFromSponsored(secret, item.vendorWalletAddress, item.amount.toString());
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, txHash: result.hash });
+      } catch (err: any) {
+        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, error: err?.message });
+      }
+    }
+    return results;
+>>>>>>> Stashed changes
   }
 
   async fundAccount(_data: FundAccountDto): Promise<any> {
