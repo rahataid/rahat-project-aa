@@ -25,6 +25,7 @@ import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
 import { FundallocationModule } from '../fundallocation/fundallocation.module';
 import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
+import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
 
 @Module({
@@ -100,6 +101,7 @@ import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module'
     GrievancesModule,
     InkindsModule,
     GroupCashTransferModule,
+    IvrTemplatesModule,
     OtpModule,
     FundallocationModule,
   ],

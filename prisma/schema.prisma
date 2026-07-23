@@ -949,3 +949,25 @@ model GroupCashTransferRecord {
 }
 
 // ============== End Group Cash Transfer Schemas ================
+
+// ++++++++++++++++++ START: IVR Templates ++++++++++++++++++++
+
+model IvrTemplate {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  flowUrl     String?
+  status      IvrStatus @default(DRAFT)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("tbl_ivr_templates")
+}
+
+enum IvrStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// ++++++++++++++++++ END: IVR Templates ++++++++++++++++++++

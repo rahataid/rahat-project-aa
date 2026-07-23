@@ -273,6 +273,13 @@ export const JOBS = {
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
     GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
   },
+  IVR_TEMPLATES: {
+    CREATE: 'aa.jobs.ivrTemplates.create',
+    LIST: 'aa.jobs.ivrTemplates.list',
+    GET: 'aa.jobs.ivrTemplates.get',
+    UPDATE: 'aa.jobs.ivrTemplates.update',
+    DELETE: 'aa.jobs.ivrTemplates.delete',
+  },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
     TX_JOB: `aa.jobs.evm.tx_${process.env.PROJECT_ID}`, // write ops: serial (concurrency 1), signer required
