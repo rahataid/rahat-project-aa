@@ -214,7 +214,7 @@ async function main() {
         uuid,
         name,
         description,
-        status: 'ACTIVE',
+        status: 'NOT_READY',
         type: 'aa',
       },
       environment: {
@@ -407,6 +407,46 @@ async function modifyEnvAndSettings(
       },
     });
 
+    // Minimal defaults so the aa app can boot (QrPdfService and EvmChainService
+    // read these on startup and crash if the rows don't exist at all).
+    await projectPrisma.setting.upsert({
+      where: {
+        name: 'CHAIN_SETTINGS',
+      },
+      create: {
+        name: 'CHAIN_SETTINGS',
+        value: {
+          name: '',
+          type: '',
+          rpcUrl: '',
+          chainId: '',
+          currency: { name: '', symbol: '' },
+          explorerUrl: '',
+        },
+        dataType: 'OBJECT',
+        isPrivate: false,
+      },
+      update: {},
+    });
+
+    await projectPrisma.setting.upsert({
+      where: {
+        name: 'CLOUDFLARE_R2',
+      },
+      create: {
+        name: 'CLOUDFLARE_R2',
+        value: {
+          R2_ACCOUNT_ID: '',
+          R2_ACCESS_KEY_ID: '',
+          R2_SECRET_ACCESS_KEY: '',
+          R2_BUCKET: '',
+          R2_PUBLIC_DOMAIN: '',
+        },
+        dataType: 'OBJECT',
+        isPrivate: false,
+      },
+      update: {},
+    });
 
     await seedProject();
     console.log('ProjectInfo seeded successfully.');

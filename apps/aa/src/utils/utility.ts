@@ -26,3 +26,57 @@ export const lowerCaseObjectKeys = (obj: any) => {
     }
     return lowerCaseObj;
 }
+
+export const normalizeRequiredFields = (requiredFields: unknown): string[] => {
+    if (Array.isArray(requiredFields)) {
+        return requiredFields.map((field) => String(field));
+    }
+
+    if (typeof requiredFields !== 'string') {
+        return [];
+    }
+
+    const trimmed = requiredFields.trim();
+
+    if (!trimmed || trimmed === '{}' || trimmed === '[]') {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed.map((field) => String(field)) : [];
+    } catch {
+        return [];
+    }
+}
+
+// Deserializes a setting's value from its JSON-string form (as sent in the
+// aa.settings.update payload) to the native type expected by Prisma.
+export const parseValueForPrisma = (setting: { value: unknown; dataType: string }): unknown => {
+    const { value, dataType } = setting;
+
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    if (dataType === 'OBJECT') {
+        try {
+            return JSON.parse(value);
+        } catch {
+            return value;
+        }
+    }
+
+    if (dataType === 'NUMBER') {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? value : parsed;
+    }
+
+    if (dataType === 'BOOLEAN') {
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        return value;
+    }
+
+    return value;
+}
