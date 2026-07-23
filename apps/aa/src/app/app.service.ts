@@ -1,11 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
-import { lowerCaseObjectKeys } from '../utils/utility';
+import { PrismaService } from '@rumsan/prisma';
+import { Prisma } from '@prisma/client';
+import {
+  lowerCaseObjectKeys,
+  normalizeRequiredFields,
+  parseValueForPrisma,
+} from '../utils/utility';
 import { sanitizeSettingValue } from './settings-sanitizer';
+import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
+import { RpcException } from '@nestjs/microservices';
 
 @Injectable()
 export class AppService {
-  constructor(private readonly settingService: SettingsService) {
+  constructor(
+    private readonly settingService: SettingsService,
+    private readonly prisma: PrismaService
+  ) {
     this.refreshSettings();
   }
 
@@ -30,6 +41,40 @@ export class AppService {
     const res = await this.settingService.getPublic(name);
 
     return lowerCaseObjectKeys(res);
+  }
+
+  async updateSettingsBulk(dto: UpdateSettingsPayloadDto) {
+    const { projectId, settings } = dto;
+
+    const upserted = [];
+
+    for (const setting of settings) {
+      const name = setting.name.toUpperCase();
+      const value = parseValueForPrisma(setting) as Prisma.InputJsonValue;
+      const result = await this.prisma.setting.upsert({
+        where: { name },
+        update: {
+          value,
+          dataType: setting.dataType,
+          requiredFields: normalizeRequiredFields(setting.requiredFields),
+          isReadOnly: Boolean(setting.isReadOnly),
+          isPrivate: Boolean(setting.isPrivate),
+        },
+        create: {
+          name,
+          value,
+          dataType: setting.dataType,
+          requiredFields: normalizeRequiredFields(setting.requiredFields),
+          isReadOnly: Boolean(setting.isReadOnly),
+          isPrivate: Boolean(setting.isPrivate),
+        },
+      });
+      upserted.push(result.name);
+    }
+
+    await this.refreshSettings();
+
+    return { projectId, upserted };
   }
 
   async refreshSettings() {
