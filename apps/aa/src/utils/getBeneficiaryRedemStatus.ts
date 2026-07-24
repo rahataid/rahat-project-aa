@@ -14,7 +14,7 @@ export type PayoutWithRelations = Payouts & {
         beneficiaries: number;
       };
     };
-  };
+  } | null;
   beneficiaryRedeem: { status: string }[];
 };
 
