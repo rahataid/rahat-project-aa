@@ -4,6 +4,7 @@ export class SendAssetDto {
   receiverAddress: string;
   otp: string;
   mediaUrl?: string;
+  fileName?: string;
 }
 
 export interface IChainService {
