@@ -1468,14 +1468,14 @@ export class InkindsService {
       )
     );
 
-    // if (!isPayoutMethodPhaseActivated) {
-    //   this.logger.log(
-    //     'Payout phase not active. In-kind redemption is unavailable.'
-    //   );
-    //   throw new RpcException(
-    //     'Payout phase not active. In-kind redemption is unavailable.'
-    //   );
-    // }
+    if (!isPayoutMethodPhaseActivated) {
+      this.logger.log(
+        'Payout phase not active. In-kind redemption is unavailable.'
+      );
+      throw new RpcException(
+        'Payout phase not active. In-kind redemption is unavailable.'
+      );
+    }
 
     return vendor;
   }
