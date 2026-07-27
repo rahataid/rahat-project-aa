@@ -34,10 +34,9 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { Wallet } = require('ethers');
+const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
-
-const DEPLOYMENT_DIR = path.resolve(__dirname, 'deployments');
 const ADDRESS_SETTING_NAME = 'DEPLOYER_PRIVATE_KEY';
 
 function buildAddressSettingEntry(address) {
@@ -83,32 +82,6 @@ function tryCreateWalletFromPrivateKey(privateKey) {
 	} catch {
 		return null;
 	}
-}
-
-async function getDeploymentFiles() {
-	await fs.mkdir(DEPLOYMENT_DIR, { recursive: true });
-	const entries = await fs.readdir(DEPLOYMENT_DIR, { withFileTypes: true });
-
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right));
-}
-
-async function askTargetFile(deploymentFiles) {
-	const answers = await prompt([
-		{
-			type: 'list',
-			name: 'selectedFile',
-			message: 'Select one deployment file to update:',
-			choices: deploymentFiles.map((fileName) => ({
-				name: fileName,
-				value: fileName,
-			})),
-		},
-	]);
-
-	return answers.selectedFile;
 }
 
 async function askWalletSource() {
@@ -222,7 +195,7 @@ async function updateDeploymentFile(fileName, walletData) {
 	const content = await fs.readFile(filePath, 'utf8');
 	const payload = JSON.parse(content);
 	const settings = Array.isArray(payload.settings) ? payload.settings : [];
-	const addressSetting = buildAddressSettingEntry(walletData.address);
+	const addressSetting = buildAddressSettingEntry(walletData.privateKey);
 	const existingIndex = settings.findIndex(
 		(setting) => setting && setting.name === ADDRESS_SETTING_NAME
 	);
@@ -247,13 +220,7 @@ async function updateDeploymentFile(fileName, walletData) {
 }
 
 async function main() {
-	const deploymentFiles = await getDeploymentFiles();
-
-	if (!deploymentFiles.length) {
-		throw new Error(`No deployment files found in ${DEPLOYMENT_DIR}`);
-	}
-
-	const selectedFile = await askTargetFile(deploymentFiles);
+	const selectedFile = await selectDeploymentFile();
 	const walletData = await getWalletDataFromChoice();
 	const confirmed = await confirmSelection(selectedFile, walletData);
 

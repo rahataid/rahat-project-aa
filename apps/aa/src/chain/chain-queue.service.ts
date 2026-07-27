@@ -7,6 +7,7 @@ import {
   DisburseDto,
   FundAccountDto,
   SendOtpDto,
+  SendAssetDto,
   TransferTokensDto,
   VerifyOtpDto,
   AddTriggerDto,
@@ -14,7 +15,6 @@ import {
   RedeemInkindDto,
   RedeemInkindTokenForCashDto,
 } from './interfaces/chain-service.interface';
-import { SendAssetDto } from '../stellar/dto/send-otp.dto';
 
 @Injectable()
 export class ChainQueueService {
@@ -66,6 +66,20 @@ export class ChainQueueService {
       chainType
     );
     return chainService.disburse(data);
+  }
+
+  async preDisburse(data: DisburseDto, chainType?: ChainType): Promise<any> {
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+
+    if (!chainService.preDisburse) {
+      throw new Error(
+        `Disburse-on-create not supported for ${chainService.getChainType()} chain`
+      );
+    }
+
+    return chainService.preDisburse(data);
   }
 
   async getDisbursementStatus(id: string, chainType?: ChainType): Promise<any> {

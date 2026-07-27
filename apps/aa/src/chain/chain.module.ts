@@ -7,13 +7,9 @@ import { ChainServiceRegistry } from './registries/chain-service.registry';
 import { StellarChainService } from './chain-services/stellar-chain.service';
 import { EvmChainService } from './chain-services/evm-chain.service';
 import { BQUEUE, CHAIN_SERVICE } from '../constants';
-import { StellarModule } from '../stellar/stellar.module';
-import { ClientsModule } from '@nestjs/microservices';
-import { Transport } from '@nestjs/microservices';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
 import { PrismaService } from '@rumsan/prisma';
-import { ReceiveService } from '@rahataid/stellar-sdk';
-import { SettingsService } from '@rumsan/settings';
 
 @Module({
   imports: [
@@ -28,15 +24,11 @@ import { SettingsService } from '@rumsan/settings';
         },
       },
     ]),
-    BullModule.registerQueue({
-      name: BQUEUE.STELLAR,
-    }),
-    BullModule.registerQueue({
-      name: BQUEUE.CONTRACT,
-    }),
+    BullModule.registerQueue({ name: BQUEUE.CONTRACT }),
     BullModule.registerQueue({ name: BQUEUE.EVM_TX }),
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
-    StellarModule,
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
   ],
   controllers: [ChainController],
   providers: [
@@ -47,22 +39,7 @@ import { SettingsService } from '@rumsan/settings';
     StellarChainService,
     EvmChainService,
     PrismaService,
-    {
-      provide: ReceiveService,
-      useFactory: async (settingService: SettingsService) => {
-        const settings = await settingService.getPublic('STELLAR_SETTINGS');
-        return new ReceiveService(
-          settings?.value['ASSETCREATOR'] || '',
-          settings?.value['ASSETCODE'] || '',
-          settings?.value['NETWORK'] || '',
-          settings?.value['FAUCETSECRETKEY'] || '',
-          settings?.value['FUNDINGAMOUNT'] || 0,
-          settings?.value['HORIZONURL'] || ''
-        );
-      },
-      inject: [SettingsService],
-    },
   ],
-  exports: [ChainService, CHAIN_SERVICE],
+  exports: [ChainService, CHAIN_SERVICE, ChainServiceRegistry, StellarChainService, EvmChainService],
 })
 export class ChainModule {}

@@ -9,6 +9,10 @@ export class ChainService {
     return this.chainQueueService.disburse(disburseDto);
   }
 
+  preDisburse(disburseDto: any) {
+    return this.chainQueueService.preDisburse(disburseDto);
+  }
+
   sendOtp(sendOtpDto: any) {
     return this.chainQueueService.sendOtp(sendOtpDto);
   }

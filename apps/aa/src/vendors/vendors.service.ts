@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CORE_MODULE } from '../constants';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import bcrypt from 'bcryptjs';
@@ -7,7 +7,9 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
 import { VendorRedeemDto, VendorStatsDto } from './dto/vendorStats.dto';
 import { lastValueFrom } from 'rxjs';
-import { ReceiveService } from '@rahataid/stellar-sdk';
+// TODO: STELLAR DETACH - re-enable once stellar module is rewritten and re-exports a
+// ReceiveService/equivalent. Was used to fetch vendor on-chain balance.
+// import { ReceiveService } from '@rahataid/stellar-sdk';
 import { VendorRedeemTxnListDto } from './dto/vendorRedemTxn.dto';
 import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import {
@@ -21,14 +23,21 @@ import {
   VendorOfflinePayoutDto,
   TestVendorOfflinePayoutDto,
   VendorOnlinePayoutDto,
+  QueueOfflineRedemptionDto,
 } from './dto/vendor-offline-payout.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { BatchTransferDto } from '../processors/types';
 import { UpdateVendorDetailsDto } from './dto/vendor-details.dto';
+import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
+
+const OFFLINE_REDEEM_BATCH_SIZE = parseInt(
+  process.env.OFFLINE_REDEEM_BATCH_SIZE || '10',
+  10
+);
 
 @Injectable()
 export class VendorsService {
@@ -37,11 +46,15 @@ export class VendorsService {
   constructor(
     private prisma: PrismaService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly receiveService: ReceiveService,
+    // TODO: STELLAR DETACH - re-add once ReceiveService-equivalent is available.
+    // private readonly receiveService: ReceiveService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue,
     @InjectQueue(BQUEUE.VENDOR_CVA)
-    private readonly vendorCVAPayoutQueue: Queue
+    private readonly vendorCVAPayoutQueue: Queue,
+    @InjectQueue(BQUEUE.OFFLINE_REDEEM)
+    private readonly offlineRedeemQueue: Queue,
+    private readonly chainServiceRegistry: ChainServiceRegistry
   ) {}
 
   // Update vendor details
@@ -116,15 +129,18 @@ export class VendorsService {
         throw new RpcException(`Vendor with id ${vendorWallet.uuid} not found`);
       }
 
-      const vendorBalance = await this.receiveService.getAccountBalance(
-        vendor.walletAddress
-      );
-
-      if (!vendorBalance) {
-        throw new RpcException(
-          `Failed to get balance for vendor with id ${vendorWallet.uuid}`
-        );
-      }
+      // TODO: STELLAR DETACH - re-enable vendor on-chain balance lookup once the
+      // stellar module is rewritten and exposes a ReceiveService-equivalent.
+      // const vendorBalance = await this.receiveService.getAccountBalance(
+      //   vendor.walletAddress
+      // );
+      //
+      // if (!vendorBalance) {
+      //   throw new RpcException(
+      //     `Failed to get balance for vendor with id ${vendorWallet.uuid}`
+      //   );
+      // }
+      const vendorBalance = null;
 
       return {
         assignedTokens: await this.getVendorAssignedTokens(
@@ -230,7 +246,7 @@ export class VendorsService {
       const query = {
         where: {
           vendorUid: uuid,
-          status: 'COMPLETED',
+          status,
           ...(txHash && { txHash }),
         },
         include: {
@@ -551,6 +567,87 @@ export class VendorsService {
     }
   }
 
+  // Chunks a vendor's pending offline redemptions into batches of
+  // OFFLINE_REDEEM_BATCH_SIZE, persists each batch to a temp table (crash-safe),
+  // then queues one job per batch. Worker re-reads the batch from the temp row,
+  // so only `batchId` needs to travel in the job payload.
+  async queueOfflineRedemption(payload: QueueOfflineRedemptionDto) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: payload.vendorUuid },
+    });
+    if (!vendor) {
+      throw new RpcException(`Vendor with id ${payload.vendorUuid} not found`);
+    }
+
+    const pending = await this.prisma.beneficiaryRedeem.findMany({
+      where: {
+        vendorUid: payload.vendorUuid,
+        transactionType: 'VENDOR_REIMBURSEMENT',
+        status: 'PENDING',
+        isCompleted: false,
+      },
+    });
+
+    if (pending.length === 0) {
+      return { success: true, message: 'No pending offline redemptions', totalBatches: 0 };
+    }
+
+    const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+
+    const items = pending.map((r) => ({
+      redeemUuid: r.uuid,
+      beneficiaryWalletAddress: r.beneficiaryWalletAddress,
+      vendorWalletAddress: vendor.walletAddress,
+      amount: r.amount,
+    }));
+
+    const batches: (typeof items)[] = [];
+    for (let i = 0; i < items.length; i += OFFLINE_REDEEM_BATCH_SIZE) {
+      batches.push(items.slice(i, i + OFFLINE_REDEEM_BATCH_SIZE));
+    }
+
+    const batchRecords = await Promise.all(
+      batches.map((batch) =>
+        this.prisma.tempOfflineRedemption.create({
+          data: {
+            chainType,
+            vendorId: vendor.uuid,
+            payloads: batch,
+            status: 'PENDING',
+          },
+        })
+      )
+    );
+
+    await Promise.all(
+      batchRecords.map((record) =>
+        this.offlineRedeemQueue.add(
+          JOBS.VENDOR.OFFLINE_REDEEM_BATCH,
+          { batchId: record.uuid },
+          {
+            jobId: record.uuid,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+          }
+        )
+      )
+    );
+
+    this.logger.log(
+      `Queued ${batchRecords.length} offline redemption batch(es) for vendor ${payload.vendorUuid} on chain ${chainType}`
+    );
+
+    return {
+      success: true,
+      message: 'Offline redemptions queued',
+      totalRedemptions: items.length,
+      totalBatches: batchRecords.length,
+      chainType,
+    };
+
+    return { success: true, message: 'Offline redemptions queued' };
+  }
+
   // todo: remove after test
   async testVendorOfflinePayout(payload: TestVendorOfflinePayoutDto) {
     try {
@@ -809,7 +906,6 @@ export class VendorsService {
         `Syncing offline data for vendor ${payload.vendorUuid} with ${payload.verifiedBeneficiaries.length} verified beneficiaries`
       );
 
-      // First verify the vendor exists
       const vendor = await this.prisma.vendor.findUnique({
         where: { uuid: payload.vendorUuid },
       });
@@ -819,95 +915,89 @@ export class VendorsService {
         );
       }
 
-      const results = [];
+      // Get verified beneficiary UUIDs + OTP map
+      const verifiedMap = new Map(
+        payload.verifiedBeneficiaries.map(b => [b.beneficiaryUuid, b.otp])
+      );
 
-      for (const item of payload.verifiedBeneficiaries) {
-        try {
-          const beneficiaryUuid = item.beneficiaryUuid;
-          if (!beneficiaryUuid) {
-            results.push({
-              beneficiaryUuid,
-              success: false,
-              message: 'Beneficiary UUID missing',
-            });
-            continue;
-          }
+      // Fetch all pending VENDOR_REIMBURSEMENT for vendor
+      const pending = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          vendorUid: payload.vendorUuid,
+          transactionType: 'VENDOR_REIMBURSEMENT',
+          status: 'TOKEN_TRANSACTION_INITIATED',
+          isCompleted: false,
+        },
+        include: { Beneficiary: true },
+      });
 
-          // Find the latest beneficiaryRedeem for this vendor and beneficiary
-          const beneficiary = await this.prisma.beneficiary.findUnique({
-            where: { uuid: beneficiaryUuid },
-          });
-          if (!beneficiary) {
-            results.push({
-              beneficiaryUuid,
-              success: false,
-              message: 'Beneficiary not found',
-            });
-            continue;
-          }
-          const redeemRecord = await this.prisma.beneficiaryRedeem.findFirst({
-            where: {
-              vendorUid: payload.vendorUuid,
-              beneficiaryWalletAddress: beneficiary.walletAddress,
-              transactionType: 'VENDOR_REIMBURSEMENT',
-            },
-            orderBy: { createdAt: 'desc' },
-          });
-          if (!redeemRecord) {
-            results.push({
-              beneficiaryUuid,
-              success: false,
-              message: 'Redemption record not found',
-            });
-            continue;
-          }
+      // Filter to only verified beneficiaries
+      const verified = pending.filter(r =>
+        verifiedMap.has(r.Beneficiary?.uuid)
+      );
 
-          // Do NOT validate OTP here. Only queue for token transfer
-          await this.vendorCVAPayoutQueue.add(
-            JOBS.VENDOR.PROCESS_OFFLINE_TOKEN_TRANSFER,
-            {
-              vendorUuid: payload.vendorUuid,
-              beneficiaryUuid: beneficiaryUuid,
-              amount: redeemRecord.amount,
-              otp: item.otp,
-            },
-            {
-              attempts: 3,
-              removeOnComplete: true,
-              backoff: {
-                type: 'exponential',
-                delay: 1000,
-              },
-            }
-          );
-
-          results.push({
-            beneficiaryUuid,
-            success: true,
-            message: 'Queued for token transfer',
-          });
-        } catch (error) {
-          this.logger.error(
-            `Error processing redemption for beneficiary ${item.beneficiaryUuid}: ${error.message}`
-          );
-          results.push({
-            beneficiaryUuid: item.beneficiaryUuid,
-            success: false,
-            message: error.message,
-          });
-        }
+      if (verified.length === 0) {
+        return {
+          success: true,
+          message: 'No matching verified beneficiaries found',
+          totalProcessed: payload.verifiedBeneficiaries.length,
+          totalQueued: 0,
+        };
       }
 
+      const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+
+      const items = verified.map(r => ({
+        redeemUuid: r.uuid,
+        beneficiaryWalletAddress: r.beneficiaryWalletAddress,
+        vendorWalletAddress: vendor.walletAddress,
+        amount: r.amount,
+        otp: verifiedMap.get(r.Beneficiary?.uuid), // ponytail: store OTP in batch for processor validation if needed later
+      }));
+
+      const batches: (typeof items)[] = [];
+      for (let i = 0; i < items.length; i += OFFLINE_REDEEM_BATCH_SIZE) {
+        batches.push(items.slice(i, i + OFFLINE_REDEEM_BATCH_SIZE));
+      }
+
+      const batchRecords = await Promise.all(
+        batches.map(batch =>
+          this.prisma.tempOfflineRedemption.create({
+            data: {
+              chainType,
+              vendorId: vendor.uuid,
+              payloads: batch,
+              status: 'PENDING',
+            },
+          })
+        )
+      );
+
+      await Promise.all(
+        batchRecords.map((record: any) =>
+          this.offlineRedeemQueue.add(
+            JOBS.VENDOR.OFFLINE_REDEEM_BATCH,
+            { batchId: record.uuid },
+            {
+              jobId: record.uuid,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 2000 },
+            }
+          )
+        )
+      );
+
       this.logger.log(
-        `Completed syncing offline data for vendor ${
-          payload.vendorUuid
-        }. Results: ${JSON.stringify(results)}`
+        `Synced ${verified.length} verified beneficiaries into ${batchRecords.length} batch(es) for vendor ${payload.vendorUuid} on chain ${chainType}`
       );
 
       return {
-        vendorUuid: payload.vendorUuid,
+        success: true,
+        message: 'Offline redemptions queued for verified beneficiaries',
         totalProcessed: payload.verifiedBeneficiaries.length,
-        results,
+        totalQueued: verified.length,
+        totalBatches: batchRecords.length,
+        chainType,
       };
     } catch (error) {
       this.logger.error(`Error syncing vendor offline data: ${error.message}`);
