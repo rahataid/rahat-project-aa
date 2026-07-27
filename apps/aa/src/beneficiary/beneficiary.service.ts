@@ -224,27 +224,41 @@ export class BeneficiaryService {
       ],
     };
 
-    const benfGroups = await paginate(
-      this.prisma.beneficiaryGroups,
-      {
-        where: {
-          ...where,
-        },
-        include: {
-          _count: {
-            select: {
-              beneficiaries: true,
-            },
+    const query = {
+      where,
+      include: {
+        _count: {
+          select: {
+            beneficiaries: true,
           },
-          tokensReserved: true,
         },
-        orderBy,
+        tokensReserved: true,
       },
-      {
+      orderBy,
+    };
+
+    let benfGroups;
+
+    if (page !== undefined && perPage !== undefined) {
+      benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
         page,
         perPage,
-      }
-    );
+      });
+    } else {
+      const data = await this.prisma.beneficiaryGroups.findMany(query);
+
+      benfGroups = {
+        data,
+        meta: {
+          total: data.length,
+          currentPage: 1,
+          perPage: data.length,
+          lastPage: 1,
+          prev: null,
+          next: null,
+        },
+      };
+    }
 
     this.logger.debug(
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
