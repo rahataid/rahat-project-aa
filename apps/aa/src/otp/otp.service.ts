@@ -1,10 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import prabhu from './prabhu';
 import type { CommsClient } from '../comms/comms.service';
-import { CommsService } from '../comms/comms.service';
 
 @Injectable()
 export class OtpService {
@@ -13,7 +13,8 @@ export class OtpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
-    private readonly commsService: CommsService,
+    @Inject('CORE_CLIENT')
+    private readonly coreClient: ClientProxy,
     @Inject('COMMS_CLIENT')
     private commsClient: CommsClient
   ) {}
@@ -60,20 +61,24 @@ export class OtpService {
 
   async sendEmail(email: string, subject: string, message: string, defaultOtp?: string | null) {
     const otp = defaultOtp || (await this.getOtp());
+    const [frontendSetting] = await lastValueFrom(
+      this.coreClient.send({ cmd: 'appJobs.frontendUrl.get' }, {})
+    );
+    const frontendUrl = frontendSetting?.value ?? '';
     this.logger.log(`Generated OTP ${otp} for email ${email}`);
 
-    // if (process.env.NODE_ENV !== 'production') {
-    //   this.logger.log(`[DEV] OTP for ${email}: ${otp}`);
-    //   return { otp };
-    // }
-
     try {
-      const frontendUrl = await this.commsService.getFrontendUrl();
-      await this.commsService.sendEmail(
-        email,
-        subject,
-        `${message} ${otp}`,
-        this.buildOtpEmailHtml(otp, frontendUrl)
+      await lastValueFrom(
+        this.coreClient.send(
+          { cmd: 'rahat.jobs.email.send_email' },
+          {
+            to: email,
+            subject,
+            text: `${message} ${otp}`,
+            html: this.buildOtpEmailHtml(otp, frontendUrl),
+          }
+        ),
+        { defaultValue: null }
       );
 
       this.logger.log(`OTP sent to email: ${email}`);

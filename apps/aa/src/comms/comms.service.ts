@@ -5,8 +5,6 @@ import { getClient } from '@rumsan/connect/src/clients';
 import * as nodemailer from 'nodemailer';
 
 const GET_COMMUNICATION_SETTINGS = 'appJobs.communication.getSettings';
-const GET_SMTP_SETTINGS = 'appJobs.smtp.getSettings';
-const GET_FRONTEND_URL = 'appJobs.frontendUrl.get';
 const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 60000;
 const TIMEOUT_MS = 5000;
@@ -20,9 +18,6 @@ export class CommsService {
   private isInitializing = false;
   private initializationPromise: Promise<void> | null = null;
   private retryCount = 0;
-
-  private emailTransporter: nodemailer.Transporter | null = null;
-  private emailFrom: string | null = null;
 
   constructor(
     @Inject('CORE_CLIENT') private readonly coreClient: ClientProxy
@@ -102,72 +97,5 @@ export class CommsService {
       }
     }
     return this.client;
-  }
-
-  private async initEmailTransporter(): Promise<void> {
-    if (this.emailTransporter) return;
-
-    const [smtpSettings] = await lastValueFrom(
-      this.coreClient
-        .send({ cmd: GET_SMTP_SETTINGS }, {})
-        .pipe(timeout(TIMEOUT_MS))
-    );
-
-    if (!smtpSettings) {
-      throw new Error('SMTP settings not found in response');
-    }
-
-    const { value } = smtpSettings;
-    this.emailFrom = value['USERNAME'];
-    this.emailTransporter = nodemailer.createTransport({
-      pool: true,
-      host: value['HOST'],
-      port: value['PORT'],
-      secure: value['SECURE'],
-      auth: {
-        user: value['USERNAME'],
-        pass: value['PASSWORD'],
-      },
-    });
-
-    this.logger.log('Email transporter initialized successfully');
-  }
-
-  async sendEmail(
-    to: string | string[],
-    subject: string,
-    text: string,
-    html?: string
-  ): Promise<void> {
-    await this.initEmailTransporter();
-
-    this.logger.log(`Sending email to ${to} with subject "${subject}"`);
-    try {
-      const info = await this.emailTransporter!.sendMail({
-        from: this.emailFrom!,
-        to,
-        subject,
-        text,
-        html,
-      });
-
-      this.logger.log(
-        `Email sent to ${to}: messageId=${info.messageId}, response=${info.response}`
-      );
-    } catch (error: any) {
-      this.logger.error(`Failed to send email to ${to}: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getFrontendUrl(): Promise<string> {
-    const [frontendSetting] = await lastValueFrom(
-      this.coreClient
-        .send({ cmd: GET_FRONTEND_URL }, {})
-        .pipe(timeout(TIMEOUT_MS))
-    );
-
-    // FRONTEND_URL setting stores the url string directly in value
-    return frontendSetting?.value ?? '';
   }
 }

@@ -7,26 +7,26 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 @Module({})
 export class CommsModule {
   static forRoot(): DynamicModule {
+    const coreClientModule = ClientsModule.registerAsync([
+      {
+        name: 'CORE_CLIENT',
+        imports: [ConfigModule],
+        useFactory: async (configService: ConfigService) => ({
+          transport: Transport.REDIS,
+          options: {
+            host: configService.get('REDIS_HOST'),
+            port: configService.get('REDIS_PORT'),
+            password: configService.get('REDIS_PASSWORD'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]);
+
     return {
       module: CommsModule,
       global: true,
-      imports: [
-        ClientsModule.registerAsync([
-          {
-            name: 'CORE_CLIENT',
-            imports: [ConfigModule],
-            useFactory: async (configService: ConfigService) => ({
-              transport: Transport.REDIS,
-              options: {
-                host: configService.get('REDIS_HOST'),
-                port: configService.get('REDIS_PORT'),
-                password: configService.get('REDIS_PASSWORD'),
-              },
-            }),
-            inject: [ConfigService],
-          },
-        ]),
-      ],
+      imports: [coreClientModule],
       providers: [
         CommsService,
         {
@@ -38,7 +38,7 @@ export class CommsModule {
           inject: [CommsService],
         },
       ],
-      exports: ['COMMS_CLIENT', CommsService],
+      exports: [coreClientModule, 'COMMS_CLIENT', CommsService],
     };
   }
 }
