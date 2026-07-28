@@ -4,6 +4,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import prabhu from './prabhu';
 import type { CommsClient } from '../comms/comms.service';
+import { CommsService } from '../comms/comms.service';
 
 @Injectable()
 export class OtpService {
@@ -12,6 +13,7 @@ export class OtpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly commsService: CommsService,
     @Inject('COMMS_CLIENT')
     private commsClient: CommsClient
   ) {}
@@ -60,28 +62,19 @@ export class OtpService {
     const otp = defaultOtp || (await this.getOtp());
     this.logger.log(`Generated OTP ${otp} for email ${email}`);
 
-    if (process.env.NODE_ENV !== 'production') {
-      this.logger.log(`[DEV] OTP for ${email}: ${otp}`);
-      return { otp };
-    }
+    // if (process.env.NODE_ENV !== 'production') {
+    //   this.logger.log(`[DEV] OTP for ${email}: ${otp}`);
+    //   return { otp };
+    // }
 
     try {
-      const { data } = await this.commsClient.transport.list();
-      const appId = this.commsClient.apiClient.client.defaults.headers['app-id'];
-      const transportId = data.find((item) => item.name === 'EMAIL')?.cuid;
-
-      if (!transportId || !appId) {
-        throw new RpcException('EMAIL transport not configured');
-      }
-
-      await this.commsClient.broadcast.create({
-        transport: transportId,
-        addresses: [email],
-        message: { content: `${message} ${otp}`, meta: { subject } },
-        maxAttempts: 1,
-        trigger: 'DIRECT' as any,
-        options: {},
-      });
+      const frontendUrl = await this.commsService.getFrontendUrl();
+      await this.commsService.sendEmail(
+        email,
+        subject,
+        `${message} ${otp}`,
+        this.buildOtpEmailHtml(otp, frontendUrl)
+      );
 
       this.logger.log(`OTP sent to email: ${email}`);
       return { otp };
@@ -89,6 +82,38 @@ export class OtpService {
       this.logger.error(`Error sending email: ${error.message}`);
       throw new RpcException('Failed to send email');
     }
+  }
+
+  private buildOtpEmailHtml(otp: string, frontendUrl?: string): string {
+    return `
+      <div style="max-width:800px;max-height: 600px;overflow:auto;line-height:2;background: #333333;">
+        <div style="margin:50px auto;width:70%;padding:40px 40px; border: 1px solid #fff; border-radius: 12px;">
+          <div style="text-align: center;">
+            <img src='https://assets.rumsan.net/rumsan-group/rahat-logo-white.png' width="250" title="stage4all" alt="stage4all">
+          </div>
+          <div style="color:#fff; text-align: center;">
+            <h4 style="font-size:1.3em;">Your Rahat Pin is</h4>
+            <h2
+              style="background: #373737;margin: 0 auto;width: 100%;padding: 0 10px;color: #fff;border-radius: 4px; letter-spacing: 10px">
+              ${otp}</h2>
+          </div>
+          <div style="color: #fff; text-align: left;">
+            <p>This is a one-time-code that expires in 5 minutes.</p>
+            <p style="font-size:0.9em;">Please DO NOT share your code with anyone. Rahat team will never ask for it.</p>
+          </div>
+          <hr style=" border-top: 1px solid rgb(73, 72, 72)" />
+          <div style="color:#fff!important">
+            <p>If you didn't attempt to sign up but received this email, please ignore.
+            </p>
+            <p>
+              Regards,<br />
+              Team Rahat
+            </p>
+            ${frontendUrl ? `<p><a href="${frontendUrl}" style="color:#fff;">${frontendUrl}</a></p>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
     async getOtp() {

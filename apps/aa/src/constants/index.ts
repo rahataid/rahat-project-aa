@@ -143,6 +143,7 @@ export const JOBS = {
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    SEND_OTP: 'aa.jobs.payout.sendOtp',
     TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
     TRIGGER_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerFailedPayoutRequest',
     TRIGGER_ONE_FAILED_PAYOUT_REQUEST:
@@ -157,7 +158,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',

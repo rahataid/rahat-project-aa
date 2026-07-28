@@ -622,7 +622,8 @@ model OfflineBeneficiary {
 // ============== Start OTP SCHEMAS ================
 model Otp {
   id            Int      @id @default(autoincrement())
-  phoneNumber   String   @unique
+  phoneNumber   String?  @unique
+  email         String?  @unique
   walletAddress String?  @unique
   otp           String?
   otpHash       String
