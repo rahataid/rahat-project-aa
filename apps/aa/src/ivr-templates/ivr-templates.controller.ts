@@ -3,6 +3,7 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { CreateIvrTemplateDto } from './dto/create-ivr-template.dto';
 import { UpdateIvrTemplateDto } from './dto/update-ivr-template.dto';
+import { SendTestCallDto } from './dto/send-test-call.dto';
 import { IvrTemplatesService } from './ivr-templates.service';
 
 @Controller()
@@ -49,5 +50,13 @@ export class IvrTemplatesController {
   })
   remove(@Payload() payload: { id: number }) {
     return this.ivrTemplatesService.remove(payload.id);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.IVR_TEMPLATES.SEND_TEST_CALL,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendTestCall(@Payload() data: SendTestCallDto) {
+    return this.ivrTemplatesService.sendTestCall(data);
   }
 }

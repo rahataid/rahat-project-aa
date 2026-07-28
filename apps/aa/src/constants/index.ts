@@ -279,6 +279,7 @@ export const JOBS = {
     GET: 'aa.jobs.ivrTemplates.get',
     UPDATE: 'aa.jobs.ivrTemplates.update',
     DELETE: 'aa.jobs.ivrTemplates.delete',
+    SEND_TEST_CALL: 'aa.jobs.ivrTemplates.sendTestCall',
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two

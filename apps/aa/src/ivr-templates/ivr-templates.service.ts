@@ -1,14 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
+import { TriggerType } from '@rumsan/connect';
 import { IvrStatus } from '@prisma/client';
 import { PrismaService } from '@rumsan/prisma';
 import { CreateIvrTemplateDto } from './dto/create-ivr-template.dto';
 import { UpdateIvrTemplateDto } from './dto/update-ivr-template.dto';
+import { SendTestCallDto } from './dto/send-test-call.dto';
+import { CommsClient } from '../comms/comms.service';
 
 @Injectable()
 export class IvrTemplatesService {
   private readonly logger = new Logger(IvrTemplatesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('COMMS_CLIENT')
+    private commsClient: CommsClient,
+  ) {}
 
   async create(dto: CreateIvrTemplateDto) {
     try {
@@ -70,6 +78,34 @@ export class IvrTemplatesService {
         where: { id },
         data: { status: IvrStatus.ARCHIVED },
       });
+    } catch (error) {
+      this.logger.error(error);
+      throw error;
+    }
+  }
+
+  async sendTestCall(dto: SendTestCallDto) {
+    try {
+      const { data: transports } = await this.commsClient.transport.list();
+      const voiceTransport = transports.find((t) => t.type === 'VOICE');
+
+      if (!voiceTransport?.cuid) {
+        throw new RpcException('Voice transport not found');
+      }
+
+      const { data: sessionData } = await this.commsClient.broadcast.create({
+        addresses: [dto.phoneNumber],
+        maxAttempts: 1,
+        message: {
+          content: dto.flowUrl,
+          meta: { subject: 'INFO' },
+        },
+        options: {},
+        transport: voiceTransport.cuid,
+        trigger: TriggerType.IMMEDIATE,
+      });
+
+      return sessionData;
     } catch (error) {
       this.logger.error(error);
       throw error;
