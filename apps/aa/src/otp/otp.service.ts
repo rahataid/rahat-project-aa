@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
+import { TriggerType } from '@rumsan/connect/src/types/session.type';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import prabhu from './prabhu';
-import type { CommsClient } from '../comms/comms.service';
+import { CommsService } from '../comms/comms.service';
 
 @Injectable()
 export class OtpService {
@@ -15,14 +16,12 @@ export class OtpService {
     private readonly settingsService: SettingsService,
     @Inject('CORE_CLIENT')
     private readonly coreClient: ClientProxy,
-    @Inject('COMMS_CLIENT')
-    private commsClient: CommsClient
+    private readonly commsClient: CommsService,
+
   ) {}
 
   async sendSms(number: string, message: string, defaultOpt?: string | null) {
     const otp = defaultOpt || (await this.getOtp());
-
-    this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
 
     this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
 
@@ -33,11 +32,11 @@ export class OtpService {
 
     this.logger.log(`Sending SMS to ${number} with message: ${message}`);
     try {
-      const { data } = await this.commsClient.transport.list();
+      const data = await this.commsClient.listTransports();
       const appId =
         this.commsClient.apiClient.client.defaults.headers['app-id'];
       const url = this.commsClient.apiClient.client.defaults.baseURL;
-      const transportId = data.find((item) => item.name === 'SMS')?.cuid;
+      const transportId = data.find((item: any) => item.name === 'SMS')?.cuid;
 
       if (!transportId || !appId || !url) {
         throw new RpcException('SMS_TRANSPORT_ID, APP_ID, URL are required');
@@ -54,7 +53,7 @@ export class OtpService {
       this.logger.log(`OTP Sent to phone number: ${number}`);
       return { otp };
     } catch (error) {
-      this.logger.error(`Error sending SMS: ${error.message}`);
+      this.logger.error(`Error sending SMS: ${(error as any).message}`);
       throw new RpcException('Failed to send SMS');
     }
   }
@@ -68,18 +67,22 @@ export class OtpService {
     this.logger.log(`Generated OTP ${otp} for email ${email}`);
 
     try {
-      await lastValueFrom(
-        this.coreClient.send(
-          { cmd: 'rahat.jobs.email.send_email' },
-          {
-            to: email,
+      const transportId = await this.commsClient.getEmailTransportId();
+      const htmlContent = this.buildOtpEmailHtml(otp, frontendUrl);
+
+      await this.commsClient.broadcast.create({
+        transport: transportId,
+        addresses: [email],
+        maxAttempts: 3,
+        trigger: TriggerType.IMMEDIATE,
+        message: {
+          content: htmlContent,
+          meta: {
             subject,
-            text: `${message} ${otp}`,
-            html: this.buildOtpEmailHtml(otp, frontendUrl),
-          }
-        ),
-        { defaultValue: null }
-      );
+          },
+        },
+        options: {},
+      });
 
       this.logger.log(`OTP sent to email: ${email}`);
       return { otp };

@@ -13,10 +13,11 @@ export type CommsClient = ReturnType<typeof getClient>;
 
 @Injectable()
 export class CommsService {
-  private client: CommsClient;
+  private client: CommsClient | null = null;
   private logger = new Logger(CommsService.name);
   private isInitializing = false;
   private initializationPromise: Promise<void> | null = null;
+  private emailTransportId: string | null = null;
   private retryCount = 0;
 
   constructor(
@@ -29,7 +30,10 @@ export class CommsService {
     }
 
     this.isInitializing = true;
-    this.initializationPromise = this.attemptInitialization();
+    this.initializationPromise = this.attemptInitialization().then(async () => {
+      this.emailTransportId = await this.getEmailClient();
+    });
+
     return this.initializationPromise;
   }
 
@@ -97,5 +101,44 @@ export class CommsService {
       }
     }
     return this.client;
+  }
+
+  get broadcast() {
+    if (!this.client) {
+      throw new Error('Comms client is not available. Service is still initializing.');
+    }
+    return this.client.broadcast;
+  }
+
+  get apiClient() {
+    if (!this.client) {
+      throw new Error('Comms client is not available. Service is still initializing.');
+    }
+    return this.client.apiClient;
+  }
+
+  async listTransports(): Promise<any> {
+    const commsClient = await this.getClient();
+    if (!commsClient) {
+      throw new Error('Comms client is not available. Service is still initializing.');
+    }
+    const { data } = await commsClient.transport.list();
+    
+    return data;
+  }
+
+  async getEmailTransportId(): Promise<string> {
+    const transportData = await this.listTransports();
+    const emailTransport = transportData.find(
+      (item: any) => item.name === 'EMAIL' && item.type === 'SMTP'
+    );
+    if (!emailTransport) {
+      throw new Error('No EMAIL/SMTP transport found');
+    }
+    return emailTransport.cuid;
+  }
+
+  async getEmailClient(): Promise<string> {
+    return this.getEmailTransportId();
   }
 }
