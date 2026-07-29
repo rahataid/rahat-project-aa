@@ -15,7 +15,7 @@ export class IvrTemplatesService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject('COMMS_CLIENT')
-    private commsClient: CommsClient,
+    private commsClient: CommsClient
   ) {}
 
   async create(dto: CreateIvrTemplateDto) {
@@ -98,7 +98,7 @@ export class IvrTemplatesService {
         maxAttempts: 1,
         message: {
           content: dto.flowUrl,
-          meta: { subject: 'INFO' },
+          meta: { type: 'new-ivr' },
         },
         options: {},
         transport: voiceTransport.cuid,
