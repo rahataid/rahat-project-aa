@@ -416,15 +416,22 @@ export class GroupCashTransferService {
 
     const defaultOpt = await this.db.otp.findUnique({ where: { email } });
 
+    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.db.otp.delete({ where: { email } });
+    }
+
     const { otp } = await this.otpService.sendEmail(
       email,
       'Group Cash Transfer Disbursement OTP',
       'Your OTP for disbursement is:',
-      defaultOpt?.otp
+      isExistingValid ? defaultOpt.otp : undefined
     );
 
     // if otp set in db and not expired, do not update otp, just resend existing otp
-    if (defaultOpt?.otp) {
+    if (isExistingValid) {
       return { success: true, message: 'OTP sent successfully' };
     }
 

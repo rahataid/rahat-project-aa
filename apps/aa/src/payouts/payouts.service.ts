@@ -90,15 +90,22 @@ export class PayoutsService {
 
     const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
 
+    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.prisma.otp.delete({ where: { email } });
+    }
+
     const { otp } = await this.otpService.sendEmail(
       email,
       'Payout Trigger OTP',
       'Your OTP for triggering payout is:',
-      defaultOpt?.otp
+      isExistingValid ? defaultOpt.otp : undefined
     );
 
     // if otp is set in db and not expired, do not update otp, just resend the existing otp
-    if (defaultOpt?.otp) {
+    if (isExistingValid) {
       return { success: true, message: 'OTP sent successfully' };
     }
 
