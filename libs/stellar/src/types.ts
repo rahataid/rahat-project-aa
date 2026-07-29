@@ -61,6 +61,10 @@ export interface SendPaymentContext {
   networkPassphrase: string;
 }
 
+export interface sendBatchPaymentContext {
+  
+}
+
 export interface StellarOperationErrorOptions {
   resultCodes?: unknown;
   raw?: unknown;

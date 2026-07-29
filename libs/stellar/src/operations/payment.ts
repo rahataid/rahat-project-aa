@@ -10,6 +10,7 @@ import {
 import { describePaymentError } from '../utils/errors';
 import { submitTransaction } from './submit';
 
+
 /**
  * Sponsor sends the configured asset to a (sponsored) account. Only the
  * sponsor signs - the destination account does not need to be involved.
@@ -223,4 +224,70 @@ export async function sendPayment(
   } catch (error) {
     throw describePaymentError(error, asset);
   }
+}
+
+export async function sendBatchPayment(
+  ctx: SendPaymentContext,
+  asset: Asset,
+  designatedWallet: {
+    secret: string;
+    publicKey: string;
+  },
+  items: {
+    destination: string,
+    amount: string
+  }[]
+): Promise<unknown>{
+  if (items.length < 1 || items.length > MAX_TRANSFERS_PER_BATCH) {
+    throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${items.length})`);
+  }
+
+  const designatedWalletKeypair = Keypair.fromSecret(designatedWallet.secret);
+  const desingatedAccount = await ctx.server.loadAccount(designatedWallet.publicKey);
+
+  let builder = new TransactionBuilder(desingatedAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: ctx.networkPassphrase
+  })
+
+  items.forEach((item) => {
+    builder = builder.addOperation(
+      Operation.payment({
+        destination: item.destination,
+        amount: item.amount,
+        asset: asset
+      })
+    )
+  })
+
+  const tx = builder.setTimeout(100).build();
+
+  tx.sign(designatedWalletKeypair);
+
+  const result = await submitTransaction(ctx.server, tx);
+
+  const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(items.length).call();
+  const paymentOps = opPage.records.filter(isPaymentOperationRecord);
+
+  if (paymentOps.length !== items.length) {
+    throw new StellarOperationError(
+      `Expected ${items.length} payment operation(s) for batch transaction ${result.hash}, found ${paymentOps.length}`,
+      { raw: opPage.records }
+    );
+  }
+
+  return {
+    hash: result.hash,
+    successful: result.successful,
+    ledger: result.ledger,
+    items: items.map((item, idx) => {
+      const op = paymentOps[idx];
+      return {
+        sourcePublicKey: designatedWallet.publicKey,
+        destination: item.destination,
+        amount: item.amount,
+        paymentId: op.id,
+      };
+    }),
+  };
 }
