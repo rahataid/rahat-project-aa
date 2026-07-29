@@ -25,7 +25,7 @@ export class StellarClient {
   readonly horizonUrl: string;
   readonly asset: Asset;
   private readonly sponsorKeypair: Keypair;
-  private readonly designatedKeypair: Keypair;
+  private readonly designatedKeypair: Keypair | undefined;
 
   //TODO: consider sender horizon urls as well
   constructor(config: StellarClientConfig) {
@@ -38,7 +38,9 @@ export class StellarClient {
 
     this.asset = new Asset(config.assetCode, config.assetIssuer);
     this.sponsorKeypair = Keypair.fromSecret(config.sponsorSecret);
-    this.designatedKeypair = Keypair.fromSecret(config.designatedWalletSecret);
+    this.designatedKeypair = config.designatedWalletSecret
+      ? Keypair.fromSecret(config.designatedWalletSecret)
+      : undefined;
     console.log('StellarClient initialized with config:', config);
   }
 
@@ -109,17 +111,20 @@ export class StellarClient {
    * sole signer for any transactions. Works for any asset that has the builtin trustline
   **/
   async sendBatchPayment(
-  receivers: {
-    destination: string,
-    amount: string
-  }[]
+    receivers: {
+      destination: string;
+      amount: string;
+    }[]
   ) {
+    if (!this.designatedKeypair) {
+      throw new Error('designatedWalletSecret is required in StellarClientConfig to call sendBatchPayment');
+    }
     return sendBatchPayment(
       { server: this.server, networkPassphrase: this.networkPassphrase },
       this.asset,
       this.designatedKeypair,
       receivers
-    )
+    );
   }
 
   /** Fund `destination` with XLM from the sponsor; creates the account if it doesn't exist. */
