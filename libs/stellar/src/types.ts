@@ -61,8 +61,8 @@ export interface SendPaymentContext {
   networkPassphrase: string;
 }
 
-export interface sendBatchPaymentContext {
-  
+export interface SendBatchPaymentResult extends TransactionResult {
+  items: { destination: string; amount: string; paymentId: string }[];
 }
 
 export interface StellarOperationErrorOptions {

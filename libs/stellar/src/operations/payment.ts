@@ -2,6 +2,7 @@ import { Asset, BASE_FEE, Horizon, Keypair, Operation, TransactionBuilder } from
 import {
   PaymentOpContext,
   PaymentResult,
+  SendBatchPaymentResult,
   SendFromSponsoredBatchResult,
   SendPaymentContext,
   SponsoredBatchTransferItem,
@@ -237,7 +238,7 @@ export async function sendBatchPayment(
     destination: string,
     amount: string
   }[]
-): Promise<unknown>{
+): Promise<SendBatchPaymentResult> {
   if (items.length < 1 || items.length > MAX_TRANSFERS_PER_BATCH) {
     throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${items.length})`);
   }
