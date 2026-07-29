@@ -179,7 +179,6 @@ export class BeneficiaryService {
       hasPayout,
       excludeGroupPurpose,
     } = dto;
-
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
 
@@ -237,28 +236,21 @@ export class BeneficiaryService {
       orderBy,
     };
 
-    let benfGroups;
-
-    if (page !== undefined && perPage !== undefined) {
-      benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
-        page,
-        perPage,
-      });
-    } else {
+    if (page === undefined || perPage === undefined) {
       const data = await this.prisma.beneficiaryGroups.findMany(query);
 
-      benfGroups = {
+      return {
         data,
         meta: {
           total: data.length,
-          currentPage: 1,
-          perPage: data.length,
-          lastPage: 1,
-          prev: null,
-          next: null,
         },
       };
     }
+
+    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
+      page,
+      perPage,
+    });
 
     this.logger.debug(
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
