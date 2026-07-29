@@ -12,6 +12,8 @@ export interface StellarClientConfig {
   assetCode: string;
   /** Public key of the account that issued the asset */
   assetIssuer: string;
+  /* Secret key for the distributor account for direct disbursement */
+  designatedWalletSecret: string;
 }
 
 export interface SponsoredAccount {

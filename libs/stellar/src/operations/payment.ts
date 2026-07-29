@@ -230,20 +230,19 @@ export async function sendPayment(
 export async function sendBatchPayment(
   ctx: SendPaymentContext,
   asset: Asset,
-  designatedWalletSecret: string,
+  designatedWalletKeypair: Keypair,
   receivers: {
     destination: string,
     amount: string
   }[]
 ): Promise<SendBatchPaymentResult> {
   if (receivers.length < 1 || receivers.length > MAX_TRANSFERS_PER_BATCH) {
-    throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${receivers.length})`);
+    throw new RangeError(`receivers.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${receivers.length})`);
   }
 
-  const designatedWalletKeypair = Keypair.fromSecret(designatedWalletSecret);
-  const desingatedAccount = await ctx.server.loadAccount(designatedWalletKeypair.publicKey());
+  const designatedAccount = await ctx.server.loadAccount(designatedWalletKeypair.publicKey());
 
-  let builder = new TransactionBuilder(desingatedAccount, {
+  let builder = new TransactionBuilder(designatedAccount, {
     fee: BASE_FEE,
     networkPassphrase: ctx.networkPassphrase
   })
@@ -264,7 +263,7 @@ export async function sendBatchPayment(
 
   const result = await submitTransaction(ctx.server, tx);
 
-  const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(items.length).call();
+  const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(receivers.length).call();
   const paymentOps = opPage.records.filter(isPaymentOperationRecord);
 
   if (paymentOps.length !== receivers.length) {

@@ -2,7 +2,7 @@ import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
 import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
 import { createSponsoredAccount, createSponsoredAccountsBatch } from './operations/account';
-import { sendFromSponsored, sendFromSponsoredBatch, sendPayment, sendToSponsored } from './operations/payment';
+import { sendBatchPayment, sendFromSponsored, sendFromSponsoredBatch, sendPayment, sendToSponsored } from './operations/payment';
 import { fundAccountWithXlm } from './operations/fundAccount';
 import {
   CreateSponsoredAccountResult,
@@ -25,6 +25,7 @@ export class StellarClient {
   readonly horizonUrl: string;
   readonly asset: Asset;
   private readonly sponsorKeypair: Keypair;
+  private readonly designatedKeypair: Keypair;
 
   //TODO: consider sender horizon urls as well
   constructor(config: StellarClientConfig) {
@@ -37,6 +38,7 @@ export class StellarClient {
 
     this.asset = new Asset(config.assetCode, config.assetIssuer);
     this.sponsorKeypair = Keypair.fromSecret(config.sponsorSecret);
+    this.designatedKeypair = Keypair.fromSecret(config.designatedWalletSecret);
     console.log('StellarClient initialized with config:', config);
   }
 
@@ -49,6 +51,7 @@ export class StellarClient {
       server: this.server,
       networkPassphrase: this.networkPassphrase,
       sponsorKeypair: this.sponsorKeypair,
+      // designatedKeypair: this.designatedKeypair,
       asset: this.asset,
     };
   }
@@ -99,6 +102,24 @@ export class StellarClient {
       asset,
       amount
     );
+  }
+
+  /** 
+   * Send Batch payments directly from a designated wallet with its own fee and will be the
+   * sole signer for any transactions. Works for any asset that has the builtin trustline
+  **/
+  async sendBatchPayment(
+  receivers: {
+    destination: string,
+    amount: string
+  }[]
+  ) {
+    return sendBatchPayment(
+      { server: this.server, networkPassphrase: this.networkPassphrase },
+      this.asset,
+      this.designatedKeypair,
+      receivers
+    )
   }
 
   /** Fund `destination` with XLM from the sponsor; creates the account if it doesn't exist. */
