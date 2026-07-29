@@ -230,32 +230,29 @@ export async function sendPayment(
 export async function sendBatchPayment(
   ctx: SendPaymentContext,
   asset: Asset,
-  designatedWallet: {
-    secret: string;
-    publicKey: string;
-  },
-  items: {
+  designatedWalletSecret: string,
+  receivers: {
     destination: string,
     amount: string
   }[]
 ): Promise<SendBatchPaymentResult> {
-  if (items.length < 1 || items.length > MAX_TRANSFERS_PER_BATCH) {
-    throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${items.length})`);
+  if (receivers.length < 1 || receivers.length > MAX_TRANSFERS_PER_BATCH) {
+    throw new RangeError(`items.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${receivers.length})`);
   }
 
-  const designatedWalletKeypair = Keypair.fromSecret(designatedWallet.secret);
-  const desingatedAccount = await ctx.server.loadAccount(designatedWallet.publicKey);
+  const designatedWalletKeypair = Keypair.fromSecret(designatedWalletSecret);
+  const desingatedAccount = await ctx.server.loadAccount(designatedWalletKeypair.publicKey());
 
   let builder = new TransactionBuilder(desingatedAccount, {
     fee: BASE_FEE,
     networkPassphrase: ctx.networkPassphrase
   })
 
-  items.forEach((item) => {
+  receivers.forEach((receiver) => {
     builder = builder.addOperation(
       Operation.payment({
-        destination: item.destination,
-        amount: item.amount,
+        destination: receiver.destination,
+        amount: receiver.amount,
         asset: asset
       })
     )
@@ -270,9 +267,9 @@ export async function sendBatchPayment(
   const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(items.length).call();
   const paymentOps = opPage.records.filter(isPaymentOperationRecord);
 
-  if (paymentOps.length !== items.length) {
+  if (paymentOps.length !== receivers.length) {
     throw new StellarOperationError(
-      `Expected ${items.length} payment operation(s) for batch transaction ${result.hash}, found ${paymentOps.length}`,
+      `Expected ${receivers.length} payment operation(s) for batch transaction ${result.hash}, found ${paymentOps.length}`,
       { raw: opPage.records }
     );
   }
@@ -281,10 +278,9 @@ export async function sendBatchPayment(
     hash: result.hash,
     successful: result.successful,
     ledger: result.ledger,
-    items: items.map((item, idx) => {
+    items: receivers.map((item, idx) => {
       const op = paymentOps[idx];
       return {
-        sourcePublicKey: designatedWallet.publicKey,
         destination: item.destination,
         amount: item.amount,
         paymentId: op.id,
