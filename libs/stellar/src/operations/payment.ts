@@ -230,7 +230,7 @@ export async function sendPayment(
 export async function sendBatchPayment(
   ctx: SendPaymentContext,
   asset: Asset,
-  designatedWalletKeypair: Keypair,
+  distributionWalletKeypair: Keypair,
   receivers: {
     destination: string,
     amount: string
@@ -240,9 +240,9 @@ export async function sendBatchPayment(
     throw new RangeError(`receivers.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${receivers.length})`);
   }
 
-  const designatedAccount = await ctx.server.loadAccount(designatedWalletKeypair.publicKey());
+  const distributionAccount = await ctx.server.loadAccount(distributionWalletKeypair.publicKey());
 
-  let builder = new TransactionBuilder(designatedAccount, {
+  let builder = new TransactionBuilder(distributionAccount, {
     fee: BASE_FEE,
     networkPassphrase: ctx.networkPassphrase
   })
@@ -259,7 +259,7 @@ export async function sendBatchPayment(
 
   const tx = builder.setTimeout(100).build();
 
-  tx.sign(designatedWalletKeypair);
+  tx.sign(distributionWalletKeypair);
 
   const result = await submitTransaction(ctx.server, tx);
 

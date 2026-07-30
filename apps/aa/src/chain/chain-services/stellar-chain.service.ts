@@ -1,6 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+
+/**
+ * Toggle between 'SDP' and 'DIRECT' disbursement architectures.
+ * 'SDP'    → jobs land on STELLAR_SDP queue  (SdpStellarProcessor)
+ * 'DIRECT' → jobs land on STELLAR_DISBURSE queue (StellarDirectDisburseProcessor)
+ */
+const DISBURSEMENT_MODE: 'SDP' | 'DIRECT' = 'DIRECT';
 import { SettingsService } from '@rumsan/settings';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import {
@@ -43,6 +50,7 @@ export class StellarChainService implements IChainService {
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_DISBURSE) private stellarDisburseQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR_SEND_ASSET) private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
@@ -83,7 +91,9 @@ export class StellarChainService implements IChainService {
 
     const groups = await this.getGroupsFromUuid(groupUuids);
 
-    this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
+    this.logger.log(
+      `Adding disbursement jobs for ${groups.length} groups [mode=${DISBURSEMENT_MODE}]`
+    );
 
     for (const { uuid, tokensReserved } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
@@ -94,8 +104,14 @@ export class StellarChainService implements IChainService {
         continue;
       }
 
-      const existingDisbursementId = (activeToken.info as any)?.disbursement
-        ?.id;
+      if (DISBURSEMENT_MODE === 'DIRECT') {
+        const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
+        await this.queueDirectGroupDisbursement(uuid, dName);
+        continue;
+      }
+
+      // SDP path
+      const existingDisbursementId = (activeToken.info as any)?.disbursement?.id;
       if (existingDisbursementId) {
         this.logger.log(
           `Group ${uuid} was already sent to SDP via disburse-on-create (disbursement ${existingDisbursementId}), queuing status check only`
@@ -109,7 +125,7 @@ export class StellarChainService implements IChainService {
     }
 
     this.logger.log(
-      `Successfully queued ${groups.length} SDP disbursement jobs`
+      `Successfully queued ${groups.length} disbursement jobs [mode=${DISBURSEMENT_MODE}]`
     );
 
     return {
@@ -128,10 +144,14 @@ export class StellarChainService implements IChainService {
     }
 
     this.logger.log(
-      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid}`
+      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid} [mode=${DISBURSEMENT_MODE}]`
     );
 
-    await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    if (DISBURSEMENT_MODE === 'DIRECT') {
+      await this.queueDirectGroupDisbursement(groupUuid, data.dName);
+    } else {
+      await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    }
 
     return {
       message: `Disbursement job added for group ${groupUuid}`,
@@ -165,6 +185,25 @@ export class StellarChainService implements IChainService {
           type: 'exponential',
           delay: 1000,
         },
+      }
+    );
+  }
+
+  private async queueDirectGroupDisbursement(
+    groupUuid: string,
+    dName: string
+  ): Promise<void> {
+    this.logger.debug(
+      `Queuing direct disbursement job for group ${groupUuid}, dName: ${dName}`
+    );
+    await this.stellarDisburseQueue.add(
+      JOBS.STELLAR_DIRECT.DISBURSE,
+      { dName, groups: [groupUuid] },
+      {
+        attempts: 3,
+        delay: 2000,
+        removeOnComplete: true,
+        backoff: { type: 'exponential', delay: 1000 },
       }
     );
   }

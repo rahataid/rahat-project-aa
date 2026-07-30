@@ -12,8 +12,8 @@ export interface StellarClientConfig {
   assetCode: string;
   /** Public key of the account that issued the asset */
   assetIssuer: string;
-  /** Secret key for the designated wallet used for direct batch disbursement. Required only when calling sendBatchPayment. */
-  designatedWalletSecret?: string;
+  /** Secret key for the distribution wallet used for direct batch disbursement. Required only when calling sendBatchPayment. */
+  distributionWalletSecret?: string;
 }
 
 export interface SponsoredAccount {
