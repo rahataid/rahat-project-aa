@@ -46,11 +46,11 @@ export class StellarDirectDisburseProcessor {
     }
 
     const distributionSecretSetting = await this.settingsService.getPublic(
-      'STELLAR_DESIGNATED_WALLET_SECRET'
+      'STELLAR_DISTRUBUTION_WALLET_SECRET'
     );
     if (!distributionSecretSetting?.value) {
       throw new Error(
-        'STELLAR_DESIGNATED_WALLET_SECRET not found in settings table'
+        'STELLAR_DISTRUBUTION_WALLET_SECRET not found in settings table'
       );
     }
 
