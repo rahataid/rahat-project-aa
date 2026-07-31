@@ -117,6 +117,8 @@ export class BatchTokenTransferProcessor {
       BatchTokenTransferProcessor.name
     );
 
+    this.logger.log(`Batch information: `, transfers);
+
     try {
       // Process transfers in batches of 10
       const batches = this.createBatches(transfers, BATCH_SIZE);
@@ -211,6 +213,8 @@ export class BatchTokenTransferProcessor {
       const functionName = isSourceGnosis
         ? 'transferTokenToVendor'
         : 'transferTokenToVendorForCashToken';
+
+      this.logger.log(`Batch transfer happening for`, transfers);
 
       this.logger.log(
         `Executing ${functionName} for batch ${batchNumber} (${multicallTxnPayload.length} transfers)`,
