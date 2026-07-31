@@ -54,6 +54,7 @@ import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
+import { ethers } from 'ethers';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -1843,6 +1844,32 @@ export class PayoutsService {
    * Retrieves field officer wallet address from settings
    */
   private async getFieldOfficerWalletAddress(): Promise<string> {
+    const fundManagementConfig = await this.getFromSettings(
+      'FUNDMANAGEMENT_TAB_CONFIG'
+    );
+
+    const isProjectCashTracker = !fundManagementConfig.tabs?.some(
+      (tab: any) => tab.value === 'cashTracker'
+    );
+
+    const deployerPrivateKey = await this.settingService.getPublic(
+      'DEPLOYER_PRIVATE_KEY'
+    );
+
+    if (!isProjectCashTracker) {
+      if (!deployerPrivateKey.value) {
+        throw new RpcException(
+          'Payout verification failed: Deployer private key not configured in system settings'
+        );
+      }
+
+      const deployerWalletAddress = new ethers.Wallet(
+        deployerPrivateKey.value as string
+      ).address;
+
+      return deployerWalletAddress;
+    }
+
     const entitiesSettings = await this.settingService.getPublic('ENTITIES');
 
     if (!entitiesSettings?.value) {
@@ -2137,5 +2164,24 @@ export class PayoutsService {
     }
 
     return filteredRedeems;
+  }
+
+  private async getFromSettings(key: string): Promise<any> {
+    try {
+      const settings = await this.prismaService.setting.findUnique({
+        where: {
+          name: key,
+        },
+      });
+
+      if (!settings?.value) {
+        throw new Error(`${key} not found`);
+      }
+
+      return settings.value;
+    } catch (error) {
+      this.logger.error(`Error getting setting ${key}: ${error.message}`);
+      throw error;
+    }
   }
 }
