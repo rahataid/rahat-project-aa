@@ -45,11 +45,19 @@ export class PayoutsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.PAYOUT.SEND_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendOtp(@Payload() payload: { email: string }) {
+    return this.payoutsService.sendOtp(payload.email);
+  }
+
+  @MessagePattern({
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
-    return this.payoutsService.triggerPayout(payload.uuid, payload.user);
+  triggerPayout(@Payload() payload: { uuid: string; user?: any; otp: string }) {
+    return this.payoutsService.triggerPayout(payload.uuid, payload.user, payload.otp);
   }
 
   @MessagePattern({

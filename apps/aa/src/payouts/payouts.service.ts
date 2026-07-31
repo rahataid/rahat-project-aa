@@ -41,6 +41,8 @@ import {
 } from '../processors/types';
 import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import { OtpService } from '../otp/otp.service';
+import bcrypt from 'bcryptjs';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -76,9 +78,75 @@ export class PayoutsService {
     @Inject(forwardRef(() => BeneficiaryService))
     private readonly beneficiaryService: BeneficiaryService,
     private settingService: SettingsService,
+    private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue
   ) {}
+
+  async sendOtp(email: string) {
+    if (!email) {
+      throw new RpcException('Email is required to send OTP');
+    }
+
+    const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
+
+    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.prisma.otp.delete({ where: { email } });
+    }
+
+    const { otp } = await this.otpService.sendEmail(
+      email,
+      'Payout Trigger OTP',
+      'Your OTP for triggering payout is:',
+      isExistingValid ? defaultOpt.otp : undefined
+    );
+
+    // if otp is set in db and not expired, do not update otp, just resend the existing otp
+    if (isExistingValid) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
+
+    const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
+    const otpHash = await bcrypt.hash(otp, 10);
+    await this.prisma.otp.create({
+      data: {
+        otpHash,
+        otp,
+        email,
+        expiresAt: expiry,
+        amount: 0,
+      },
+    });
+
+    this.logger.log(`Payout OTP sent to email: ${email}`);
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  private async verifyOtp(email?: string, otp?: string) {
+    if (!email || !otp) {
+      throw new RpcException('Email and OTP are required');
+    }
+
+    const otpRecord = await this.prisma.otp.findUnique({ where: { email } });
+    if (!otpRecord) {
+      throw new RpcException('OTP record not found');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    if (!isValid) {
+      throw new RpcException('Invalid OTP');
+    }
+
+    // consume OTP so it cannot be reused
+    await this.prisma.otp.delete({ where: { email } });
+  }
 
   /**
    * Find payout stats
@@ -934,7 +1002,10 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-  async triggerPayout(uuid: string, user?: any): Promise<any> {
+  async triggerPayout(uuid: string, user?: any, otp?: string): Promise<any> {
+    // Verify OTP before proceeding with payout trigger
+    await this.verifyOtp(user?.email, otp);
+
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
     const projectId = this.configService.get('PROJECT_ID');
