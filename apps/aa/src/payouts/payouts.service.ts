@@ -2168,7 +2168,7 @@ export class PayoutsService {
 
   private async getFromSettings(key: string): Promise<any> {
     try {
-      const settings = await this.prismaService.setting.findUnique({
+      const settings = await this.prisma.setting.findUnique({
         where: {
           name: key,
         },
