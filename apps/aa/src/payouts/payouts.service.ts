@@ -85,20 +85,33 @@ export class PayoutsService {
    * This is used to find the payout stats including counts by payout type
    * and isCompleted status.
    */
-  async getPayoutStats(): Promise<PayoutStats> {
+  async getPayoutStats(payload: any): Promise<PayoutStats> {
     try {
+      const { startDate, endDate } = payload || {};
+      const dateFilter =
+        startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {};
+
       const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
         await Promise.all([
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'FIAT_TRANSFER',
               status: 'FIAT_TRANSACTION_COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'VENDOR_REIMBURSEMENT',
               status: 'COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -110,6 +123,7 @@ export class PayoutsService {
                   'TOKEN_TRANSACTION_FAILED',
                 ],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -117,6 +131,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.findMany({
@@ -127,6 +142,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
         ]);
@@ -366,7 +382,8 @@ export class PayoutsService {
     payload: ListPayoutDto
   ): Promise<PaginatedResult<Omit<PayoutWithRelations, 'beneficiaryRedeem'>>> {
     try {
-      const { page, perPage, groupName, payoutType } = payload;
+      const { page, perPage, groupName, payoutType, startDate, endDate } =
+        payload;
 
       this.logger.log('Fetching all payouts');
       const where: Prisma.PayoutsWhereInput = {
@@ -384,6 +401,14 @@ export class PayoutsService {
           Object.values(PayoutType).includes(payoutType as PayoutType) && {
             type: payoutType as PayoutType,
           }),
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {}),
       };
 
       const query: Prisma.PayoutsFindManyArgs = {

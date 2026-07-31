@@ -338,7 +338,6 @@ export class InkindsService {
           _count: { id: true },
         }),
       ]);
-      console.log('totalAssignedStock:', totalAssignedStock);
       // Aggregate redemption types in-memory
       const redemptionCounts = redemptionsByType.reduce(
         (acc, redemption) => {

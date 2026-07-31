@@ -87,9 +87,8 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET_STATS, uuid: process.env.PROJECT_ID })
-  getPayoutStats() {
-    console.log('first');
-    return this.payoutsService.getPayoutStats();
+  getPayoutStats(@Payload() payload: { startDate?: string; endDate?: string }) {
+    return this.payoutsService.getPayoutStats(payload);
   }
 
   @MessagePattern({
@@ -105,6 +104,10 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   verifyManualPayout(@Payload() payload: any) {
-    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data, payload?.matchBy);
+    return this.payoutsService.verifyManualPayout(
+      payload.payoutUUID,
+      payload?.data,
+      payload?.matchBy
+    );
   }
 }
