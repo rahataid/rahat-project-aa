@@ -147,7 +147,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_GCT_DATA,
     uuid: process.env.PROJECT_ID,
   })
-  getGCTData() {
-    return this.groupCashTransferService.getGCTData();
+  getGCTData(@Payload() payload: { startDate: Date; endDate: Date }) {
+    return this.groupCashTransferService.getGCTData(payload);
   }
 }
