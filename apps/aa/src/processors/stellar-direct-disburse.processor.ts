@@ -34,7 +34,32 @@ export class StellarDirectDisburseProcessor {
     private readonly prisma: PrismaService
   ) {}
 
-  private async buildStellarClient(): Promise<{
+  private async getDisbursementSettings(): Promise<{
+    CHECK_TRUSTLINE: boolean;
+    STELLAR_DISBURSMENT_MODE: 'SDP' | 'DIRECT';
+    STELLAR_DISTRUBUTION_WALLET_SECRET: string;
+  }> {
+    const setting = await this.settingsService.getPublic(
+      'STELLAR_DISBURSEMENT_SETTINGS'
+    );
+    if (!setting?.value) {
+      throw new Error(
+        'STELLAR_DISBURSEMENT_SETTINGS not found in settings table'
+      );
+    }
+    const value = setting.value as Record<string, unknown>;
+    return {
+      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE !== false,
+      STELLAR_DISBURSMENT_MODE:
+        value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
+      STELLAR_DISTRUBUTION_WALLET_SECRET:
+        (value.STELLAR_DISTRUBUTION_WALLET_SECRET as string) || '',
+    };
+  }
+
+  private async buildStellarClient(
+    distributionWalletSecret: string
+  ): Promise<{
     client: StellarClient;
     distributionPublicKey: string;
   }> {
@@ -45,16 +70,12 @@ export class StellarDirectDisburseProcessor {
       throw new Error('STELLAR_SPONSOR_SETTINGS not found in settings table');
     }
 
-    const distributionSecretSetting = await this.settingsService.getPublic(
-      'STELLAR_DISTRUBUTION_WALLET_SECRET'
-    );
-    if (!distributionSecretSetting?.value) {
+    if (!distributionWalletSecret) {
       throw new Error(
-        'STELLAR_DISTRUBUTION_WALLET_SECRET not found in settings table'
+        'STELLAR_DISTRUBUTION_WALLET_SECRET not set in STELLAR_DISBURSEMENT_SETTINGS'
       );
     }
 
-    const distributionWalletSecret = distributionSecretSetting.value as string;
     const distributionPublicKey = Keypair.fromSecret(
       distributionWalletSecret
     ).publicKey();
@@ -113,8 +134,11 @@ export class StellarDirectDisburseProcessor {
       }
 
       // 4. Build Stellar client with distribution wallet
+      const disbursementSettings = await this.getDisbursementSettings();
       const { client: stellarClient, distributionPublicKey } =
-        await this.buildStellarClient();
+        await this.buildStellarClient(
+          disbursementSettings.STELLAR_DISTRUBUTION_WALLET_SECRET
+        );
 
       // 5. Balance check: distribution wallet must hold enough tokens
       const totalNeeded = benData.reduce(
@@ -135,23 +159,31 @@ export class StellarDirectDisburseProcessor {
         );
       }
 
-      // 6. Per-beneficiary trustline check
-      this.logger.log(
-        `Checking for trustline of beneficiaries of ${groupUuid}`
-      );
+      // 6. Per-beneficiary trustline check (CHECK_TRUSTLINE true → verify on-chain;
+      // false → chain-service already gated on extras.stellarSponsored before queuing this job)
       await this.prisma.beneficiaryGroupTokens.updateMany({
         where: { groupId: groupUuid, status: 'NOT_DISBURSED' },
         data: {
           status: 'PREPARING',
         },
       });
-      for (const ben of benData) {
-        const hasTrust = await stellarClient.hasTrustline(ben.walletAddress);
-        if (!hasTrust) {
-          throw new Error(
-            `Beneficiary ${ben.id} (${ben.walletAddress}) has no trustline for the asset`
-          );
+
+      if (disbursementSettings.CHECK_TRUSTLINE) {
+        this.logger.log(
+          `Checking for trustline of beneficiaries of ${groupUuid}`
+        );
+        for (const ben of benData) {
+          const hasTrust = await stellarClient.hasTrustline(ben.walletAddress);
+          if (!hasTrust) {
+            throw new Error(
+              `Beneficiary ${ben.id} (${ben.walletAddress}) has no trustline for the asset`
+            );
+          }
         }
+      } else {
+        this.logger.log(
+          `CHECK_TRUSTLINE disabled — skipping on-chain trustline check for ${groupUuid}`
+        );
       }
 
       // 7. Chunk and send (Stellar max 12 ops per tx)

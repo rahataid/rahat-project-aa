@@ -60,7 +60,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+    const chainSettings = await this.settingsService.getPublic(
+      'CHAIN_SETTINGS'
+    );
     const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
     if (typeof chainType === 'string' && chainType.toLowerCase() !== 'evm') {
       this.logger.log(
@@ -70,7 +72,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
       return;
     }
     await this.initializeProvider().catch((err) =>
-      this.logger.error(`Failed to initialize EVM provider: ${err.message}`, err.stack, EvmChainService.name)
+      this.logger.error(
+        `Failed to initialize EVM provider: ${err.message}`,
+        err.stack,
+        EvmChainService.name
+      )
     );
   }
 
@@ -316,7 +322,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
-    this.logger.log(`Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`);
+    this.logger.log(
+      `Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`
+    );
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.ASSIGN_TOKENS,
@@ -378,16 +386,20 @@ export class EvmChainService implements IChainService, OnModuleInit {
     //     },
     //   }))
     // );
-    
+
     let count = 0;
     for (const { uuid, tokensReserved } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
-        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
+        this.logger.warn(
+          `Group ${uuid} has no active token reservation, skipping`
+        );
         continue;
       }
       this.logger.log(`loop counter: ${count++}`);
-      this.logger.log(`Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`);
+      this.logger.log(
+        `Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`
+      );
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
@@ -763,7 +775,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
     }
   }
 
-  async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
+  async transferOfflineRedemptionBatch(
+    items: OfflineTransferItem[]
+  ): Promise<OfflineTransferResult[]> {
     const results: OfflineTransferResult[] = [];
     for (const item of items) {
       try {
@@ -772,9 +786,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
           item.vendorWalletAddress,
           item.amount.toString()
         );
-        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, txHash: result.txHash });
+        results.push({
+          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+          txHash: result.txHash,
+        });
       } catch (err: any) {
-        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, error: err?.message });
+        results.push({
+          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+          error: err?.message,
+        });
       }
     }
     return results;
@@ -835,7 +855,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async fundAccount(data: FundAccountDto): Promise<any> {
-    this.logger.log(`Funding account ${data.walletAddress} with amount ${data.amount}`);
+    this.logger.log(
+      `Funding account ${data.walletAddress} with amount ${data.amount}`
+    );
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.FUND_ACCOUNT,
@@ -1336,7 +1358,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
       const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true 
+        (t) => t.isDisbursed === true
       );
 
       if (!activeToken) {
@@ -1385,7 +1407,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
-    this.logger.log(`Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`);
+    this.logger.log(
+      `Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`
+    );
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
       {
@@ -1400,8 +1424,12 @@ export class EvmChainService implements IChainService, OnModuleInit {
     );
   }
 
-  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto) {
-    this.logger.log(`Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`);
+  async redeemVendorInkindTokens(
+    redeemVendorInkindDto: RedeemInkindTokenForCashDto
+  ) {
+    this.logger.log(
+      `Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`
+    );
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH, ...redeemVendorInkindDto },
       {
