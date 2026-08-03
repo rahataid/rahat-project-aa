@@ -13,6 +13,7 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
+import bcrypt from 'bcryptjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -470,11 +471,78 @@ export class GroupCashTransferService {
     }
   }
 
-  async disburse(recordUuid: string, user: any) {
+  async sendOtp(email: string) {
+    if (!email) {
+      throw new RpcException('Email is required to send OTP');
+    }
+
+    const defaultOpt = await this.db.otp.findUnique({ where: { email } });
+
+    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.db.otp.delete({ where: { email } });
+    }
+
+    const { otp } = await this.otpService.sendEmail(
+      email,
+      'Group Cash Transfer Disbursement OTP',
+      'Your OTP for disbursement is:',
+      isExistingValid ? defaultOpt.otp : undefined
+    );
+
+    // if otp set in db and not expired, do not update otp, just resend existing otp
+    if (isExistingValid) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
+
+    const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
+    const otpHash = await bcrypt.hash(otp, 10);
+    await this.db.otp.create({
+      data: {
+        otpHash,
+        otp,
+        email,
+        expiresAt: expiry,
+        amount: 0,
+      },
+    });
+
+    this.logger.log(`Disbursement OTP sent to email: ${email}`);
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  private async verifyOtp(email?: string, otp?: string) {
+    if (!email || !otp) {
+      throw new RpcException('Email and OTP are required');
+    }
+
+    const otpRecord = await this.db.otp.findUnique({ where: { email } });
+    if (!otpRecord) {
+      throw new RpcException('OTP record not found');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    if (!isValid) {
+      throw new RpcException('Invalid OTP');
+    }
+
+    // consume OTP so it cannot be reused
+    await this.db.otp.delete({ where: { email } });
+  }
+
+  async disburse(recordUuid: string, user: any, otp: string) {
     try {
       this.logger.log(
         `Initiating disbursement for group cash transfer record: ${recordUuid}`
       );
+
+      await this.verifyOtp(user?.email, otp);
 
       const record = await this.db.groupCashTransferRecord.findFirst({
         where: { uuid: recordUuid, deletedAt: null },
