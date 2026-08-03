@@ -163,7 +163,7 @@ export class StellarDirectDisburseProcessor {
       );
 
       await this.prisma.beneficiaryGroupTokens.updateMany({
-        where: { groupId: groupUuid, status: 'NOT_DISBURSED' },
+        where: { groupId: groupUuid, status: 'PREPARING' },
         data: {
           status: 'STARTED',
         },
