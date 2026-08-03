@@ -3,6 +3,10 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
+export const STELLAR_CLIENT = 'STELLAR_CLIENT';
+export const STELLAR_SPONSOR_BATCH_SIZE = 12;
+// Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
+export const STELLAR_TRANSFER_BATCH_SIZE = 6;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -62,6 +66,8 @@ export const JOBS = {
     LIST_PROJECT_PII: 'rahat.jobs.beneficiary.list_project_pii',
     GET: 'rahat.jobs.beneficiary.get',
     GET_ONE_BENEFICIARY: 'rahat.jobs.beneficiary.find_one_beneficiary',
+    GET_BENEFICIARY_BANK_ACCOUNT:
+      'rahat.jobs.beneficiary.get_beneficiary_bank_account',
     UPDATE: 'rahat.jobs.beneficiary.update',
     REFER: 'rahat.jobs.beneficiary.get_referred',
     ADD_TO_PROJECT: 'rahat.jobs.beneficiary.add_to_project',
@@ -113,8 +119,18 @@ export const JOBS = {
     GET_WALLET_BALANCE: 'aa.jobs.stellar.getWalletBalance',
     GET_VENDOR_STATS: 'aa.jobs.stellar.getVendorStats',
     TRANSFER_TO_OFFRAMP: `aa.jobs.stellar.transferToOfframp`,
+    TRANSFER_TO_OFFRAMP_BATCH: `aa.jobs.stellar.transferToOfframpBatch`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
+    SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
+  },
+  STELLAR_SDP: {
+    DISBURSE: 'aa.jobs.stellar_sdp.disburse',
+    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+  },
+  WALLET: {
+    GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
+    GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
   },
   OFFRAMP: {
     CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',
@@ -238,6 +254,8 @@ export const JOBS = {
     SEND_GROUP_OTP: 'aa.jobs.vendor.send_group_otp',
     PROCESS_OFFLINE_TOKEN_TRANSFER:
       'aa.jobs.vendor.process_offline_token_transfer',
+    OFFLINE_REDEEM_BATCH: 'aa.jobs.vendor.offline_redeem_batch',
+    QUEUE_OFFLINE_REDEMPTION: 'aa.jobs.vendor.queue_offline_redemption',
     SYNC_OFFLINE_DATA: 'aa.jobs.vendor.sync_offline_data',
     SEND_BULK_OTP: 'rahat.jobs.otp.send_bulk_otp',
   },
@@ -314,6 +332,25 @@ export const JOBS = {
     UPDATE_VENDOR_REDEMPTION_TX_HASH:
       'aa.jobs.inkinds.updateVendorRedemptionTxHash',
   },
+  GROUP_CASH_TRANSFER: {
+    CREATE: 'aa.jobs.groupCashTransfer.create',
+    UPDATE: 'aa.jobs.groupCashTransfer.update',
+    DELETE: 'aa.jobs.groupCashTransfer.delete',
+    GET: 'aa.jobs.groupCashTransfer.get',
+    GET_ONE: 'aa.jobs.groupCashTransfer.getOne',
+    ASSIGN_FUND: 'aa.jobs.groupCashTransfer.assignFund',
+    DISBURSE: 'aa.jobs.groupCashTransfer.disburse',
+    GET_RECORDS: 'aa.jobs.groupCashTransfer.getRecords',
+    GET_ONE_RECORD: 'aa.jobs.groupCashTransfer.getOneRecord',
+    VALIDATE_BANK_ACCOUNT: 'aa.jobs.groupCashTransfer.validateBankAccount',
+    GET_ALL_VALID: 'aa.jobs.groupCashTransfer.getAllValid',
+    UPDATE_RECORD: 'aa.jobs.groupCashTransfer.updateRecord',
+    GET_GCT_DATA: 'aa.jobs.groupCashTransfer.getGCTData',
+    CONFIRM_DISBURSE: 'aa.jobs.groupCashTransfer.confirmDisburse',
+    GET_TREASURY_INFO: 'aa.jobs.groupCashTransfer.getTreasuryInfo',
+    SEND_OTP: 'aa.jobs.groupCashTransfer.sendOtp',
+    VERIFY_OTP: 'aa.jobs.groupCashTransfer.verifyOtp',
+  },
   MULTISIG: {
     GET_SAFE_OWNER: 'aa.jobs.safe-wallet.getOwner',
     CREATE_SAFE_TRANSACTION: 'aa.jobs.safe-wallet.createSafeTransaction',
@@ -338,10 +375,12 @@ export const EVENTS = {
   BENEFICIARY_UPDATED: 'events.beneficiary_updated',
   AUTOMATED_TRIGGERED: 'events.automated_triggered',
   TOKEN_RESERVED: 'events.token_reserved',
+  GROUP_TOKEN_RESERVED_FOR_DISBURSE: 'events.group_token_reserved_for_disburse',
   STAKEHOLDER_UPDATED: 'events.stakeholders_updated',
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -353,6 +392,7 @@ export const BQUEUE = {
   CONTRACT: `CONTRACT_${process.env.PROJECT_ID}`,
   COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
+  STELLAR_SEND_ASSET: `STELLAR_SEND_ASSET_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
@@ -365,6 +405,12 @@ export const BQUEUE = {
   INKIND_BULK_REDEEM: `INKIND_BULK_REDEEM_${process.env.PROJECT_ID}`,
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
+  STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
+  STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
+  STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
+  STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
+  MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,
+  OFFLINE_REDEEM: `OFFLINE_REDEEM_${process.env.PROJECT_ID}`,
 };
 
 export const VULNERABILITY_FIELD = {

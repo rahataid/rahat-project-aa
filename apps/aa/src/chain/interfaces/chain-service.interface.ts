@@ -1,4 +1,9 @@
-import { SendAssetDto } from '../../stellar/dto/send-otp.dto';
+export class SendAssetDto {
+  amount: string | number;
+  phoneNumber: string;
+  receiverAddress: string;
+  otp: string;
+}
 
 export interface IChainService {
   // Token operations
@@ -7,6 +12,7 @@ export interface IChainService {
 
   // Disbursement operations
   disburse(data: DisburseDto): Promise<any>;
+  preDisburse?(data: DisburseDto): Promise<any>;
   getDisbursementStatus(id: string): Promise<any>;
 
   // Send otp operations
@@ -39,6 +45,21 @@ export interface IChainService {
   // Inkind redemption
   redeemInkind?(redeemDto: RedeemInkindDto): Promise<any>;
   redeemVendorInkindTokens?(redeemVendorInkindDto: RedeemInkindTokenForCashDto): Promise<any>;
+
+  // Offline redemption (batched, no OTP)
+  transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]>;
+}
+
+export interface OfflineTransferItem {
+  beneficiaryWalletAddress: string;
+  vendorWalletAddress: string;
+  amount: string | number;
+}
+
+export interface OfflineTransferResult {
+  beneficiaryWalletAddress: string;
+  txHash?: string;
+  error?: string;
 }
 
 export type ChainType = 'stellar' | 'evm';

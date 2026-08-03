@@ -7,7 +7,8 @@ import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { StellarModule } from '../stellar/stellar.module';
+// TODO: STELLAR DETACH - re-add once stellar module is rewritten.
+// import { StellarModule } from '../stellar/stellar.module';
 import { SettingsModule } from '@rumsan/settings';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 import { PayoutsModule } from '../payouts/payouts.module';
@@ -17,7 +18,7 @@ import { PdfGenerationProcessor } from '../processors/pdf-generation.processor';
 @Module({
   imports: [
     forwardRef(() => PayoutsModule),
-    StellarModule,
+    // StellarModule,
     SettingsModule,
     ClientsModule.register([
       {
@@ -34,9 +35,10 @@ import { PdfGenerationProcessor } from '../processors/pdf-generation.processor';
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
     }),
-    BullModule.registerQueue({
-      name: BQUEUE.STELLAR,
-    }),
+    // TODO: STELLAR DETACH - no provider in this module injects BQUEUE.STELLAR.
+    // BullModule.registerQueue({
+    //   name: BQUEUE.STELLAR,
+    // }),
     BullModule.registerQueue({
       name: BQUEUE.QR_PDF,
     }),

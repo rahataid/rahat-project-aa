@@ -6,6 +6,9 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
+import { ChainService } from '../chain/chain.service';
+import { SettingsService } from '@rumsan/settings';
+import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
 
 @Injectable()
 export class ListernersService {
@@ -17,7 +20,9 @@ export class ListernersService {
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
-    private disbService: CvaDisbursementService
+    private disbService: CvaDisbursementService,
+    private readonly settingsService: SettingsService,
+    private readonly chainService: ChainService
   ) {}
 
   private statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -30,9 +35,9 @@ export class ListernersService {
     if (this.statsDebounceTimer) clearTimeout(this.statsDebounceTimer);
     this.statsDebounceTimer = setTimeout(() => {
       this.statsDebounceTimer = null;
-      this.aaStats.saveAllStats().catch((err) =>
-        this.logger.error('saveAllStats failed', err)
-      );
+      this.aaStats
+        .saveAllStats()
+        .catch((err) => this.logger.error('saveAllStats failed', err));
     }, 2000);
   }
   @OnEvent(EVENTS.STAKEHOLDER_CREATED)
@@ -42,6 +47,30 @@ export class ListernersService {
   async onstakeholderChanged() {
     await this.stakeholderStats.stakeholdersCount();
   }
+
+  @OnEvent(EVENTS.GROUP_TOKEN_RESERVED_FOR_DISBURSE)
+  async onTokenReservedDisburseOnCreate(payload: {
+    groupUuid: string;
+    groupName: string;
+    title: string;
+  }) {
+    try {
+      const disburseOnCreate = await this.settingsService.getPublic(
+        'DISBURSED_ON_CREATE'
+      );
+
+      if (disburseOnCreate?.value !== true) return;
+
+      const { groupUuid, groupName, title } = payload;
+      const dName = `${title.toLowerCase()}_${groupName}_${Date.now()}`;
+      await this.chainService.preDisburse({ dName, groups: [groupUuid] });
+    } catch (error) {
+      this.logger.error(
+        `Failed to trigger disburse-on-create for group ${payload.groupUuid}: ${error}`
+      );
+    }
+  }
+
   @OnEvent(EVENTS.AUTOMATED_TRIGGERED)
   async handleAutomatedTrigger(payload: { repeatKey: string }) {
     const allJobs = await this.scheduleQueue.getRepeatableJobs();
@@ -77,6 +106,22 @@ export class ListernersService {
     } catch (error) {
       this.logger.error('❌ Notification emit failed:', error);
       throw error;
+    }
+  }
+
+  @OnEvent(CVA_EVENTS.VENDOR.CREATED)
+  async handleVendorAssignment(event: { walletAddress: string }) {
+    this.logger.log(`[VENDOR CREATION EVENT]✅ Vendor assignment event emitted with walletAddress: ${event.walletAddress}`);
+    try {
+      const settings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
+      if (!settings?.value) {
+        this.logger.warn('STELLAR_SPONSOR_SETTINGS not configured — skipping XLM send');
+        return;
+      }
+      const result = await new StellarClient(settings.value as unknown as StellarClientConfig).fundAccountWithXlm(event.walletAddress, '5');
+      this.logger.log(`[VENDOR CREATION EVENT] Sent 5 XLM to ${event.walletAddress}, tx: ${result.hash}`);
+    } catch (err) {
+      this.logger.error(`[VENDOR CREATION EVENT] Failed to send 5 XLM to ${event.walletAddress}`, err);
     }
   }
 }
