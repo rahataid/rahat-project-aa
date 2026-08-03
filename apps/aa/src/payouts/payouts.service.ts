@@ -1688,8 +1688,8 @@ export class PayoutsService {
       matchBy
     );
 
-    this.logVerificationStats(verificationResult, payoutRows.length);
-    this.validateMatchedBeneficiaries(verificationResult);
+    this.logVerificationStats(verificationResult, payoutRows.length, matchBy);
+    this.validateMatchedBeneficiaries(verificationResult, matchBy);
 
     const fieldOfficerAddress = await this.getFieldOfficerWalletAddress();
     const tokenAmount = this.calculateTokenAmountPerBeneficiary(payout);
@@ -1794,6 +1794,13 @@ export class PayoutsService {
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
+      if (!row['Transaction Status']) {
+        throw new RpcException(
+          `Payout verification failed: Missing transaction status in row ${
+            index + 1
+          }`
+        );
+      }
       if (matchBy === 'phoneNumber') {
         if (!row['Phone Number']) {
           throw new RpcException(
@@ -1876,7 +1883,8 @@ export class PayoutsService {
    */
   private logVerificationStats(
     result: ManualPayoutVerificationResult,
-    totalRows: number
+    totalRows: number,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     const matchPercentage = ((result.matched.length / totalRows) * 100).toFixed(
       1
@@ -1892,7 +1900,11 @@ export class PayoutsService {
     if (result.unmatched.length > 0) {
       this.logger.warn(
         `Found ${result.unmatched.length} unmatched records. ` +
-          `These beneficiaries may not be registered or have incorrect bank account information.`
+          `These beneficiaries may not be registered or have incorrect ${
+            matchBy === 'phoneNumber'
+              ? 'phone number'
+              : 'bank account'
+          } information.`
       );
     }
   }
@@ -1901,9 +1913,16 @@ export class PayoutsService {
    * Validates that we have matched beneficiaries to process
    */
   private validateMatchedBeneficiaries(
-    result: ManualPayoutVerificationResult
+    result: ManualPayoutVerificationResult,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     if (result.matched.length === 0) {
+      if (matchBy === 'phoneNumber') {
+        throw new RpcException(
+          'Payout verification failed: No beneficiary phone numbers matched with the provided data. ' +
+            'Please verify that the phone numbers in your file match the registered beneficiaries.'
+        );
+      }
       throw new RpcException(
         'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
           'Please verify that the bank account numbers in your file match the registered beneficiaries.'
