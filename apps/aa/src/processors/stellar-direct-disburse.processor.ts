@@ -324,6 +324,15 @@ export class StellarDirectDisburseProcessor {
       const completedAt = new Date().toISOString();
       const totalElapsedMs = Date.now() - startedAt;
 
+      const stellarSponsorSettings = (
+        await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS')
+      )?.value;
+
+      // Asset infommation for logs
+      const assetCode = stellarSponsorSettings?.['assetCode'] ?? null;
+      const assetIssuer = stellarSponsorSettings?.['assetIssuer'] ?? null;
+      const assetInfo = `${assetCode}:${assetIssuer}`;
+
       await this.beneficiaryService.updateGroupToken({
         groupUuid,
         status: 'DISBURSED',
@@ -335,14 +344,8 @@ export class StellarDirectDisburseProcessor {
           disbursementName: dName,
           distributionWallet: distributionPublicKey,
           asset: {
-            network:
-              (
-                await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS')
-              )?.value?.['network'] ?? null,
-            tokenCode:
-              (
-                await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS')
-              )?.value?.['assetCode'] ?? null,
+            network: stellarSponsorSettings?.['network'] ?? null,
+            tokenCode: assetInfo,
           },
           summary: {
             beneficiaryCount: benData.length,
