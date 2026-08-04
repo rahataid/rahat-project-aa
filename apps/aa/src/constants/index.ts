@@ -146,6 +146,7 @@ export const JOBS = {
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    SEND_OTP: 'aa.jobs.payout.sendOtp',
     TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
     TRIGGER_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerFailedPayoutRequest',
     TRIGGER_ONE_FAILED_PAYOUT_REQUEST:
@@ -160,7 +161,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -275,6 +276,14 @@ export const JOBS = {
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
     GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
+  },
+  IVR_TEMPLATES: {
+    CREATE: 'aa.jobs.ivrTemplates.create',
+    LIST: 'aa.jobs.ivrTemplates.list',
+    GET: 'aa.jobs.ivrTemplates.get',
+    UPDATE: 'aa.jobs.ivrTemplates.update',
+    DELETE: 'aa.jobs.ivrTemplates.delete',
+    SEND_TEST_CALL: 'aa.jobs.ivrTemplates.sendTestCall',
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
