@@ -91,7 +91,8 @@ export class PayoutsService {
 
     const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
 
-    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
 
     // if existing OTP is expired, purge it so we can issue a fresh one
     if (defaultOpt && !isExistingValid) {
@@ -1852,8 +1853,9 @@ export class PayoutsService {
     const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
       const matchedBeneficiary = beneficiaries.find((beneficiary) =>
         matchBy === 'phoneNumber'
-          ? beneficiary.phoneNumber === row['Phone Number']
-          : beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+          ? beneficiary.phoneNumber === String(row['Phone Number']).trim()
+          : beneficiary.bankDetails.accountNumber ===
+            String(row['Bank Account Number']).trim()
       );
 
       return {
@@ -1901,9 +1903,7 @@ export class PayoutsService {
       this.logger.warn(
         `Found ${result.unmatched.length} unmatched records. ` +
           `These beneficiaries may not be registered or have incorrect ${
-            matchBy === 'phoneNumber'
-              ? 'phone number'
-              : 'bank account'
+            matchBy === 'phoneNumber' ? 'phone number' : 'bank account'
           } information.`
       );
     }
