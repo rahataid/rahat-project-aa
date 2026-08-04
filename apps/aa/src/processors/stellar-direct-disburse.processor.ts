@@ -39,17 +39,19 @@ export class StellarDirectDisburseProcessor {
     STELLAR_DISBURSMENT_MODE: 'SDP' | 'DIRECT';
     STELLAR_DISTRUBUTION_WALLET_SECRET: string;
   }> {
-    const setting = await this.settingsService.getPublic(
-      'STELLAR_DISBURSEMENT_SETTINGS'
-    );
-    if (!setting?.value) {
-      throw new Error(
-        'STELLAR_DISBURSEMENT_SETTINGS not found in settings table'
+    let value: Record<string, unknown> = {};
+    try {
+      const setting = await this.settingsService.getPublic(
+        'STELLAR_DISBURSEMENT_SETTINGS'
+      );
+      value = (setting?.value as Record<string, unknown>) || {};
+    } catch {
+      this.logger.warn(
+        'STELLAR_DISBURSEMENT_SETTINGS not found in settings table, using defaults'
       );
     }
-    const value = setting.value as Record<string, unknown>;
     return {
-      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE !== false,
+      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE === true,
       STELLAR_DISBURSMENT_MODE:
         value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
       STELLAR_DISTRUBUTION_WALLET_SECRET:

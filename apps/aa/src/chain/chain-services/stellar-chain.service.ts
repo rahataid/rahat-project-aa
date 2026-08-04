@@ -995,7 +995,7 @@ export class StellarChainService implements IChainService {
     );
     const value = (settings as Record<string, unknown>) || {};
     return {
-      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE !== false,
+      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE === true,
       STELLAR_DISBURSMENT_MODE:
         value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
       STELLAR_DISTRUBUTION_WALLET_SECRET:
