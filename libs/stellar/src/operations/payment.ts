@@ -88,7 +88,7 @@ export async function sendFromSponsored(
  * sponsor's signature - so signatures are the binding constraint well before
  * operations are. 12 keeps a wide margin under that cap.
  */
-export const MAX_TRANSFERS_PER_BATCH = 12;
+export const MAX_TRANSFERS_PER_BATCH = 20;
 
 /**
  * Combines up to MAX_TRANSFERS_PER_BATCH sponsored-account payments into a
