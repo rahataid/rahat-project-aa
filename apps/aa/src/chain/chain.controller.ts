@@ -55,7 +55,6 @@ export class ChainController {
   getDisbursementStats(
     @Payload() payload: { startDate: string; endDate: string }
   ) {
-    // console.log('Received payload in chain controller:', payload);
     return this.chainService.getDisbursementStats(payload);
   }
 

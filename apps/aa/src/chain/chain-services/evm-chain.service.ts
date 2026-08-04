@@ -435,7 +435,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
     startDate?: string;
     endDate?: string;
   }): Promise<any[]> {
-    // console.log('Received payload in EVM chain service:', payload);
     try {
       this.logger.log(
         'Getting disbursement stats for EVM chain',

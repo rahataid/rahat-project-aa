@@ -30,7 +30,6 @@ export class ChainService {
   }
 
   getDisbursementStats(payload: { startDate: string; endDate: string }) {
-    // console.log('Received payload in chain service:', payload);
     return this.chainQueueService.getDisbursementStats(payload);
   }
 
