@@ -195,8 +195,8 @@ export class StellarChainService implements IChainService {
 
   async getDisbursementStats(payload: {
     startDate?: string;
-    endDate: string;
-  }): Promise<any> {
+    endDate?: string;
+  }): Promise<any[]> {
     this.logger.log('Fetching disbursement stats for Stellar SDP chain');
 
     const oneTokenPrice =
@@ -209,12 +209,20 @@ export class StellarChainService implements IChainService {
       `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
     );
 
+    // Apply date filter to beneficiaryGroupTokens
+    const dateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
+        : {};
+
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
-        createdAt: {
-          gte: payload?.startDate ? new Date(payload.startDate) : undefined,
-          lte: payload?.endDate ? new Date(payload.endDate) : undefined,
-        },
+        ...dateFilter,
       },
 
       include: {
@@ -229,6 +237,19 @@ export class StellarChainService implements IChainService {
         },
       },
     });
+
+    // Apply date filter to beneficiaryRedeem for token stats
+    const redeemDateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
+        : {};
+
+    const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
 
     const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
       if (token.isDisbursed) {
@@ -299,9 +320,73 @@ export class StellarChainService implements IChainService {
         value:
           averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
       },
+      {
+        name: 'Assigned Tokens',
+        value: tokenStatsResult.assignedTokens,
+      },
+      {
+        name: 'Disbursed Tokens',
+        value: tokenStatsResult.disbursedTokens,
+      },
+      {
+        name: 'Pending Disbursement',
+        value: tokenStatsResult.pendingDisbursement,
+      },
+      {
+        name: 'Redeemed Tokens',
+        value: tokenStatsResult.redeemedTokens,
+      },
     ];
   }
 
+  private async getTokenStats(dateFilter?: any) {
+    const REDEEMED_LEGS = [
+      { transactionType: 'VENDOR_REIMBURSEMENT', status: 'COMPLETED' },
+      {
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      },
+    ] as const;
+    let assignedTokens = 0;
+    let disbursedTokens = 0;
+    let redeemedTokens = 0;
+
+    const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: dateFilter,
+      select: {
+        numberOfTokens: true,
+        isDisbursed: true,
+        payout: { select: { type: true, mode: true } },
+      },
+    });
+    for (const gt of groupTokens) {
+      const tokens = gt.numberOfTokens || 0;
+      assignedTokens += tokens;
+      if (gt.isDisbursed) disbursedTokens += tokens;
+    }
+    const pendingDisbursement = assignedTokens - disbursedTokens;
+
+    const redeemRecords = await this.prisma.beneficiaryRedeem.findMany({
+      where: { OR: [...REDEEMED_LEGS], ...dateFilter },
+      select: {
+        amount: true,
+        transactionType: true,
+        beneficiaryWalletAddress: true,
+        payout: { select: { mode: true } },
+      },
+    });
+
+    for (const r of redeemRecords) {
+      redeemedTokens += r.amount;
+    }
+    const result = {
+      assignedTokens,
+      disbursedTokens,
+      pendingDisbursement,
+      redeemedTokens,
+    };
+    return result;
+  }
   async getRahatTokenBalance(data: { address: string }): Promise<any> {
     this.logger.debug(`getRahatTokenBalance address=${data.address}`);
     if (!this.validateAddress(data.address)) {
