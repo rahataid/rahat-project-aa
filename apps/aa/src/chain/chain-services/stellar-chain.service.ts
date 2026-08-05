@@ -27,7 +27,7 @@ import { lastValueFrom } from 'rxjs';
 import { getBalance } from 'libs/stellar/src/utils/account';
 import { StellarClient } from 'libs/stellar/src/client';
 import { StellarClientConfig } from 'libs/stellar/src/types';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../../utils/hash';
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -667,7 +667,7 @@ export class StellarChainService implements IChainService {
     if (record.isVerified) throw new RpcException('OTP already verified');
     if (record.expiresAt < new Date()) throw new RpcException('OTP has expired');
 
-    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    const isValid = verifyOtpHash(record.otpHash, `${otp}:${amount}`);
     if (!isValid) throw new RpcException('Invalid OTP or amount mismatch');
 
     await this.prisma.otp.update({ where: { phoneNumber }, data: { isVerified: true } });
@@ -677,7 +677,7 @@ export class StellarChainService implements IChainService {
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
-    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+    const otpHash = getOtpHash(`${otp}:${amount}`);
 
     const otpRes = await this.prisma.otp.upsert({
       where: { phoneNumber },

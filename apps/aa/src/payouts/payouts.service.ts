@@ -42,7 +42,7 @@ import {
 import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import { OtpService } from '../otp/otp.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../utils/hash';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -111,7 +111,7 @@ export class PayoutsService {
     }
 
     const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
-    const otpHash = await bcrypt.hash(otp, 10);
+    const otpHash = getOtpHash(otp);
     await this.prisma.otp.create({
       data: {
         otpHash,
@@ -140,7 +140,7 @@ export class PayoutsService {
       throw new RpcException('OTP has expired');
     }
 
-    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    const isValid = verifyOtpHash(otpRecord.otpHash, otp);
     if (!isValid) {
       throw new RpcException('Invalid OTP');
     }

@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CORE_MODULE } from '../constants';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../utils/hash';
 
 import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginationBaseDto } from './common';
@@ -726,10 +726,9 @@ export class VendorsService {
         };
       }
 
-      // Verify the OTP using bcrypt
-      const isValidOtp = await bcrypt.compare(
-        `${payload.otp}:${otpData.amount}`,
-        otpData.otpHash
+      const isValidOtp = verifyOtpHash(
+        otpData.otpHash,
+        `${payload.otp}:${otpData.amount}`
       );
 
       if (!isValidOtp) {

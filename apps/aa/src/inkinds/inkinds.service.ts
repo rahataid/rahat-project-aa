@@ -41,7 +41,7 @@ import {
   BeneficiaryRedemptionResponse,
 } from './dto/inkind.type';
 import { OtpService } from '../otp/otp.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../utils/hash';
 import { randomUUID } from 'crypto';
 import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
@@ -1379,7 +1379,7 @@ export class InkindsService {
     }
 
     const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
-    const hashOpt = await bcrypt.hash(otp, 10);
+    const hashOpt = getOtpHash(otp);
     await this.prisma.otp.create({
       data: {
         otpHash: hashOpt,
@@ -1417,7 +1417,7 @@ export class InkindsService {
     //   throw new RpcException('OTP has expired');
     // }
 
-    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    const isValid = verifyOtpHash(otpRecord.otpHash, otp);
     if (!isValid) {
       throw new RpcException('Invalid OTP');
     }

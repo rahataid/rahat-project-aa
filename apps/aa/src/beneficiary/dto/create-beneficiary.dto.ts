@@ -81,3 +81,22 @@ export class CreateBulkBeneficiaryDto {
   @Type(() => CreateBeneficiaryDto)
   beneficiaries: CreateBeneficiaryDto[];
 }
+
+export interface CreateBenfAddGroupToProjectDto {
+  beneficiaryGroupId: string;
+  beneficiaryGroupName: string;
+  groupPurpose: GroupPurpose;
+  projectId: string;
+  beneficiaries: Array<{
+    uuid: string;
+    walletAddress: string;
+    phone: string | null;
+    extras: Record<string, any> | null;
+    isVerified: boolean;
+    type: string;
+    beneficiaryGroupId: string;
+    gender?: Enums.Gender;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}

@@ -5,13 +5,13 @@ import { SdpClient } from '@rahataid/stellar-sdp';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
-import bcrypt from 'bcryptjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
   CreateBulkBeneficiaryDto,
+  CreateBenfAddGroupToProjectDto
 } from './dto/create-beneficiary.dto';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -25,6 +25,7 @@ import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
 import { createContractInstance } from '../utils/web3';
+import { getOtpHash } from '../utils/hash';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -189,23 +190,23 @@ export class BeneficiaryService {
           ...(tokenAssigned === true
             ? { tokensReserved: { some: { isDisbursed: true } } }
             : tokenAssigned === false
-            ? {
+              ? {
                 OR: [
                   { tokensReserved: { none: {} } },
                   { tokensReserved: { some: { isDisbursed: true } } },
                 ],
                 groupPurpose: { not: GroupPurpose.COMMUNICATION },
               }
-            : {}),
+              : {}),
         },
         {
           ...(hasPayout === true
             ? { tokensReserved: { some: { payoutId: { not: null } } } }
             : hasPayout === false
-            ? {
+              ? {
                 tokensReserved: { some: { payoutId: null, isDisbursed: true } },
               }
-            : {}),
+              : {}),
         },
         {
           ...(search && {
@@ -284,8 +285,7 @@ export class BeneficiaryService {
     this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
     this.logger.debug(
-      `Group uuids: ${uuids.length}, selectFields: ${
-        selectField?.join(',') ?? 'all'
+      `Group uuids: ${uuids.length}, selectFields: ${selectField?.join(',') ?? 'all'
       }`
     );
     try {
@@ -483,8 +483,82 @@ export class BeneficiaryService {
     return data;
   }
 
+  async createBenfAndAddGroupToProject(dto: CreateBenfAddGroupToProjectDto) {
+    const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose, } = dto;
+
+    this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
+
+    const processedBeneficiaries: Prisma.BeneficiaryCreateManyInput[] = beneficiaries.map(
+      ({ uuid, walletAddress, phone, extras, gender, createdAt, updatedAt }) => ({
+        uuid,
+        walletAddress,
+        phone,
+        extras,
+        gender,
+        createdAt,
+        updatedAt
+      })
+    )
+
+    let groupedBeneficiaries: any;
+    let group: any;
+
+    try {
+      await this.prisma.$transaction(async (txn) => {
+        const rdata = await txn.beneficiary.createMany({
+          data: processedBeneficiaries,
+          skipDuplicates: true,
+        });
+
+        this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
+        this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+
+        await this.seedOtpsForBeneficiaries(processedBeneficiaries);
+
+        // Group creation and assignment starts here
+        this.logger.debug(
+          `Adding beneficiary group ${dto.beneficiaryGroupId} to project`
+        );
+        group = await txn.beneficiaryGroups.create({
+          data: {
+            uuid: beneficiaryGroupId,
+            name: beneficiaryGroupName,
+            groupPurpose: groupPurpose,
+          },
+        });
+
+        groupedBeneficiaries =
+          await txn.beneficiaryToGroup.createMany({
+            data: beneficiaries.map((beneficiary) => ({
+              beneficiaryId: beneficiary.uuid,
+              groupId: beneficiary.beneficiaryGroupId,
+            })),
+          });
+      })
+
+      this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
+        groupUuid: beneficiaryGroupId
+      });
+
+      return {
+        group,
+        groupedBeneficiaries
+      }
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error in group creation and addition: ${msg}`, err);
+
+      throw new RpcException(`Error in group creation and addition: ${msg}`);
+    }
+  }
+
+
+
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
+
+    this.logger.debug(`The payload received is:`, payload);
     this.logger.debug(
       `Adding beneficiary group ${beneficiaryGroupData.uuid} to project`
     );
@@ -495,6 +569,8 @@ export class BeneficiaryService {
         groupPurpose: beneficiaryGroupData.groupPurpose,
       },
     });
+
+    this.logger.log(`Group is: `, group);
 
     const groupedBeneficiaries =
       await this.prisma.beneficiaryToGroup.createMany({
@@ -695,8 +771,7 @@ export class BeneficiaryService {
           `Group purpose GENERAL not allowed for group: ${beneficiaryGroupId} with payout type: ${params?.type}, isPayoutIntegrated: ${isPayoutIntegrated}`
         );
         throw new RpcException(
-          `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${
-            params?.type ?? 'none'
+          `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${params?.type ?? 'none'
           }, `
         );
       }
@@ -859,10 +934,10 @@ export class BeneficiaryService {
       const status = isDisbursed
         ? 'DISBURSED'
         : sdpStatus === 'FAILED' || sdpStatus === 'ERROR'
-        ? 'FAILED'
-        : sdpStatus === 'STARTED'
-        ? 'STARTED'
-        : tokenReservation['status'];
+          ? 'FAILED'
+          : sdpStatus === 'STARTED'
+            ? 'STARTED'
+            : tokenReservation['status'];
 
       if (status === tokenReservation['status']) return null;
 
@@ -1026,7 +1101,6 @@ export class BeneficiaryService {
   ) {
     this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
     const CHUNK_SIZE = 100;
-    const BCRYPT_ROUNDS = 8;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const eligible = beneficiaries.filter((b) => b.phone);
@@ -1035,7 +1109,7 @@ export class BeneficiaryService {
     const isDev = process.env.NODE_ENV !== 'production';
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+      devHash = getOtpHash('1234');
     }
 
     const otpRecords: Array<{
@@ -1057,7 +1131,7 @@ export class BeneficiaryService {
             : Math.floor(1000 + Math.random() * 9000).toString();
           const otpHash = isDev
             ? devHash!
-            : await bcrypt.hash(`${otp}`, BCRYPT_ROUNDS);
+            : getOtpHash(otp);
           return {
             phoneNumber: b.phone!,
             ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
@@ -1665,7 +1739,7 @@ export class BeneficiaryService {
 
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+      devHash = getOtpHash('1234');
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -1706,7 +1780,7 @@ export class BeneficiaryService {
             : Math.floor(1000 + Math.random() * 9000).toString();
           const otpHash = isDev
             ? devHash!
-            : await bcrypt.hash(otp, BCRYPT_ROUNDS);
+            : getOtpHash(otp);
 
           await tx.otp.upsert({
             where: { walletAddress: benf.walletAddress },

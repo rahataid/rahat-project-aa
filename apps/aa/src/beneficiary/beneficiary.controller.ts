@@ -5,6 +5,7 @@ import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
   CreateBeneficiaryDto,
+  CreateBenfAddGroupToProjectDto,
   CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -106,6 +107,15 @@ export class BeneficiaryController {
   async addGroupToProject(payload) {
     console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  //NOTE: creates beneficiaries and their group in a single transaction
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  async createBenfAndAddGroupToProject(payload: CreateBenfAddGroupToProjectDto) {
+    return this.beneficiaryService.createBenfAndAddGroupToProject(payload);
   }
 
   @MessagePattern({
