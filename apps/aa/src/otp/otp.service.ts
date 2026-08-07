@@ -93,9 +93,9 @@ export class OtpService {
 
   async getOtp() {
     if (process.env.NODE_ENV !== 'production') {
-      return '123456';
+      return '1234';
     }
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return Math.floor(1000+ Math.random() * 9000).toString();
   }
 
   private async loadSmsModule(provider) {
