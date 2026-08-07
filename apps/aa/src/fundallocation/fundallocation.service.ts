@@ -20,11 +20,8 @@ export class FundService {
       const { amount } = payload;
       const contractSettings = await this.settingService.getPublic('CONTRACT');
       const contractValue = contractSettings?.value as any;
-      const cashTokenValue = await this.settingService.getPublic(
-        'CASH_TOKEN_CONTRACT'
-      );
+      const cashTokenAddress = contractValue?.CASHTOKEN?.ADDRESS
       const rahatTokenAddress = contractValue?.RAHATTOKEN?.ADDRESS;
-      const cashTokenAddress = cashTokenValue?.value;
       const projectAddress = contractValue?.AAPROJECT?.ADDRESS;
 
       const donorContract = await createContractInstanceSign(

@@ -707,7 +707,7 @@ export class BatchTokenTransferProcessor {
       'FUNDMANAGEMENT_TAB_CONFIG'
     );
     return fundManagementConfig.tabs?.some(
-      (tab: any) => tab.value === 'multisigWallet'
+      (tab: any) => tab.value === 'multisigWallet' || 'treasury'
     );
   }
 
