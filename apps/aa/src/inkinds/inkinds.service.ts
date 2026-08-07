@@ -46,7 +46,8 @@ import { randomUUID } from 'crypto';
 import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
-import { ChainService } from '../chain/chain.service';
+import type { ChainService } from '../chain/chain.service';
+import { ModuleRef } from '@nestjs/core';
 import { AppService } from '../app/app.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bull';
@@ -66,13 +67,16 @@ const DEFAULT_BULK_BATCH_SIZE = parseInt(
 @Injectable()
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
+
+  // Lazy-loaded to avoid circular dependency with ChainModule
+  private _chainService: ChainService | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly appService: AppService,
     private configService: ConfigService,
-    @Inject(CHAIN_SERVICE)
-    private readonly chainService: ChainService,
+    private readonly moduleRef: ModuleRef,
     // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.COMMUNICATION)
@@ -81,6 +85,12 @@ export class InkindsService {
     @InjectQueue(BQUEUE.INKIND_BULK_REDEEM)
     private readonly inkindBulkQueue: Queue
   ) {}
+
+  private get chainService(): ChainService {
+    return (this._chainService ??= this.moduleRef.get(CHAIN_SERVICE, {
+      strict: false,
+    }));
+  }
 
   async create(createInkindDto: CreateInkindDto) {
     const { quantity, ...inkindData } = createInkindDto;
@@ -269,9 +279,20 @@ export class InkindsService {
     }
   }
 
-  async getInkindSummary() {
+  async getInkindSummary(payload?: { startDate?: string; endDate?: string }) {
     try {
       this.logger.log(`Fetching inkind summary`);
+
+      const { startDate, endDate } = payload || {};
+      const dateFilter =
+        startDate || endDate
+          ? {
+              redeemedAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : undefined;
 
       const [
         summary,
@@ -280,11 +301,30 @@ export class InkindsService {
         otpReasonBreakdown,
       ] = await Promise.all([
         this.prisma.inkind.aggregate({
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            ...(startDate || endDate
+              ? {
+                  createdAt: {
+                    ...(startDate && { gte: new Date(startDate) }),
+                    ...(endDate && { lte: new Date(endDate) }),
+                  },
+                }
+              : {}),
+          },
           _count: { id: true },
           _sum: { availableStock: true },
         }),
         this.prisma.groupInkind.aggregate({
+          where:
+            startDate || endDate
+              ? {
+                  createdAt: {
+                    ...(startDate && { gte: new Date(startDate) }),
+                    ...(endDate && { lte: new Date(endDate) }),
+                  },
+                }
+              : undefined,
           _sum: {
             quantityAllocated: true,
             quantityRedeemed: true,
@@ -292,6 +332,7 @@ export class InkindsService {
         }),
         // Single query for both PRE_DEFINED and WALK_IN counts
         this.prisma.beneficiaryInkindRedemption.findMany({
+          where: dateFilter,
           select: {
             groupInkind: {
               select: {
@@ -303,16 +344,18 @@ export class InkindsService {
         // Single query for OTP breakdown and counts
         this.prisma.beneficiaryInkindRedemption.groupBy({
           by: ['otpExemptionReason'],
+          where: dateFilter,
           _count: { id: true },
         }),
       ]);
-
       // Aggregate redemption types in-memory
       const redemptionCounts = redemptionsByType.reduce(
         (acc, redemption) => {
           if (redemption.groupInkind.inkind.type === InkindType.PRE_DEFINED) {
             acc.predefined++;
-          } else if (redemption.groupInkind.inkind.type === InkindType.WALK_IN) {
+          } else if (
+            redemption.groupInkind.inkind.type === InkindType.WALK_IN
+          ) {
             acc.walkIn++;
           }
           return acc;
@@ -438,11 +481,19 @@ export class InkindsService {
   }
 
   async getAllStockMovements(payload: ListStockMovementsDto) {
-    const { page, perPage, order = 'desc', type } = payload;
+    const { page, perPage, order = 'desc', type, startDate, endDate } = payload;
     this.logger.log(`Fetching all inkind stock movements`);
     try {
       const where: Prisma.InkindStockMovementWhereInput = {
         type: type ? type : { not: InkindStockMovementType.REDEEM },
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {}),
       };
 
       return paginate(
@@ -1639,7 +1690,7 @@ export class InkindsService {
         this.chainService.redeemInkind({
           beneficiaryAddress: walletAddress,
           vendorAddress: user.wallet,
-          inkinds: batchedInkinds,
+          inkindId: batchedInkinds,
         });
       } catch (error) {
         this.logger.error(
@@ -2399,7 +2450,7 @@ export class InkindsService {
             this.chainService.redeemInkind({
               beneficiaryAddress: wallet,
               vendorAddress: user.wallet,
-              inkinds: inkinds,
+              inkindId: inkinds
             });
           }
         }

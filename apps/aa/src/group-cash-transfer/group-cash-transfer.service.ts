@@ -50,7 +50,10 @@ export class GroupCashTransferService {
       this.logger.log(`Group cash transfer created: ${record.uuid}`);
       return record;
     } catch (error: any) {
-      this.logger.error(`Failed to create group cash transfer: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to create group cash transfer: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -62,14 +65,17 @@ export class GroupCashTransferService {
       await this.findOneOrThrow(uuid);
 
       await this.checkUniqueness(dto, uuid);
-      
+
       const isBankDetailsChanged = data.bankDetails !== undefined;
 
       let baseExtras: Record<string, unknown>;
       if (data.extras !== undefined) {
         baseExtras = (data.extras as Record<string, unknown>) ?? {};
       } else {
-        const existing = await this.db.groupCashTransferDetail.findUnique({ where: { uuid }, select: { extras: true } });
+        const existing = await this.db.groupCashTransferDetail.findUnique({
+          where: { uuid },
+          select: { extras: true },
+        });
         baseExtras = (existing?.extras as Record<string, unknown>) ?? {};
       }
 
@@ -80,14 +86,17 @@ export class GroupCashTransferService {
           extras: {
             ...baseExtras,
             ...(isBankDetailsChanged ? { isBankValidated: false } : {}),
-          }
+          },
         },
       });
 
       this.logger.log(`Group cash transfer updated: ${uuid}`);
       return record;
     } catch (error: any) {
-      this.logger.error(`Failed to update group cash transfer: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to update group cash transfer: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -102,7 +111,9 @@ export class GroupCashTransferService {
       });
 
       if (fundCount > 0) {
-        throw new RpcException('Cannot delete: fund has already been assigned to this group');
+        throw new RpcException(
+          'Cannot delete: fund has already been assigned to this group'
+        );
       }
 
       await this.db.groupCashTransferDetail.update({
@@ -111,9 +122,15 @@ export class GroupCashTransferService {
       });
 
       this.logger.log(`Group cash transfer soft deleted: ${uuid}`);
-      return { success: true, message: 'Group cash transfer deleted successfully' };
+      return {
+        success: true,
+        message: 'Group cash transfer deleted successfully',
+      };
     } catch (error: any) {
-      this.logger.error(`Failed to delete group cash transfer: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to delete group cash transfer: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -143,8 +160,9 @@ export class GroupCashTransferService {
       let supportAreaUuids: string[] | null = null;
       if (areas.length > 0) {
         const matched = await Promise.all(
-          areas.map((area) =>
-            this.db.$queryRaw<{ uuid: string }[]>`
+          areas.map(
+            (area) =>
+              this.db.$queryRaw<{ uuid: string }[]>`
               SELECT uuid FROM tbl_group_cash_transfer_details
               WHERE "deletedAt" IS NULL
               AND EXISTS (
@@ -214,7 +232,10 @@ export class GroupCashTransferService {
 
       return result;
     } catch (error: any) {
-      this.logger.error(`Failed to fetch group cash transfers: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch group cash transfers: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -243,7 +264,9 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(`Group cash transfer with UUID ${uuid} not found`);
+        throw new RpcException(
+          `Group cash transfer with UUID ${uuid} not found`
+        );
       }
 
       const totalAmount = record.groupCashTransferRecords.reduce(
@@ -257,7 +280,10 @@ export class GroupCashTransferService {
         totalRecords: record.groupCashTransferRecords.length,
       };
     } catch (error: any) {
-      this.logger.error(`Failed to fetch group cash transfer: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch group cash transfer: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -280,7 +306,9 @@ export class GroupCashTransferService {
       // }
 
       if (!gctDetail.extras.isBankValidated) {
-        throw new RpcException('Bank account for this group has not been validated. Please validate the bank account before assigning funds.');
+        throw new RpcException(
+          'Bank account for this group has not been validated. Please validate the bank account before assigning funds.'
+        );
       }
 
       const record = await this.db.groupCashTransferRecord.create({
@@ -302,18 +330,33 @@ export class GroupCashTransferService {
   }
 
   async getRecords(dto: ListGroupCashTransferRecordDto) {
-    const { page, perPage, groupCashTransferName, search, status, sort = 'createdAt', order = 'desc' } = dto;
+    const {
+      page,
+      perPage,
+      groupCashTransferName,
+      search,
+      status,
+      sort = 'createdAt',
+      order = 'desc',
+    } = dto;
 
     try {
-      this.logger.log(`Fetching records for groupCashTransferName=${groupCashTransferName}`);
+      this.logger.log(
+        `Fetching records for groupCashTransferName=${groupCashTransferName}`
+      );
 
       let groupCashTransferId: string | undefined;
       if (groupCashTransferName) {
         const group = await this.db.groupCashTransferDetail.findFirst({
-          where: { name: { contains: groupCashTransferName, mode: 'insensitive' }, deletedAt: null },
+          where: {
+            name: { contains: groupCashTransferName, mode: 'insensitive' },
+            deletedAt: null,
+          },
         });
         if (!group) {
-          throw new RpcException(`Group cash transfer '${groupCashTransferName}' not found`);
+          throw new RpcException(
+            `Group cash transfer '${groupCashTransferName}' not found`
+          );
         }
         groupCashTransferId = group.uuid;
       }
@@ -329,7 +372,11 @@ export class GroupCashTransferService {
         ...(search && {
           OR: [
             { title: { contains: search, mode: 'insensitive' } },
-            { groupCashTransfer: { name: { contains: search, mode: 'insensitive' } } },
+            {
+              groupCashTransfer: {
+                name: { contains: search, mode: 'insensitive' },
+              },
+            },
           ],
         }),
       };
@@ -348,7 +395,10 @@ export class GroupCashTransferService {
         { page, perPage }
       );
     } catch (error: any) {
-      this.logger.error(`Failed to fetch records: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch records: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -367,12 +417,17 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
+        throw new RpcException(
+          `Group cash transfer record ${recordUuid} not found`
+        );
       }
 
       return record;
     } catch (error: any) {
-      this.logger.error(`Failed to fetch record: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch record: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -391,12 +446,16 @@ export class GroupCashTransferService {
       }
 
       if (record.disbursedAt) {
-        throw new RpcException('Cannot edit: disbursal has already been initiated for this record');
+        throw new RpcException(
+          'Cannot edit: disbursal has already been initiated for this record'
+        );
       }
 
       const editableStatuses = ['NOT_STARTED', 'FAILED'];
       if (!editableStatuses.includes(record.status)) {
-        throw new RpcException(`Cannot edit: record status is '${record.status}'. Only NOT_STARTED or FAILED records can be edited`);
+        throw new RpcException(
+          `Cannot edit: record status is '${record.status}'. Only NOT_STARTED or FAILED records can be edited`
+        );
       }
 
       return this.db.groupCashTransferRecord.update({
@@ -404,7 +463,10 @@ export class GroupCashTransferService {
         data,
       });
     } catch (error: any) {
-      this.logger.error(`Failed to update record: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to update record: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -476,7 +538,9 @@ export class GroupCashTransferService {
 
   async disburse(recordUuid: string, user: any, otp: string) {
     try {
-      this.logger.log(`Initiating disbursement for group cash transfer record: ${recordUuid}`);
+      this.logger.log(
+        `Initiating disbursement for group cash transfer record: ${recordUuid}`
+      );
 
       await this.verifyOtp(user?.email, otp);
 
@@ -485,15 +549,21 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
+        throw new RpcException(
+          `Group cash transfer record ${recordUuid} not found`
+        );
       }
 
       if (record.status === 'COMPLETED') {
-        throw new RpcException(`Record ${recordUuid} has already been disbursed`);
+        throw new RpcException(
+          `Record ${recordUuid} has already been disbursed`
+        );
       }
 
       if (record.txHash) {
-        this.logger.log(`Record ${recordUuid} already has a transfer, ready to confirm`);
+        this.logger.log(
+          `Record ${recordUuid} already has a transfer, ready to confirm`
+        );
         return {
           success: true,
           message: 'Transfer already initiated, ready to confirm',
@@ -506,7 +576,6 @@ export class GroupCashTransferService {
       //   throw new RpcException('payoutProcessorId is required to initiate disbursement');
       // }
 
-
       const balance = await this.treasuryService.getBalance();
       if (balance < (record.amount ?? 0)) {
         throw new RpcException(
@@ -518,7 +587,10 @@ export class GroupCashTransferService {
 
       let txHash: string;
       try {
-        txHash = await this.treasuryService.transfer(offrampWallet, record.amount ?? 0);
+        txHash = await this.treasuryService.transfer(
+          offrampWallet,
+          record.amount ?? 0
+        );
       } catch (error: any) {
         await this.db.groupCashTransferRecord.update({
           where: { uuid: recordUuid },
@@ -532,10 +604,16 @@ export class GroupCashTransferService {
 
       await this.db.groupCashTransferRecord.update({
         where: { uuid: recordUuid },
-        data: { txHash, status: 'TOKEN_TRANSFERRED', disbursementInfo: { disbursedBy: user.name } },
+        data: {
+          txHash,
+          status: 'TOKEN_TRANSFERRED',
+          disbursementInfo: { disbursedBy: user.name },
+        },
       });
 
-      this.logger.log(`Token transferred for record=${recordUuid}, txHash=${txHash}`);
+      this.logger.log(
+        `Token transferred for record=${recordUuid}, txHash=${txHash}`
+      );
       return {
         success: true,
         message: 'Token transferred, ready to confirm disbursement',
@@ -550,7 +628,9 @@ export class GroupCashTransferService {
 
   async confirmDisburse(recordUuid: string, paymentProviderId: string) {
     try {
-      this.logger.log(`Confirming disbursement for group cash transfer record: ${recordUuid}`);
+      this.logger.log(
+        `Confirming disbursement for group cash transfer record: ${recordUuid}`
+      );
 
       const record = await this.db.groupCashTransferRecord.findFirst({
         where: { uuid: recordUuid, deletedAt: null },
@@ -558,11 +638,15 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(`Group cash transfer record ${recordUuid} not found`);
+        throw new RpcException(
+          `Group cash transfer record ${recordUuid} not found`
+        );
       }
 
       if (record.status === 'COMPLETED') {
-        throw new RpcException(`Record ${recordUuid} has already been disbursed`);
+        throw new RpcException(
+          `Record ${recordUuid} has already been disbursed`
+        );
       }
 
       if (!record.txHash) {
@@ -570,7 +654,9 @@ export class GroupCashTransferService {
       }
 
       if (!paymentProviderId) {
-        throw new RpcException('payoutProcessorId not set — call disburse with a payoutProcessorId first');
+        throw new RpcException(
+          'payoutProcessorId not set — call disburse with a payoutProcessorId first'
+        );
       }
 
       const bankDetails = (record.groupCashTransfer?.bankDetails as any) || {};
@@ -578,13 +664,15 @@ export class GroupCashTransferService {
         tokenAmount: record.amount,
         transactionHash: record.txHash,
         paymentProviderId: paymentProviderId,
-        senderAddress: await this.treasuryService.getTreasuryInfo().then(info => info.publicKey),
+        senderAddress: await this.treasuryService
+          .getTreasuryInfo()
+          .then((info) => info.publicKey),
         xref: record.uuid,
         paymentDetails: {
           creditorAgent: bankDetails.bankCode,
           creditorAccount: bankDetails.accountNumber,
           creditorName: bankDetails.accountName,
-          creditorBranch: bankDetails.branchId
+          creditorBranch: bankDetails.branchId,
         },
       };
 
@@ -603,13 +691,19 @@ export class GroupCashTransferService {
           data: {
             status: isRejected ? 'REJECTED' : 'COMPLETED',
             disbursedAt: isRejected ? null : new Date(),
-            disbursementInfo: { result }
+            disbursementInfo: { result },
           },
         });
 
         if (isRejected) {
-          this.logger.warn(`Offramp rejected for record=${recordUuid}, status=${offrampStatus}`);
-          return { success: false, message: `Disbursement rejected by offramp: ${offrampStatus}`, recordUuid };
+          this.logger.warn(
+            `Offramp rejected for record=${recordUuid}, status=${offrampStatus}`
+          );
+          return {
+            success: false,
+            message: `Disbursement rejected by offramp: ${offrampStatus}`,
+            recordUuid,
+          };
         }
 
         this.logger.log(`Disbursement completed for record=${recordUuid}`);
@@ -626,7 +720,10 @@ export class GroupCashTransferService {
         throw new RpcException(`Offramp request failed: ${error.message}`);
       }
     } catch (error: any) {
-      this.logger.error(`Failed to confirm disburse: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to confirm disburse: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -635,57 +732,93 @@ export class GroupCashTransferService {
     try {
       return await this.treasuryService.getTreasuryInfo();
     } catch (error: any) {
-      this.logger.error(`Failed to fetch treasury info: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch treasury info: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
 
   // TODO: Complete after nchl api is working
-  async getGCTData() {
+  async getGCTData(payload: { startDate?: Date; endDate?: Date }) {
     try {
       this.logger.log('Fetching GCT overview data');
 
-      const [
-        totalGroups,
-        recordStats,
-        disbursedStats,
-        disbursedCount,
-      ] = await Promise.all([
-        this.db.groupCashTransferDetail.count({ where: { deletedAt: null } }),
-        this.db.groupCashTransferRecord.aggregate({
-          where: { deletedAt: null },
-          _sum: { amount: true },
-          _count: { _all: true },
-        }),
-        this.db.groupCashTransferRecord.aggregate({
-          where: { deletedAt: null, disbursedAt: { not: null } },
-          _sum: { amount: true },
-        }),
-        this.db.groupCashTransferRecord.count({
-          where: { deletedAt: null, disbursedAt: { not: null } },
-        }),
-      ]);
+      const { startDate, endDate } = payload || {};
+      const createdDateFilter =
+        startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : undefined;
+      const disbursedDateFilter =
+        startDate || endDate
+          ? {
+              disbursedAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : undefined;
+
+      const [totalGroups, recordStats, disbursedStats, disbursedCount] =
+        await Promise.all([
+          this.db.groupCashTransferDetail.count({
+            where: { deletedAt: null, ...createdDateFilter },
+          }),
+          this.db.groupCashTransferRecord.aggregate({
+            where: { deletedAt: null, ...createdDateFilter },
+            _sum: { amount: true },
+            _count: { _all: true },
+          }),
+          this.db.groupCashTransferRecord.aggregate({
+            where: {
+              deletedAt: null,
+              disbursedAt: { not: null },
+              ...disbursedDateFilter,
+            },
+            _sum: { amount: true },
+          }),
+          this.db.groupCashTransferRecord.count({
+            where: {
+              deletedAt: null,
+              disbursedAt: { not: null },
+              ...disbursedDateFilter,
+            },
+          }),
+        ]);
 
       const statusCounts = await this.db.groupCashTransferRecord.groupBy({
         by: ['status'],
-        where: { deletedAt: null },
+        where: { deletedAt: null, ...createdDateFilter },
         _count: { _all: true },
       });
 
-      const byStatus = statusCounts.reduce((acc: Record<string, number>, s: any) => {
-        acc[s.status] = s._count._all;
-        return acc;
-      }, {} as Record<string, number>);
+      const byStatus = statusCounts.reduce(
+        (acc: Record<string, number>, s: any) => {
+          acc[s.status] = s._count._all;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
 
       let treasuryBalance: number | null = null;
       try {
         treasuryBalance = await this.treasuryService.getBalance();
       } catch (error: any) {
-        this.logger.warn(`Could not fetch treasury balance for GCT overview: ${error.message}`);
+        this.logger.warn(
+          `Could not fetch treasury balance for GCT overview: ${error.message}`
+        );
       }
 
       const totalDisbursedAmount = disbursedStats._sum.amount ?? 0;
-      const totalAllocatedAmount = recordStats._sum.amount ? recordStats._sum.amount - totalDisbursedAmount : 0;
+      const totalAllocatedAmount = recordStats._sum.amount
+        ? recordStats._sum.amount - totalDisbursedAmount
+        : 0;
 
       return {
         totalGroups,
@@ -699,10 +832,16 @@ export class GroupCashTransferService {
         tokenDisbursedCount: byStatus['TOKEN_TRANSFERRED'] ?? 0,
         rejectedCount: byStatus['REJECTED'] ?? 0,
         treasuryBalance,
-        remainingBudget: treasuryBalance !== null ? treasuryBalance - totalAllocatedAmount : null,
+        remainingBudget:
+          treasuryBalance !== null
+            ? treasuryBalance - totalAllocatedAmount
+            : null,
       };
     } catch (error: any) {
-      this.logger.error(`Failed to fetch GCT overview data: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch GCT overview data: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
@@ -718,7 +857,8 @@ export class GroupCashTransferService {
       this.logger.log(`Validating bank account for group: ${dto.groupUuid}`);
       const record = await this.findOneOrThrow(dto.groupUuid);
 
-      if (!dto.bankId) throw new RpcException(`Bank not found: ${dto.bankName}`);
+      if (!dto.bankId)
+        throw new RpcException(`Bank not found: ${dto.bankName}`);
 
       const result = await this.offrampClient.validateBankAccount({
         bankId: dto.bankId,
@@ -726,15 +866,23 @@ export class GroupCashTransferService {
         accountId: dto.accountNumber,
       });
 
-      this.logger.log(`Bank account validation result for group ${dto.groupUuid}: ${JSON.stringify(result)}`);
+      this.logger.log(
+        `Bank account validation result for group ${
+          dto.groupUuid
+        }: ${JSON.stringify(result)}`
+      );
 
       const isValid = result?.isValid === true;
       const existingExtras = (record.extras as Record<string, unknown>) ?? {};
-      const existingBankDetails = (record.bankDetails as Record<string, unknown>) ?? {};
+      const existingBankDetails =
+        (record.bankDetails as Record<string, unknown>) ?? {};
 
       if (!isValid) {
-        const errorMessage = result?.cipsData?.responseMessage ?? 'Bank account validation failed';
-        this.logger.error(`Bank account validation failed for group ${dto.groupUuid}: ${errorMessage}`);
+        const errorMessage =
+          result?.cipsData?.responseMessage ?? 'Bank account validation failed';
+        this.logger.error(
+          `Bank account validation failed for group ${dto.groupUuid}: ${errorMessage}`
+        );
         await this.db.groupCashTransferDetail.update({
           where: { uuid: dto.groupUuid },
           data: {
@@ -742,7 +890,7 @@ export class GroupCashTransferService {
               ...existingExtras,
               isBankValidated: false,
               validationError: errorMessage,
-             bankValidatedAt: null 
+              bankValidatedAt: null,
             },
           },
         });
@@ -767,30 +915,42 @@ export class GroupCashTransferService {
 
       return { valid: true, result };
     } catch (error: any) {
-      this.logger.error(`Failed to validate bank account: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to validate bank account: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
 
   async getAllValidGroupTransfers() {
     try {
-      this.logger.log('Fetching all valid group transfers (bank validated, no funds assigned)');
+      this.logger.log(
+        'Fetching all valid group transfers (bank validated, no funds assigned)'
+      );
       return this.db.groupCashTransferDetail.findMany({
         where: {
           deletedAt: null,
           extras: { path: ['bankValidatedAt'], not: Prisma.JsonNull },
-         },
+        },
         orderBy: { createdAt: 'desc' },
       });
     } catch (error: any) {
-      this.logger.error(`Failed to fetch valid group transfers: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch valid group transfers: ${error.message}`,
+        error.stack
+      );
       throw new RpcException(error.message);
     }
   }
 
   private async checkUniqueness(
-    dto: { name?: string; phone?: string; bankDetails?: Record<string, unknown> },
-    excludeUuid?: string,
+    dto: {
+      name?: string;
+      phone?: string;
+      bankDetails?: Record<string, unknown>;
+    },
+    excludeUuid?: string
   ) {
     const base: Record<string, any> = { deletedAt: null };
     if (excludeUuid) base.uuid = { not: excludeUuid };
@@ -829,10 +989,18 @@ export class GroupCashTransferService {
     }
 
     const results = await Promise.all(
-      checks.map(({ where }) => this.db.groupCashTransferDetail.findFirst({ where, select: { uuid: true } }))
+      checks.map(({ where }) =>
+        this.db.groupCashTransferDetail.findFirst({
+          where,
+          select: { uuid: true },
+        })
+      )
     );
     const hit = results.findIndex((r) => r !== null);
-    if (hit !== -1) throw new RpcException(`A group with this ${checks[hit].field} already exists`);
+    if (hit !== -1)
+      throw new RpcException(
+        `A group with this ${checks[hit].field} already exists`
+      );
   }
 
   private async findOneOrThrow(uuid: string) {

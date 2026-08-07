@@ -68,8 +68,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_SUMMARY,
     uuid: process.env.PROJECT_ID,
   })
-  getInkindSummary() {
-    return this.inkindsService.getInkindSummary();
+  getInkindSummary(@Payload() payload: any) {
+    return this.inkindsService.getInkindSummary(payload);
   }
 
   @MessagePattern({
@@ -223,27 +223,33 @@ export class InkindsController {
 
   @MessagePattern({
     cmd: JOBS.INKINDS.GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR,
-    uuid: process.env.PROJECT_ID
+    uuid: process.env.PROJECT_ID,
   })
   getAllOfflineBeneficiaryByVendor(@Payload() payload: { vendorId: string }) {
-    return this.inkindsService.getAllOfflineBeneficiaryByVendor(payload.vendorId);
+    return this.inkindsService.getAllOfflineBeneficiaryByVendor(
+      payload.vendorId
+    );
   }
 
   @MessagePattern({
     cmd: JOBS.INKINDS.REDEEM_OFFLINE_INKIND_BY_VENDOR,
-    uuid: process.env.PROJECT_ID
+    uuid: process.env.PROJECT_ID,
   })
-  redeemOfflineInkindByVendor(@Payload() payload: RedeemOfflineInkindByVendorDto) {
+  redeemOfflineInkindByVendor(
+    @Payload() payload: RedeemOfflineInkindByVendorDto
+  ) {
     return this.inkindsService.redeemOfflineInkindByVendor(payload);
   }
 
   // ============== Vendor Redemption ============================
-@MessagePattern({
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_VENDOR_AVAILABLE_INKIND_DETAILS,
     uuid: process.env.PROJECT_ID,
   })
   getVendorAvailableInkindsDetails(@Payload() payload: { vendorUuid: string }) {
-    return this.inkindsService.getVendorAvailableInkindsDetails(payload.vendorUuid);
+    return this.inkindsService.getVendorAvailableInkindsDetails(
+      payload.vendorUuid
+    );
   }
 
   @MessagePattern({
