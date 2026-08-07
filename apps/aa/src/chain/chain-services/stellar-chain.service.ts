@@ -510,6 +510,31 @@ export class StellarChainService implements IChainService {
     if (!keys?.privateKey)
       throw new RpcException('Beneficiary secret not found');
 
+    if (data.mediaUrl) {
+      const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+        where: {
+          beneficiaryWalletAddress: keys.address,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      this.logger.log(
+        `Updating mediaUrl for redeem record ${existingRedeem?.uuid} to ${data.mediaUrl}`
+      );
+      if (existingRedeem) {
+        const info = (existingRedeem.info as Record<string, any>) ?? {};
+        await this.prisma.beneficiaryRedeem.update({
+          where: { uuid: existingRedeem.uuid },
+          data: {
+            info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName },
+          },
+        });
+      }
+    }
+
     // ponytail: redeem-and-forget — queue the transfer and return immediately with a null
     // txHash. Dedicated queue (concurrency: 1) serializes sponsored-account sends in the
     // background since concurrent sends on the same sponsor wallet race the sequence number.
