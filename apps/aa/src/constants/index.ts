@@ -126,7 +126,8 @@ export const JOBS = {
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
-    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+    DISBURSEMENT_STATUS_UPDATE:
+      'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   WALLET: {
     GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
@@ -158,7 +159,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -389,7 +390,8 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -453,4 +455,12 @@ export const FIELD_MAP = {
   NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
+};
+
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
 };

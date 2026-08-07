@@ -25,6 +25,7 @@ import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
 import { createContractInstance } from '../utils/web3';
+import { SseService } from '../sse/sse.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -51,7 +52,8 @@ export class BeneficiaryService {
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
-    private readonly qrPdfService: QrPdfService
+    private readonly qrPdfService: QrPdfService,
+    private readonly sseService: SseService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -712,7 +714,7 @@ export class BeneficiaryService {
 
     // Tx definies a single transaction with a number of operations that either all succeed or all fail together
     // Which is crucial for maintaining data integrity when reserving tokens and creating payouts.
-    return this.prisma.$transaction(async (tx) => {
+    const createTokenReservation = this.prisma.$transaction(async (tx) => {
       const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
@@ -756,6 +758,8 @@ export class BeneficiaryService {
         message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
       };
     });
+    await this.sseService.publishEvent('fund.event', createTokenReservation);
+    return createTokenReservation;
   }
 
   async getAllTokenReservations(dto) {
