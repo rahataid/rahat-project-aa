@@ -11,18 +11,20 @@ import {
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
-
-const BENEFICIARY_BATCH_THRESHOLD = 500;
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
+
+// Threshold to create batches for benf creation
+const BENEFICIARY_BATCH_THRESHOLD = 500;
 
 @Controller()
 export class BeneficiaryController {
   private logger = new Logger(BeneficiaryController.name);
+
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
     private readonly beneficiaryMultisigService: BeneficiaryMultisigService
-  ) {}
+  ) { }
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   // findAll(data) {
@@ -72,7 +74,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   createMany(data) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT',JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT);
+    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT', JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT);
     return this.beneficiaryService.createMany(data);
   }
 
@@ -96,7 +98,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   createBulk(data: CreateBulkBeneficiaryDto) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT',JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT);
+    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT', JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT);
     return this.beneficiaryService.createBulk(data);
   }
 
@@ -108,7 +110,7 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async addGroupToProject(payload) {
-    console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
+    console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`, JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
     return this.beneficiaryService.addGroupToProject(payload);
   }
 
@@ -125,9 +127,11 @@ export class BeneficiaryController {
       this.logger.log(
         `Beneficiary count (${beneficiaries.length}) exceeds threshold, using batched processing`
       );
+      // Batched process to prevent db connection pool limit
       return this.beneficiaryService.createBeneficiariesInBatches(payload);
     }
 
+    // Default process
     return this.beneficiaryService.createBenfAndAddGroupToProject(payload);
   }
 
