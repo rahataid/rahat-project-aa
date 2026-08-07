@@ -6,6 +6,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { JsonRpcProvider, ethers } from 'ethers';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { lowerCaseObjectKeys } from '../utils/utility';
+import { GroupPurpose } from '@prisma/client';
 
 type IStringArr = string[];
 type ICallData = IStringArr[];
@@ -889,5 +890,55 @@ export class ContractProcessor {
     const tx = await contract.multicall(encodedData);
     const result = await tx.wait();
     return result;
+  }
+
+  @Process({
+    name: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+    concurrency: 5,
+  })
+  async processCreateBeneficiariesInBatches(job: Job) {
+    try {
+      const payload = job.data as {
+        beneficiaries: any[];
+        beneficiaryGroupId: string;
+        beneficiaryGroupName: string;
+        groupPurpose: GroupPurpose;
+        totalBatches: number;
+        currentBatchIndex: number;
+        isLastBatch: boolean;
+      };
+
+      this.logger.log(
+        `Processing batch ${payload.currentBatchIndex + 1}/${payload.totalBatches} with ${payload.beneficiaries.length} beneficiaries`
+      );
+
+      const dto = {
+        projectId: process.env.PROJECT_ID,
+        beneficiaries: payload.beneficiaries,
+        beneficiaryGroupId: payload.beneficiaryGroupId,
+        beneficiaryGroupName: payload.beneficiaryGroupName,
+        groupPurpose: payload.groupPurpose,
+      };
+
+      const result = await this.beneficiaryService.createBenfAndAddGroupToProject(
+        dto,
+        true
+      );
+
+      if (payload.isLastBatch) {
+        this.logger.log(
+          `All batches completed for group ${payload.beneficiaryGroupId}`
+        );
+      }
+
+      return result;
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to process beneficiary batch: ${errMsg}`,
+        error
+      );
+      throw error;
+    }
   }
 }

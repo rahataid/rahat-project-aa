@@ -16,7 +16,7 @@ import {
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { Job, Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, PayoutType, Prisma } from '@prisma/client';
 import { QrPdfService } from './qr-pdf.service';
@@ -28,7 +28,7 @@ import { createContractInstance } from '../utils/web3';
 import { getOtpHash } from '../utils/hash';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
-const BATCH_SIZE = 50;
+const BENEFICIARY_BATCH_SIZE = 500;
 interface DataItem {
   groupId: UUID;
   [key: string]: any;
@@ -483,7 +483,10 @@ export class BeneficiaryService {
     return data;
   }
 
-  async createBenfAndAddGroupToProject(dto: CreateBenfAddGroupToProjectDto) {
+  async createBenfAndAddGroupToProject(
+    dto: CreateBenfAddGroupToProjectDto,
+    skipGroupCreation = false
+  ) {
     const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose, } = dto;
 
     this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
@@ -516,16 +519,22 @@ export class BeneficiaryService {
         await this.seedOtpsForBeneficiaries(processedBeneficiaries);
 
         // Group creation and assignment starts here
-        this.logger.debug(
-          `Adding beneficiary group ${dto.beneficiaryGroupId} to project`
-        );
-        group = await txn.beneficiaryGroups.create({
-          data: {
-            uuid: beneficiaryGroupId,
-            name: beneficiaryGroupName,
-            groupPurpose: groupPurpose,
-          },
-        });
+        if (skipGroupCreation) {
+          group = await txn.beneficiaryGroups.findUniqueOrThrow({
+            where: { uuid: beneficiaryGroupId },
+          });
+        } else {
+          this.logger.debug(
+            `Adding beneficiary group ${dto.beneficiaryGroupId} to project`
+          );
+          group = await txn.beneficiaryGroups.create({
+            data: {
+              uuid: beneficiaryGroupId,
+              name: beneficiaryGroupName,
+              groupPurpose: groupPurpose,
+            },
+          });
+        }
 
         groupedBeneficiaries =
           await txn.beneficiaryToGroup.createMany({
@@ -1034,7 +1043,7 @@ export class BeneficiaryService {
   async assignToken() {
     this.logger.log('Starting token assignment process');
     const allBenfs = await this.getCount();
-    const batches = this.createBatches(allBenfs, BATCH_SIZE);
+    const batches = this.createBatches(allBenfs, BENEFICIARY_BATCH_SIZE);
     this.logger.debug(
       `Total beneficiaries: ${allBenfs}, batches: ${batches.length}`
     );
@@ -1814,4 +1823,63 @@ export class BeneficiaryService {
 
     return { message: 'Sync process completed successfully' };
   }
+
+  async createBeneficiariesInBatches(
+    dto: CreateBenfAddGroupToProjectDto
+  ): Promise<{ jobIds: string[] }> {
+    const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
+
+    this.logger.log(`Processing ${beneficiaries.length} beneficiaries in batches of ${BENEFICIARY_BATCH_SIZE}`);
+
+    this.logger.debug(`Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`);
+    await this.prisma.beneficiaryGroups.create({
+      data: {
+        uuid: beneficiaryGroupId,
+        name: beneficiaryGroupName,
+        groupPurpose: groupPurpose,
+      },
+    });
+
+    const batches: { batch: any[]; index: number }[] = [];
+    for (let i = 0; i < beneficiaries.length; i += BENEFICIARY_BATCH_SIZE) {
+      const batch = beneficiaries.slice(i, i + BENEFICIARY_BATCH_SIZE);
+      batches.push({ batch, index: Math.floor(i / BENEFICIARY_BATCH_SIZE) });
+    }
+
+    this.logger.log(`Created ${batches.length} batches for processing`);
+
+    const jobIds: string[] = [];
+    
+    for (const { batch, index } of batches) {
+      const jobData = {
+        beneficiaries: batch,
+        beneficiaryGroupId,
+        beneficiaryGroupName,
+        groupPurpose,
+        totalBatches: batches.length,
+        currentBatchIndex: index,
+        isLastBatch: index === batches.length - 1,
+      };
+
+      const job = await this.contractQueue.add(
+        JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+        jobData,
+        {
+          attempts: 3,
+          removeOnComplete: true,
+          removeOnFail: false,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        }
+      );
+
+      jobIds.push(job.id.toString());
+      this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${job.id})`);
+    }
+
+    return { jobIds };
+  }
+
 }

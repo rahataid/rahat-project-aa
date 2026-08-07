@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Logger, Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { CONTROLLERS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
@@ -11,11 +11,14 @@ import {
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
+
+const BENEFICIARY_BATCH_THRESHOLD = 500;
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
 export class BeneficiaryController {
+  private logger = new Logger(BeneficiaryController.name);
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
     private readonly beneficiaryMultisigService: BeneficiaryMultisigService
@@ -109,12 +112,22 @@ export class BeneficiaryController {
     return this.beneficiaryService.addGroupToProject(payload);
   }
 
-  //NOTE: creates beneficiaries and their group in a single transaction
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
   })
-  async createBenfAndAddGroupToProject(payload: CreateBenfAddGroupToProjectDto) {
+  async createBenfAndAddGroupToProject(
+    payload: CreateBenfAddGroupToProjectDto
+  ) {
+    const { beneficiaries } = payload;
+
+    if (beneficiaries.length > BENEFICIARY_BATCH_THRESHOLD) {
+      this.logger.log(
+        `Beneficiary count (${beneficiaries.length}) exceeds threshold, using batched processing`
+      );
+      return this.beneficiaryService.createBeneficiariesInBatches(payload);
+    }
+
     return this.beneficiaryService.createBenfAndAddGroupToProject(payload);
   }
 
