@@ -26,6 +26,7 @@ import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
 import { createContractInstance } from '../utils/web3';
 import { getOtpHash } from '../utils/hash';
+import { AsyncQueueService } from '../queue/async-queue.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BENEFICIARY_BATCH_SIZE = 500;
@@ -49,10 +50,12 @@ export class BeneficiaryService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
-    private readonly qrPdfService: QrPdfService
+    private readonly qrPdfService: QrPdfService,
+    private readonly asyncQueueService: AsyncQueueService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -1861,22 +1864,23 @@ export class BeneficiaryService {
         isLastBatch: index === batches.length - 1,
       };
 
-      const job = await this.contractQueue.add(
-        JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
-        jobData,
-        {
-          attempts: 3,
-          removeOnComplete: true,
-          removeOnFail: false,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        }
-      );
+      const { uuid } = await this.asyncQueueService.enqueue({
+        jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+        queue: this.beneficiaryQueue,
+        jobTypeData: jobData,
+        metadata: {
+          source: 'beneficiary.createBeneficiariesInBatches',
+          totalBatches: batches.length,
+        },
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      });
 
-      jobIds.push(job.id.toString());
-      this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${job.id})`);
+      jobIds.push(uuid);
+      this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${uuid})`);
     }
 
     return { jobIds };

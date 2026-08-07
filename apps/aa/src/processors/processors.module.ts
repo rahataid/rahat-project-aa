@@ -22,10 +22,13 @@ import { InkindProcessor } from './inkind.processor';
 import { OtpModule } from '../otp/otp.module';
 import { ChainModule } from '../chain/chain.module';
 import { OfflineRedemptionProcessor } from './offline-redemption.processor';
+import { QueueModule } from '../queue/queue.module';
+import { BeneficiaryProcessor } from './beneficiary.processor';
 
 @Module({
   imports: [
     BeneficiaryModule,
+    QueueModule,
     forwardRef(() => InkindsModule),
     PayoutsModule,
     StakeholdersModule,
@@ -73,11 +76,13 @@ import { OfflineRedemptionProcessor } from './offline-redemption.processor';
     }),
     BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
     BullModule.registerQueue({ name: BQUEUE.OFFLINE_REDEEM }),
+    BullModule.registerQueue({ name: BQUEUE.BENEFICIARY }),
     OtpModule,
   ],
   providers: [
     PrismaService,
     ContractProcessor,
+    BeneficiaryProcessor,
     InkindProcessor,
     StatsProcessor,
     SdpStellarProcessor,
