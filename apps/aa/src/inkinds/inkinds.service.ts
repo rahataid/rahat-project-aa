@@ -279,9 +279,20 @@ export class InkindsService {
     }
   }
 
-  async getInkindSummary() {
+  async getInkindSummary(payload?: { startDate?: string; endDate?: string }) {
     try {
       this.logger.log(`Fetching inkind summary`);
+
+      const { startDate, endDate } = payload || {};
+      const dateFilter =
+        startDate || endDate
+          ? {
+              redeemedAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : undefined;
 
       const [
         summary,
@@ -290,11 +301,30 @@ export class InkindsService {
         otpReasonBreakdown,
       ] = await Promise.all([
         this.prisma.inkind.aggregate({
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            ...(startDate || endDate
+              ? {
+                  createdAt: {
+                    ...(startDate && { gte: new Date(startDate) }),
+                    ...(endDate && { lte: new Date(endDate) }),
+                  },
+                }
+              : {}),
+          },
           _count: { id: true },
           _sum: { availableStock: true },
         }),
         this.prisma.groupInkind.aggregate({
+          where:
+            startDate || endDate
+              ? {
+                  createdAt: {
+                    ...(startDate && { gte: new Date(startDate) }),
+                    ...(endDate && { lte: new Date(endDate) }),
+                  },
+                }
+              : undefined,
           _sum: {
             quantityAllocated: true,
             quantityRedeemed: true,
@@ -302,6 +332,7 @@ export class InkindsService {
         }),
         // Single query for both PRE_DEFINED and WALK_IN counts
         this.prisma.beneficiaryInkindRedemption.findMany({
+          where: dateFilter,
           select: {
             groupInkind: {
               select: {
@@ -313,16 +344,18 @@ export class InkindsService {
         // Single query for OTP breakdown and counts
         this.prisma.beneficiaryInkindRedemption.groupBy({
           by: ['otpExemptionReason'],
+          where: dateFilter,
           _count: { id: true },
         }),
       ]);
-
       // Aggregate redemption types in-memory
       const redemptionCounts = redemptionsByType.reduce(
         (acc, redemption) => {
           if (redemption.groupInkind.inkind.type === InkindType.PRE_DEFINED) {
             acc.predefined++;
-          } else if (redemption.groupInkind.inkind.type === InkindType.WALK_IN) {
+          } else if (
+            redemption.groupInkind.inkind.type === InkindType.WALK_IN
+          ) {
             acc.walkIn++;
           }
           return acc;
@@ -448,11 +481,19 @@ export class InkindsService {
   }
 
   async getAllStockMovements(payload: ListStockMovementsDto) {
-    const { page, perPage, order = 'desc', type } = payload;
+    const { page, perPage, order = 'desc', type, startDate, endDate } = payload;
     this.logger.log(`Fetching all inkind stock movements`);
     try {
       const where: Prisma.InkindStockMovementWhereInput = {
         type: type ? type : { not: InkindStockMovementType.REDEEM },
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {}),
       };
 
       return paginate(

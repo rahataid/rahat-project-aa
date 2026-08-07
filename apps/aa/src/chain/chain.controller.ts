@@ -1,6 +1,6 @@
 import { Controller } from '@nestjs/common';
 import { ChainService } from './chain.service';
-import { MessagePattern } from '@nestjs/microservices';
+import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RedeemInkindDto } from './interfaces/chain-service.interface';
 import { JOBS } from '../constants';
 
@@ -52,8 +52,10 @@ export class ChainController {
     cmd: 'aa.jobs.chain.getDisbursementStats',
     uuid: process.env.PROJECT_ID,
   })
-  getDisbursementStats() {
-    return this.chainService.getDisbursementStats();
+  getDisbursementStats(
+    @Payload() payload: { startDate: string; endDate: string }
+  ) {
+    return this.chainService.getDisbursementStats(payload);
   }
 
   @MessagePattern({
@@ -61,7 +63,7 @@ export class ChainController {
     uuid: process.env.PROJECT_ID,
   })
   redeemInkind(data: RedeemInkindDto) {
-    return this.chainService.redeemInkind(data); 
+    return this.chainService.redeemInkind(data);
   }
 
   @MessagePattern({
@@ -69,6 +71,6 @@ export class ChainController {
     uuid: process.env.PROJECT_ID,
   })
   redeemVendorInkindTokens(data: any) {
-    return this.chainService.redeemVendorInkindTokens(data);  
+    return this.chainService.redeemVendorInkindTokens(data);
   }
 }

@@ -26,10 +26,9 @@ export interface IChainService {
   checkBalance(address: string): Promise<any>;
   getWalletBalance?(data: { address: string }): Promise<any>;
   getRahatTokenBalance?(data: { address: string }): Promise<any>;
-  getDisbursementStats?(): Promise<any[]>;
+  getDisbursementStats(payload: { startDate?: string; endDate?: string }): Promise<any[]>;
 
   // Authentication operations
-  sendOtp(data: SendOtpDto): Promise<any>;
   verifyOtp(data: VerifyOtpDto): Promise<any>;
 
   // Trigger operations (optional for chains that support it)
@@ -41,15 +40,16 @@ export interface IChainService {
   validateAddress(address: string): boolean;
   getChainType(): ChainType;
 
-  // Stats
-  getDisbursementStats?(): Promise<any>;
-
   // Inkind redemption
   redeemInkind?(redeemDto: RedeemInkindDto): Promise<any>;
-  redeemVendorInkindTokens?(redeemVendorInkindDto: RedeemInkindTokenForCashDto): Promise<any>;
+  redeemVendorInkindTokens?(
+    redeemVendorInkindDto: RedeemInkindTokenForCashDto
+  ): Promise<any>;
 
   // Offline redemption (batched, no OTP)
-  transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]>;
+  transferOfflineRedemptionBatch(
+    items: OfflineTransferItem[]
+  ): Promise<OfflineTransferResult[]>;
 }
 
 export interface OfflineTransferItem {
