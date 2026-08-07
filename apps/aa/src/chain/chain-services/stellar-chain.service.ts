@@ -43,7 +43,8 @@ export class StellarChainService implements IChainService {
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
-    @InjectQueue(BQUEUE.STELLAR_SEND_ASSET) private stellarSendAssetQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_SEND_ASSET)
+    private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy
@@ -105,7 +106,11 @@ export class StellarChainService implements IChainService {
       }
 
       const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
-      await this.queueGroupDisbursement(uuid, dName, activeToken.numberOfTokens);
+      await this.queueGroupDisbursement(
+        uuid,
+        dName,
+        activeToken.numberOfTokens
+      );
     }
 
     this.logger.log(
@@ -188,7 +193,10 @@ export class StellarChainService implements IChainService {
     );
   }
 
-  async getDisbursementStats(): Promise<any> {
+  async getDisbursementStats(payload: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any[]> {
     this.logger.log('Fetching disbursement stats for Stellar SDP chain');
 
     const oneTokenPrice =
@@ -201,7 +209,22 @@ export class StellarChainService implements IChainService {
       `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
     );
 
+    // Apply date filter to beneficiaryGroupTokens
+    const dateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
+        : {};
+
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: {
+        ...dateFilter,
+      },
+
       include: {
         beneficiaryGroup: {
           include: {
@@ -214,6 +237,19 @@ export class StellarChainService implements IChainService {
         },
       },
     });
+
+    // Apply date filter to beneficiaryRedeem for token stats
+    const redeemDateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
+        : {};
+
+    const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
 
     const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
       if (token.isDisbursed) {
@@ -284,9 +320,73 @@ export class StellarChainService implements IChainService {
         value:
           averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
       },
+      {
+        name: 'Assigned Tokens',
+        value: tokenStatsResult.assignedTokens,
+      },
+      {
+        name: 'Disbursed Tokens',
+        value: tokenStatsResult.disbursedTokens,
+      },
+      {
+        name: 'Pending Disbursement',
+        value: tokenStatsResult.pendingDisbursement,
+      },
+      {
+        name: 'Redeemed Tokens',
+        value: tokenStatsResult.redeemedTokens,
+      },
     ];
   }
 
+  private async getTokenStats(dateFilter?: any) {
+    const REDEEMED_LEGS = [
+      { transactionType: 'VENDOR_REIMBURSEMENT', status: 'COMPLETED' },
+      {
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      },
+    ] as const;
+    let assignedTokens = 0;
+    let disbursedTokens = 0;
+    let redeemedTokens = 0;
+
+    const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: dateFilter,
+      select: {
+        numberOfTokens: true,
+        isDisbursed: true,
+        payout: { select: { type: true, mode: true } },
+      },
+    });
+    for (const gt of groupTokens) {
+      const tokens = gt.numberOfTokens || 0;
+      assignedTokens += tokens;
+      if (gt.isDisbursed) disbursedTokens += tokens;
+    }
+    const pendingDisbursement = assignedTokens - disbursedTokens;
+
+    const redeemRecords = await this.prisma.beneficiaryRedeem.findMany({
+      where: { OR: [...REDEEMED_LEGS], ...dateFilter },
+      select: {
+        amount: true,
+        transactionType: true,
+        beneficiaryWalletAddress: true,
+        payout: { select: { mode: true } },
+      },
+    });
+
+    for (const r of redeemRecords) {
+      redeemedTokens += r.amount;
+    }
+    const result = {
+      assignedTokens,
+      disbursedTokens,
+      pendingDisbursement,
+      redeemedTokens,
+    };
+    return result;
+  }
   async getRahatTokenBalance(data: { address: string }): Promise<any> {
     this.logger.debug(`getRahatTokenBalance address=${data.address}`);
     if (!this.validateAddress(data.address)) {
@@ -369,8 +469,12 @@ export class StellarChainService implements IChainService {
   }
 
   async sendOtp(data: SendOtpDto): Promise<any> {
-    this.logger.log(`Sending OTP to ${data.phoneNumber} for amount ${data.amount}`);
-    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(data.phoneNumber);
+    this.logger.log(
+      `Sending OTP to ${data.phoneNumber} for amount ${data.amount}`
+    );
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      data.phoneNumber
+    );
 
     if (!payoutType) {
       this.logger.error('Payout not initiated');
@@ -424,7 +528,9 @@ export class StellarChainService implements IChainService {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: { info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName } },
+          data: {
+            info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName },
+          },
         });
       }
     }
@@ -558,7 +664,7 @@ export class StellarChainService implements IChainService {
           { cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET },
           { walletAddresses, chain: 'stellar' }
         )
-    );
+      );
     const secretByWallet = new Map(
       secrets.map((s) => [s.address, s.privateKey])
     );
@@ -743,12 +849,16 @@ export class StellarChainService implements IChainService {
     const record = await this.prisma.otp.findUnique({ where: { phoneNumber } });
     if (!record) throw new RpcException('OTP record not found');
     if (record.isVerified) throw new RpcException('OTP already verified');
-    if (record.expiresAt < new Date()) throw new RpcException('OTP has expired');
+    if (record.expiresAt < new Date())
+      throw new RpcException('OTP has expired');
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
     if (!isValid) throw new RpcException('Invalid OTP or amount mismatch');
 
-    await this.prisma.otp.update({ where: { phoneNumber }, data: { isVerified: true } });
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
     return true;
   }
 
@@ -759,7 +869,13 @@ export class StellarChainService implements IChainService {
 
     const otpRes = await this.prisma.otp.upsert({
       where: { phoneNumber },
-      update: { otpHash, amount, expiresAt, isVerified: false, updatedAt: new Date() },
+      update: {
+        otpHash,
+        amount,
+        expiresAt,
+        isVerified: false,
+        updatedAt: new Date(),
+      },
       create: { phoneNumber, otpHash, amount, expiresAt },
     });
 
@@ -776,47 +892,64 @@ export class StellarChainService implements IChainService {
     );
 
     if (!beneficiary) throw new RpcException('Beneficiary not found');
-    if (!beneficiary.groupedBeneficiaries) throw new RpcException('Beneficiary has no grouped beneficiaries');
+    if (!beneficiary.groupedBeneficiaries)
+      throw new RpcException('Beneficiary has no grouped beneficiaries');
 
     const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
       (g: any) => g.groupPurpose !== 'COMMUNICATION'
     );
 
-    if (!payoutEligibleGroups.length) throw new RpcException('No payout-eligible group found for beneficiary');
-    if (payoutEligibleGroups.length > 1) throw new RpcException('Multiple payout-eligible groups found for beneficiary');
+    if (!payoutEligibleGroups.length)
+      throw new RpcException('No payout-eligible group found for beneficiary');
+    if (payoutEligibleGroups.length > 1)
+      throw new RpcException(
+        'Multiple payout-eligible groups found for beneficiary'
+      );
 
     const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
       include: { tokensReserved: { include: { payout: true } } },
     });
 
-    if (!beneficiaryGroups) throw new RpcException('Beneficiary group not found');
+    if (!beneficiaryGroups)
+      throw new RpcException('Beneficiary group not found');
 
-    this.logger.log(`Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`);
-    this.logger.log(`Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`);
-    if (!beneficiaryGroups.tokensReserved) throw new RpcException('Tokens not reserved for the group');
+    this.logger.log(
+      `Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`
+    );
+    this.logger.log(
+      `Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`
+    );
+    if (!beneficiaryGroups.tokensReserved)
+      throw new RpcException('Tokens not reserved for the group');
 
     const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
+      (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
     );
 
     if (!activeToken) {
-        this.logger.error('No active payout found for the group');
-        throw new RpcException('No active payout found for the group');
+      this.logger.error('No active payout found for the group');
+      throw new RpcException('No active payout found for the group');
     }
 
     return activeToken.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {
-    const vendor = await this.prisma.vendor.findUnique({ where: { uuid: data.vendorUuid } });
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: data.vendorUuid },
+    });
     if (!vendor) throw new RpcException('Vendor not found');
 
-    const keys = await this.getSecretByPhone(data.phoneNumber) as any;
+    const keys = (await this.getSecretByPhone(data.phoneNumber)) as any;
     if (!keys) throw new RpcException('Beneficiary address not found');
 
-    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
-    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+    const stellarSettings = await this.getFromSettings(
+      'STELLAR_SPONSOR_SETTINGS'
+    );
+    const stellarClient = new StellarClient(
+      stellarSettings as unknown as StellarClientConfig
+    );
 
     const tokenBalance = await getBalance(
       stellarClient.server,
@@ -826,14 +959,22 @@ export class StellarChainService implements IChainService {
     );
 
     const beneficiaryTokenBalance = parseFloat(tokenBalance);
-    if (!beneficiaryTokenBalance) throw new RpcException('Beneficiary token balance not found');
+    if (!beneficiaryTokenBalance)
+      throw new RpcException('Beneficiary token balance not found');
 
     const amount = data.amount || beneficiaryTokenBalance;
-    if (Number(amount) > beneficiaryTokenBalance) throw new RpcException(`Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`);
-    if (Number(amount) <= 0) throw new RpcException('Amount must be greater than 0');
+    if (Number(amount) > beneficiaryTokenBalance)
+      throw new RpcException(
+        `Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`
+      );
+    if (Number(amount) <= 0)
+      throw new RpcException('Amount must be greater than 0');
 
     const res = await lastValueFrom(
-      this.client.send({ cmd: 'rahat.jobs.otp.send_otp' }, { phoneNumber: data.phoneNumber, amount })
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: data.phoneNumber, amount }
+      )
     );
 
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -844,7 +985,14 @@ export class StellarChainService implements IChainService {
     if (existingRedeem) {
       await this.prisma.beneficiaryRedeem.update({
         where: { uuid: existingRedeem.uuid },
-        data: { vendorUid: data.vendorUuid, amount: amount as number, status: 'PENDING', isCompleted: false, txHash: null, payoutId },
+        data: {
+          vendorUid: data.vendorUuid,
+          amount: amount as number,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          payoutId,
+        },
       });
     } else {
       await this.prisma.beneficiaryRedeem.create({

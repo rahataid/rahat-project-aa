@@ -22,7 +22,7 @@ export class ChainQueueService {
 
   constructor(private chainServiceRegistry: ChainServiceRegistry) {}
 
-  async disbursementStats(chainType?: ChainType): Promise<any> {
+  async disbursementStats(chainType?: ChainType, payload?: { startDate?: string; endDate?: string }): Promise<any> {
     this.logger.log(`disbursment Stats`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
@@ -34,7 +34,7 @@ export class ChainQueueService {
       );
     }
 
-    return chainService.getDisbursementStats();
+    return chainService.getDisbursementStats(payload || {});
   }
 
   async assignTokens(
@@ -154,12 +154,15 @@ export class ChainQueueService {
     return chainService.getRahatTokenBalance(data);
   }
 
-  async getDisbursementStats(chainType?: ChainType): Promise<any[]> {
+  async getDisbursementStats(
+    payload: { startDate: string; endDate: string },
+    chainType?: ChainType
+  ): Promise<any[]> {
     this.logger.log('Getting disbursement stats');
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
-    return chainService.getDisbursementStats();
+    return chainService.getDisbursementStats(payload);
   }
 
   async verifyOtp(data: VerifyOtpDto, chainType?: ChainType): Promise<any> {
@@ -273,7 +276,10 @@ export class ChainQueueService {
     return this.transferTokens(data, chainType);
   }
 
-  async redeemInkind(redeemDto: RedeemInkindDto, chainType?: ChainType): Promise<any> {
+  async redeemInkind(
+    redeemDto: RedeemInkindDto,
+    chainType?: ChainType
+  ): Promise<any> {
     this.logger.log(`Redeeming inkind for ${redeemDto.beneficiaryAddress}`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
@@ -281,8 +287,13 @@ export class ChainQueueService {
     return chainService.redeemInkind(redeemDto);
   }
 
-  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto, chainType?: ChainType): Promise<any> {
-    this.logger.log(`Redeeming inkind tokens for vendor ${redeemVendorInkindDto.vendorAddress}`);
+  async redeemVendorInkindTokens(
+    redeemVendorInkindDto: RedeemInkindTokenForCashDto,
+    chainType?: ChainType
+  ): Promise<any> {
+    this.logger.log(
+      `Redeeming inkind tokens for vendor ${redeemVendorInkindDto.vendorAddress}`
+    );
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
     );
