@@ -28,6 +28,9 @@ import { getBalance } from 'libs/stellar/src/utils/account';
 import { StellarClient } from 'libs/stellar/src/client';
 import { StellarClientConfig } from 'libs/stellar/src/types';
 import bcrypt from 'bcryptjs';
+import { InkindsService } from '../../inkinds/inkinds.service';
+import { ModuleRef } from '@nestjs/core';
+import { generateRandomTxHash } from '../../utils/utility';
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -41,13 +44,17 @@ export interface BeneficiaryCsvData {
 export class StellarChainService implements IChainService {
   private readonly logger = new Logger(StellarChainService.name);
 
+  // Lazy-loaded service to avoid circular dependency issues
+  private _inkindService: InkindsService | null = null;
+
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR_SEND_ASSET)
     private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   getChainType(): ChainType {
@@ -56,6 +63,12 @@ export class StellarChainService implements IChainService {
 
   validateAddress(address: string): boolean {
     return address.length === 56 && address.startsWith('G');
+  }
+
+  private get inkindService(): InkindsService {
+    return (this._inkindService ??= this.moduleRef.get(InkindsService, {
+      strict: false,
+    }));
   }
 
   async disburse(data: DisburseDto): Promise<any> {
@@ -728,7 +741,31 @@ export class StellarChainService implements IChainService {
   }
 
   async redeemInkind(_data: RedeemInkindDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    const { beneficiaryAddress, inkindId: inkinds } = _data; // Destructure to avoid unused variable warning
+    this.logger.log(
+      `Redeeming inkind for beneficiary ${_data.beneficiaryAddress}`
+    );
+    this.logger.log(
+      `Skipping actual Stellar transfer for inkind redemption and generating a random txHash for record-keeping`
+    );
+
+    const randomTxHash = generateRandomTxHash('stellar');
+
+    try {
+      await this.inkindService.updateRedeemInkindTxHash(
+        inkinds,
+        randomTxHash,
+        beneficiaryAddress
+      );
+      this.logger.log(
+        `Inkind redemption recorded for beneficiary ${_data.beneficiaryAddress}`
+      );
+    } catch (err) {
+      this.logger.error(
+        `Error redeeming in-kind for beneficiary ${_data.beneficiaryAddress}: ${err.message}`
+      );
+      throw new RpcException(`Error redeeming in-kind: ${err.message}`);
+    }
   }
 
   async redeemVendorInkindTokens(
