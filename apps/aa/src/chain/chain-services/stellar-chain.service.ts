@@ -57,7 +57,7 @@ export class StellarChainService implements IChainService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef
-  ) {}
+  ) { }
 
   getChainType(): ChainType {
     return 'stellar';
@@ -75,8 +75,7 @@ export class StellarChainService implements IChainService {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
-        data.groups || 'all'
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'
       }`
     );
 
@@ -117,32 +116,32 @@ export class StellarChainService implements IChainService {
         `Processing group ${uuid} with token ${activeToken.title} (${activeToken.numberOfTokens} tokens)`
       );
 
-      // CHECK_TRUSTLINE false → trust the extras.stellarSponsored flag instead of an
-      // on-chain trustline check (done by the direct disburse processor when true).
-      if (!disbursementSettings.CHECK_TRUSTLINE) {
-        const allSponsored = beneficiaries.every((b) => {
-          const sponsoredAttr = (b.beneficiary?.extras as any)
-            ?.stellarSponsored;
-          return sponsoredAttr === true;
-        });
-
-        if (!allSponsored) {
-          const errorMsg = `Trust check failed: group ${uuid} contains beneficiaries without confirmed stellarSponsored flag`;
-          this.logger.error(errorMsg);
-          await this.prisma.beneficiaryGroupTokens.update({
-            where: { uuid: activeToken.uuid },
-            data: {
-              status: 'FAILED',
-              info: {
-                ...(activeToken.info as any),
-                error: errorMsg,
-                failedAt: new Date().toISOString(),
-              },
-            },
-          });
-          continue;
-        }
-      }
+      // // CHECK_TRUSTLINE false → trust the extras.stellarSponsored flag instead of an
+      // // on-chain trustline check (done by the direct disburse processor when true).
+      // if (!disbursementSettings.CHECK_TRUSTLINE) {
+      //   const allSponsored = beneficiaries.every((b) => {
+      //     const sponsoredAttr = (b.beneficiary?.extras as any)
+      //       ?.stellarSponsored;
+      //     return sponsoredAttr === true;
+      //   });
+      //
+      //   if (!allSponsored) {
+      //     const errorMsg = `Trust check failed: group ${uuid} contains beneficiaries without confirmed stellarSponsored flag`;
+      //     this.logger.error(errorMsg);
+      //     await this.prisma.beneficiaryGroupTokens.update({
+      //       where: { uuid: activeToken.uuid },
+      //       data: {
+      //         status: 'FAILED',
+      //         info: {
+      //           ...(activeToken.info as any),
+      //           error: errorMsg,
+      //           failedAt: new Date().toISOString(),
+      //         },
+      //       },
+      //     });
+      //     continue;
+      //   }
+      // }
 
       if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
         const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
@@ -213,8 +212,7 @@ export class StellarChainService implements IChainService {
     skipStatusUpdate = false
   ): Promise<void> {
     this.logger.debug(
-      `Queuing SDP disbursement job for group ${groupUuid}${
-        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      `Queuing SDP disbursement job for group ${groupUuid}${numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
       }, dName: ${dName}`
     );
     await this.stellarSdpQueue.add(
@@ -294,11 +292,11 @@ export class StellarChainService implements IChainService {
     const dateFilter =
       payload?.startDate || payload?.endDate
         ? {
-            createdAt: {
-              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-            },
-          }
+          createdAt: {
+            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+          },
+        }
         : {};
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
@@ -323,11 +321,11 @@ export class StellarChainService implements IChainService {
     const redeemDateFilter =
       payload?.startDate || payload?.endDate
         ? {
-            createdAt: {
-              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-            },
-          }
+          createdAt: {
+            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+          },
+        }
         : {};
 
     const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
@@ -361,7 +359,7 @@ export class StellarChainService implements IChainService {
     const averageDisbursementTime =
       disbursementsInfo.length > 0
         ? disbursementsInfo.reduce((acc, time) => acc + time, 0) /
-          disbursementsInfo.length
+        disbursementsInfo.length
         : 0;
 
     const activityActivationTime = await this.getActivityActivationTime();
