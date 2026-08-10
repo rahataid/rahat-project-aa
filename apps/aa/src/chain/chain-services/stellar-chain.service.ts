@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+
 import { SettingsService } from '@rumsan/settings';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import {
@@ -49,6 +50,7 @@ export class StellarChainService implements IChainService {
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_DISBURSE) private stellarDisburseQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR_SEND_ASSET)
     private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
@@ -96,10 +98,13 @@ export class StellarChainService implements IChainService {
     }
 
     const groups = await this.getGroupsFromUuid(groupUuids);
+    const disbursementSettings = await this.getDisbursementSettings();
 
-    this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
+    this.logger.log(
+      `Adding disbursement jobs for ${groups.length} groups [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}, checkTrustline=${disbursementSettings.CHECK_TRUSTLINE}]`
+    );
 
-    for (const { uuid, tokensReserved } of groups) {
+    for (const { uuid, tokensReserved, beneficiaries } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
         this.logger.warn(
@@ -108,6 +113,44 @@ export class StellarChainService implements IChainService {
         continue;
       }
 
+      this.logger.log(
+        `Processing group ${uuid} with token ${activeToken.title} (${activeToken.numberOfTokens} tokens)`
+      );
+
+      // CHECK_TRUSTLINE false → trust the extras.stellarSponsored flag instead of an
+      // on-chain trustline check (done by the direct disburse processor when true).
+      if (!disbursementSettings.CHECK_TRUSTLINE) {
+        const allSponsored = beneficiaries.every((b) => {
+          const sponsoredAttr = (b.beneficiary?.extras as any)
+            ?.stellarSponsored;
+          return sponsoredAttr === true;
+        });
+
+        if (!allSponsored) {
+          const errorMsg = `Trust check failed: group ${uuid} contains beneficiaries without confirmed stellarSponsored flag`;
+          this.logger.error(errorMsg);
+          await this.prisma.beneficiaryGroupTokens.update({
+            where: { uuid: activeToken.uuid },
+            data: {
+              status: 'FAILED',
+              info: {
+                ...(activeToken.info as any),
+                error: errorMsg,
+                failedAt: new Date().toISOString(),
+              },
+            },
+          });
+          continue;
+        }
+      }
+
+      if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
+        const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
+        await this.queueDirectGroupDisbursement(uuid, dName);
+        continue;
+      }
+
+      // SDP path
       const existingDisbursementId = (activeToken.info as any)?.disbursement
         ?.id;
       if (existingDisbursementId) {
@@ -127,7 +170,7 @@ export class StellarChainService implements IChainService {
     }
 
     this.logger.log(
-      `Successfully queued ${groups.length} SDP disbursement jobs`
+      `Successfully queued ${groups.length} disbursement jobs [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}]`
     );
 
     return {
@@ -145,11 +188,17 @@ export class StellarChainService implements IChainService {
       throw new RpcException('preDisburse requires a single group uuid');
     }
 
+    const disbursementSettings = await this.getDisbursementSettings();
+
     this.logger.log(
-      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid}`
+      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid} [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}]`
     );
 
-    await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
+      await this.queueDirectGroupDisbursement(groupUuid, data.dName);
+    } else {
+      await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    }
 
     return {
       message: `Disbursement job added for group ${groupUuid}`,
@@ -183,6 +232,25 @@ export class StellarChainService implements IChainService {
           type: 'exponential',
           delay: 1000,
         },
+      }
+    );
+  }
+
+  private async queueDirectGroupDisbursement(
+    groupUuid: string,
+    dName: string
+  ): Promise<void> {
+    this.logger.debug(
+      `Queuing direct disbursement job for group ${groupUuid}, dName: ${dName}`
+    );
+    await this.stellarDisburseQueue.add(
+      JOBS.STELLAR_DIRECT.DISBURSE,
+      { dName, groups: [groupUuid] },
+      {
+        attempts: 3,
+        delay: 2000,
+        removeOnComplete: true,
+        backoff: { type: 'exponential', delay: 1000 },
       }
     );
   }
@@ -799,7 +867,18 @@ export class StellarChainService implements IChainService {
     }
     return this.prisma.beneficiaryGroups.findMany({
       where: { uuid: { in: uuids } },
-      include: { tokensReserved: true },
+      include: {
+        tokensReserved: true,
+        beneficiaries: {
+          include: {
+            beneficiary: {
+              select: {
+                extras: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -1056,6 +1135,29 @@ export class StellarChainService implements IChainService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Reads the consolidated STELLAR_DISBURSEMENT_SETTINGS object.
+   * STELLAR_DISBURSMENT_MODE toggles 'SDP' (STELLAR_SDP queue) vs 'DIRECT' (STELLAR_DISBURSE queue);
+   * defaults to 'SDP' if not configured.
+   */
+  private async getDisbursementSettings(): Promise<{
+    CHECK_TRUSTLINE: boolean;
+    STELLAR_DISBURSMENT_MODE: 'SDP' | 'DIRECT';
+    STELLAR_DISTRUBUTION_WALLET_SECRET: string;
+  }> {
+    const settings = await this.getFromSettings(
+      'STELLAR_DISBURSEMENT_SETTINGS'
+    );
+    const value = (settings as Record<string, unknown>) || {};
+    return {
+      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE === true,
+      STELLAR_DISBURSMENT_MODE:
+        value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
+      STELLAR_DISTRUBUTION_WALLET_SECRET:
+        (value.STELLAR_DISTRUBUTION_WALLET_SECRET as string) || '',
+    };
   }
 
   private async getActivityActivationTime() {
