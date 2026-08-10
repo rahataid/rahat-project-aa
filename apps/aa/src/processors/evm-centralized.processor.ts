@@ -633,7 +633,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     job: Job<{
       beneficiaryAddress: string;
       vendorAddress: string;
-      inkinds: string[];
+      inkindId: string[];
     }>
   ): Promise<any> {
     try {
@@ -665,7 +665,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         });
 
       // Step 4: Extract - Pull the redemption payload from the job data
-      const { inkinds, beneficiaryAddress, vendorAddress } = job.data;
+      const { inkindId: inkinds, beneficiaryAddress, vendorAddress } = job.data;
 
       // Step 4.1: Scale - Convert the inkind count to the token's decimal unit for the contract call
       const inkindsValue = ethers.parseUnits(
