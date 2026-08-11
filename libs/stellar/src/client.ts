@@ -6,6 +6,7 @@ import {
   createSponsoredAccountsBatch,
 } from './operations/account';
 import {
+  MAX_TRANSFERS_PER_BATCH,
   sendBatchPayment,
   sendFromSponsored,
   sendFromSponsoredBatch,
@@ -35,6 +36,7 @@ export class StellarClient {
   readonly asset: Asset;
   private readonly sponsorKeypair: Keypair;
   private readonly designatedKeypair: Keypair | undefined;
+  private readonly maxBatchTransfers: number;
 
   //TODO: consider sender horizon urls as well
   constructor(config: StellarClientConfig) {
@@ -50,6 +52,7 @@ export class StellarClient {
     this.designatedKeypair = config.distributionWalletSecret
       ? Keypair.fromSecret(config.distributionWalletSecret)
       : undefined;
+    this.maxBatchTransfers = config.maxBatchTransfers || MAX_TRANSFERS_PER_BATCH;
     console.log('StellarClient initialized with config:', config);
   }
 
@@ -146,7 +149,8 @@ export class StellarClient {
       { server: this.server, networkPassphrase: this.networkPassphrase },
       this.asset,
       this.designatedKeypair,
-      receivers
+      receivers,
+      this.maxBatchTransfers
     );
   }
 

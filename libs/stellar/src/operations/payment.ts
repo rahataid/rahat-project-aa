@@ -88,7 +88,7 @@ export async function sendFromSponsored(
  * sponsor's signature - so signatures are the binding constraint well before
  * operations are. 12 keeps a wide margin under that cap.
  */
-export const MAX_TRANSFERS_PER_BATCH = 20;
+export const MAX_TRANSFERS_PER_BATCH = 12;
 
 /**
  * Combines up to MAX_TRANSFERS_PER_BATCH sponsored-account payments into a
@@ -234,10 +234,13 @@ export async function sendBatchPayment(
   receivers: {
     destination: string,
     amount: string
-  }[]
+  }[],
+  maxBatchTransfers: number
 ): Promise<SendBatchPaymentResult> {
-  if (receivers.length < 1 || receivers.length > MAX_TRANSFERS_PER_BATCH) {
-    throw new RangeError(`receivers.length must be between 1 and ${MAX_TRANSFERS_PER_BATCH} (got ${receivers.length})`);
+  const maximumAllowedBatchTransfers = maxBatchTransfers;
+
+  if (receivers.length < 1 || receivers.length > maximumAllowedBatchTransfers) {
+    throw new RangeError(`receivers.length must be between 1 and ${maximumAllowedBatchTransfers} (got ${receivers.length})`);
   }
 
   const distributionAccount = await ctx.server.loadAccount(distributionWalletKeypair.publicKey());
