@@ -32,12 +32,13 @@ export class StellarDirectDisburseProcessor {
     private readonly settingsService: SettingsService,
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService
-  ) {}
+  ) { }
 
   private async getDisbursementSettings(): Promise<{
     CHECK_TRUSTLINE: boolean;
     STELLAR_DISBURSMENT_MODE: 'SDP' | 'DIRECT';
     STELLAR_DISTRUBUTION_WALLET_SECRET: string;
+    MAX_BATCH_ALLOWED_TRANSFERS: number;
   }> {
     let value: Record<string, unknown> = {};
     try {
@@ -56,11 +57,13 @@ export class StellarDirectDisburseProcessor {
         value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
       STELLAR_DISTRUBUTION_WALLET_SECRET:
         (value.STELLAR_DISTRUBUTION_WALLET_SECRET as string) || '',
+      MAX_BATCH_ALLOWED_TRANSFERS: Number(value.MAX_BATCH_ALLOWED_TRANSFERS) || MAX_TRANSFERS_PER_BATCH
     };
   }
 
   private async buildStellarClient(
-    distributionWalletSecret: string
+    distributionWalletSecret: string,
+    maxAllowedBatchTransfers: number
   ): Promise<{
     client: StellarClient;
     distributionPublicKey: string;
@@ -85,6 +88,7 @@ export class StellarDirectDisburseProcessor {
     const config: StellarClientConfig = {
       ...(sponsorSettings.value as unknown as StellarClientConfig),
       distributionWalletSecret,
+      maxBatchTransfers: maxAllowedBatchTransfers
     };
 
     const client = new StellarClient(config);
@@ -139,7 +143,8 @@ export class StellarDirectDisburseProcessor {
       const disbursementSettings = await this.getDisbursementSettings();
       const { client: stellarClient, distributionPublicKey } =
         await this.buildStellarClient(
-          disbursementSettings.STELLAR_DISTRUBUTION_WALLET_SECRET
+          disbursementSettings.STELLAR_DISTRUBUTION_WALLET_SECRET,
+          disbursementSettings.MAX_BATCH_ALLOWED_TRANSFERS
         );
 
       // 5. Balance check: distribution wallet must hold enough tokens
@@ -157,7 +162,7 @@ export class StellarDirectDisburseProcessor {
       if (balance < totalNeeded) {
         throw new Error(
           `Insufficient balance in distribution wallet ${distributionPublicKey}: ` +
-            `has ${balance}, needs ${totalNeeded}`
+          `has ${balance}, needs ${totalNeeded}`
         );
       }
 
@@ -189,7 +194,7 @@ export class StellarDirectDisburseProcessor {
       }
 
       // 7. Chunk and send (Stellar max 12 ops per tx)
-      const chunks = chunkArray(benData, MAX_TRANSFERS_PER_BATCH);
+      const chunks = chunkArray(benData, disbursementSettings.MAX_BATCH_ALLOWED_TRANSFERS);
       const totalBatches = chunks.length;
 
       this.logger.log(
@@ -411,7 +416,7 @@ export class StellarDirectDisburseProcessor {
 
       this.logger.log(
         `Group ${groupUuid} disbursed successfully. ` +
-          `Batches: ${chunks.length}, took ${totalElapsedMs}ms`
+        `Batches: ${chunks.length}, took ${totalElapsedMs}ms`
       );
 
       // 9. Emit token disbursed event
@@ -435,8 +440,7 @@ export class StellarDirectDisburseProcessor {
         })
         .catch((updateErr: unknown) =>
           this.logger.error(
-            `Failed to mark group ${groupUuid} as FAILED: ${
-              updateErr instanceof Error ? updateErr.message : String(updateErr)
+            `Failed to mark group ${groupUuid} as FAILED: ${updateErr instanceof Error ? updateErr.message : String(updateErr)
             }`
           )
         );

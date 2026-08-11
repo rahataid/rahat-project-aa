@@ -14,6 +14,8 @@ export interface StellarClientConfig {
   assetIssuer: string;
   /** Secret key for the distribution wallet used for direct batch disbursement. Required only when calling sendBatchPayment. */
   distributionWalletSecret?: string;
+  /** Maximum allowed bactch transfered during payment sending **/
+  maxBatchTransfers?: number;
 }
 
 export interface SponsoredAccount {
