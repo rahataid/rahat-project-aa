@@ -4,6 +4,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
 import { SdpStellarProcessor } from './sdp-stellar.processor';
+import { StellarDirectDisburseProcessor } from './stellar-direct-disburse.processor';
 import { StellarSendAssetProcessor } from './stellar-send-asset.processor';
 import { OfframpProcessor } from './offramp.processor';
 import { ManualPayoutProcessor } from './manual-payout.processor';
@@ -45,6 +46,7 @@ import { BeneficiaryProcessor } from './beneficiary.processor';
       },
     ]),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_DISBURSE }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
     BullModule.registerQueue({
       name: BQUEUE.OFFRAMP,
@@ -86,6 +88,7 @@ import { BeneficiaryProcessor } from './beneficiary.processor';
     InkindProcessor,
     StatsProcessor,
     SdpStellarProcessor,
+    StellarDirectDisburseProcessor,
     StellarSendAssetProcessor,
     NotificationProcessor,
     OfframpProcessor,

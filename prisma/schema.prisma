@@ -424,7 +424,7 @@ model Vendor {
   BeneficiaryRedeem            BeneficiaryRedeem[]
   OfflineBeneficiary           OfflineBeneficiary[]
   beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
-  vendorInkindRedemptions       VendorInkindRedemption[]
+  vendorInkindRedemptions      VendorInkindRedemption[]
 
   @@map("tbl_vendors")
 }
@@ -725,8 +725,8 @@ model Inkind {
   // Optional cached fields (recommended for performance)
   availableStock Int @default(0)
 
-  stockMovements InkindStockMovement[]
-  groupInkinds   GroupInkind[]
+  stockMovements          InkindStockMovement[]
+  groupInkinds            GroupInkind[]
   vendorInkindRedemptions VendorInkindRedemption[]
 
   createdAt DateTime  @default(now())
@@ -808,9 +808,9 @@ model BeneficiaryInkindRedemption {
 
   redeemedAt DateTime @default(now())
 
-  txHash String?
-  status String  @default("PENDING")
-  otpExemptionReason String? 
+  txHash             String?
+  status             String  @default("PENDING")
+  otpExemptionReason String?
 
   vendorUid String? @db.Uuid()
   Vendor    Vendor? @relation(fields: [vendorUid], references: [uuid])
@@ -858,7 +858,7 @@ model VendorInkindRedemption {
   uuid String @unique @default(uuid())
 
   redemptionStatus RedemptionStatus @default(REQUESTED)
-  quantity Int @default(1)
+  quantity         Int              @default(1)
 
   transactionHash String?
   approvedBy      String?
@@ -867,10 +867,10 @@ model VendorInkindRedemption {
   inkindUuid String
   inkind     Inkind @relation(fields: [inkindUuid], references: [uuid])
 
-  vendorUuid       String                @db.Uuid()
-  vendor Vendor @relation(fields: [vendorUuid], references: [uuid])
+  vendorUuid String @db.Uuid()
+  vendor     Vendor @relation(fields: [vendorUuid], references: [uuid])
 
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
   @@index([vendorUuid])
@@ -931,12 +931,12 @@ model GroupCashTransferRecord {
   title               String
   groupCashTransferId String
 
-  amount              Float?  @default(0)
-  payoutProcessorId   String?
+  amount            Float?  @default(0)
+  payoutProcessorId String?
 
-  status String @default("NOT_STARTED")
-  disbursedAt DateTime?
-  txHash String?
+  status           String    @default("NOT_STARTED")
+  disbursedAt      DateTime?
+  txHash           String?
   disbursementInfo Json?
 
   createdBy String?
@@ -950,6 +950,64 @@ model GroupCashTransferRecord {
 }
 
 // ============== End Group Cash Transfer Schemas ================
+
+// ============== Start Stellar Direct Disbursement Batch Schemas ================
+
+enum StellarBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// One row per Stellar batch within a direct disbursement job.
+/// Unique on (groupTokenUuid, batchIndex) so re-runs can skip COMPLETED batches.
+model StellarDisburseBatch {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  /// FK to tbl_beneficiaries_groups_tokens.uuid
+  groupTokenUuid String
+  /// 1-based position within this disbursement run
+  batchIndex     Int
+  /// Total batches in this run (denormalised for convenience)
+  totalBatches   Int
+
+  status StellarBatchStatus @default(PENDING)
+
+  /// Stellar transaction hash — null until COMPLETED
+  txHash String?
+
+  /// Number of recipients in this batch
+  recipientCount Int
+  /// Sum of amounts for this batch (stored as string to preserve decimal precision)
+  totalAmount    String
+
+  /// Full recipient list [{walletAddress, amount}]
+  recipients Json
+
+  /// Wall-clock timestamps
+  startedAt   DateTime?
+  completedAt DateTime?
+  /// Processing time in ms
+  timeTakenMs Int?
+
+  /// Error message if FAILED
+  error String?
+
+  /// Attempt counter for retry tracking
+  attemptCount Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@unique([groupTokenUuid, batchIndex], name: "unique_group_batch")
+  @@index([groupTokenUuid])
+  @@index([status])
+  @@map("tbl_stellar_disburse_batches")
+}
+
+// ============== End Stellar Direct Disbursement Batch Schemas ================
 
 // ++++++++++++++++++ START: IVR Templates ++++++++++++++++++++
 
