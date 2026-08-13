@@ -1030,3 +1030,31 @@ enum IvrStatus {
 }
 
 // ++++++++++++++++++ END: IVR Templates ++++++++++++++++++++
+
+// ============== Start Async Queue Jobs SCHEMAS ================
+model AsyncQueueJob {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid())
+
+  jobName String // JOBS constant, e.g. 'aa.jobs.beneficiary.create_beneficiaries_in_batches'
+  status  String @default("PENDING") // free-form: PENDING | PROCESSING | COMPLETED | FAILED | ...
+
+  jobTypeData Json // primary job payload
+  metadata    Json? // extra context (source, tags, parent job, etc.)
+
+  error      String?
+  retryCount Int     @default(0) // informational; Bull owns real retries
+  maxRetries Int     @default(3) // mirrors Bull attempts, reference
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobName, status]) // fast scan per job type recovery
+  @@index([createdAt]) // FIFO replay ordering
+  @@map("tbl_async_queue_jobs")
+}
+// ============== End Async Queue Jobs SCHEMAS ================

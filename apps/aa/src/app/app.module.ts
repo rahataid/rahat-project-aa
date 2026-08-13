@@ -20,6 +20,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { VendorsModule } from '../vendors/vendors.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
+import { QueueModule } from '../queue/queue.module';
+import { AsyncQueueRecoveryService } from '../queue/async-queue-recovery.service';
 import { BQUEUE } from '../constants';
 import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
@@ -104,12 +106,16 @@ import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module'
     IvrTemplatesModule,
     OtpModule,
     FundallocationModule,
+    QueueModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
 })
 export class AppModule implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly queueService: QueueService) {}
+  constructor(
+    private readonly queueService: QueueService,
+    private readonly asyncQueueRecoveryService: AsyncQueueRecoveryService
+  ) {}
 
   async onModuleInit() {
     console.log('🚀 Initializing application...');
@@ -117,6 +123,8 @@ export class AppModule implements OnModuleInit, OnModuleDestroy {
     await this.queueService.waitForConnection();
 
     await this.setupProcessors();
+
+    await this.asyncQueueRecoveryService.recoverAll();
 
     console.log('✅ All queue processors initialized successfully');
   }

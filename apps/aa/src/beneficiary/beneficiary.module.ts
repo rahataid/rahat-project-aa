@@ -14,10 +14,12 @@ import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QrPdfService } from './qr-pdf.service';
 import { PdfGenerationProcessor } from '../processors/pdf-generation.processor';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
   imports: [
     forwardRef(() => PayoutsModule),
+    QueueModule,
     // StellarModule,
     SettingsModule,
     ClientsModule.register([
@@ -34,6 +36,9 @@ import { PdfGenerationProcessor } from '../processors/pdf-generation.processor';
     StatsModule,
     BullModule.registerQueue({
       name: BQUEUE.CONTRACT,
+    }),
+    BullModule.registerQueue({
+      name: BQUEUE.BENEFICIARY,
     }),
     // TODO: STELLAR DETACH - no provider in this module injects BQUEUE.STELLAR.
     // BullModule.registerQueue({
