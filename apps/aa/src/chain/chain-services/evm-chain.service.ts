@@ -4,7 +4,7 @@ import { ModuleRef } from '@nestjs/core';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../../utils/hash';
 import { Queue } from 'bull';
 import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
@@ -1149,7 +1149,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       throw new RpcException('OTP has expired');
     }
 
-    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    const isValid = verifyOtpHash(record.otpHash, `${otp}:${amount}`);
 
     if (!isValid) {
       this.logger.log('Invalid OTP or amount mismatch');
@@ -1473,7 +1473,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
     this.logger.log('Expires at: ', expiresAt);
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
 
-    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+    const otpHash = getOtpHash(`${otp}:${amount}`);
     this.logger.log('OTP hash: ', otpHash);
 
     const otpRes = await this.prisma.otp.upsert({

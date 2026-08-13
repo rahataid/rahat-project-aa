@@ -7,10 +7,11 @@ import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import { PayoutMode } from '@prisma/client';
 import { of } from 'rxjs';
 import { getQueueToken } from '@nestjs/bull';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../utils/hash';
 
-jest.mock('bcryptjs', () => ({
-  compare: jest.fn(),
+jest.mock('../utils/hash', () => ({
+  getOtpHash: jest.fn(),
+  verifyOtpHash: jest.fn(),
 }));
 
 describe('VendorsService', () => {
@@ -756,7 +757,7 @@ describe('VendorsService', () => {
     it('should return isValid:true for valid OTP', async () => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.otp.findUnique.mockResolvedValue(mockOtpData);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (verifyOtpHash as jest.Mock).mockReturnValue(true);
       mockPrismaService.beneficiary.findFirst.mockResolvedValue(
         mockBeneficiary
       );
@@ -822,7 +823,7 @@ describe('VendorsService', () => {
     it('should return isValid:false when OTP is incorrect', async () => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.otp.findUnique.mockResolvedValue(mockOtpData);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      (verifyOtpHash as jest.Mock).mockReturnValue(false);
 
       const result = await service.verifyVendorOfflineOtp(basePayload);
 
@@ -833,7 +834,7 @@ describe('VendorsService', () => {
     it('should return isValid:false when beneficiary not found for phone', async () => {
       mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
       mockPrismaService.otp.findUnique.mockResolvedValue(mockOtpData);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (verifyOtpHash as jest.Mock).mockReturnValue(true);
       mockPrismaService.beneficiary.findFirst.mockResolvedValue(null);
 
       const result = await service.verifyVendorOfflineOtp(basePayload);

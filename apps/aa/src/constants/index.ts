@@ -80,6 +80,8 @@ export const JOBS = {
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
+    CREATE_BENF_ADD_GROUP_TO_PROJECT:
+      'rahat.jobs.beneficiary.create_benf_add_group_to_project',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
@@ -88,6 +90,8 @@ export const JOBS = {
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
+    CREATE_BENEFICIARIES_IN_BATCHES:
+      'aa.jobs.beneficiary.create_beneficiaries_in_batches',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',

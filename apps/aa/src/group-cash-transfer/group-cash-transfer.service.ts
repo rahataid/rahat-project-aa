@@ -13,7 +13,7 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../utils/hash';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -498,7 +498,7 @@ export class GroupCashTransferService {
     }
 
     const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
-    const otpHash = await bcrypt.hash(otp, 10);
+    const otpHash = getOtpHash(otp);
     await this.db.otp.create({
       data: {
         otpHash,
@@ -527,7 +527,7 @@ export class GroupCashTransferService {
       throw new RpcException('OTP has expired');
     }
 
-    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    const isValid = verifyOtpHash(otpRecord.otpHash, otp);
     if (!isValid) {
       throw new RpcException('Invalid OTP');
     }
