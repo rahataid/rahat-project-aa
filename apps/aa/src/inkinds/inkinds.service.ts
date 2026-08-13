@@ -46,7 +46,8 @@ import { randomUUID } from 'crypto';
 import { BQUEUE, CHAIN_SERVICE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import { lastValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
-import { ChainService } from '../chain/chain.service';
+import type { ChainService } from '../chain/chain.service';
+import { ModuleRef } from '@nestjs/core';
 import { AppService } from '../app/app.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bull';
@@ -66,13 +67,16 @@ const DEFAULT_BULK_BATCH_SIZE = parseInt(
 @Injectable()
 export class InkindsService {
   private readonly logger = new Logger(InkindsService.name);
+
+  // Lazy-loaded to avoid circular dependency with ChainModule
+  private _chainService: ChainService | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly appService: AppService,
     private configService: ConfigService,
-    @Inject(CHAIN_SERVICE)
-    private readonly chainService: ChainService,
+    private readonly moduleRef: ModuleRef,
     // @InjectQueue(BQUEUE.EVM) private readonly contractQueue: Queue,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.COMMUNICATION)
@@ -81,6 +85,12 @@ export class InkindsService {
     @InjectQueue(BQUEUE.INKIND_BULK_REDEEM)
     private readonly inkindBulkQueue: Queue
   ) {}
+
+  private get chainService(): ChainService {
+    return (this._chainService ??= this.moduleRef.get(CHAIN_SERVICE, {
+      strict: false,
+    }));
+  }
 
   async create(createInkindDto: CreateInkindDto) {
     const { quantity, ...inkindData } = createInkindDto;
@@ -1680,7 +1690,7 @@ export class InkindsService {
         this.chainService.redeemInkind({
           beneficiaryAddress: walletAddress,
           vendorAddress: user.wallet,
-          inkinds: batchedInkinds,
+          inkindId: batchedInkinds,
         });
       } catch (error) {
         this.logger.error(
@@ -2440,7 +2450,7 @@ export class InkindsService {
             this.chainService.redeemInkind({
               beneficiaryAddress: wallet,
               vendorAddress: user.wallet,
-              inkinds: inkinds,
+              inkindId: inkinds
             });
           }
         }

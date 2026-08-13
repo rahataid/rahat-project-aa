@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+
 import { SettingsService } from '@rumsan/settings';
 import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
 import {
@@ -28,6 +29,9 @@ import { getBalance } from 'libs/stellar/src/utils/account';
 import { StellarClient } from 'libs/stellar/src/client';
 import { StellarClientConfig } from 'libs/stellar/src/types';
 import bcrypt from 'bcryptjs';
+import { InkindsService } from '../../inkinds/inkinds.service';
+import { ModuleRef } from '@nestjs/core';
+import { generateRandomTxHash } from '../../utils/utility';
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -41,13 +45,19 @@ export interface BeneficiaryCsvData {
 export class StellarChainService implements IChainService {
   private readonly logger = new Logger(StellarChainService.name);
 
+  // Lazy-loaded service to avoid circular dependency issues
+  private _inkindService: InkindsService | null = null;
+
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
-    @InjectQueue(BQUEUE.STELLAR_SEND_ASSET) private stellarSendAssetQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_DISBURSE) private stellarDisburseQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_SEND_ASSET)
+    private stellarSendAssetQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
-    @Inject(CORE_MODULE) private readonly client: ClientProxy
-  ) {}
+    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly moduleRef: ModuleRef
+  ) { }
 
   getChainType(): ChainType {
     return 'stellar';
@@ -57,10 +67,15 @@ export class StellarChainService implements IChainService {
     return address.length === 56 && address.startsWith('G');
   }
 
+  private get inkindService(): InkindsService {
+    return (this._inkindService ??= this.moduleRef.get(InkindsService, {
+      strict: false,
+    }));
+  }
+
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
-        data.groups || 'all'
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'
       }`
     );
 
@@ -82,10 +97,13 @@ export class StellarChainService implements IChainService {
     }
 
     const groups = await this.getGroupsFromUuid(groupUuids);
+    const disbursementSettings = await this.getDisbursementSettings();
 
-    this.logger.log(`Adding SDP disbursement jobs for ${groups.length} groups`);
+    this.logger.log(
+      `Adding disbursement jobs for ${groups.length} groups [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}, checkTrustline=${disbursementSettings.CHECK_TRUSTLINE}]`
+    );
 
-    for (const { uuid, tokensReserved } of groups) {
+    for (const { uuid, tokensReserved, beneficiaries } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
         this.logger.warn(
@@ -94,6 +112,44 @@ export class StellarChainService implements IChainService {
         continue;
       }
 
+      this.logger.log(
+        `Processing group ${uuid} with token ${activeToken.title} (${activeToken.numberOfTokens} tokens)`
+      );
+
+      // // CHECK_TRUSTLINE false → trust the extras.stellarSponsored flag instead of an
+      // // on-chain trustline check (done by the direct disburse processor when true).
+      // if (!disbursementSettings.CHECK_TRUSTLINE) {
+      //   const allSponsored = beneficiaries.every((b) => {
+      //     const sponsoredAttr = (b.beneficiary?.extras as any)
+      //       ?.stellarSponsored;
+      //     return sponsoredAttr === true;
+      //   });
+      //
+      //   if (!allSponsored) {
+      //     const errorMsg = `Trust check failed: group ${uuid} contains beneficiaries without confirmed stellarSponsored flag`;
+      //     this.logger.error(errorMsg);
+      //     await this.prisma.beneficiaryGroupTokens.update({
+      //       where: { uuid: activeToken.uuid },
+      //       data: {
+      //         status: 'FAILED',
+      //         info: {
+      //           ...(activeToken.info as any),
+      //           error: errorMsg,
+      //           failedAt: new Date().toISOString(),
+      //         },
+      //       },
+      //     });
+      //     continue;
+      //   }
+      // }
+
+      if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
+        const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
+        await this.queueDirectGroupDisbursement(uuid, dName);
+        continue;
+      }
+
+      // SDP path
       const existingDisbursementId = (activeToken.info as any)?.disbursement
         ?.id;
       if (existingDisbursementId) {
@@ -105,11 +161,15 @@ export class StellarChainService implements IChainService {
       }
 
       const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
-      await this.queueGroupDisbursement(uuid, dName, activeToken.numberOfTokens);
+      await this.queueGroupDisbursement(
+        uuid,
+        dName,
+        activeToken.numberOfTokens
+      );
     }
 
     this.logger.log(
-      `Successfully queued ${groups.length} SDP disbursement jobs`
+      `Successfully queued ${groups.length} disbursement jobs [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}]`
     );
 
     return {
@@ -127,11 +187,17 @@ export class StellarChainService implements IChainService {
       throw new RpcException('preDisburse requires a single group uuid');
     }
 
+    const disbursementSettings = await this.getDisbursementSettings();
+
     this.logger.log(
-      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid}`
+      `Pre-disbursement (disburse-on-create) triggered for group ${groupUuid} [mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE}]`
     );
 
-    await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
+      await this.queueDirectGroupDisbursement(groupUuid, data.dName);
+    } else {
+      await this.queueGroupDisbursement(groupUuid, data.dName, undefined, true);
+    }
 
     return {
       message: `Disbursement job added for group ${groupUuid}`,
@@ -146,8 +212,7 @@ export class StellarChainService implements IChainService {
     skipStatusUpdate = false
   ): Promise<void> {
     this.logger.debug(
-      `Queuing SDP disbursement job for group ${groupUuid}${
-        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      `Queuing SDP disbursement job for group ${groupUuid}${numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
       }, dName: ${dName}`
     );
     await this.stellarSdpQueue.add(
@@ -165,6 +230,25 @@ export class StellarChainService implements IChainService {
           type: 'exponential',
           delay: 1000,
         },
+      }
+    );
+  }
+
+  private async queueDirectGroupDisbursement(
+    groupUuid: string,
+    dName: string
+  ): Promise<void> {
+    this.logger.debug(
+      `Queuing direct disbursement job for group ${groupUuid}, dName: ${dName}`
+    );
+    await this.stellarDisburseQueue.add(
+      JOBS.STELLAR_DIRECT.DISBURSE,
+      { dName, groups: [groupUuid] },
+      {
+        attempts: 3,
+        delay: 2000,
+        removeOnComplete: true,
+        backoff: { type: 'exponential', delay: 1000 },
       }
     );
   }
@@ -188,7 +272,10 @@ export class StellarChainService implements IChainService {
     );
   }
 
-  async getDisbursementStats(): Promise<any> {
+  async getDisbursementStats(payload: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any[]> {
     this.logger.log('Fetching disbursement stats for Stellar SDP chain');
 
     const oneTokenPrice =
@@ -201,7 +288,22 @@ export class StellarChainService implements IChainService {
       `Token price: ${oneTokenPrice}, Token name: ${tokenName}`
     );
 
+    // Apply date filter to beneficiaryGroupTokens
+    const dateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+          createdAt: {
+            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+          },
+        }
+        : {};
+
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: {
+        ...dateFilter,
+      },
+
       include: {
         beneficiaryGroup: {
           include: {
@@ -214,6 +316,19 @@ export class StellarChainService implements IChainService {
         },
       },
     });
+
+    // Apply date filter to beneficiaryRedeem for token stats
+    const redeemDateFilter =
+      payload?.startDate || payload?.endDate
+        ? {
+          createdAt: {
+            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+          },
+        }
+        : {};
+
+    const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
 
     const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
       if (token.isDisbursed) {
@@ -244,7 +359,7 @@ export class StellarChainService implements IChainService {
     const averageDisbursementTime =
       disbursementsInfo.length > 0
         ? disbursementsInfo.reduce((acc, time) => acc + time, 0) /
-          disbursementsInfo.length
+        disbursementsInfo.length
         : 0;
 
     const activityActivationTime = await this.getActivityActivationTime();
@@ -284,9 +399,73 @@ export class StellarChainService implements IChainService {
         value:
           averageDuration !== 0 ? getFormattedTimeDiff(averageDuration) : 'N/A',
       },
+      {
+        name: 'Assigned Tokens',
+        value: tokenStatsResult.assignedTokens,
+      },
+      {
+        name: 'Disbursed Tokens',
+        value: tokenStatsResult.disbursedTokens,
+      },
+      {
+        name: 'Pending Disbursement',
+        value: tokenStatsResult.pendingDisbursement,
+      },
+      {
+        name: 'Redeemed Tokens',
+        value: tokenStatsResult.redeemedTokens,
+      },
     ];
   }
 
+  private async getTokenStats(dateFilter?: any) {
+    const REDEEMED_LEGS = [
+      { transactionType: 'VENDOR_REIMBURSEMENT', status: 'COMPLETED' },
+      {
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      },
+    ] as const;
+    let assignedTokens = 0;
+    let disbursedTokens = 0;
+    let redeemedTokens = 0;
+
+    const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: dateFilter,
+      select: {
+        numberOfTokens: true,
+        isDisbursed: true,
+        payout: { select: { type: true, mode: true } },
+      },
+    });
+    for (const gt of groupTokens) {
+      const tokens = gt.numberOfTokens || 0;
+      assignedTokens += tokens;
+      if (gt.isDisbursed) disbursedTokens += tokens;
+    }
+    const pendingDisbursement = assignedTokens - disbursedTokens;
+
+    const redeemRecords = await this.prisma.beneficiaryRedeem.findMany({
+      where: { OR: [...REDEEMED_LEGS], ...dateFilter },
+      select: {
+        amount: true,
+        transactionType: true,
+        beneficiaryWalletAddress: true,
+        payout: { select: { mode: true } },
+      },
+    });
+
+    for (const r of redeemRecords) {
+      redeemedTokens += r.amount;
+    }
+    const result = {
+      assignedTokens,
+      disbursedTokens,
+      pendingDisbursement,
+      redeemedTokens,
+    };
+    return result;
+  }
   async getRahatTokenBalance(data: { address: string }): Promise<any> {
     this.logger.debug(`getRahatTokenBalance address=${data.address}`);
     if (!this.validateAddress(data.address)) {
@@ -369,8 +548,12 @@ export class StellarChainService implements IChainService {
   }
 
   async sendOtp(data: SendOtpDto): Promise<any> {
-    this.logger.log(`Sending OTP to ${data.phoneNumber} for amount ${data.amount}`);
-    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(data.phoneNumber);
+    this.logger.log(
+      `Sending OTP to ${data.phoneNumber} for amount ${data.amount}`
+    );
+    const payoutType = await this.getBeneficiaryPayoutTypeByPhone(
+      data.phoneNumber
+    );
 
     if (!payoutType) {
       this.logger.error('Payout not initiated');
@@ -424,7 +607,9 @@ export class StellarChainService implements IChainService {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: { info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName } },
+          data: {
+            info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName },
+          },
         });
       }
     }
@@ -558,7 +743,7 @@ export class StellarChainService implements IChainService {
           { cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET },
           { walletAddresses, chain: 'stellar' }
         )
-    );
+      );
     const secretByWallet = new Map(
       secrets.map((s) => [s.address, s.privateKey])
     );
@@ -622,7 +807,31 @@ export class StellarChainService implements IChainService {
   }
 
   async redeemInkind(_data: RedeemInkindDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    const { beneficiaryAddress, inkindId: inkinds } = _data; // Destructure to avoid unused variable warning
+    this.logger.log(
+      `Redeeming inkind for beneficiary ${_data.beneficiaryAddress}`
+    );
+    this.logger.log(
+      `Skipping actual Stellar transfer for inkind redemption and generating a random txHash for record-keeping`
+    );
+
+    const randomTxHash = generateRandomTxHash('stellar');
+
+    try {
+      await this.inkindService.updateRedeemInkindTxHash(
+        inkinds,
+        randomTxHash,
+        beneficiaryAddress
+      );
+      this.logger.log(
+        `Inkind redemption recorded for beneficiary ${_data.beneficiaryAddress}`
+      );
+    } catch (err) {
+      this.logger.error(
+        `Error redeeming in-kind for beneficiary ${_data.beneficiaryAddress}: ${err.message}`
+      );
+      throw new RpcException(`Error redeeming in-kind: ${err.message}`);
+    }
   }
 
   async redeemVendorInkindTokens(
@@ -656,7 +865,18 @@ export class StellarChainService implements IChainService {
     }
     return this.prisma.beneficiaryGroups.findMany({
       where: { uuid: { in: uuids } },
-      include: { tokensReserved: true },
+      include: {
+        tokensReserved: true,
+        beneficiaries: {
+          include: {
+            beneficiary: {
+              select: {
+                extras: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -743,12 +963,16 @@ export class StellarChainService implements IChainService {
     const record = await this.prisma.otp.findUnique({ where: { phoneNumber } });
     if (!record) throw new RpcException('OTP record not found');
     if (record.isVerified) throw new RpcException('OTP already verified');
-    if (record.expiresAt < new Date()) throw new RpcException('OTP has expired');
+    if (record.expiresAt < new Date())
+      throw new RpcException('OTP has expired');
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
     if (!isValid) throw new RpcException('Invalid OTP or amount mismatch');
 
-    await this.prisma.otp.update({ where: { phoneNumber }, data: { isVerified: true } });
+    await this.prisma.otp.update({
+      where: { phoneNumber },
+      data: { isVerified: true },
+    });
     return true;
   }
 
@@ -759,7 +983,13 @@ export class StellarChainService implements IChainService {
 
     const otpRes = await this.prisma.otp.upsert({
       where: { phoneNumber },
-      update: { otpHash, amount, expiresAt, isVerified: false, updatedAt: new Date() },
+      update: {
+        otpHash,
+        amount,
+        expiresAt,
+        isVerified: false,
+        updatedAt: new Date(),
+      },
       create: { phoneNumber, otpHash, amount, expiresAt },
     });
 
@@ -776,47 +1006,64 @@ export class StellarChainService implements IChainService {
     );
 
     if (!beneficiary) throw new RpcException('Beneficiary not found');
-    if (!beneficiary.groupedBeneficiaries) throw new RpcException('Beneficiary has no grouped beneficiaries');
+    if (!beneficiary.groupedBeneficiaries)
+      throw new RpcException('Beneficiary has no grouped beneficiaries');
 
     const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
       (g: any) => g.groupPurpose !== 'COMMUNICATION'
     );
 
-    if (!payoutEligibleGroups.length) throw new RpcException('No payout-eligible group found for beneficiary');
-    if (payoutEligibleGroups.length > 1) throw new RpcException('Multiple payout-eligible groups found for beneficiary');
+    if (!payoutEligibleGroups.length)
+      throw new RpcException('No payout-eligible group found for beneficiary');
+    if (payoutEligibleGroups.length > 1)
+      throw new RpcException(
+        'Multiple payout-eligible groups found for beneficiary'
+      );
 
     const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
       include: { tokensReserved: { include: { payout: true } } },
     });
 
-    if (!beneficiaryGroups) throw new RpcException('Beneficiary group not found');
+    if (!beneficiaryGroups)
+      throw new RpcException('Beneficiary group not found');
 
-    this.logger.log(`Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`);
-    this.logger.log(`Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`);
-    if (!beneficiaryGroups.tokensReserved) throw new RpcException('Tokens not reserved for the group');
+    this.logger.log(
+      `Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`
+    );
+    this.logger.log(
+      `Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`
+    );
+    if (!beneficiaryGroups.tokensReserved)
+      throw new RpcException('Tokens not reserved for the group');
 
     const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
+      (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
     );
 
     if (!activeToken) {
-        this.logger.error('No active payout found for the group');
-        throw new RpcException('No active payout found for the group');
+      this.logger.error('No active payout found for the group');
+      throw new RpcException('No active payout found for the group');
     }
 
     return activeToken.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {
-    const vendor = await this.prisma.vendor.findUnique({ where: { uuid: data.vendorUuid } });
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { uuid: data.vendorUuid },
+    });
     if (!vendor) throw new RpcException('Vendor not found');
 
-    const keys = await this.getSecretByPhone(data.phoneNumber) as any;
+    const keys = (await this.getSecretByPhone(data.phoneNumber)) as any;
     if (!keys) throw new RpcException('Beneficiary address not found');
 
-    const stellarSettings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
-    const stellarClient = new StellarClient(stellarSettings as unknown as StellarClientConfig);
+    const stellarSettings = await this.getFromSettings(
+      'STELLAR_SPONSOR_SETTINGS'
+    );
+    const stellarClient = new StellarClient(
+      stellarSettings as unknown as StellarClientConfig
+    );
 
     const tokenBalance = await getBalance(
       stellarClient.server,
@@ -826,14 +1073,22 @@ export class StellarChainService implements IChainService {
     );
 
     const beneficiaryTokenBalance = parseFloat(tokenBalance);
-    if (!beneficiaryTokenBalance) throw new RpcException('Beneficiary token balance not found');
+    if (!beneficiaryTokenBalance)
+      throw new RpcException('Beneficiary token balance not found');
 
     const amount = data.amount || beneficiaryTokenBalance;
-    if (Number(amount) > beneficiaryTokenBalance) throw new RpcException(`Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`);
-    if (Number(amount) <= 0) throw new RpcException('Amount must be greater than 0');
+    if (Number(amount) > beneficiaryTokenBalance)
+      throw new RpcException(
+        `Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`
+      );
+    if (Number(amount) <= 0)
+      throw new RpcException('Amount must be greater than 0');
 
     const res = await lastValueFrom(
-      this.client.send({ cmd: 'rahat.jobs.otp.send_otp' }, { phoneNumber: data.phoneNumber, amount })
+      this.client.send(
+        { cmd: 'rahat.jobs.otp.send_otp' },
+        { phoneNumber: data.phoneNumber, amount }
+      )
     );
 
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -844,7 +1099,14 @@ export class StellarChainService implements IChainService {
     if (existingRedeem) {
       await this.prisma.beneficiaryRedeem.update({
         where: { uuid: existingRedeem.uuid },
-        data: { vendorUid: data.vendorUuid, amount: amount as number, status: 'PENDING', isCompleted: false, txHash: null, payoutId },
+        data: {
+          vendorUid: data.vendorUuid,
+          amount: amount as number,
+          status: 'PENDING',
+          isCompleted: false,
+          txHash: null,
+          payoutId,
+        },
       });
     } else {
       await this.prisma.beneficiaryRedeem.create({
@@ -871,6 +1133,29 @@ export class StellarChainService implements IChainService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Reads the consolidated STELLAR_DISBURSEMENT_SETTINGS object.
+   * STELLAR_DISBURSMENT_MODE toggles 'SDP' (STELLAR_SDP queue) vs 'DIRECT' (STELLAR_DISBURSE queue);
+   * defaults to 'SDP' if not configured.
+   */
+  private async getDisbursementSettings(): Promise<{
+    CHECK_TRUSTLINE: boolean;
+    STELLAR_DISBURSMENT_MODE: 'SDP' | 'DIRECT';
+    STELLAR_DISTRUBUTION_WALLET_SECRET: string;
+  }> {
+    const settings = await this.getFromSettings(
+      'STELLAR_DISBURSEMENT_SETTINGS'
+    );
+    const value = (settings as Record<string, unknown>) || {};
+    return {
+      CHECK_TRUSTLINE: value.CHECK_TRUSTLINE === true,
+      STELLAR_DISBURSMENT_MODE:
+        value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP',
+      STELLAR_DISTRUBUTION_WALLET_SECRET:
+        (value.STELLAR_DISTRUBUTION_WALLET_SECRET as string) || '',
+    };
   }
 
   private async getActivityActivationTime() {

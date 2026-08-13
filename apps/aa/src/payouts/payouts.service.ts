@@ -1429,6 +1429,10 @@ export class PayoutsService {
         );
       }
 
+      // const info = log.info as Record<string, any> | null;
+
+      // return { ...log, mediaUrl: info?.mediaUrl };
+
       return log;
     } catch (error) {
       this.logger.error(

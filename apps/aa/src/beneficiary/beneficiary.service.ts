@@ -456,7 +456,6 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
-    this.logger.debug(`Fetching beneficiary group: ${uuid}`);
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
@@ -474,7 +473,6 @@ export class BeneficiaryService {
 
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    this.logger.debug(`Group found: ${uuid}, fetching project data`);
     const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },

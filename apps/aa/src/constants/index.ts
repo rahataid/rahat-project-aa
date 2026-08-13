@@ -129,6 +129,9 @@ export const JOBS = {
     DISBURSEMENT_STATUS_UPDATE:
       'aa.jobs.stellar_sdp.disbursement_status_update',
   },
+  STELLAR_DIRECT: {
+    DISBURSE: 'aa.jobs.stellar_direct.disburse',
+  },
   WALLET: {
     GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
     GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
@@ -418,6 +421,7 @@ export const BQUEUE = {
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
   STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
   STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
+  STELLAR_DISBURSE: `STELLAR_DISBURSE_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
   MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,

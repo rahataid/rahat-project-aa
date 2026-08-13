@@ -29,8 +29,8 @@ export class ChainService {
     return this.chainQueueService.getRahatTokenBalance(data);
   }
 
-  getDisbursementStats() {
-    return this.chainQueueService.getDisbursementStats();
+  getDisbursementStats(payload: { startDate: string; endDate: string }) {
+    return this.chainQueueService.getDisbursementStats(payload);
   }
 
   redeemInkind(redeemDto: any) {
@@ -38,6 +38,8 @@ export class ChainService {
   }
 
   redeemVendorInkindTokens(redeemVendorInkindDto: any) {
-    return this.chainQueueService.redeemVendorInkindTokens(redeemVendorInkindDto);
+    return this.chainQueueService.redeemVendorInkindTokens(
+      redeemVendorInkindDto
+    );
   }
 }
