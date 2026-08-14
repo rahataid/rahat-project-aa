@@ -9,27 +9,27 @@ import { CvaBeneficiaryGroupService } from './beneficiary-group.service';
 export class CvaBeneficiaryGroupController {
   constructor(private readonly benGroupService: CvaBeneficiaryGroupService) {}
 
-  @MessagePattern({
-    cmd: CVA_JOBS.BENEFICIARY_GROUP.BULK_ASSIGN,
-    uuid: process.env['PROJECT_ID'],
-  })
-  create(dto: AddBeneficiariesToGroupDto) {
-    return this.benGroupService.addBeneficiariesToGroup(dto);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.BENEFICIARY_GROUP.BULK_ASSIGN,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // create(dto: AddBeneficiariesToGroupDto) {
+  //   return this.benGroupService.addBeneficiariesToGroup(dto);
+  // }
 
-  @MessagePattern({
-    cmd: CVA_JOBS.BENEFICIARY_GROUP.LIST,
-    uuid: process.env['PROJECT_ID'],
-  })
-  list(query: PaginationBaseDto): unknown {
-    return this.benGroupService.list(query);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.BENEFICIARY_GROUP.LIST,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // list(query: PaginationBaseDto): unknown {
+  //   return this.benGroupService.list(query);
+  // }
 
-  @MessagePattern({
-    cmd: CVA_JOBS.BENEFICIARY_GROUP.LIST_BY_GROUP,
-    uuid: process.env['PROJECT_ID'],
-  })
-  listBenByGroup(dto: ListBeneficiaryByGroupDto): unknown {
-    return this.benGroupService.listBenefByGroup(dto);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.BENEFICIARY_GROUP.LIST_BY_GROUP,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // listBenByGroup(dto: ListBeneficiaryByGroupDto): unknown {
+  //   return this.benGroupService.listBenefByGroup(dto);
+  // }
 }

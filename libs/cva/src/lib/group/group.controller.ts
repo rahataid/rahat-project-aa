@@ -9,27 +9,27 @@ import { CreateGroupDto, GetGroupDto } from '../dtos';
 export class CvaGroupController {
   constructor(private readonly groupService: CvaGroupService) {}
 
-  @MessagePattern({
-    cmd: CVA_JOBS.GROUP.CREATE,
-    uuid: process.env['PROJECT_ID'],
-  })
-  create(dto: CreateGroupDto) {
-    return this.groupService.create(dto);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.GROUP.CREATE,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // create(dto: CreateGroupDto) {
+  //   return this.groupService.create(dto);
+  // }
 
-  @MessagePattern({
-    cmd: CVA_JOBS.GROUP.LIST,
-    uuid: process.env['PROJECT_ID'],
-  })
-  list(query: PaginationBaseDto): unknown {
-    return this.groupService.list(query);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.GROUP.LIST,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // list(query: PaginationBaseDto): unknown {
+  //   return this.groupService.list(query);
+  // }
 
-  @MessagePattern({
-    cmd: CVA_JOBS.GROUP.GET,
-    uuid: process.env['PROJECT_ID'],
-  })
-  findOne(dto: GetGroupDto) {
-    return this.groupService.findOne(dto);
-  }
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.GROUP.GET,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // findOne(dto: GetGroupDto) {
+  //   return this.groupService.findOne(dto);
+  // }
 }

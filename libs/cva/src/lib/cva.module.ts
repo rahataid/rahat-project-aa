@@ -12,15 +12,15 @@ import { CvaBeneficiaryGroupModule } from './beneficiary-group/beneficiary-group
 
 const DEFAULT_MODULES = [
   CvaBeneficiaryModule,
-  CvaVendorModule,
-  CvaDisbursementModule,
-  CvaVendorReimbursementModule,
+  // CvaVendorModule,
+  // CvaDisbursementModule,
+  // CvaVendorReimbursementModule,
   CvaBeneficiaryRedeemModule,
-  CvaBeneficiaryOtpModule,
-  CvaOfflineBeneficiaryModule,
-  CvaCommunicationModule,
-  CvaGroupModule,
-  CvaBeneficiaryGroupModule,
+  // CvaBeneficiaryOtpModule,
+  // CvaOfflineBeneficiaryModule,
+  // CvaCommunicationModule,
+  // CvaGroupModule,
+  // CvaBeneficiaryGroupModule,
 ];
 
 @Global()
