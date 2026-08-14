@@ -381,7 +381,7 @@ export const JOBS = {
     TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
   HEALTH: {
-    GET: 'aa.jobs.health.get',
+    GET: 'rahat.jobs.health.getcheck',
   },
 };
 
