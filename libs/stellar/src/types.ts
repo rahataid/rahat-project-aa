@@ -29,8 +29,17 @@ export interface CreateSponsoredAccountResult extends TransactionResult {
   account: SponsoredAccount;
 }
 
-export interface CreateSponsoredAccountsBatchResult extends TransactionResult {
-  accounts: SponsoredAccount[];
+export interface SponsoredAccountBatchItem extends SponsoredAccount {
+  /** What the batch call did for this account: created it + trustline, added only the trustline (account already existed), or found it already fully sponsored. */
+  action: 'create' | 'trustline-only' | 'already-sponsored';
+}
+
+export interface CreateSponsoredAccountsBatchResult {
+  /** Null when every account in the batch was already fully sponsored — nothing was submitted. */
+  hash: string | null;
+  successful?: boolean;
+  ledger?: number;
+  accounts: SponsoredAccountBatchItem[];
 }
 
 export type PaymentResult = TransactionResult;
