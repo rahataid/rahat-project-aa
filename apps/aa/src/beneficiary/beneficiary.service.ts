@@ -536,7 +536,10 @@ export class BeneficiaryService {
   /**
    * Reports Stellar sponsorship status for every beneficiary in a group, by
    * reading what StellarSponsorProcessor has already written to
-   * `beneficiary.extras` — no live Stellar calls. Status per beneficiary:
+   * `beneficiary.extras` — no live Stellar calls. Returns `isStellarChain:
+   * false` with all counts zeroed (no DB scan) when the project's chain
+   * isn't Stellar — sponsorship doesn't apply, so there's nothing to report.
+   * Status per beneficiary:
    *  - `sponsored`: extras.stellarSponsored === true (extras.stellarSponsorAction says how — create/trustline-only/already-sponsored)
    *  - `failed`: extras.stellarSponsorError is set (the error message is the reason)
    *  - `no-wallet`: beneficiary has no walletAddress on file — was never even queued
@@ -544,6 +547,19 @@ export class BeneficiaryService {
    */
   async getSponsorshipStatusForGroup(payload: { groupUuid: string }) {
     const { groupUuid } = payload;
+
+    if (!(await this.isStellarChain())) {
+      return {
+        groupUuid,
+        isStellarChain: false,
+        total: 0,
+        sponsored: 0,
+        pending: 0,
+        failed: 0,
+        noWallet: 0,
+        accounts: [],
+      };
+    }
 
     const records = await this.prisma.beneficiaryToGroup.findMany({
       where: { groupId: groupUuid },
@@ -573,6 +589,7 @@ export class BeneficiaryService {
 
     return {
       groupUuid,
+      isStellarChain: true,
       total: accounts.length,
       sponsored: accounts.filter((a) => a.status === 'sponsored').length,
       pending: accounts.filter((a) => a.status === 'pending').length,
@@ -784,10 +801,10 @@ export class BeneficiaryService {
       return tokenAssignmentCheck;
     }
 
-    if (await this.isStellarChain()) {
-      const sponsorshipStatus = await this.getSponsorshipStatusForGroup({
-        groupUuid: beneficiaryGroupId,
-      });
+    const sponsorshipStatus = await this.getSponsorshipStatusForGroup({
+      groupUuid: beneficiaryGroupId,
+    });
+    if (sponsorshipStatus.isStellarChain) {
       const notSponsored = sponsorshipStatus.total - sponsorshipStatus.sponsored;
       if (notSponsored > 0) {
         this.logger.warn(
