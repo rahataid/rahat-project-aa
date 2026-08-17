@@ -41,6 +41,8 @@ import {
 } from '../processors/types';
 import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import { OtpService } from '../otp/otp.service';
+import bcrypt from 'bcryptjs';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -54,6 +56,7 @@ import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
+import { ethers } from 'ethers';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -76,29 +79,109 @@ export class PayoutsService {
     @Inject(forwardRef(() => BeneficiaryService))
     private readonly beneficiaryService: BeneficiaryService,
     private settingService: SettingsService,
+    private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue
   ) {}
+
+  async sendOtp(email: string) {
+    if (!email) {
+      throw new RpcException('Email is required to send OTP');
+    }
+
+    const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
+
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.prisma.otp.delete({ where: { email } });
+    }
+
+    const { otp } = await this.otpService.sendEmail(
+      email,
+      'Payout Trigger OTP',
+      'Your OTP for triggering payout is:',
+      isExistingValid ? defaultOpt.otp : undefined
+    );
+
+    // if otp is set in db and not expired, do not update otp, just resend the existing otp
+    if (isExistingValid) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
+
+    const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
+    const otpHash = await bcrypt.hash(otp, 10);
+    await this.prisma.otp.create({
+      data: {
+        otpHash,
+        otp,
+        email,
+        expiresAt: expiry,
+        amount: 0,
+      },
+    });
+
+    this.logger.log(`Payout OTP sent to email: ${email}`);
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  private async verifyOtp(email?: string, otp?: string) {
+    if (!email || !otp) {
+      throw new RpcException('Email and OTP are required');
+    }
+
+    const otpRecord = await this.prisma.otp.findUnique({ where: { email } });
+    if (!otpRecord) {
+      throw new RpcException('OTP record not found');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    if (!isValid) {
+      throw new RpcException('Invalid OTP');
+    }
+
+    // consume OTP so it cannot be reused
+    await this.prisma.otp.delete({ where: { email } });
+  }
 
   /**
    * Find payout stats
    * This is used to find the payout stats including counts by payout type
    * and isCompleted status.
    */
-  async getPayoutStats(): Promise<PayoutStats> {
+  async getPayoutStats(payload: any): Promise<PayoutStats> {
     try {
+      const { startDate, endDate } = payload || {};
+      const dateFilter =
+        startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {};
+
       const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
         await Promise.all([
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'FIAT_TRANSFER',
               status: 'FIAT_TRANSACTION_COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'VENDOR_REIMBURSEMENT',
               status: 'COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -110,6 +193,7 @@ export class PayoutsService {
                   'TOKEN_TRANSACTION_FAILED',
                 ],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -117,6 +201,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.findMany({
@@ -127,6 +212,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
         ]);
@@ -366,7 +452,8 @@ export class PayoutsService {
     payload: ListPayoutDto
   ): Promise<PaginatedResult<Omit<PayoutWithRelations, 'beneficiaryRedeem'>>> {
     try {
-      const { page, perPage, groupName, payoutType } = payload;
+      const { page, perPage, groupName, payoutType, startDate, endDate } =
+        payload;
 
       this.logger.log('Fetching all payouts');
       const where: Prisma.PayoutsWhereInput = {
@@ -384,6 +471,14 @@ export class PayoutsService {
           Object.values(PayoutType).includes(payoutType as PayoutType) && {
             type: payoutType as PayoutType,
           }),
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {}),
       };
 
       const query: Prisma.PayoutsFindManyArgs = {
@@ -934,7 +1029,10 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-  async triggerPayout(uuid: string, user?: any): Promise<any> {
+  async triggerPayout(uuid: string, user?: any, otp?: string): Promise<any> {
+    // Verify OTP before proceeding with payout trigger
+    await this.verifyOtp(user?.email, otp);
+
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
     const projectId = this.configService.get('PROJECT_ID');
@@ -1331,6 +1429,10 @@ export class PayoutsService {
         );
       }
 
+      // const info = log.info as Record<string, any> | null;
+
+      // return { ...log, mediaUrl: info?.mediaUrl };
+
       return log;
     } catch (error) {
       this.logger.error(
@@ -1616,8 +1718,8 @@ export class PayoutsService {
       matchBy
     );
 
-    this.logVerificationStats(verificationResult, payoutRows.length);
-    this.validateMatchedBeneficiaries(verificationResult);
+    this.logVerificationStats(verificationResult, payoutRows.length, matchBy);
+    this.validateMatchedBeneficiaries(verificationResult, matchBy);
 
     const fieldOfficerAddress = await this.getFieldOfficerWalletAddress();
     const tokenAmount = this.calculateTokenAmountPerBeneficiary(payout);
@@ -1722,6 +1824,13 @@ export class PayoutsService {
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
+      if (!row['Transaction Status']) {
+        throw new RpcException(
+          `Payout verification failed: Missing transaction status in row ${
+            index + 1
+          }`
+        );
+      }
       if (matchBy === 'phoneNumber') {
         if (!row['Phone Number']) {
           throw new RpcException(
@@ -1773,8 +1882,9 @@ export class PayoutsService {
     const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
       const matchedBeneficiary = beneficiaries.find((beneficiary) =>
         matchBy === 'phoneNumber'
-          ? beneficiary.phoneNumber === row['Phone Number']
-          : beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+          ? beneficiary.phoneNumber === String(row['Phone Number']).trim()
+          : beneficiary.bankDetails.accountNumber ===
+            String(row['Bank Account Number']).trim()
       );
 
       return {
@@ -1804,7 +1914,8 @@ export class PayoutsService {
    */
   private logVerificationStats(
     result: ManualPayoutVerificationResult,
-    totalRows: number
+    totalRows: number,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     const matchPercentage = ((result.matched.length / totalRows) * 100).toFixed(
       1
@@ -1820,7 +1931,9 @@ export class PayoutsService {
     if (result.unmatched.length > 0) {
       this.logger.warn(
         `Found ${result.unmatched.length} unmatched records. ` +
-          `These beneficiaries may not be registered or have incorrect bank account information.`
+          `These beneficiaries may not be registered or have incorrect ${
+            matchBy === 'phoneNumber' ? 'phone number' : 'bank account'
+          } information.`
       );
     }
   }
@@ -1829,9 +1942,16 @@ export class PayoutsService {
    * Validates that we have matched beneficiaries to process
    */
   private validateMatchedBeneficiaries(
-    result: ManualPayoutVerificationResult
+    result: ManualPayoutVerificationResult,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     if (result.matched.length === 0) {
+      if (matchBy === 'phoneNumber') {
+        throw new RpcException(
+          'Payout verification failed: No beneficiary phone numbers matched with the provided data. ' +
+            'Please verify that the phone numbers in your file match the registered beneficiaries.'
+        );
+      }
       throw new RpcException(
         'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
           'Please verify that the bank account numbers in your file match the registered beneficiaries.'
@@ -1843,6 +1963,32 @@ export class PayoutsService {
    * Retrieves field officer wallet address from settings
    */
   private async getFieldOfficerWalletAddress(): Promise<string> {
+    const fundManagementConfig = await this.getFromSettings(
+      'FUNDMANAGEMENT_TAB_CONFIG'
+    );
+
+    const isProjectCashTracker = !fundManagementConfig.tabs?.some(
+      (tab: any) => tab.value === 'cashTracker'
+    );
+
+    const deployerPrivateKey = await this.settingService.getPublic(
+      'DEPLOYER_PRIVATE_KEY'
+    );
+
+    if (!isProjectCashTracker) {
+      if (!deployerPrivateKey.value) {
+        throw new RpcException(
+          'Payout verification failed: Deployer private key not configured in system settings'
+        );
+      }
+
+      const deployerWalletAddress = new ethers.Wallet(
+        deployerPrivateKey.value as string
+      ).address;
+
+      return deployerWalletAddress;
+    }
+
     const entitiesSettings = await this.settingService.getPublic('ENTITIES');
 
     if (!entitiesSettings?.value) {
@@ -2137,5 +2283,24 @@ export class PayoutsService {
     }
 
     return filteredRedeems;
+  }
+
+  private async getFromSettings(key: string): Promise<any> {
+    try {
+      const settings = await this.prisma.setting.findUnique({
+        where: {
+          name: key,
+        },
+      });
+
+      if (!settings?.value) {
+        throw new Error(`${key} not found`);
+      }
+
+      return settings.value;
+    } catch (error) {
+      this.logger.error(`Error getting setting ${key}: ${error.message}`);
+      throw error;
+    }
   }
 }

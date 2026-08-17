@@ -69,8 +69,20 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
-  disburse(@Payload() payload: { uuid: string; user: any }) {
-    return this.groupCashTransferService.disburse(payload.uuid, payload.user);
+  disburse(@Payload() payload: { uuid: string; user: any; otp: string }) {
+    return this.groupCashTransferService.disburse(
+      payload.uuid,
+      payload.user,
+      payload.otp
+    );
+  }
+
+  @MessagePattern({
+    cmd: JOBS.GROUP_CASH_TRANSFER.SEND_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendOtp(@Payload() payload: { email: string }) {
+    return this.groupCashTransferService.sendOtp(payload.email);
   }
 
   @MessagePattern({
@@ -147,7 +159,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_GCT_DATA,
     uuid: process.env.PROJECT_ID,
   })
-  getGCTData() {
-    return this.groupCashTransferService.getGCTData();
+  getGCTData(@Payload() payload: { startDate: Date; endDate: Date }) {
+    return this.groupCashTransferService.getGCTData(payload);
   }
 }

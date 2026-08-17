@@ -1,8 +1,18 @@
 import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
 import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
-import { createSponsoredAccount, createSponsoredAccountsBatch, mergeSponsoredAccountsBatch } from './operations/account';
-import { sendFromSponsored, sendFromSponsoredBatch, sendPayment, sendToSponsored } from './operations/payment';
+import {
+  createSponsoredAccount,
+  createSponsoredAccountsBatch, mergeSponsoredAccountsBatch,
+} from './operations/account';
+import {
+  MAX_TRANSFERS_PER_BATCH,
+  sendBatchPayment,
+  sendFromSponsored,
+  sendFromSponsoredBatch,
+  sendPayment,
+  sendToSponsored,
+} from './operations/payment';
 import { fundAccountWithXlm } from './operations/fundAccount';
 import {
   CreateSponsoredAccountResult,
@@ -26,6 +36,8 @@ export class StellarClient {
   readonly horizonUrl: string;
   readonly asset: Asset;
   private readonly sponsorKeypair: Keypair;
+  private readonly designatedKeypair: Keypair | undefined;
+  private readonly maxBatchTransfers: number;
 
   //TODO: consider sender horizon urls as well
   constructor(config: StellarClientConfig) {
@@ -38,6 +50,10 @@ export class StellarClient {
 
     this.asset = new Asset(config.assetCode, config.assetIssuer);
     this.sponsorKeypair = Keypair.fromSecret(config.sponsorSecret);
+    this.designatedKeypair = config.distributionWalletSecret
+      ? Keypair.fromSecret(config.distributionWalletSecret)
+      : undefined;
+    this.maxBatchTransfers = config.maxBatchTransfers || MAX_TRANSFERS_PER_BATCH;
     console.log('StellarClient initialized with config:', config);
   }
 
@@ -50,6 +66,7 @@ export class StellarClient {
       server: this.server,
       networkPassphrase: this.networkPassphrase,
       sponsorKeypair: this.sponsorKeypair,
+      // designatedKeypair: this.designatedKeypair,
       asset: this.asset,
     };
   }
@@ -60,7 +77,9 @@ export class StellarClient {
   }
 
   /** Creates up to MAX_ACCOUNTS_PER_BATCH sponsored accounts in a single transaction. */
-  async createSponsoredAccountsBatch(keypairs: Keypair[]): Promise<CreateSponsoredAccountsBatchResult> {
+  async createSponsoredAccountsBatch(
+    keypairs: Keypair[]
+  ): Promise<CreateSponsoredAccountsBatchResult> {
     return createSponsoredAccountsBatch(this.opContext, keypairs);
   }
 
@@ -76,7 +95,10 @@ export class StellarClient {
   }
 
   /** Sponsor sends the configured asset to a sponsored account. */
-  async sendToSponsored(destinationPublicKey: string, amount: string): Promise<PaymentResult> {
+  async sendToSponsored(
+    destinationPublicKey: string,
+    amount: string
+  ): Promise<PaymentResult> {
     return sendToSponsored(this.opContext, destinationPublicKey, amount);
   }
 
@@ -86,11 +108,18 @@ export class StellarClient {
     destinationPublicKey: string,
     amount: string
   ): Promise<PaymentResult> {
-    return sendFromSponsored(this.opContext, sponsoredSecret, destinationPublicKey, amount);
+    return sendFromSponsored(
+      this.opContext,
+      sponsoredSecret,
+      destinationPublicKey,
+      amount
+    );
   }
 
   /** Combines up to MAX_TRANSFERS_PER_BATCH sponsored payments into a single sponsor-signed transaction. */
-  async sendFromSponsoredBatch(items: SponsoredBatchTransferItem[]): Promise<SendFromSponsoredBatchResult> {
+  async sendFromSponsoredBatch(
+    items: SponsoredBatchTransferItem[]
+  ): Promise<SendFromSponsoredBatchResult> {
     return sendFromSponsoredBatch(this.opContext, items);
   }
 
@@ -113,10 +142,41 @@ export class StellarClient {
     );
   }
 
+  /**
+   * Send Batch payments directly from a designated wallet with its own fee and will be the
+   * sole signer for any transactions. Works for any asset that has the builtin trustline
+   **/
+  async sendBatchPayment(
+    receivers: {
+      destination: string;
+      amount: string;
+    }[]
+  ) {
+    if (!this.designatedKeypair) {
+      throw new Error(
+        'designatedWalletSecret is required in StellarClientConfig to call sendBatchPayment'
+      );
+    }
+    return sendBatchPayment(
+      { server: this.server, networkPassphrase: this.networkPassphrase },
+      this.asset,
+      this.designatedKeypair,
+      receivers,
+      this.maxBatchTransfers
+    );
+  }
+
   /** Fund `destination` with XLM from the sponsor; creates the account if it doesn't exist. */
-  async fundAccountWithXlm(destination: string, amount: string): Promise<PaymentResult> {
+  async fundAccountWithXlm(
+    destination: string,
+    amount: string
+  ): Promise<PaymentResult> {
     return fundAccountWithXlm(
-      { server: this.server, networkPassphrase: this.networkPassphrase, sponsorKeypair: this.sponsorKeypair },
+      {
+        server: this.server,
+        networkPassphrase: this.networkPassphrase,
+        sponsorKeypair: this.sponsorKeypair,
+      },
       destination,
       amount
     );
@@ -127,11 +187,21 @@ export class StellarClient {
   }
 
   async hasTrustline(publicKey: string): Promise<boolean> {
-    return accountUtils.hasTrustline(this.server, publicKey, this.config.assetCode, this.config.assetIssuer);
+    return accountUtils.hasTrustline(
+      this.server,
+      publicKey,
+      this.config.assetCode,
+      this.config.assetIssuer
+    );
   }
 
   async getBalance(publicKey: string): Promise<string> {
-    return accountUtils.getBalance(this.server, publicKey, this.config.assetCode, this.config.assetIssuer);
+    return accountUtils.getBalance(
+      this.server,
+      publicKey,
+      this.config.assetCode,
+      this.config.assetIssuer
+    );
   }
 
   async getNativeBalance(publicKey: string): Promise<string> {

@@ -16,4 +16,12 @@ export class ListPayoutDto {
   @IsOptional()
   @IsString()
   groupName?: string;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
 }

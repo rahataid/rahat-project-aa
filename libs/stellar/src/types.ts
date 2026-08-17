@@ -12,6 +12,10 @@ export interface StellarClientConfig {
   assetCode: string;
   /** Public key of the account that issued the asset */
   assetIssuer: string;
+  /** Secret key for the distribution wallet used for direct batch disbursement. Required only when calling sendBatchPayment. */
+  distributionWalletSecret?: string;
+  /** Maximum allowed bactch transfered during payment sending **/
+  maxBatchTransfers?: number;
 }
 
 export interface SponsoredAccount {
@@ -86,6 +90,10 @@ export interface PaymentOpContext {
 export interface SendPaymentContext {
   server: Horizon.Server;
   networkPassphrase: string;
+}
+
+export interface SendBatchPaymentResult extends TransactionResult {
+  items: { destination: string; amount: string; paymentId: string }[];
 }
 
 export interface StellarOperationErrorOptions {
