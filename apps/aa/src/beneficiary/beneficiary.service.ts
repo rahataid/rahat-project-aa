@@ -534,6 +534,44 @@ export class BeneficiaryService {
   }
 
   /**
+   * Called from the core repo to re-attempt Stellar sponsorship for a
+   * group's not-yet-sponsored beneficiaries — e.g. after a transient
+   * failure (insufficient sponsor balance, network error) is resolved.
+   * Checks current status first via `getSponsorshipStatusForGroup` and:
+   *  - no-ops if the chain isn't Stellar, or every beneficiary is already sponsored.
+   *  - otherwise re-emits BENEFICIARY_GROUP_ADDED_TO_PROJECT, the same event
+   *    that first triggers sponsorship. Safe to re-run: the underlying batch
+   *    (`createSponsoredAccountsBatch`) already skips accounts it finds
+   *    already sponsored, so already-sponsored beneficiaries in the group
+   *    aren't touched again.
+   * `no-wallet` beneficiaries are reported separately since retrying can
+   * never fix them — they need a wallet address before sponsorship can even
+   * be attempted.
+   */
+  async retrySponsorshipForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Received retry-sponsorship request for group ${groupUuid}`);
+
+    const status = await this.getSponsorshipStatusForGroup({ groupUuid });
+
+    if (!status.isStellarChain) {
+      return { ...status, queued: false, reason: 'Chain is not Stellar — sponsorship does not apply' };
+    }
+
+    const retriable = status.pending + status.failed;
+    if (retriable === 0) {
+      return { ...status, queued: false, reason: 'No pending or failed beneficiaries to retry' };
+    }
+
+    this.logger.log(
+      `Retrying sponsorship for group ${groupUuid}: ${retriable} beneficiary/ies eligible (pending: ${status.pending}, failed: ${status.failed}, no-wallet skipped: ${status.noWallet})`
+    );
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, { groupUuid });
+
+    return { ...status, queued: true, retrying: retriable };
+  }
+
+  /**
    * Reports Stellar sponsorship status for every beneficiary in a group, by
    * reading what StellarSponsorProcessor has already written to
    * `beneficiary.extras` — no live Stellar calls. Returns `isStellarChain:

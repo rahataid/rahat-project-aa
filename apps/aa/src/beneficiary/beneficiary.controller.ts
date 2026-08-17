@@ -140,6 +140,15 @@ export class BeneficiaryController {
     return this.beneficiaryService.getSponsorshipStatusForGroup(payload);
   }
 
+  //NOTE: called from core repo to re-attempt Stellar sponsorship for a group's not-yet-sponsored beneficiaries
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.RETRY_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async retrySponsorshipForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.retrySponsorshipForGroup(payload);
+  }
+
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,

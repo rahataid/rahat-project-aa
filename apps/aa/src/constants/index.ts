@@ -96,6 +96,7 @@ export const JOBS = {
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
     REVOKE_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.revokeSponsorshipForGroup',
     GET_SPONSORSHIP_STATUS_FOR_GROUP: 'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
