@@ -90,7 +90,10 @@ export class StakeholdersService {
       }
 
       if (stakeholderWithSamePhone)
-        throw new RpcException('Phone number must be unique');
+        throw new RpcException({
+          message: 'Phone number must be unique',
+          code: 'PHONE_NUMBER_MUST_BE_UNIQUE',
+        });
     }
 
     const rData = await this.prisma.stakeholders.create({
@@ -111,7 +114,10 @@ export class StakeholdersService {
     this.logger.log('Validating bulk stakeholders...');
 
     if (!payload || !payload.length) {
-      throw new RpcException('No stakeholder data provided for bulk add');
+      throw new RpcException({
+        message: 'No stakeholder data provided for bulk add',
+        code: 'NO_STAKEHOLDER_DATA_PROVIDED',
+      });
     }
 
     const errorsMap = new Map<string, StakeholderValidationError>();
@@ -161,21 +167,28 @@ export class StakeholdersService {
     this.logger.log('Adding bulk stakeholders...');
 
     if (!payload.data || !payload.data.length) {
-      throw new RpcException('No stakeholder data provided for bulk add');
+      throw new RpcException({
+        message: 'No stakeholder data provided for bulk add',
+        code: 'NO_STAKEHOLDER_DATA_PROVIDED',
+      });
     }
 
     if (payload?.isGroupCreate) {
       if (!payload?.groupName?.trim()) {
-        throw new RpcException(
-          'Group name is required when isGroupCreate is true'
-        );
+        throw new RpcException({
+          message: 'Group name is required when isGroupCreate is true',
+          code: 'GROUP_NAME_REQUIRED_FOR_CREATE',
+        });
       }
 
       const existingGroup = await this.prisma.stakeholdersGroups.findFirst({
         where: { name: payload.groupName },
       });
       if (existingGroup) {
-        throw new RpcException('Group name must be unique');
+        throw new RpcException({
+          message: 'Group name must be unique',
+          code: 'GROUP_NAME_MUST_BE_UNIQUE',
+        });
       }
     }
 
@@ -440,7 +453,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingStakeholder) throw new RpcException('Stakeholder not found!');
+    if (!existingStakeholder)
+      throw new RpcException({
+        message: 'Stakeholder not found!',
+        code: 'STAKEHOLDER_NOT_FOUND',
+      });
 
     const validPhone = phone && phone.trim() !== '';
 
@@ -454,7 +471,10 @@ export class StakeholdersService {
         }
       );
       if (stakeholderWithSamePhone)
-        throw new RpcException('Phone number must be unique');
+        throw new RpcException({
+          message: 'Phone number must be unique',
+          code: 'PHONE_NUMBER_MUST_BE_UNIQUE',
+        });
     }
 
     const updatedStakeholder = await this.prisma.stakeholders.update({
@@ -499,7 +519,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingGroup) throw new RpcException('Group not found!');
+    if (!existingGroup)
+      throw new RpcException({
+        message: 'Group not found!',
+        code: 'GROUP_NOT_FOUND',
+      });
 
     const data = {
       ...(name && { name }),
@@ -581,9 +605,11 @@ export class StakeholdersService {
 
       return groups;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching stakeholders groups by uuids. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching stakeholders groups by uuids. ${err.message}`,
+        code: 'FAILED_TO_FETCH_STAKEHOLDERS_GROUPS_BY_UUIDS',
+        params: { message: err.message },
+      });
     }
   }
 
@@ -608,9 +634,11 @@ export class StakeholdersService {
       });
       return groups;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching stakeholders groups by uuids. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching stakeholders groups by uuids. ${err.message}`,
+        code: 'FAILED_TO_FETCH_STAKEHOLDERS_GROUPS_BY_UUIDS',
+        params: { message: err.message },
+      });
     }
   }
 
@@ -640,7 +668,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingGroup) throw new RpcException('Group not found!');
+    if (!existingGroup)
+      throw new RpcException({
+        message: 'Group not found!',
+        code: 'GROUP_NOT_FOUND',
+      });
 
     const activities = await this.getActivitiesByStakeholderGroupUuid(uuid);
 
@@ -677,9 +709,11 @@ export class StakeholdersService {
       );
       return activities;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching related activities. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching related activities. ${err.message}`,
+        code: 'FAILED_TO_FETCH_RELATED_ACTIVITIES',
+        params: { message: err.message },
+      });
     }
   }
 

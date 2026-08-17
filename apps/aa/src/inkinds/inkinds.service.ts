@@ -102,9 +102,11 @@ export class InkindsService {
       });
 
       if (existingInkind) {
-        throw new RpcException(
-          `Inkind with name '${inkindData.name}' already exists`
-        );
+        throw new RpcException({
+          message: `Inkind with name '${inkindData.name}' already exists`,
+          code: 'INKIND_NAME_ALREADY_EXISTS',
+          params: { name: inkindData.name },
+        });
       }
 
       const inkind = await this.prisma.$transaction(async (tx) => {
@@ -138,6 +140,7 @@ export class InkindsService {
         `Failed to create inkind: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -162,6 +165,7 @@ export class InkindsService {
         `Failed to update inkind: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -184,6 +188,7 @@ export class InkindsService {
         `Failed to delete inkind: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -275,6 +280,7 @@ export class InkindsService {
         `Failed to fetch inkinds: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -405,6 +411,7 @@ export class InkindsService {
         `Failed to fetch inkind summary: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -441,7 +448,11 @@ export class InkindsService {
     });
 
     if (!inkind) {
-      throw new RpcException(`Inkind with UUID ${uuid} not found`);
+      throw new RpcException({
+        message: `Inkind with UUID ${uuid} not found`,
+        code: 'INKIND_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return inkind;
@@ -452,7 +463,10 @@ export class InkindsService {
     const { inkindId, quantity, groupInkindId, redemptionId } = payload;
 
     if (!inkindId || quantity == null || quantity <= 0) {
-      throw new RpcException('Missing or invalid required fields');
+      throw new RpcException({
+        message: 'Missing or invalid required fields',
+        code: 'MISSING_OR_INVALID_REQUIRED_FIELDS',
+      });
     }
 
     try {
@@ -476,6 +490,7 @@ export class InkindsService {
         `Failed to add inkind stock: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -522,6 +537,7 @@ export class InkindsService {
         `Failed to fetch inkind stock movements: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -532,7 +548,10 @@ export class InkindsService {
     this.logger.log(`Removing stock for inkind: ${inkindUuid}`);
 
     if (!inkindUuid) {
-      throw new RpcException('Missing inkindUuid field');
+      throw new RpcException({
+        message: 'Missing inkindUuid field',
+        code: 'MISSING_INKIND_UUID_FIELD',
+      });
     }
 
     try {
@@ -549,6 +568,7 @@ export class InkindsService {
         `Failed to remove inkind stock: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -574,6 +594,7 @@ export class InkindsService {
         `Failed to fetch unassigned groups for inkind ${uuid}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -593,23 +614,34 @@ export class InkindsService {
     );
 
     if (!inkindId || !groupId || !mode) {
-      throw new RpcException('Missing required fields');
+      throw new RpcException({
+        message: 'Missing required fields',
+        code: 'MISSING_REQUIRED_FIELDS',
+      });
     }
 
     if (!(mode in PayoutMode)) {
-      throw new RpcException('Invalid payout mode');
+      throw new RpcException({
+        message: 'Invalid payout mode',
+        code: 'INVALID_PAYOUT_MODE',
+        params: { mode },
+      });
     }
 
     if (mode === PayoutMode.OFFLINE && !payoutProcessorId) {
-      throw new RpcException(
-        'payoutProcessorId is required for offline payouts'
-      );
+      throw new RpcException({
+        message: 'payoutProcessorId is required for offline payouts',
+        code: 'PAYOUT_PROCESSOR_ID_REQUIRED_FOR_OFFLINE',
+      });
     }
 
     const inkind = await this.findOneOrThrow(inkindId);
 
     if (inkind.type === InkindType.WALK_IN) {
-      throw new RpcException('Walk-in inkinds cannot be assigned to groups');
+      throw new RpcException({
+        message: 'Walk-in inkinds cannot be assigned to groups',
+        code: 'WALK_IN_INKINDS_CANNOT_BE_ASSIGNED',
+      });
     }
 
     const existingAssignment = await this.prisma.groupInkind.findFirst({
@@ -617,7 +649,10 @@ export class InkindsService {
     });
 
     if (existingAssignment) {
-      throw new RpcException(`Inkind is already assigned to this group.`);
+      throw new RpcException({
+        message: `Inkind is already assigned to this group.`,
+        code: 'INKIND_ALREADY_ASSIGNED_TO_GROUP',
+      });
     }
 
     const group = await this.prisma.beneficiaryGroups.findUnique({
@@ -626,22 +661,27 @@ export class InkindsService {
     });
 
     if (!group) {
-      throw new RpcException(`Group not found.`);
+      throw new RpcException({ message: `Group not found.`, code: 'GROUP_NOT_FOUND' });
     }
 
     const numberOfGroupBeneficiaries = group.beneficiaries.length;
 
     if (numberOfGroupBeneficiaries === 0) {
-      throw new RpcException(`No beneficiaries found in the group.`);
+      throw new RpcException({
+        message: `No beneficiaries found in the group.`,
+        code: 'NO_BENEFICIARIES_IN_GROUP',
+      });
     }
 
     const totalNeedInkindQuantity = newQuantity * numberOfGroupBeneficiaries;
     const availableStock = inkind.availableStock || 0;
 
     if (totalNeedInkindQuantity > availableStock) {
-      throw new RpcException(
-        `Not enough stock available. Requested: ${totalNeedInkindQuantity}, Available: ${availableStock}`
-      );
+      throw new RpcException({
+        message: `Not enough stock available. Requested: ${totalNeedInkindQuantity}, Available: ${availableStock}`,
+        code: 'INSUFFICIENT_INKIND_STOCK',
+        params: { requested: totalNeedInkindQuantity, available: availableStock },
+      });
     }
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -722,6 +762,7 @@ export class InkindsService {
         `Failed to assign group inkind: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -787,6 +828,7 @@ export class InkindsService {
         `Failed to fetch inkinds by group: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -802,9 +844,10 @@ export class InkindsService {
     );
 
     if (!number && !walletAddress) {
-      throw new RpcException(
-        'Beneficiary phone number or wallet address is required'
-      );
+      throw new RpcException({
+        message: 'Beneficiary phone number or wallet address is required',
+        code: 'BENEFICIARY_PHONE_OR_WALLET_REQUIRED',
+      });
     }
 
     try {
@@ -844,6 +887,7 @@ export class InkindsService {
         `Failed to fetch inkind details for beneficiary: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -965,7 +1009,10 @@ export class InkindsService {
     );
 
     if (!vendorId) {
-      throw new RpcException('vendorId is required');
+      throw new RpcException({
+        message: 'vendorId is required',
+        code: 'VENDOR_ID_REQUIRED',
+      });
     }
 
     const vendor = await this.prisma.vendor.findUnique({
@@ -974,7 +1021,11 @@ export class InkindsService {
     });
 
     if (!vendor) {
-      throw new RpcException(`Vendor with UUID ${vendorId} not found`);
+      throw new RpcException({
+          message: `Vendor with UUID ${vendorId} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: vendorId },
+        });
     }
 
     const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
@@ -1045,7 +1096,10 @@ export class InkindsService {
         `Failed to fetch inkind redemption logs details for vendor: ${error.message}`,
         error.stack
       );
-      throw new RpcException('Failed to fetch inkind redemption logs details');
+      throw new RpcException({
+        message: 'Failed to fetch inkind redemption logs details',
+        code: 'FAILED_TO_FETCH_INKIND_REDEMPTION_LOGS',
+      });
     }
   }
 
@@ -1063,7 +1117,10 @@ export class InkindsService {
     this.logger.log(`Fetching inkind redemption logs for vendor: ${vendorId}`);
 
     if (!vendorId) {
-      throw new RpcException('vendorId is required');
+      throw new RpcException({
+        message: 'vendorId is required',
+        code: 'VENDOR_ID_REQUIRED',
+      });
     }
 
     try {
@@ -1073,7 +1130,11 @@ export class InkindsService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${vendorId} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${vendorId} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: vendorId },
+        });
       }
 
       const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
@@ -1198,6 +1259,7 @@ export class InkindsService {
         `Failed to fetch logs for vendor ${vendorId}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1206,7 +1268,10 @@ export class InkindsService {
     this.logger.log(`Fetching redemption details for txHash: ${txHash}`);
 
     if (!vendorUid) {
-      throw new RpcException('vendorUid is required');
+      throw new RpcException({
+        message: 'vendorUid is required',
+        code: 'VENDOR_ID_REQUIRED',
+      });
     }
 
     try {
@@ -1234,7 +1299,11 @@ export class InkindsService {
         });
 
       if (redemptions.length === 0) {
-        throw new RpcException(`No redemptions found for txHash: ${txHash}`);
+        throw new RpcException({
+          message: `No redemptions found for txHash: ${txHash}`,
+          code: 'NO_REDEMPTIONS_FOUND_FOR_TXHASH',
+          params: { txHash },
+        });
       }
 
       const first = redemptions[0];
@@ -1257,6 +1326,7 @@ export class InkindsService {
         `Failed to fetch redemption details for txHash ${txHash}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1275,7 +1345,10 @@ export class InkindsService {
     this.logger.log(`Fetching logs for groupInkindId: ${groupInkindId}`);
 
     if (!groupInkindId) {
-      throw new RpcException('groupInkindId is required');
+      throw new RpcException({
+        message: 'groupInkindId is required',
+        code: 'GROUP_INKIND_ID_REQUIRED',
+      });
     }
 
     try {
@@ -1296,9 +1369,11 @@ export class InkindsService {
       });
 
       if (!groupInkind) {
-        throw new RpcException(
-          `GroupInkind with UUID ${groupInkindId} not found`
-        );
+        throw new RpcException({
+          message: `GroupInkind with UUID ${groupInkindId} not found`,
+          code: 'GROUP_INKIND_NOT_FOUND',
+          params: { uuid: groupInkindId },
+        });
       }
 
       const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
@@ -1396,6 +1471,7 @@ export class InkindsService {
         `Failed to fetch logs for groupInkindId ${groupInkindId}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1403,7 +1479,10 @@ export class InkindsService {
   async sendBeneficiaryOtp(number: string) {
     this.logger.log(`Sending OTP to beneficiary phone number: ${number}`);
     if (!number) {
-      throw new RpcException('Missing phone number');
+      throw new RpcException({
+        message: 'Missing phone number',
+        code: 'MISSING_PHONE_NUMBER',
+      });
     }
     const benf = await this.prisma.beneficiary.findFirst({
       where: {
@@ -1411,7 +1490,10 @@ export class InkindsService {
       },
     });
     if (!benf) {
-      throw new RpcException('Beneficiary not found');
+      throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'BENEFICIARY_NOT_FOUND',
+      });
     }
 
     const defaultOpt = await this.prisma.otp.findUnique({
@@ -1448,7 +1530,10 @@ export class InkindsService {
   async validateBeneficiaryOtp(number: string, otp: string) {
     this.logger.log(`Validating OTP for beneficiary phone number: ${number}`);
     if (!number || !otp) {
-      throw new RpcException('Missing phone number or OTP');
+      throw new RpcException({
+        message: 'Missing phone number or OTP',
+        code: 'MISSING_PHONE_NUMBER_OR_OTP',
+      });
     }
 
     const otpRecord = await this.prisma.otp.findUnique({
@@ -1456,7 +1541,10 @@ export class InkindsService {
     });
 
     if (!otpRecord) {
-      throw new RpcException('OTP record not found');
+      throw new RpcException({
+        message: 'OTP record not found',
+        code: 'OTP_RECORD_NOT_FOUND',
+      });
     }
 
     // if (otpRecord.isVerified) {
@@ -1470,7 +1558,7 @@ export class InkindsService {
 
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
     if (!isValid) {
-      throw new RpcException('Invalid OTP');
+      throw new RpcException({ message: 'Invalid OTP', code: 'INVALID_OTP' });
     }
 
     await this.prisma.otp.update({
@@ -1489,9 +1577,11 @@ export class InkindsService {
     });
 
     if (!vendor) {
-      throw new RpcException(
-        `User '${user.name}' is not registered as a vendor`
-      );
+      throw new RpcException({
+        message: `User '${user.name}' is not registered as a vendor`,
+        code: 'USER_NOT_REGISTERED_AS_VENDOR',
+        params: { name: user.name },
+      });
     }
 
     const { value } = await this.appService.getSettings({
@@ -1513,9 +1603,10 @@ export class InkindsService {
       this.logger.log(
         'Payout phase not active. In-kind redemption is unavailable.'
       );
-      throw new RpcException(
-        'Payout phase not active. In-kind redemption is unavailable.'
-      );
+      throw new RpcException({
+        message: 'Payout phase not active. In-kind redemption is unavailable.',
+        code: 'PAYOUT_PHASE_NOT_ACTIVE_INKIND',
+      });
     }
 
     return vendor;
@@ -1540,7 +1631,10 @@ export class InkindsService {
       payload;
 
     if (!walletAddress || !inkinds || inkinds.length === 0) {
-      throw new RpcException('Missing required fields');
+      throw new RpcException({
+        message: 'Missing required fields',
+        code: 'MISSING_REQUIRED_FIELDS',
+      });
     }
 
     this.logger.log(
@@ -1554,9 +1648,11 @@ export class InkindsService {
         : await this.validateVendorAndPayoutPhase(user);
 
       if (!vendor) {
-        throw new RpcException(
-          `User '${user.name}' is not registered as a vendor`
-        );
+        throw new RpcException({
+          message: `User '${user.name}' is not registered as a vendor`,
+          code: 'USER_NOT_REGISTERED_AS_VENDOR',
+          params: { name: user.name },
+        });
       }
 
       // ===== STEP 1: Fetch and validate common data =====
@@ -1570,7 +1666,10 @@ export class InkindsService {
       }
 
       if (inkinds.length !== inkindRecords.length) {
-        throw new RpcException('One or more inkinds not found');
+        throw new RpcException({
+          message: 'One or more inkinds not found',
+          code: 'ONE_OR_MORE_INKINDS_NOT_FOUND',
+        });
       }
 
       const beneficiary =
@@ -1581,7 +1680,10 @@ export class InkindsService {
         }));
 
       if (!beneficiary) {
-        throw new RpcException('Beneficiary not found');
+        throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'BENEFICIARY_NOT_FOUND',
+      });
       }
 
       // ===== STEP 2: Categorize inkinds by type =====
@@ -1604,9 +1706,11 @@ export class InkindsService {
 
         if (inkindRecord.type === InkindType.PRE_DEFINED) {
           if (!payloadInkind.groupInkindUuid) {
-            throw new RpcException(
-              `Missing groupInkindUuid for PRE_DEFINED inkind: ${inkindRecord.name}`
-            );
+            throw new RpcException({
+              message: `Missing groupInkindUuid for PRE_DEFINED inkind: ${inkindRecord.name}`,
+              code: 'MISSING_GROUP_INKIND_UUID_FOR_PRE_DEFINED',
+              params: { name: inkindRecord.name },
+            });
           }
           preDefinedPayload.push({
             uuid: payloadInkind.uuid,
@@ -1712,6 +1816,7 @@ export class InkindsService {
         `Failed to redeem inkinds for beneficiary: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1751,6 +1856,7 @@ export class InkindsService {
         `Failed to update redemption txHash for beneficiary: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1769,9 +1875,10 @@ export class InkindsService {
 
     try {
       if (!beneficiaryUuid && !walletAddress) {
-        throw new RpcException(
-          'Either beneficiaryUuid or walletAddress is required'
-        );
+        throw new RpcException({
+          message: 'Either beneficiaryUuid or walletAddress is required',
+          code: 'BENEFICIARY_UUID_OR_WALLET_REQUIRED',
+        });
       }
 
       const beneficiary = await this.prisma.beneficiary.findFirst({
@@ -1788,7 +1895,10 @@ export class InkindsService {
       });
 
       if (!beneficiary) {
-        throw new RpcException('Beneficiary not found');
+        throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'BENEFICIARY_NOT_FOUND',
+      });
       }
 
       const [groupInkinds, redemptions, walkInInkinds] = await Promise.all([
@@ -1970,6 +2080,7 @@ export class InkindsService {
         `Failed to fetch beneficiary inkind details: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1980,7 +2091,10 @@ export class InkindsService {
     );
 
     if (!vendorId) {
-      throw new RpcException('vendorUid is required');
+      throw new RpcException({
+        message: 'vendorUid is required',
+        code: 'VENDOR_ID_REQUIRED',
+      });
     }
 
     try {
@@ -2120,6 +2234,7 @@ export class InkindsService {
         `Failed to fetch predefined offline beneficiaries for vendor: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2130,7 +2245,10 @@ export class InkindsService {
     batchSize = DEFAULT_BULK_BATCH_SIZE
   ) {
     if (!payloads || payloads.length === 0) {
-      throw new RpcException('No inkinds provided for redemption');
+      throw new RpcException({
+        message: 'No inkinds provided for redemption',
+        code: 'NO_INKINDS_PROVIDED_FOR_REDEMPTION',
+      });
     }
 
     this.logger.log(
@@ -2198,6 +2316,7 @@ export class InkindsService {
         `Failed to process bulk inkind redemptions for vendor: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2493,11 +2612,17 @@ export class InkindsService {
     );
 
     if (!user || !user.uuid) {
-      throw new RpcException('userUuid is required');
+      throw new RpcException({
+        message: 'userUuid is required',
+        code: 'USER_UUID_REQUIRED',
+      });
     }
 
     if (!redeemedInkinds || redeemedInkinds.length === 0) {
-      throw new RpcException('No inkinds provided for redemption');
+      throw new RpcException({
+        message: 'No inkinds provided for redemption',
+        code: 'NO_INKINDS_PROVIDED_FOR_REDEMPTION',
+      });
     }
 
     try {
@@ -2521,6 +2646,7 @@ export class InkindsService {
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2533,7 +2659,10 @@ export class InkindsService {
     );
 
     if (!vendorUuid) {
-      throw new RpcException('vendorUuid is required');
+      throw new RpcException({
+        message: 'vendorUuid is required',
+        code: 'VENDOR_ID_REQUIRED',
+      });
     }
 
     try {
@@ -2543,7 +2672,11 @@ export class InkindsService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: vendorUuid },
+        });
       }
 
       // Total earned per inkind: what the vendor collected from beneficiaries
@@ -2640,6 +2773,7 @@ export class InkindsService {
         `Failed to fetch total earned inkinds for vendor ${vendorUuid}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2665,7 +2799,11 @@ export class InkindsService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: vendorUuid },
+        });
       }
     }
 
@@ -2723,6 +2861,7 @@ export class InkindsService {
         )}: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2739,11 +2878,17 @@ export class InkindsService {
     const projectId = this.configService.get('PROJECT_ID');
 
     if (!vendorUuid || !inkindUuid || !quantity) {
-      throw new RpcException('Missing required fields');
+      throw new RpcException({
+        message: 'Missing required fields',
+        code: 'MISSING_REQUIRED_FIELDS',
+      });
     }
 
     if (quantity <= 0) {
-      throw new RpcException('Quantity must be greater than zero');
+      throw new RpcException({
+        message: 'Quantity must be greater than zero',
+        code: 'QUANTITY_MUST_BE_GREATER_THAN_ZERO',
+      });
     }
 
     try {
@@ -2752,7 +2897,11 @@ export class InkindsService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${vendorUuid} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: vendorUuid },
+        });
       }
 
       const inkind = await this.prisma.inkind.findUnique({
@@ -2760,7 +2909,11 @@ export class InkindsService {
       });
 
       if (!inkind) {
-        throw new RpcException(`Inkind with UUID ${inkindUuid} not found`);
+        throw new RpcException({
+          message: `Inkind with UUID ${inkindUuid} not found`,
+          code: 'INKIND_NOT_FOUND',
+          params: { uuid: inkindUuid },
+        });
       }
 
       const existingRedemption =
@@ -2773,9 +2926,10 @@ export class InkindsService {
         });
 
       if (existingRedemption) {
-        throw new RpcException(
-          `A pending redemption already exists for this vendor and inkind`
-        );
+        throw new RpcException({
+          message: `A pending redemption already exists for this vendor and inkind`,
+          code: 'PENDING_REDEMPTION_ALREADY_EXISTS',
+        });
       }
 
       const redemption = await this.prisma.vendorInkindRedemption.create({
@@ -2817,6 +2971,7 @@ export class InkindsService {
         `Failed to create vendor redemption: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2830,7 +2985,10 @@ export class InkindsService {
     );
 
     if (!uuid || !status) {
-      throw new RpcException('Missing required fields');
+      throw new RpcException({
+        message: 'Missing required fields',
+        code: 'MISSING_REQUIRED_FIELDS',
+      });
     }
 
     try {
@@ -2839,7 +2997,11 @@ export class InkindsService {
       });
 
       if (!redemption) {
-        throw new RpcException(`Vendor redemption with UUID ${uuid} not found`);
+        throw new RpcException({
+          message: `Vendor redemption with UUID ${uuid} not found`,
+          code: 'VENDOR_REDEMPTION_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
       const vendorDetails = await this.prisma.vendor.findUnique({
@@ -2847,9 +3009,11 @@ export class InkindsService {
       });
 
       if (!vendorDetails) {
-        throw new RpcException(
-          `Vendor with UUID ${redemption.vendorUuid} not found`
-        );
+        throw new RpcException({
+          message: `Vendor with UUID ${redemption.vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: redemption.vendorUuid },
+        });
       }
       // now we have to create tx hash of this redemption and update the redemption record with that tx hash
 
@@ -2892,6 +3056,7 @@ export class InkindsService {
         `Failed to update vendor redemption status: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2902,7 +3067,10 @@ export class InkindsService {
     );
 
     if (!redemptionUuid || !txHash) {
-      throw new RpcException('Missing required fields');
+      throw new RpcException({
+        message: 'Missing required fields',
+        code: 'MISSING_REQUIRED_FIELDS',
+      });
     }
 
     try {
@@ -2924,6 +3092,7 @@ export class InkindsService {
         `Failed to update vendor redemption txHash: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2955,18 +3124,23 @@ export class InkindsService {
     });
 
     if (groupInkinds.length !== groupInkindUuids.length) {
-      throw new RpcException('One or more PRE_DEFINED group inkinds not found');
+      throw new RpcException({
+        message: 'One or more PRE_DEFINED group inkinds not found',
+        code: 'PRE_DEFINED_GROUP_INKINDS_NOT_FOUND',
+      });
     }
 
     // Validate beneficiary membership
     for (const groupInkind of groupInkinds) {
       if (groupInkind.group.beneficiaries.length === 0) {
         const inkindRecord = inkindRecordMap.get(groupInkind.inkindId);
-        throw new RpcException(
-          `Beneficiary is not a member of group for inkind: ${
+        throw new RpcException({
+          message: `Beneficiary is not a member of group for inkind: ${
             inkindRecord?.name || groupInkind.inkindId
-          }`
-        );
+          }`,
+          code: 'BENEFICIARY_NOT_MEMBER_OF_GROUP_FOR_INKIND',
+          params: { inkindName: inkindRecord?.name || groupInkind.inkindId },
+        });
       }
     }
 
@@ -2984,11 +3158,13 @@ export class InkindsService {
       const alreadyRedeemed = existingRedemptions.map(
         (r) => r.groupInkind.inkind.name
       );
-      throw new RpcException(
-        `Beneficiary has already redeemed PRE_DEFINED inkinds: ${alreadyRedeemed.join(
+      throw new RpcException({
+        message: `Beneficiary has already redeemed PRE_DEFINED inkinds: ${alreadyRedeemed.join(
           ', '
-        )}`
-      );
+        )}`,
+        code: 'BENEFICIARY_ALREADY_REDEEMED_PRE_DEFINED_INKINDS',
+        params: { names: alreadyRedeemed.join(', ') },
+      });
     }
 
     // Build validated redemption items
@@ -3003,9 +3179,11 @@ export class InkindsService {
       );
 
       if (quantityPerBeneficiary <= 0) {
-        throw new RpcException(
-          `Invalid quantity allocation for PRE_DEFINED inkind: ${inkindRecord.name}`
-        );
+        throw new RpcException({
+          message: `Invalid quantity allocation for PRE_DEFINED inkind: ${inkindRecord.name}`,
+          code: 'INVALID_QUANTITY_ALLOCATION_FOR_PRE_DEFINED_INKIND',
+          params: { name: inkindRecord.name },
+        });
       }
 
       return {
@@ -3058,11 +3236,13 @@ export class InkindsService {
         const alreadyRedeemed = existingRedemptions.map(
           (r) => r.groupInkind.inkind.name
         );
-        throw new RpcException(
-          `Beneficiary has already redeemed WALK_IN inkinds: ${alreadyRedeemed.join(
+        throw new RpcException({
+          message: `Beneficiary has already redeemed WALK_IN inkinds: ${alreadyRedeemed.join(
             ', '
-          )}`
-        );
+          )}`,
+          code: 'BENEFICIARY_ALREADY_REDEEMED_WALK_IN_INKINDS',
+          params: { names: alreadyRedeemed.join(', ') },
+        });
       }
     }
 
@@ -3168,9 +3348,10 @@ export class InkindsService {
             beneficiaryUuid,
           ]);
           if (!res || !res.success) {
-            throw new RpcException(
-              'Failed to assign beneficiary to existing walk-in group'
-            );
+            throw new RpcException({
+              message: 'Failed to assign beneficiary to existing walk-in group',
+              code: 'FAILED_TO_ASSIGN_BENEFICIARY_TO_WALK_IN_GROUP',
+            });
           }
 
           // Add beneficiary to the walk-in group
@@ -3203,9 +3384,10 @@ export class InkindsService {
         ]);
 
         if (!res) {
-          throw new RpcException(
-            'Failed to create group and assign beneficiary for walk-in redemption'
-          );
+          throw new RpcException({
+            message: 'Failed to create group and assign beneficiary for walk-in redemption',
+            code: 'FAILED_TO_CREATE_WALK_IN_GROUP',
+          });
         }
 
         groupId = res.group.uuid;

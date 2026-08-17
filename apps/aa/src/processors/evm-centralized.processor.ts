@@ -150,7 +150,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const bens = await this.getBeneficiaryTokenBalance(groups);
 
       if (!bens || bens.length === 0) {
-        throw new RpcException('Beneficiary Token Balance not found');
+        throw new RpcException({
+          message: 'Beneficiary Token Balance not found',
+          code: 'STELLAR_ERR_TOKEN_BALANCE_NOT_FOUND',
+        });
       }
 
       const multicallTxnPayload = [];

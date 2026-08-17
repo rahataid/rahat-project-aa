@@ -488,7 +488,11 @@ export class CashTrackerService {
       const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
 
       if (!result.success) {
-        throw new RpcException(`Mint operation failed: ${result.error}`);
+        throw new RpcException({
+          message: `Mint operation failed: ${result.error}`,
+          code: 'CASH_TRACKER_MINT_FAILED',
+          params: { error: result.error },
+        });
       }
 
       this.logger.log(
@@ -503,7 +507,11 @@ export class CashTrackerService {
       };
     } catch (error) {
       this.logger.error(`Failed to create budget: ${error.message}`);
-      throw new RpcException(`Budget creation failed: ${error.message}`);
+      throw new RpcException({
+        message: `Budget creation failed: ${error.message}`,
+        code: 'CASH_TRACKER_BUDGET_CREATE_FAILED',
+        params: { message: error.message },
+      });
     }
   }
 }
