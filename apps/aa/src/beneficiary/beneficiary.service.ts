@@ -533,6 +533,65 @@ export class BeneficiaryService {
     return { groupUuid, queued: true };
   }
 
+  /**
+   * Reports Stellar sponsorship status for every beneficiary in a group, by
+   * reading what StellarSponsorProcessor has already written to
+   * `beneficiary.extras` — no live Stellar calls. Status per beneficiary:
+   *  - `sponsored`: extras.stellarSponsored === true (extras.stellarSponsorAction says how — create/trustline-only/already-sponsored)
+   *  - `failed`: extras.stellarSponsorError is set (the error message is the reason)
+   *  - `no-wallet`: beneficiary has no walletAddress on file — was never even queued
+   *  - `pending`: none of the above — not yet processed (queued-but-not-run and never-triggered both land here; this doesn't inspect live queue state)
+   */
+  async getSponsorshipStatusForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+
+    const records = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId: groupUuid },
+      select: { beneficiary: { select: { uuid: true, walletAddress: true, extras: true } } },
+    });
+
+    const accounts = records.map(({ beneficiary }) => {
+      const extras = (beneficiary.extras as Record<string, unknown>) ?? {};
+      const base = { beneficiaryId: beneficiary.uuid, walletAddress: beneficiary.walletAddress || null };
+
+      if (!beneficiary.walletAddress) {
+        return { ...base, status: 'no-wallet' as const, reason: 'No wallet address on file' };
+      }
+      if (extras.stellarSponsored === true) {
+        return { ...base, status: 'sponsored' as const, action: extras.stellarSponsorAction as string | undefined };
+      }
+      if (typeof extras.stellarSponsorError === 'string') {
+        return {
+          ...base,
+          status: 'failed' as const,
+          reason: extras.stellarSponsorError,
+          failedAt: extras.stellarSponsorFailedAt as string | undefined,
+        };
+      }
+      return { ...base, status: 'pending' as const };
+    });
+
+    return {
+      groupUuid,
+      total: accounts.length,
+      sponsored: accounts.filter((a) => a.status === 'sponsored').length,
+      pending: accounts.filter((a) => a.status === 'pending').length,
+      failed: accounts.filter((a) => a.status === 'failed').length,
+      noWallet: accounts.filter((a) => a.status === 'no-wallet').length,
+      accounts,
+    };
+  }
+
+  private async isStellarChain(): Promise<boolean> {
+    try {
+      const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+      return (chainSettings?.value as any)?.type === 'stellar';
+    } catch (err: any) {
+      this.logger.warn(`Failed to load CHAIN_SETTINGS: ${err?.message}`);
+      return false;
+    }
+  }
+
   async checkIsTokenAlreadyAssigned(groupId: UUID) {
     this.logger.debug(`Checking token assignment for group: ${groupId}`);
     const group = await this.getOneGroup(groupId);
@@ -723,6 +782,21 @@ export class BeneficiaryService {
 
     if (!tokenAssignmentCheck.isAssignable) {
       return tokenAssignmentCheck;
+    }
+
+    if (await this.isStellarChain()) {
+      const sponsorshipStatus = await this.getSponsorshipStatusForGroup({
+        groupUuid: beneficiaryGroupId,
+      });
+      const notSponsored = sponsorshipStatus.total - sponsorshipStatus.sponsored;
+      if (notSponsored > 0) {
+        this.logger.warn(
+          `Group ${beneficiaryGroupId} has ${notSponsored}/${sponsorshipStatus.total} beneficiary/ies not yet sponsored on Stellar (pending: ${sponsorshipStatus.pending}, failed: ${sponsorshipStatus.failed}, no-wallet: ${sponsorshipStatus.noWallet}) — refusing to reserve tokens`
+        );
+        throw new RpcException(
+          'Beneficiary sponsorship is still in progress for this group. Please wait until all beneficiaries are sponsored before assigning funds.'
+        );
+      }
     }
 
     // Tx definies a single transaction with a number of operations that either all succeed or all fail together

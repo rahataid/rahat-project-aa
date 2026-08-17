@@ -131,6 +131,15 @@ export class BeneficiaryController {
     return this.beneficiaryService.revokeSponsorshipForGroup(payload);
   }
 
+  //NOTE: called from core repo to report Stellar sponsorship status for a group's beneficiaries (sponsored/pending/failed counts + per-account reasons)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_SPONSORSHIP_STATUS_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getSponsorshipStatusForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.getSponsorshipStatusForGroup(payload);
+  }
+
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.GET_ALL_GROUPS,
     uuid: process.env.PROJECT_ID,
