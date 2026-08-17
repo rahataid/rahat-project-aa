@@ -179,7 +179,6 @@ export class BeneficiaryService {
       hasPayout,
       excludeGroupPurpose,
     } = dto;
-
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
 
@@ -224,27 +223,34 @@ export class BeneficiaryService {
       ],
     };
 
-    const benfGroups = await paginate(
-      this.prisma.beneficiaryGroups,
-      {
-        where: {
-          ...where,
-        },
-        include: {
-          _count: {
-            select: {
-              beneficiaries: true,
-            },
+    const query = {
+      where,
+      include: {
+        _count: {
+          select: {
+            beneficiaries: true,
           },
-          tokensReserved: true,
         },
-        orderBy,
+        tokensReserved: true,
       },
-      {
-        page,
-        perPage,
-      }
-    );
+      orderBy,
+    };
+
+    if (page === undefined || perPage === undefined) {
+      const data = await this.prisma.beneficiaryGroups.findMany(query);
+
+      return {
+        data,
+        meta: {
+          total: data.length,
+        },
+      };
+    }
+
+    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
+      page,
+      perPage,
+    });
 
     this.logger.debug(
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
@@ -448,7 +454,6 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
-    this.logger.debug(`Fetching beneficiary group: ${uuid}`);
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
@@ -466,7 +471,6 @@ export class BeneficiaryService {
 
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    this.logger.debug(`Group found: ${uuid}, fetching project data`);
     const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
