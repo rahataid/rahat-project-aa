@@ -11,6 +11,7 @@ import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StellarTransferModule } from '../stellar-transfer/stellar-transfer.module';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { StellarTransferModule } from '../stellar-transfer/stellar-transfer.modu
     HttpModule,
     forwardRef(() => BeneficiaryModule),
     StellarTransferModule,
+    OtpModule,
     ClientsModule.register([
       {
         name: 'RAHAT_CLIENT',

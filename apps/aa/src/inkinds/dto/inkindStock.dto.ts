@@ -1,5 +1,5 @@
 import { InkindStockMovementType } from '@prisma/client';
-import { IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AddInkindStockDto {
@@ -48,4 +48,12 @@ export class ListStockMovementsDto {
   @IsOptional()
   @IsEnum(InkindStockMovementType)
   type?: InkindStockMovementType;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
 }

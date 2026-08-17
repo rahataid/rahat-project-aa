@@ -45,11 +45,19 @@ export class PayoutsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.PAYOUT.SEND_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendOtp(@Payload() payload: { email: string }) {
+    return this.payoutsService.sendOtp(payload.email);
+  }
+
+  @MessagePattern({
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
-    return this.payoutsService.triggerPayout(payload.uuid, payload.user);
+  triggerPayout(@Payload() payload: { uuid: string; user?: any; otp: string }) {
+    return this.payoutsService.triggerPayout(payload.uuid, payload.user, payload.otp);
   }
 
   @MessagePattern({
@@ -87,9 +95,8 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET_STATS, uuid: process.env.PROJECT_ID })
-  getPayoutStats() {
-    console.log('first');
-    return this.payoutsService.getPayoutStats();
+  getPayoutStats(@Payload() payload: { startDate?: string; endDate?: string }) {
+    return this.payoutsService.getPayoutStats(payload);
   }
 
   @MessagePattern({
@@ -105,6 +112,10 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   verifyManualPayout(@Payload() payload: any) {
-    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data, payload?.matchBy);
+    return this.payoutsService.verifyManualPayout(
+      payload.payoutUUID,
+      payload?.data,
+      payload?.matchBy
+    );
   }
 }

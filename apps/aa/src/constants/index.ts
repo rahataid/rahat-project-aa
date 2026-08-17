@@ -80,6 +80,7 @@ export const JOBS = {
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
+    SPONSOR_BENEFICIARY_GROUP: 'aa.jobs.beneficiary.sponsorBeneficiaryGroup',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
@@ -128,6 +129,9 @@ export const JOBS = {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
     DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
   },
+  STELLAR_DIRECT: {
+    DISBURSE: 'aa.jobs.stellar_direct.disburse',
+  },
   WALLET: {
     GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
     GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
@@ -143,6 +147,7 @@ export const JOBS = {
   },
   PAYOUT: {
     ASSIGN_TOKEN: 'aa.jobs.payout.assignToken',
+    SEND_OTP: 'aa.jobs.payout.sendOtp',
     TRIGGER_PAYOUT: 'aa.jobs.payout.triggerPayout',
     TRIGGER_FAILED_PAYOUT_REQUEST: 'aa.jobs.payout.triggerFailedPayoutRequest',
     TRIGGER_ONE_FAILED_PAYOUT_REQUEST:
@@ -157,7 +162,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -272,6 +277,14 @@ export const JOBS = {
     REMOVE: 'aa.jobs.grievances.remove',
     UPDATE_STATUS: 'aa.jobs.grievances.updateStatus',
     GET_OVERVIEW_STATS: 'aa.jobs.grievances.getOverviewStats',
+  },
+  IVR_TEMPLATES: {
+    CREATE: 'aa.jobs.ivrTemplates.create',
+    LIST: 'aa.jobs.ivrTemplates.list',
+    GET: 'aa.jobs.ivrTemplates.get',
+    UPDATE: 'aa.jobs.ivrTemplates.update',
+    DELETE: 'aa.jobs.ivrTemplates.delete',
+    SEND_TEST_CALL: 'aa.jobs.ivrTemplates.sendTestCall',
   },
   EVM: {
     // Generic dispatcher job names — all EVM jobs route through one of these two
@@ -407,6 +420,7 @@ export const BQUEUE = {
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
   STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
   STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
+  STELLAR_DISBURSE: `STELLAR_DISBURSE_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
   MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,
