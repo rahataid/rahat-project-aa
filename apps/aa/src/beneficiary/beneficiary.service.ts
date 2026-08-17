@@ -512,6 +512,23 @@ export class BeneficiaryService {
     };
   }
 
+  /**
+   * Called from the core repo (e.g. when a project closes) to tear down a
+   * group's Stellar sponsorship. Just emits the event — StellarSponsorService
+   * (stellar-sponsor.service.ts) picks it up, batches the group's
+   * beneficiaries, and closes out their sponsored accounts (trustline close +
+   * accountMerge) if the chain is Stellar and sponsorship is configured; a
+   * no-op otherwise. This method doesn't touch beneficiary records directly.
+   */
+  async revokeSponsorshipForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Received revoke-sponsorship request for group ${groupUuid}`);
+
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_SPONSORSHIP_REVOKE, { groupUuid });
+
+    return { groupUuid, queued: true };
+  }
+
   async checkIsTokenAlreadyAssigned(groupId: UUID) {
     this.logger.debug(`Checking token assignment for group: ${groupId}`);
     const group = await this.getOneGroup(groupId);

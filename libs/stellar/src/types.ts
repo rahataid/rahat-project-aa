@@ -42,6 +42,24 @@ export interface CreateSponsoredAccountsBatchResult {
   accounts: SponsoredAccountBatchItem[];
 }
 
+export interface MergedAccountItem {
+  publicKey: string;
+  /**
+   * `mergeable`: account was closed out (trustline closed if present, account merged into the sponsor).
+   * `not-found`: no account exists at this address — nothing to merge.
+   * `nonzero-balance`: account still holds some of the configured asset — skipped rather than force-closing a funded trustline.
+   */
+  status: 'mergeable' | 'not-found' | 'nonzero-balance';
+}
+
+export interface MergeSponsoredAccountsBatchResult {
+  /** Null when nothing in the batch was mergeable — no transaction was submitted. */
+  hash: string | null;
+  successful?: boolean;
+  ledger?: number;
+  accounts: MergedAccountItem[];
+}
+
 export type PaymentResult = TransactionResult;
 
 /** One leg of a batched sponsored payment: the beneficiary's own secret authorizes their transfer. */

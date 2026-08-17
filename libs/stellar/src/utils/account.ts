@@ -7,15 +7,21 @@ function isAssetBalance(balance: BalanceLine): balance is BalanceLineAsset {
   return 'asset_code' in balance && 'asset_issuer' in balance;
 }
 
-/** Pure check against an already-loaded account — avoids a redundant loadAccount round-trip for callers that already have the record. */
-export function accountHasTrustline(
+/** Finds the balance line for a given asset on an already-loaded account, if any. */
+export function findTrustlineBalance(
   account: Horizon.AccountResponse,
   assetCode: string,
   assetIssuer: string
-): boolean {
-  return account.balances.some(
-    (balance) => isAssetBalance(balance) && balance.asset_code === assetCode && balance.asset_issuer === assetIssuer
+): BalanceLineAsset | undefined {
+  return account.balances.find(
+    (balance): balance is BalanceLineAsset =>
+      isAssetBalance(balance) && balance.asset_code === assetCode && balance.asset_issuer === assetIssuer
   );
+}
+
+/** Pure check against an already-loaded account — avoids a redundant loadAccount round-trip for callers that already have the record. */
+export function accountHasTrustline(account: Horizon.AccountResponse, assetCode: string, assetIssuer: string): boolean {
+  return findTrustlineBalance(account, assetCode, assetIssuer) !== undefined;
 }
 
 export async function accountExists(server: Horizon.Server, publicKey: string): Promise<boolean> {

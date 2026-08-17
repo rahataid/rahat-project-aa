@@ -11,6 +11,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
@@ -106,6 +107,15 @@ export class BeneficiaryController {
   async addGroupToProject(payload) {
     console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  //NOTE: called from core repo when a group's Stellar sponsorship should be torn down (e.g. project closes)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.REVOKE_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async revokeSponsorshipForGroup(payload: RevokeSponsorshipForGroupDto) {
+    return this.beneficiaryService.revokeSponsorshipForGroup(payload);
   }
 
   @MessagePattern({

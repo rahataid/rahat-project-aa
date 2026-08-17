@@ -1,12 +1,13 @@
 import { Asset, Horizon, Keypair } from '@stellar/stellar-sdk';
 import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
-import { createSponsoredAccount, createSponsoredAccountsBatch } from './operations/account';
+import { createSponsoredAccount, createSponsoredAccountsBatch, mergeSponsoredAccountsBatch } from './operations/account';
 import { sendFromSponsored, sendFromSponsoredBatch, sendPayment, sendToSponsored } from './operations/payment';
 import { fundAccountWithXlm } from './operations/fundAccount';
 import {
   CreateSponsoredAccountResult,
   CreateSponsoredAccountsBatchResult,
+  MergeSponsoredAccountsBatchResult,
   PaymentResult,
   SendFromSponsoredBatchResult,
   SponsoredBatchTransferItem,
@@ -61,6 +62,17 @@ export class StellarClient {
   /** Creates up to MAX_ACCOUNTS_PER_BATCH sponsored accounts in a single transaction. */
   async createSponsoredAccountsBatch(keypairs: Keypair[]): Promise<CreateSponsoredAccountsBatchResult> {
     return createSponsoredAccountsBatch(this.opContext, keypairs);
+  }
+
+  /**
+   * Closes out up to MAX_ACCOUNTS_PER_MERGE_BATCH accounts entirely: closes
+   * each one's trustline (if open) and merges the account into the sponsor,
+   * deleting it from the ledger. One-way door — pass each beneficiary's own
+   * keypair, since they must co-sign. See mergeSponsoredAccountsBatch's
+   * doc comment in operations/account.ts for the full rationale.
+   */
+  async mergeSponsoredAccountsBatch(keypairs: Keypair[]): Promise<MergeSponsoredAccountsBatchResult> {
+    return mergeSponsoredAccountsBatch(this.opContext, keypairs);
   }
 
   /** Sponsor sends the configured asset to a sponsored account. */
