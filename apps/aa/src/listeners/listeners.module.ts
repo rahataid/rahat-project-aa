@@ -38,7 +38,7 @@ import { ChainModule } from '../chain/chain.module';
     ListernersService,
     StatsService,
     BeneficiaryStatService,
-    CvaDisbursementService,
+    // CvaDisbursementService,
   ],
 })
 export class ListenersModule {}
