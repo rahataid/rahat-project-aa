@@ -1,5 +1,6 @@
 import {
   Controller,
+  Logger,
   OnApplicationBootstrap,
   OnModuleInit,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { HealthService } from '../health/health.service';
 
 @Controller('cron')
 export class CronController implements OnApplicationBootstrap, OnModuleInit {
-  private readonly logger = new (require('@nestjs/common').Logger)(CronController.name);
+  private readonly logger = new Logger(CronController.name);
 
   constructor(private readonly healthService: HealthService) {
     console.log('CronController instantiated');
@@ -19,15 +20,14 @@ export class CronController implements OnApplicationBootstrap, OnModuleInit {
   }
 
   async onApplicationBootstrap() {
-    console.log('onApplicationBootstrap called - running initial health check...');
+    this.logger.log(
+      'onApplicationBootstrap called - running initial health check...'
+    );
     try {
       const result = await this.healthService.checkHealthStatus();
-      console.log(
-        `Initial health check completed: ${result.status}`,
-        JSON.stringify(result)
-      );
+      this.logger.log(`Initial health check completed: ${result.status}`);
     } catch (error) {
-      console.error('Initial health check failed', error);
+      this.logger.error('Initial health check failed', error);
     }
   }
 
