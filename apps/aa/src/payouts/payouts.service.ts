@@ -255,7 +255,10 @@ export class PayoutsService {
       };
     } catch (error) {
       console.error('Failed to fetch payout stats:', error);
-      throw new Error('Failed to fetch payout stats');
+      throw new RpcException({
+        message: 'Failed to fetch payout stats',
+        code: 'FAILED_TO_FETCH_PAYOUT_STATS',
+      });
     }
   }
 
@@ -2407,11 +2410,16 @@ export class PayoutsService {
       });
 
       if (!settings?.value) {
-        throw new Error(`${key} not found`);
+        throw new RpcException({
+          message: `${key} not found`,
+          code: 'SETTING_KEY_NOT_FOUND',
+          params: { key },
+        });
       }
 
       return settings.value;
     } catch (error) {
+      if (error instanceof RpcException) throw error;
       this.logger.error(`Error getting setting ${key}: ${error.message}`);
       throw error;
     }

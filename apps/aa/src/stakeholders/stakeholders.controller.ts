@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern } from '@nestjs/microservices';
+import { MessagePattern, RpcException } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { StakeholdersService } from './stakeholders.service';
 import {
@@ -35,7 +35,10 @@ export class StakeholdersController {
   })
   async validateBulkStakeholders(payload: any) {
     if (!payload) {
-      throw new Error('No data provided for validation');
+      throw new RpcException({
+        message: 'No data provided for validation',
+        code: 'NO_STAKEHOLDERS_DATA_PROVIDED_FOR_VALIDATION',
+      });
     }
 
     const normalizedData = Array.isArray(payload)
@@ -50,7 +53,10 @@ export class StakeholdersController {
   })
   async bulkAdd(payloads: BulkAddStakeholdersPayload) {
     if (!payloads || !payloads?.data) {
-      throw new Error('Missing data in bulkAdd payload');
+      throw new RpcException({
+        message: 'Missing data in bulkAdd payload',
+        code: 'MISSING_DATA_IN_BULK_ADD_PAYLOAD',
+      });
     }
 
     const normalizedData = Array.isArray(payloads?.data)

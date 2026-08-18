@@ -913,7 +913,10 @@ export class BeneficiaryService {
 
     const sdpSettings = await this.settingsService.getPublic('SDP_SETTINGS');
     if (!sdpSettings?.value) {
-      throw new Error('SDP_SETTINGS not found in settings table');
+      throw new RpcException({
+        message: 'SDP_SETTINGS not found in settings table',
+        code: 'SDP_SETTINGS_NOT_FOUND',
+      });
     }
 
     const config = sdpSettings.value as Record<string, string>;
@@ -1610,7 +1613,10 @@ export class BeneficiaryService {
           ? (error as any).response?.data || error.message
           : String(error);
       this.logger.error(`Error fetching balances: ${errData}`);
-      throw new Error('Failed to fetch balances');
+      throw new RpcException({
+        message: 'Failed to fetch balances',
+        code: 'FAILED_TO_FETCH_BALANCES',
+      });
     }
   }
 
@@ -1658,7 +1664,11 @@ export class BeneficiaryService {
     };
 
     const handler = actionHandlers[action];
-    if (!handler) throw new Error('Invalid action');
+    if (!handler)
+      throw new RpcException({
+        message: 'Invalid action',
+        code: 'INVALID_DB_TRANSACTION_ACTION',
+      });
 
     try {
       const message = await handler();
@@ -1669,7 +1679,11 @@ export class BeneficiaryService {
       this.logger.error(
         `Database transaction failed [${action}] txId=${aaDbTxId}: ${errMsg}`
       );
-      throw new Error(`Database transaction failed: ${errMsg}`);
+      throw new RpcException({
+        message: `Database transaction failed: ${errMsg}`,
+        code: 'DATABASE_TRANSACTION_FAILED',
+        params: { message: errMsg },
+      });
     }
   }
 
@@ -1690,7 +1704,12 @@ export class BeneficiaryService {
     const group = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: groupUuid },
     });
-    if (!group) throw new Error(`Beneficiary group not found: ${groupUuid}`);
+    if (!group)
+      throw new RpcException({
+        message: `Beneficiary group not found: ${groupUuid}`,
+        code: 'BENEFICIARY_GROUP_NOT_FOUND_SYNC',
+        params: { groupUuid },
+      });
 
     const BCRYPT_ROUNDS = 8;
     const isDev = process.env.NODE_ENV !== 'production';

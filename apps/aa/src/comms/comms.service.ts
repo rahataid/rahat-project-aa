@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { lastValueFrom, timeout } from 'rxjs';
 import { getClient } from '@rumsan/connect/src/clients';
 import * as nodemailer from 'nodemailer';
@@ -46,7 +46,10 @@ export class CommsService {
       );
 
       if (!communicationSettings) {
-        throw new Error('Communication settings not found in response');
+        throw new RpcException({
+          message: 'Communication settings not found in response',
+          code: 'COMMUNICATION_SETTINGS_NOT_FOUND',
+        });
       }
 
       this.client = getClient({
@@ -105,14 +108,20 @@ export class CommsService {
 
   get broadcast() {
     if (!this.client) {
-      throw new Error('Comms client is not available. Service is still initializing.');
+      throw new RpcException({
+        message: 'Comms client is not available. Service is still initializing.',
+        code: 'COMMS_CLIENT_NOT_AVAILABLE',
+      });
     }
     return this.client.broadcast;
   }
 
   get apiClient() {
     if (!this.client) {
-      throw new Error('Comms client is not available. Service is still initializing.');
+      throw new RpcException({
+        message: 'Comms client is not available. Service is still initializing.',
+        code: 'COMMS_CLIENT_NOT_AVAILABLE',
+      });
     }
     return this.client.apiClient;
   }
@@ -120,7 +129,10 @@ export class CommsService {
   async listTransports(): Promise<any> {
     const commsClient = await this.getClient();
     if (!commsClient) {
-      throw new Error('Comms client is not available. Service is still initializing.');
+      throw new RpcException({
+        message: 'Comms client is not available. Service is still initializing.',
+        code: 'COMMS_CLIENT_NOT_AVAILABLE',
+      });
     }
     const { data } = await commsClient.transport.list();
     
@@ -133,7 +145,10 @@ export class CommsService {
       (item: any) => item.name === 'EMAIL' && item.type === 'SMTP'
     );
     if (!emailTransport) {
-      throw new Error('No EMAIL/SMTP transport found');
+      throw new RpcException({
+        message: 'No EMAIL/SMTP transport found',
+        code: 'NO_EMAIL_SMTP_TRANSPORT_FOUND',
+      });
     }
     return emailTransport.cuid;
   }
