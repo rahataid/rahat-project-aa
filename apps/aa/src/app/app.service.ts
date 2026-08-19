@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
 import { Prisma } from '@prisma/client';
@@ -9,10 +9,12 @@ import {
 } from '../utils/utility';
 import { sanitizeSettingValue } from './settings-sanitizer';
 import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
-import { RpcException } from '@nestjs/microservices';
+import { UpdateSettingsByNameDto } from './dto/update-settings-by-name.dto';
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name);
+
   constructor(
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService
@@ -75,6 +77,41 @@ export class AppService {
     await this.refreshSettings();
 
     return { projectId, upserted };
+  }
+
+  async updateSettingsByName(dto: UpdateSettingsByNameDto) {
+    const { settings } = dto;
+    this.logger.log(
+      `updateSettingsByName: received ${settings.length} setting(s) to update`
+    );
+
+    const updated = [];
+    const skipped = [];
+
+    for (const setting of settings) {
+      const name = setting.name.toUpperCase();
+      const existing = await this.prisma.setting.findUnique({
+        where: { name },
+      });
+
+      if (!existing || existing.isReadOnly || existing.isPrivate) {
+        skipped.push(name);
+        continue;
+      }
+
+      await this.prisma.setting.update({
+        where: { name },
+        data: { value: setting.value as Prisma.InputJsonValue },
+      });
+      updated.push(name);
+    }
+
+    await this.refreshSettings();
+    this.logger.log(
+      `updateSettingsByName: done. updated=${updated.length} skipped=${skipped.length}`
+    );
+
+    return { updated, skipped };
   }
 
   async refreshSettings() {
