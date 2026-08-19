@@ -882,7 +882,7 @@ export class PayoutsService {
         payout.beneficiaryRedeem.every((r) => r.isCompleted)
       );
     }
-    
+
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
@@ -1682,17 +1682,6 @@ export class PayoutsService {
     if (!projectInfo) {
       throw new RpcException('Project info not found, in SETTINGS');
     }
-
-    //   const { isPayoutMethodPhaseActivated } = await lastValueFrom(
-    //   this.client.send(
-    //     { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
-    //     {
-    //       activeYear: projectInfo?.value.active_year,
-    //       riverBasin: projectInfo?.value.river_basin,
-    //       disbursementMethod: 'TOKEN',
-    //     }
-    //   )
-    // );
 
     const activeYear = projectInfo?.value?.active_year;
     const riverBasin = projectInfo?.value?.river_basin;
