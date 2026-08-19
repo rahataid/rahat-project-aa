@@ -616,17 +616,73 @@ export class PayoutsService {
     }
   }
 
+  /**
+   * Re-evaluates a payout's status right after a beneficiaryRedeem write and
+   * persists it (with the completion gap snapshot) if it just became COMPLETED.
+   * Call this from processors immediately after updating a redeem's status,
+   * instead of relying on a later findOne/findAll read to discover completion.
+   *
+   * @param payoutUuid - The UUID of the payout to re-check
+   */
+  async checkAndCompletePayout(payoutUuid: string): Promise<void> {
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      include: {
+        beneficiaryRedeem: { select: { status: true } },
+        beneficiaryGroupToken: {
+          select: {
+            uuid: true,
+            status: true,
+            numberOfTokens: true,
+            isDisbursed: true,
+            createdBy: true,
+            beneficiaryGroup: {
+              select: { _count: { select: { beneficiaries: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payout) {
+      this.logger.warn(
+        `[checkAndCompletePayout] payout not found: ${payoutUuid}`
+      );
+      return;
+    }
+
+    const calculatedStatus = calculatePayoutStatus(
+      payout as PayoutWithRelations
+    );
+    await this.syncPayoutStatus(payout as PayoutWithRelations, calculatedStatus);
+  }
+
   //  Sync payout status in DB if changed, and update object
   async syncPayoutStatus(
     payout: PayoutWithRelations,
     newStatus: RedeemStatus
   ): Promise<void> {
     if (payout.status !== newStatus) {
+      const data: { status: RedeemStatus; extras?: any } = {
+        status: newStatus,
+      };
+
+      // ponytail: snapshot the gap the moment a payout completes, since the
+      // activation phase can be reverted+reactivated later and lose its
+      // original activatedAt, making later recalculation wrong/negative.
+      if (newStatus === 'COMPLETED') {
+        const payoutGap = await this.calculatePayoutCompletionGap(
+          payout.uuid
+        );
+        data.extras = { ...(payout.extras as object), payoutGap };
+      }
+
       await this.prisma.payouts.update({
         where: { uuid: payout.uuid },
-        data: { status: newStatus },
+        data,
       });
       payout.status = newStatus;
+      if (data.extras) payout.extras = data.extras;
     }
   }
 
@@ -749,7 +805,12 @@ export class PayoutsService {
       let payoutGap = 'N/A';
 
       if (isCompleted && isPayoutTriggered) {
-        payoutGap = await this.calculatePayoutCompletionGap(uuid);
+        const storedGap = (payout.extras as { payoutGap?: string })
+          ?.payoutGap;
+
+        // backfill for payouts completed before the gap started getting
+        // stored on completion
+        payoutGap = storedGap ?? (await this.calculatePayoutCompletionGap(uuid));
       }
 
       return {
@@ -821,12 +882,18 @@ export class PayoutsService {
         payout.beneficiaryRedeem.every((r) => r.isCompleted)
       );
     }
+    
+    this.logger.log(`Checking payout completion status for FSP payout with UUID: '${payout.uuid}'`);
+    this.logger.debug(`Beneficiary Redeem Count: ${payout.beneficiaryRedeem.length}`);
+    this.logger.debug(`Expected Redeem Count: ${payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2}`);
+    this.logger.debug(`All Redeems Completed: ${payout.beneficiaryRedeem.every((r) => r.isCompleted)}`);
+    this.logger.debug(`Beneficiary Group Token: ${JSON.stringify(payout.beneficiaryGroupToken)}`);
+    this.logger.debug(`Beneficiary Group: ${JSON.stringify(payout.beneficiaryGroupToken?.beneficiaryGroup)}`);
 
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
-        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
-          2 &&
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length &&
       payout.beneficiaryRedeem.every((r) => r.isCompleted)
     );
   }
@@ -1622,6 +1689,18 @@ export class PayoutsService {
     if (!projectInfo) {
       throw new RpcException('Project info not found, in SETTINGS');
     }
+
+    //   const { isPayoutMethodPhaseActivated } = await lastValueFrom(
+    //   this.client.send(
+    //     { cmd: 'ms.jobs.phase.getPhasePayoutStatus' },
+    //     {
+    //       activeYear: projectInfo?.value.active_year,
+    //       riverBasin: projectInfo?.value.river_basin,
+    //       disbursementMethod: 'TOKEN',
+    //     }
+    //   )
+    // );
+
     const activeYear = projectInfo?.value?.active_year;
     const riverBasin = projectInfo?.value?.river_basin;
 
@@ -1641,7 +1720,7 @@ export class PayoutsService {
       )
     );
 
-    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+    const activationPhase = data.data.find((p) => p?.disbursementConfig?.disbursementMethods?.includes('TOKEN'));
 
     if (!activationPhase) {
       this.logger.warn(
@@ -1651,15 +1730,37 @@ export class PayoutsService {
       return 'N/A';
     }
 
-    if (!activationPhase.isActive) {
+    // ponytail: activatedAt goes null once a phase is reverted; fall back to the
+    // last trigger-history snapshot (taken right before the null-out) so a
+    // completed payout keeps its gap instead of going negative/N/A.
+    let activatedAtRaw = activationPhase.activatedAt;
+
+    this.logger.log(`Activation phase found for riverBasin ${riverBasin} and activeYear ${activeYear}, activatedAt: ${activatedAtRaw}`
+    );
+
+    if (!activatedAtRaw) {
+      const history = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.revertPhase.getAll' },
+          { phaseUuid: activationPhase.uuid }
+        )
+      );
+
+      this.logger.log(`Revert history found for phase ${activationPhase.uuid}: ${JSON.stringify(history)}`);
+
+      activatedAtRaw = history?.data?.[0]?.phaseActivationDate;
+      this.logger.log(`Fallback to last trigger-history snapshot, activatedAt: ${activatedAtRaw}`)
+    }
+
+    if (!activatedAtRaw) {
       this.logger.warn(
-        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+        `No activation timestamp (current or historical) found for riverBasin ${riverBasin} and activeYear ${activeYear}`
       );
 
       return 'N/A';
     }
 
-    const activatedAt = new Date(activationPhase.activatedAt);
+    const activatedAt = new Date(activatedAtRaw);
     const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
       where: { payout: { uuid: payoutUuid } },
       orderBy: {
@@ -1674,7 +1775,7 @@ export class PayoutsService {
     }
 
     const diffInMs =
-      new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+      new Date(payoutLastLog?.updatedAt).getTime() - activatedAt.getTime();
 
     console.log(`Payout completion gap in ms: ${diffInMs}`);
 
