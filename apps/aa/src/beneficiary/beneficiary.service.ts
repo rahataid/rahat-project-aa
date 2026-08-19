@@ -24,6 +24,7 @@ import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
+import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
@@ -1114,6 +1115,18 @@ export class BeneficiaryService {
 
       this.logger.log(`Beneficiary redeem updated: ${beneficiaryRedeem.uuid}`);
 
+      // single chokepoint for every caller of this helper (offramp, stellar
+      // transfer processors, etc.) — catch payout completion at the real
+      // write instead of relying on each call site to remember to check
+      if (
+        beneficiaryRedeem.payoutId &&
+        REDEEM_COMPLETED_STATUSES.includes(payload.status as string)
+      ) {
+        await this.payoutService.checkAndCompletePayout(
+          beneficiaryRedeem.payoutId
+        );
+      }
+
       return beneficiaryRedeem;
     } catch (error) {
       this.logger.error(`Error updating beneficiary redeem: ${error}`);
@@ -1131,6 +1144,20 @@ export class BeneficiaryService {
       data: payload,
     });
     this.logger.log(`Bulk updated ${result.count} beneficiary redeems`);
+
+    if (REDEEM_COMPLETED_STATUSES.includes(payload.status as string)) {
+      const updated = await this.prisma.beneficiaryRedeem.findMany({
+        where: { uuid: { in: uuids } },
+        select: { payoutId: true },
+      });
+      const payoutIds = [
+        ...new Set(updated.map((r) => r.payoutId).filter(Boolean)),
+      ];
+      await Promise.all(
+        payoutIds.map((id) => this.payoutService.checkAndCompletePayout(id))
+      );
+    }
+
     return result;
   }
 
