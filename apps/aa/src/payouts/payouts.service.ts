@@ -883,13 +883,6 @@ export class PayoutsService {
       );
     }
     
-    this.logger.log(`Checking payout completion status for FSP payout with UUID: '${payout.uuid}'`);
-    this.logger.debug(`Beneficiary Redeem Count: ${payout.beneficiaryRedeem.length}`);
-    this.logger.debug(`Expected Redeem Count: ${payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2}`);
-    this.logger.debug(`All Redeems Completed: ${payout.beneficiaryRedeem.every((r) => r.isCompleted)}`);
-    this.logger.debug(`Beneficiary Group Token: ${JSON.stringify(payout.beneficiaryGroupToken)}`);
-    this.logger.debug(`Beneficiary Group: ${JSON.stringify(payout.beneficiaryGroupToken?.beneficiaryGroup)}`);
-
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
