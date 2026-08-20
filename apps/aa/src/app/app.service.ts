@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, SettingDataType } from '@prisma/client';
 import {
   lowerCaseObjectKeys,
   normalizeRequiredFields,
@@ -45,6 +45,7 @@ export class AppService {
     return lowerCaseObjectKeys(res);
   }
 
+  // this function used to update setting with project setup, it will create new setting if not exist, and update if exist
   async updateSettingsBulk(dto: UpdateSettingsPayloadDto) {
     const { projectId, settings } = dto;
 
@@ -79,6 +80,8 @@ export class AppService {
     return { projectId, upserted };
   }
 
+  // updates settings by name; creates the setting (with default flags) if it doesn't exist yet
+  // (e.g. seed was never run), otherwise skips any existing setting that is read-only or private
   async updateSettingsByName(dto: UpdateSettingsByNameDto) {
     const { settings } = dto;
     this.logger.log(
@@ -90,19 +93,42 @@ export class AppService {
 
     for (const setting of settings) {
       const name = setting.name.toUpperCase();
+      const value = setting.value as Prisma.InputJsonValue;
       const existing = await this.prisma.setting.findUnique({
         where: { name },
       });
 
-      if (!existing || existing.isReadOnly || existing.isPrivate) {
+      if (existing && (existing.isReadOnly || existing.isPrivate)) {
+        this.logger.warn(
+          `updateSettingsByName: skipping '${name}' (${
+            existing.isReadOnly ? 'read-only' : 'private'
+          })`
+        );
         skipped.push(name);
         continue;
       }
 
-      await this.prisma.setting.update({
+      if (!existing && !setting.dataType) {
+        this.logger.warn(
+          `updateSettingsByName: skipping '${name}' (dataType required to create a new setting)`
+        );
+        skipped.push(name);
+        continue;
+      }
+
+      await this.prisma.setting.upsert({
         where: { name },
-        data: { value: setting.value as Prisma.InputJsonValue },
+        update: { value },
+        create: {
+          name,
+          value,
+          dataType: setting.dataType as SettingDataType,
+          requiredFields: [],
+          isReadOnly: false,
+          isPrivate: false,
+        },
       });
+      this.logger.log(`updateSettingsByName: upserted '${name}'`);
       updated.push(name);
     }
 
