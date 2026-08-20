@@ -1,6 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { CONTROLLERS, JOBS } from '../constants';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CONTROLLERS, EVENTS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
@@ -11,13 +12,15 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { GroupUuidDto } from './dto/group-uuid.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
 export class BeneficiaryController {
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly beneficiaryMultisigService: BeneficiaryMultisigService
+    private readonly beneficiaryMultisigService: BeneficiaryMultisigService,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
@@ -106,6 +109,16 @@ export class BeneficiaryController {
   async addGroupToProject(payload) {
     console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.SPONSOR_BENEFICIARY_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sponsorBeneficiaryGroup(@Payload() payload: GroupUuidDto) {
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
+      groupUuid: payload.groupUuid,
+    });
   }
 
   @MessagePattern({
