@@ -709,7 +709,9 @@ export class StakeholdersService {
 
   // Maps raw Excel rows → CreateStakeholderDto shape — no validation
   private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
-    return payload.map((item) => {
+    return payload
+      .filter((item) => item !== null && item !== undefined)
+      .map((item) => {
       const rawSupportArea = this.getFieldCaseInsensitive(
         item,
         'Support Area',
