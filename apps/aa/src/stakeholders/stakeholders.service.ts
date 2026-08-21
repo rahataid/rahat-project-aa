@@ -68,7 +68,7 @@ export class StakeholdersService {
     this.logger.log(
       `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
     );
-    const { phone, ...rest } = payload;
+    const { phone, user, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
       const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst(
@@ -697,6 +697,8 @@ export class StakeholdersService {
 
   // Looks up a value by key, ignoring case/whitespace differences in the key itself
   private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+    if (!item || typeof item !== 'object') return undefined;
+
     const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
     this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
 

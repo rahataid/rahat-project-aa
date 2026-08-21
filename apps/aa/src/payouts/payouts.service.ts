@@ -874,7 +874,8 @@ export class PayoutsService {
       };
     }
   ): Promise<boolean> {
-    if (payout.type === 'VENDOR') {
+    const extras = payout.extras as { paymentProviderType?: string } | null;
+    if (payout.type === 'VENDOR' || (payout.type === 'FSP' && extras?.paymentProviderType === "manual_bank_transfer")) {
       return (
         payout.beneficiaryRedeem.length > 0 &&
         payout.beneficiaryRedeem.length ===
@@ -886,8 +887,8 @@ export class PayoutsService {
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
-        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length &&
-      payout.beneficiaryRedeem.every((r) => r.isCompleted)
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2 &&
+      payout.beneficiaryRedeem.every((r) => r.isCompleted)    
     );
   }
 
