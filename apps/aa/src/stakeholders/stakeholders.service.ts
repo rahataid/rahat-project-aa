@@ -68,7 +68,7 @@ export class StakeholdersService {
     this.logger.log(
       `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
     );
-    const { phone, user, ...rest } = payload;
+    const { phone, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
       const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst(
