@@ -7,7 +7,6 @@ export interface AddStakeholdersData {
   district: string;
   municipality: string;
   supportArea: string[];
-  user: any;
 }
 
 export interface UpdateStakeholdersData {
