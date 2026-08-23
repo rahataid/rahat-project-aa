@@ -1,10 +1,11 @@
 // create-grievance-params.dto.ts
-import { IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class FindGrievanceParamsDto {
   @IsUUID()
   uuid: string;
 
   // TODO: QUICK FIX: REMOVE LATER
+  @IsOptional()
   user?: any;
 }
