@@ -1,10 +1,16 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { FundService } from './fundallocation.service';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { AddFund, TransferListQuery } from './dto/fundallocation.dto';
+import {
+  MicroserviceAuthGuard,
+  RequireAbility,
+} from '@rumsan/user/ability/ms-rpc-auth';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class FundAllocationController {
   constructor(private readonly fundService: FundService) {}
 
@@ -12,6 +18,7 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.ADD_FUND,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.FUND_MANAGEMENT)
   addFund(@Payload() payload: AddFund) {
     return this.fundService.addFundToProject(payload);
   }
@@ -20,6 +27,7 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.TOKEN_DETAILS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.FUND_MANAGEMENT)
   findTokenDetails() {
     return this.fundService.getTokenDetails();
   }
@@ -28,6 +36,7 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.TRANSFER_LIST,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.FUND_MANAGEMENT)
   findTokenTransferList(@Payload() query: TransferListQuery) {
     return this.fundService.getTransferList(query);
   }
