@@ -886,7 +886,11 @@ export class StellarChainService implements IChainService {
       this.logger.error(
         `Error redeeming in-kind for beneficiary ${_data.beneficiaryAddress}: ${err.message}`
       );
-      throw new RpcException(`Error redeeming in-kind: ${err.message}`);
+      throw new RpcException({
+        message: `Error redeeming in-kind: ${err.message}`,
+        code: 'ERROR_REDEEMING_INKIND',
+        params: { message: err.message },
+      });
     }
   }
 
