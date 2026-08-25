@@ -9,5 +9,7 @@ export const ACTIONS = {
 
 export const SUBJECTS = {
   ALL: 'all',
-  FUND_MANAGEMENT: 'fund_management',
+  FUND_MANAGEMENT: 'Fund Management',
+  PAYOUT: 'Payout',
+  INKIND: 'Inkind',
 };

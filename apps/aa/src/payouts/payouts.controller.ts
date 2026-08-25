@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { PayoutsService } from './payouts.service';
@@ -7,9 +7,11 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import { GetPayoutDetailsDto } from './dto/get-payout-details.dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class PayoutsController {
   constructor(
     private readonly payoutsService: PayoutsService,
@@ -17,6 +19,7 @@ export class PayoutsController {
   ) {}
 
   @MessagePattern({ cmd: JOBS.PAYOUT.CREATE, uuid: process.env.PROJECT_ID })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.PAYOUT)
   create(@Payload() createPayoutDto: CreatePayoutDto) {
     return this.payoutsService.create(createPayoutDto);
   }
@@ -57,7 +60,11 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   triggerPayout(@Payload() payload: { uuid: string; user?: any; otp: string }) {
-    return this.payoutsService.triggerPayout(payload.uuid, payload.user, payload.otp);
+    return this.payoutsService.triggerPayout(
+      payload.uuid,
+      payload.user,
+      payload.otp
+    );
   }
 
   @MessagePattern({
