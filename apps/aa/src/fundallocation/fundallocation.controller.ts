@@ -27,7 +27,6 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.TOKEN_DETAILS,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.READ, SUBJECTS.FUND_MANAGEMENT)
   findTokenDetails() {
     return this.fundService.getTokenDetails();
   }
@@ -36,7 +35,6 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.TRANSFER_LIST,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.READ, SUBJECTS.FUND_MANAGEMENT)
   findTokenTransferList(@Payload() query: TransferListQuery) {
     return this.fundService.getTransferList(query);
   }
