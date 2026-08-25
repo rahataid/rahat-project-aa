@@ -27,6 +27,7 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
 import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
 import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module'
     IvrTemplatesModule,
     OtpModule,
     FundallocationModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
