@@ -127,7 +127,8 @@ export const JOBS = {
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
-    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+    DISBURSEMENT_STATUS_UPDATE:
+      'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   STELLAR_DIRECT: {
     DISBURSE: 'aa.jobs.stellar_direct.disburse',
@@ -162,7 +163,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -188,6 +189,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.settings.list',
     GET: 'rahat.jobs.settings.get',
     UPDATE: 'rahat.jobs.settings.update',
+    UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
@@ -394,7 +396,8 @@ export const EVENTS = {
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
   BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },

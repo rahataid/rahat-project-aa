@@ -68,7 +68,7 @@ export class StakeholdersService {
     this.logger.log(
       `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
     );
-    const { phone, ...rest } = payload;
+    const { phone, user, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
       const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst(
@@ -711,7 +711,9 @@ export class StakeholdersService {
 
   // Maps raw Excel rows → CreateStakeholderDto shape — no validation
   private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
-    return payload.map((item) => {
+    return payload
+      .filter((item) => item !== null && item !== undefined)
+      .map((item) => {
       const rawSupportArea = this.getFieldCaseInsensitive(
         item,
         'Support Area',
