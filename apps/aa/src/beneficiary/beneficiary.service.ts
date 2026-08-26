@@ -487,6 +487,25 @@ export class BeneficiaryService {
   ) {
     const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose, } = dto;
 
+    if (!beneficiaries?.length) {
+      throw new RpcException('beneficiaries array is required and cannot be empty.');
+    }
+    if (!beneficiaryGroupId) {
+      throw new RpcException('beneficiaryGroupId is required.');
+    }
+    if (!skipGroupCreation && (!beneficiaryGroupName || !groupPurpose)) {
+      throw new RpcException('beneficiaryGroupName and groupPurpose are required when creating a new group.');
+    }
+
+    if (!skipGroupCreation) {
+      const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
+        where: { uuid: beneficiaryGroupId },
+      });
+      if (existingGroup) {
+        throw new RpcException(`Beneficiary group ${beneficiaryGroupId} already exists.`);
+      }
+    }
+
     this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
 
     const processedBeneficiaries: Prisma.BeneficiaryCreateManyInput[] = beneficiaries.map(
@@ -512,7 +531,6 @@ export class BeneficiaryService {
         });
 
         this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
-        this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
 
         await this.seedOtpsForBeneficiaries(processedBeneficiaries);
 
@@ -540,9 +558,11 @@ export class BeneficiaryService {
               beneficiaryId: beneficiary.uuid,
               groupId: beneficiary.beneficiaryGroupId,
             })),
+            skipDuplicates: true,
           });
       })
 
+      this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
       this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
         groupUuid: beneficiaryGroupId
       });
@@ -1046,20 +1066,33 @@ export class BeneficiaryService {
       `Total beneficiaries: ${allBenfs}, batches: ${batches.length}`
     );
 
-    if (batches.length) {
-      batches?.forEach((batch) => {
-        this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        });
-      });
-      this.logger.log(`Queued ${batches.length} token assignment batches`);
-    } else {
+    if (!batches.length) {
       this.logger.warn('No batches to process for token assignment');
+      return;
+    }
+
+    const isQueueReady = await this.contractQueue.isReady().catch(() => null);
+    if (!isQueueReady) {
+      throw new RpcException('Contract queue is not available. Aborting token assignment.');
+    }
+
+    try {
+      await Promise.all(
+        batches.map((batch) =>
+          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          })
+        )
+      );
+      this.logger.log(`Queued ${batches.length} token assignment batches`);
+    } catch (error) {
+      this.logger.error('Failed to queue token assignment batches', error);
+      throw new RpcException(`Failed to queue token assignment: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1827,6 +1860,25 @@ export class BeneficiaryService {
   ): Promise<{ jobIds: string[] }> {
     const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
 
+    if (!beneficiaryGroupId) {
+      throw new RpcException('beneficiaryGroupId is required.');
+    }
+    if (!beneficiaries?.length) {
+      throw new RpcException('beneficiaries array is required and cannot be empty.');
+    }
+
+    const isQueueReady = await this.contractQueue.isReady().catch(() => null);
+    if (!isQueueReady) {
+      throw new RpcException('Contract queue is not available. Aborting before any data is persisted.');
+    }
+
+    const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: beneficiaryGroupId },
+    });
+    if (existingGroup) {
+      throw new RpcException(`Beneficiary group ${beneficiaryGroupId} already exists.`);
+    }
+
     this.logger.log(`Processing ${beneficiaries.length} beneficiaries in batches of ${BENEFICIARY_BATCH_SIZE}`);
 
     this.logger.debug(`Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`);
@@ -1847,34 +1899,47 @@ export class BeneficiaryService {
     this.logger.log(`Created ${batches.length} batches for processing`);
 
     const jobIds: string[] = [];
-    
-    for (const { batch, index } of batches) {
-      const jobData = {
-        beneficiaries: batch,
-        beneficiaryGroupId,
-        beneficiaryGroupName,
-        groupPurpose,
-        totalBatches: batches.length,
-        currentBatchIndex: index,
-        isLastBatch: index === batches.length - 1,
-      };
 
-      const job = await this.contractQueue.add(
-        JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
-        jobData,
-        {
-          attempts: 3,
-          removeOnComplete: true,
-          removeOnFail: false,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        }
+    try {
+      for (const { batch, index } of batches) {
+        const jobData = {
+          beneficiaries: batch,
+          beneficiaryGroupId,
+          beneficiaryGroupName,
+          groupPurpose,
+          totalBatches: batches.length,
+          currentBatchIndex: index,
+          isLastBatch: index === batches.length - 1,
+        };
+
+        const job = await this.contractQueue.add(
+          JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+          jobData,
+          {
+            attempts: 3,
+            removeOnComplete: true,
+            removeOnFail: false,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          }
+        );
+
+        jobIds.push(job.id.toString());
+        this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${job.id})`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to queue batches for group ${beneficiaryGroupId} after queuing ${jobIds.length}/${batches.length}. Rolling back group.`,
+        error
       );
-
-      jobIds.push(job.id.toString());
-      this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${job.id})`);
+      await this.prisma.beneficiaryGroups
+        .delete({ where: { uuid: beneficiaryGroupId } })
+        .catch((cleanupError) =>
+          this.logger.error(`Rollback of group ${beneficiaryGroupId} failed`, cleanupError)
+        );
+      throw new RpcException(`Failed to queue beneficiary batches: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return { jobIds };
