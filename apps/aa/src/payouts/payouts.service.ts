@@ -675,6 +675,12 @@ export class PayoutsService {
           payout.uuid
         );
         data.extras = { ...(payout.extras as object), payoutGap };
+
+        // group_gap: time from triggerPayout call to payout completion, FSP only.
+        if (payout.type === 'FSP') {
+          const groupGap = await this.calculateGroupGap(payout);
+          if (groupGap) data.extras.group_gap = groupGap;
+        }
       }
 
       await this.prisma.payouts.update({
@@ -1129,6 +1135,19 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Stash trigger time for group_gap (trigger -> completion), FSP only.
+    if (payoutDetails.type === 'FSP') {
+      await this.prisma.payouts.update({
+        where: { uuid },
+        data: {
+          extras: {
+            ...(payoutDetails.extras as object),
+            payoutTriggeredAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
 
     // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
@@ -1761,6 +1780,47 @@ export class PayoutsService {
       new Date(payoutLastLog?.updatedAt).getTime() - activatedAt.getTime();
 
     console.log(`Payout completion gap in ms: ${diffInMs}`);
+
+    return getFormattedTimeDiff(diffInMs);
+  }
+
+  /**
+   * Calculate group_gap: time from triggerPayout call to payout completion.
+   * FSP payouts only. Uses the `payoutTriggeredAt` timestamp stashed in
+   * extras by triggerPayout, and the last beneficiaryRedeem update as the
+   * completion time.
+   *
+   * @param payout - The payout (must have uuid, type, extras)
+   * @returns { Promise<string | null> } - formatted gap, or null if trigger time unknown
+   */
+  async calculateGroupGap(
+    payout: Pick<Payouts, 'uuid' | 'type' | 'extras'>
+  ): Promise<string | null> {
+    const payoutTriggeredAt = (payout.extras as { payoutTriggeredAt?: string })
+      ?.payoutTriggeredAt;
+
+    if (!payoutTriggeredAt) {
+      this.logger.warn(
+        `[calculateGroupGap] payoutTriggeredAt not found for payout ${payout.uuid}, skipping group_gap`
+      );
+      return null;
+    }
+
+    const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { payout: { uuid: payout.uuid } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!payoutLastLog) {
+      this.logger.warn(
+        `[calculateGroupGap] payout last log not found for payout with UUID ${payout.uuid}`
+      );
+      return null;
+    }
+
+    const diffInMs =
+      new Date(payoutLastLog.updatedAt).getTime() -
+      new Date(payoutTriggeredAt).getTime();
 
     return getFormattedTimeDiff(diffInMs);
   }
