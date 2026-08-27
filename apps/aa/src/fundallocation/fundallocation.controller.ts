@@ -18,7 +18,7 @@ export class FundAllocationController {
     cmd: JOBS.FUND_MANAGEMENT.ADD_FUND,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.CREATE, SUBJECTS.FUND_MANAGEMENT)
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.MULTI_SIG)
   addFund(@Payload() payload: AddFund) {
     return this.fundService.addFundToProject(payload);
   }
