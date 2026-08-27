@@ -5,10 +5,12 @@ export const ACTIONS = {
   DELETE: 'delete',
   ACTIVATE: 'activate',
   REVERT: 'revert',
+  TRIGGER: 'trigger',
 };
 
 export const SUBJECTS = {
   ALL: 'all',
-  FUND_MANAGEMENT: 'fund_management',
-  MULTI_SIG: 'multi_sig',
+  FUND_MANAGEMENT: 'Fund Management',
+  MULTI_SIG: 'Multi Sig',
+  PAYOUT: 'Payout',
 };
