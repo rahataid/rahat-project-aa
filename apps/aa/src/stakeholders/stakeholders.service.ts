@@ -63,7 +63,7 @@ export class StakeholdersService {
     });
   }
 
-  // ***** stakeholders start ********** //
+  // ***** stakeholders start ********* //
   async add(payload: AddStakeholdersData) {
     this.logger.log(
       `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
