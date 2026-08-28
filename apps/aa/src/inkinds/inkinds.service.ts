@@ -143,7 +143,7 @@ export class InkindsService {
   }
 
   async update(updateInkindDto: UpdateInkindDto) {
-    const { uuid, user, ...data } = updateInkindDto;
+    const { uuid, user, appId, ...data } = updateInkindDto;
 
     try {
       this.logger.log(`Updating inkind item: ${uuid}`);
