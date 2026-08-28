@@ -80,14 +80,14 @@ export class ListernersService {
     return;
   }
 
-  @OnEvent(CVA_EVENTS.DISBURSEMENT.INITIATED)
-  async disburseBenefTokens(payload: {
-    amount: number;
-    walletAddress: string;
-  }) {
-    console.log('Disbursing tokens:', payload);
-    return this.disbService.create(payload);
-  }
+  // @OnEvent(CVA_EVENTS.DISBURSEMENT.INITIATED)
+  // async disburseBenefTokens(payload: {
+  //   amount: number;
+  //   walletAddress: string;
+  // }) {
+  //   console.log('Disbursing tokens:', payload);
+  //   return this.disbService.create(payload);
+  // }
 
   @OnEvent(EVENTS.NOTIFICATION.CREATE)
   async handleNotification(event: { payload: any }) {
