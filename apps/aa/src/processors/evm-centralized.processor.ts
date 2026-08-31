@@ -1286,7 +1286,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const beneficiaryBalance = await aaContract.benTokens.staticCall(
         beneficiaryAddress
       );
-      const transferAmount = amount;
+
+      const contract = await this.getContractSettings();
+      const formatedAbi = this.lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        this.provider
+      );
+
+      const decimal = await rahatTokenContract.decimals.staticCall();
+      const transferAmount = ethers.parseUnits(amount, decimal);
 
       const aaContractSigner = await this.createContractInstanceSign(
         'AAPROJECT',
