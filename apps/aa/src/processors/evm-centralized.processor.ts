@@ -1427,7 +1427,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
    */
   async getBeneficiaryBalance(
     walletAddress: string
-  ): Promise<{ balance: string; address: string }> {
+  ): Promise<{ balance: string; address: string; decimals: string }> {
     try {
       this.logger.log(
         `Getting RahatToken balance for address: ${walletAddress}`,
@@ -1436,14 +1436,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       await this.ensureInitialized();
 
       // Create RahatToken contract instance using the existing method
+      const aaContract = await this.createContractInstanceSign('AAPROJECT');
       const rahatTokenContract = await this.createContractInstanceSign(
-        'AAPROJECT'
+        'RAHATTOKEN'
       );
 
+      const decimals = await rahatTokenContract.decimals.staticCall();
       // Call the balanceOf function to get the wallet's RahatToken balance
-      const tokenBalance = await rahatTokenContract.benTokens.staticCall(
-        walletAddress
-      );
+      const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
 
       this.logger.log(
         `RahatToken assign for ${walletAddress}: ${tokenBalance.toString()}`,
@@ -1453,6 +1453,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       return {
         balance: tokenBalance.toString(),
         address: walletAddress,
+        decimals: decimals,
       };
     } catch (error) {
       this.logger.error(
