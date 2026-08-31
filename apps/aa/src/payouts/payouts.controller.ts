@@ -60,7 +60,7 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.TRIGGER, SUBJECTS.PAYOUT)
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerPayout(@Payload() payload: { uuid: string; user?: any; otp: string }) {
     return this.payoutsService.triggerPayout(
       payload.uuid,
@@ -73,7 +73,7 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_ONE_FAILED_PAYOUT_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.TRIGGER, SUBJECTS.PAYOUT)
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerOneFailedPayoutRequest(
     @Payload() payload: { beneficiaryRedeemUuid: string }
   ) {
@@ -84,7 +84,7 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_FAILED_PAYOUT_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
-  @RequireAbility(ACTIONS.TRIGGER, SUBJECTS.PAYOUT)
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerFailedPayoutRequest(@Payload() payload: { payoutUUID: string }) {
     return this.payoutsService.triggerFailedPayoutRequest(payload);
   }

@@ -5,7 +5,6 @@ export const ACTIONS = {
   DELETE: 'delete',
   ACTIVATE: 'activate',
   REVERT: 'revert',
-  TRIGGER: 'trigger',
 };
 
 export const SUBJECTS = {
