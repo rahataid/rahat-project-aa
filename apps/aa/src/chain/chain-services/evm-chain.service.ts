@@ -920,17 +920,24 @@ export class EvmChainService implements IChainService, OnModuleInit {
     }
   }
 
-  async getRahatTokenBalance(data: { address: string }): Promise<any> {
+  async getRahatTokenBalance(data: {
+    address: string;
+    role?: string;
+  }): Promise<any> {
     try {
+      let balance;
       this.logger.log(
         `Getting RahatToken balance for address: ${data.address}`,
         EvmChainService.name
       );
 
+      if (data.role && data.role?.toLowerCase() == 'vendor') {
+        balance = await this.evmProcessor.getRahatTokenBalance(data.address);
+      }
+
       // Delegate to EVM processor for getting token assign for beneficiary
-      const balance = await this.evmProcessor.getBeneficiaryBalance(
-        data.address
-      );
+      else
+        balance = await this.evmProcessor.getBeneficiaryBalance(data.address);
 
       this.logger.log(
         `Successfully retrieved RahatToken balance for ${data.address}: ${balance.balance}`,
