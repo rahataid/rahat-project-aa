@@ -94,6 +94,9 @@ export const JOBS = {
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    REVOKE_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.revokeSponsorshipForGroup',
+    GET_SPONSORSHIP_STATUS_FOR_GROUP: 'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -124,6 +127,7 @@ export const JOBS = {
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
+    REVOKE_SPONSORSHIP_BATCH: 'aa.jobs.stellar.revokeSponsorshipBatch',
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
@@ -189,6 +193,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.settings.list',
     GET: 'rahat.jobs.settings.get',
     UPDATE: 'rahat.jobs.settings.update',
+    UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
@@ -394,8 +399,9 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
-    'events.beneficiary_group_added_to_project',
+  BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE: 'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },

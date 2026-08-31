@@ -18,6 +18,7 @@ import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { VendorsModule } from '../vendors/vendors.module';
+import { AuthModule } from '../auth/auth.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
@@ -105,7 +106,7 @@ import { SseModule } from '../sse/sse.module';
     IvrTemplatesModule,
     OtpModule,
     FundallocationModule,
-    SseModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

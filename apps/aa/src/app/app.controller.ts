@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
+import { UpdateSettingsByNameDto } from './dto/update-settings-by-name.dto';
 
 @Controller()
 export class AppController {
@@ -32,6 +33,14 @@ export class AppController {
   @MessagePattern({ cmd: JOBS.SETTINGS.UPDATE, uuid: process.env.PROJECT_ID })
   updateSettings(dto: UpdateSettingsPayloadDto) {
     return this.appService.updateSettingsBulk(dto);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.SETTINGS.UPDATE_VALUES,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateSettingsByName(dto: UpdateSettingsByNameDto) {
+    return this.appService.updateSettingsByName(dto);
   }
 
   @MessagePattern({ cmd: JOBS.APP.RESET_ALL, uuid: process.env.PROJECT_ID })
