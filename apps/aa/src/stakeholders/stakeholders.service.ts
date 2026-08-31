@@ -677,9 +677,13 @@ export class StakeholdersService {
       );
       return activities;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching related activities. ${err.message}`
+      // throw new RpcException(
+      //   `Error while fetching related activities. ${err.message}`)
+
+      this.logger.warn(
+        `Activities MS unavailable for group ${uuid}, proceeding with empty activities: ${err.message}`
       );
+      return [];
     }
   }
 
@@ -696,9 +700,16 @@ export class StakeholdersService {
   }
 
   // Looks up a value by key, ignoring case/whitespace differences in the key itself
-  private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+  private getFieldCaseInsensitive(
+    item: Record<string, any>,
+    ...keys: string[]
+  ): any {
     const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
-    this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
+    this.logger.log(
+      `Looking for keys ${normalizedKeys.join(
+        ', '
+      )} in item with keys: ${Object.keys(item).join(', ')}`
+    );
 
     const matchEntry = Object.entries(item).find(([itemKey]) =>
       normalizedKeys.includes(itemKey.trim().toLowerCase())

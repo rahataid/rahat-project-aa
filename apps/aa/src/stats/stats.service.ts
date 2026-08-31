@@ -74,12 +74,14 @@ export class StatsService {
 
   async findAll(payload) {
     this.logger.log('Received payload for findAll:', payload);
+    let benefStats;
+    let tokenStats;
     try {
-      const benefStats = await this.prismaService.stats.findMany();
+      benefStats = await this.prismaService.stats.findMany();
+      tokenStats = await this.getTokenStats();
       const triggeersStats = await firstValueFrom(
         this.client.send({ cmd: JOBS.STATS.MS_TRIGGERS_STATS }, payload)
       );
-      const tokenStats = await this.getTokenStats();
       return {
         benefStats,
         triggeersStats,
@@ -87,6 +89,10 @@ export class StatsService {
       };
     } catch (error) {
       this.logger.error('Error from microservice:', error);
+      return {
+        benefStats,
+        tokenStats,
+      };
     }
   }
 
