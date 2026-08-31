@@ -23,6 +23,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 
@@ -108,6 +109,7 @@ async function updateDeploymentFile(fileName, entry) {
 
 async function main() {
   const selectedFile = await selectDeploymentFile();
+  await maybeSkipStep('Step 2: Forecast tab');
   const selectedTabs = await askTabs();
   const confirmed = await confirmSelection(selectedFile, selectedTabs);
 

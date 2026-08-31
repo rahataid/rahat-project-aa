@@ -94,6 +94,9 @@ export const JOBS = {
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    REVOKE_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.revokeSponsorshipForGroup',
+    GET_SPONSORSHIP_STATUS_FOR_GROUP: 'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -124,10 +127,12 @@ export const JOBS = {
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
+    REVOKE_SPONSORSHIP_BATCH: 'aa.jobs.stellar.revokeSponsorshipBatch',
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
-    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+    DISBURSEMENT_STATUS_UPDATE:
+      'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   STELLAR_DIRECT: {
     DISBURSE: 'aa.jobs.stellar_direct.disburse',
@@ -162,7 +167,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -188,6 +193,7 @@ export const JOBS = {
     LIST: 'rahat.jobs.settings.list',
     GET: 'rahat.jobs.settings.get',
     UPDATE: 'rahat.jobs.settings.update',
+    UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
   },
   CONTRACT: {
@@ -380,6 +386,9 @@ export const JOBS = {
     TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
     TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
+  HEALTH: {
+    GET: 'rahat.jobs.health.getcheck',
+  },
 };
 
 export const EVENTS = {
@@ -393,7 +402,9 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
   BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE: 'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -458,4 +469,12 @@ export const FIELD_MAP = {
   NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
+};
+
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
 };

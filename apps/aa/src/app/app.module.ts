@@ -18,6 +18,7 @@ import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { VendorsModule } from '../vendors/vendors.module';
+import { AuthModule } from '../auth/auth.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
@@ -28,6 +29,9 @@ import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-trans
 import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
 import { RedisModule } from '../redis/redis.module';
+import { HealthModule } from '../health/health.module';
+import { CronModule } from '../cron/cron.module';
+import { SseModule } from '../sse/sse.module';
 
 @Module({
   imports: [
@@ -90,6 +94,8 @@ import { RedisModule } from '../redis/redis.module';
     StellarSponsorModule,
     BeneficiaryModule,
     StakeholdersModule,
+    HealthModule,
+    CronModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
@@ -106,6 +112,7 @@ import { RedisModule } from '../redis/redis.module';
     OtpModule,
     FundallocationModule,
     RedisModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

@@ -35,6 +35,7 @@ const path = require('path');
 const inquirer = require('inquirer');
 const { Wallet } = require('ethers');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const ADDRESS_SETTING_NAME = 'DEPLOYER_PRIVATE_KEY';
@@ -221,6 +222,7 @@ async function updateDeploymentFile(fileName, walletData) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 3: Wallet keys');
 	const walletData = await getWalletDataFromChoice();
 	const confirmed = await confirmSelection(selectedFile, walletData);
 

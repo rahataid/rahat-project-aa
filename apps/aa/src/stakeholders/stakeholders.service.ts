@@ -521,6 +521,27 @@ export class StakeholdersService {
   async getAllGroups(payload: GetAllGroups) {
     const { page, perPage, order, search, sort } = payload;
 
+    if (!page || !perPage) {
+      const result = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          isDeleted: false,
+          ...(search && {
+            name: { contains: search, mode: 'insensitive' },
+          }),
+        },
+        orderBy: {
+          ...(order && sort
+            ? {
+                [sort]: order,
+              }
+            : {
+                createdAt: 'desc',
+              }),
+        },
+      });
+      return result;
+    }
+
     const query = {
       where: {
         isDeleted: false,
@@ -697,8 +718,14 @@ export class StakeholdersService {
 
   // Looks up a value by key, ignoring case/whitespace differences in the key itself
   private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+    if (!item || typeof item !== 'object') return undefined;
+
     const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
-    this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
+    this.logger.log(
+      `Looking for keys ${normalizedKeys.join(
+        ', '
+      )} in item with keys: ${Object.keys(item).join(', ')}`
+    );
 
     const matchEntry = Object.entries(item).find(([itemKey]) =>
       normalizedKeys.includes(itemKey.trim().toLowerCase())
@@ -712,56 +739,56 @@ export class StakeholdersService {
     return payload
       .filter((item) => item !== null && item !== undefined)
       .map((item) => {
-      const rawSupportArea = this.getFieldCaseInsensitive(
-        item,
-        'Support Area',
-        'Support Area #'
-      );
+        const rawSupportArea = this.getFieldCaseInsensitive(
+          item,
+          'Support Area',
+          'Support Area #'
+        );
 
-      return {
-        name:
-          this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        designation:
-          this.getFieldCaseInsensitive(item, 'Designation')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        organization:
-          this.getFieldCaseInsensitive(item, 'Organization')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        district:
-          this.getFieldCaseInsensitive(item, 'District')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        municipality:
-          this.getFieldCaseInsensitive(item, 'Municipality')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        phone:
-          this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
-            ?.toString()
-            .trim() || '',
-        supportArea:
-          typeof rawSupportArea === 'string' && rawSupportArea
-            ? rawSupportArea
-                .split(',')
-                .map((v) => v.trim().toLowerCase())
-                .filter(Boolean)
-            : [],
-        email:
-          this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-      };
-    });
+        return {
+          name:
+            this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          designation:
+            this.getFieldCaseInsensitive(item, 'Designation')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          organization:
+            this.getFieldCaseInsensitive(item, 'Organization')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          district:
+            this.getFieldCaseInsensitive(item, 'District')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          municipality:
+            this.getFieldCaseInsensitive(item, 'Municipality')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          phone:
+            this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
+              ?.toString()
+              .trim() || '',
+          supportArea:
+            typeof rawSupportArea === 'string' && rawSupportArea
+              ? rawSupportArea
+                  .split(',')
+                  .map((v) => v.trim().toLowerCase())
+                  .filter(Boolean)
+              : [],
+          email:
+            this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+        };
+      });
   }
 
   // Runs class-validator on already-parsed rows — no raw Excel mapping

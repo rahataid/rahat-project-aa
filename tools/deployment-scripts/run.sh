@@ -136,6 +136,9 @@ for i in "${!SCRIPTS[@]}"; do
   node "$SCRIPT" $FILE_ARG
   STATUS=$?
   echo "---"
+  if [ $STATUS -eq 2 ]; then
+    continue
+  fi
   if [ $STATUS -ne 0 ]; then
     echo "Step failed: $(basename "$SCRIPT"). Stopping."
     exit $STATUS

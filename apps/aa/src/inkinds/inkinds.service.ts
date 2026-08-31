@@ -143,7 +143,7 @@ export class InkindsService {
   }
 
   async update(updateInkindDto: UpdateInkindDto) {
-    const { uuid, ...data } = updateInkindDto;
+    const { uuid, user, appId, ...data } = updateInkindDto;
 
     try {
       this.logger.log(`Updating inkind item: ${uuid}`);
@@ -157,7 +157,7 @@ export class InkindsService {
 
       this.logger.log(`Inkind updated successfully: ${uuid}`);
       return inkind;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to update inkind: ${error.message}`,
         error.stack
@@ -2450,7 +2450,7 @@ export class InkindsService {
             this.chainService.redeemInkind({
               beneficiaryAddress: wallet,
               vendorAddress: user.wallet,
-              inkindId: inkinds
+              inkindId: inkinds,
             });
           }
         }
