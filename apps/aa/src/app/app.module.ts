@@ -28,6 +28,7 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
 import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
 import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
+import { SseModule } from '../sse/sse.module';
 
 @Module({
   imports: [
