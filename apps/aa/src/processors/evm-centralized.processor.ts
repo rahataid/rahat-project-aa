@@ -55,7 +55,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
     if (typeof chainType !== 'string' || chainType.toLowerCase() !== 'evm') {
       this.logger.log(
-        `Chain type is "${chainType ?? 'unset'}", skipping EVM provider initialization`
+        `Chain type is "${
+          chainType ?? 'unset'
+        }", skipping EVM provider initialization`
       );
       return;
     }
@@ -86,7 +88,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private async getDeployerPrivateKey() {
     if (!this.deployerPrivateKey) {
-      this.deployerPrivateKey = await this.getFromSettings('DEPLOYER_PRIVATE_KEY');
+      this.deployerPrivateKey = await this.getFromSettings(
+        'DEPLOYER_PRIVATE_KEY'
+      );
       this.logger.log('Cached DEPLOYER_PRIVATE_KEY');
     }
     return this.deployerPrivateKey;
@@ -167,7 +171,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
-        this.logger.log(`Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`);
+        this.logger.log(
+          `Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`
+        );
         if (benf.amount) {
           const formattedAmountBn = ethers.parseUnits(
             benf.amount.toString(),
@@ -791,7 +797,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         EVMCentralizedProcessor.name
       );
 
-       await this.inkindService.updateVendorRedemptionTxHash(
+      await this.inkindService.updateVendorRedemptionTxHash(
         redemptionUuid,
         receipt.hash
       );
@@ -985,16 +991,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   }
 
   private async getDisbursableGroupsUuids() {
-    const benGroups = await this.prismaService.beneficiaryGroupTokens.findFirst({
-      where: {
-        AND: [
-          { numberOfTokens: { gt: 0 } },
-          { isDisbursed: false },
-          { payout: { is: null } },
-        ],
-      },
-      select: { uuid: true, groupId: true },
-    });
+    const benGroups = await this.prismaService.beneficiaryGroupTokens.findFirst(
+      {
+        where: {
+          AND: [
+            { numberOfTokens: { gt: 0 } },
+            { isDisbursed: false },
+            { payout: { is: null } },
+          ],
+        },
+        select: { uuid: true, groupId: true },
+      }
+    );
     return benGroups?.uuid;
   }
 
@@ -1032,7 +1040,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private computeBeneficiaryTokenDistribution(
     groups: any[],
-    tokens: { numberOfTokens: number; groupId: string }[] 
+    tokens: { numberOfTokens: number; groupId: string }[]
   ) {
     const csvData: Record<
       string,
@@ -1403,6 +1411,52 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     } catch (error) {
       this.logger.error(
         `Error getting RahatToken balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get RahatToken balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get RahatToken ERC20 assigned for a given wallet address
+   * @param walletAddress - The wallet address to check RahatToken assign for
+   * @returns Promise<{ balance: string; address: string }> - The RahatToken balance and address
+   */
+  async getBeneficiaryBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string }> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${walletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+      await this.ensureInitialized();
+
+      // Create RahatToken contract instance using the existing method
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'AAPROJECT'
+      );
+
+      // Call the balanceOf function to get the wallet's RahatToken balance
+      const tokenBalance = await rahatTokenContract.benTokens.staticCall(
+        walletAddress
+      );
+
+      this.logger.log(
+        `RahatToken assign for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return {
+        balance: tokenBalance.toString(),
+        address: walletAddress,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken assign for ${walletAddress}: ${error.message}`,
         error.stack,
         EVMCentralizedProcessor.name
       );

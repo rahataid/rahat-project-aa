@@ -927,8 +927,8 @@ export class EvmChainService implements IChainService, OnModuleInit {
         EvmChainService.name
       );
 
-      // Delegate to EVM processor for getting RahatToken balance
-      const balance = await this.evmProcessor.getRahatTokenBalance(
+      // Delegate to EVM processor for getting token assign for beneficiary
+      const balance = await this.evmProcessor.getBeneficiaryBalance(
         data.address
       );
 
