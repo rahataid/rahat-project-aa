@@ -697,6 +697,8 @@ export class StakeholdersService {
 
   // Looks up a value by key, ignoring case/whitespace differences in the key itself
   private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+    if (!item || typeof item !== 'object') return undefined;
+
     const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
     this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
 

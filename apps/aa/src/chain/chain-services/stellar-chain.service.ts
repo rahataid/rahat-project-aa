@@ -3,7 +3,8 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 
 import { SettingsService } from '@rumsan/settings';
-import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../../constants';
 import {
   IChainService,
   ChainType,
@@ -56,7 +57,8 @@ export class StellarChainService implements IChainService {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly eventEmitter: EventEmitter2
   ) { }
 
   getChainType(): ChainType {
@@ -706,6 +708,12 @@ export class StellarChainService implements IChainService {
           status: 'COMPLETED',
         },
       });
+
+      if (existingRedeem.payoutId) {
+        await this.eventEmitter.emitAsync(EVENTS.BENEFICIARY_REDEEM_COMPLETED, {
+          payoutId: existingRedeem.payoutId,
+        });
+      }
 
       this.logger.log(
         `sendAssetToVendor COMPLETED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount} txHash=${result.hash}`
