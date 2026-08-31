@@ -12,4 +12,5 @@ export const SUBJECTS = {
   FUND_MANAGEMENT: 'Fund Management',
   MULTI_SIG: 'Multi Sig',
   PAYOUT: 'Payout',
+  INKIND: 'Inkind',
 };
