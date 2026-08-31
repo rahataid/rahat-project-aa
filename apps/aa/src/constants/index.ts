@@ -386,6 +386,9 @@ export const JOBS = {
     TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
     TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
+  HEALTH: {
+    GET: 'rahat.jobs.health.getcheck',
+  },
 };
 
 export const EVENTS = {

@@ -28,6 +28,8 @@ import { FundallocationModule } from '../fundallocation/fundallocation.module';
 import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
 import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
+import { HealthModule } from '../health/health.module';
+import { CronModule } from '../cron/cron.module';
 import { SseModule } from '../sse/sse.module';
 
 @Module({
@@ -91,6 +93,8 @@ import { SseModule } from '../sse/sse.module';
     StellarSponsorModule,
     BeneficiaryModule,
     StakeholdersModule,
+    HealthModule,
+    CronModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
