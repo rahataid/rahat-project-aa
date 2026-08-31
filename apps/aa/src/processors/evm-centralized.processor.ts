@@ -1453,7 +1453,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       return {
         balance: tokenBalance.toString(),
         address: walletAddress,
-        decimals: decimals,
+        decimals: decimals.toString(),
       };
     } catch (error) {
       this.logger.error(
