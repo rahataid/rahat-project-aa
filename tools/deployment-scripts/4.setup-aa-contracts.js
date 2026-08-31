@@ -43,6 +43,7 @@ const {
 	isAddress,
 } = require('ethers');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const CONTRACTS_DIR = path.resolve(__dirname, 'contracts');
@@ -334,6 +335,7 @@ async function writeUpdatedDeploymentFile(fileName, payload, contractsValue) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 4: AA contracts');
 	const filePath = path.join(DEPLOYMENT_DIR, selectedFile);
 	const payload = await readJsonFile(filePath);
 	const wallet = getWalletFromKeys(payload);

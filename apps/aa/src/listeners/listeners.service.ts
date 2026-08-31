@@ -7,6 +7,7 @@ import { Queue } from 'bull';
 import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { ChainService } from '../chain/chain.service';
+import { PayoutsService } from '../payouts/payouts.service';
 import { SettingsService } from '@rumsan/settings';
 import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
 
@@ -22,7 +23,8 @@ export class ListernersService {
     @Inject(forwardRef(() => CvaDisbursementService))
     private disbService: CvaDisbursementService,
     private readonly settingsService: SettingsService,
-    private readonly chainService: ChainService
+    private readonly chainService: ChainService,
+    private readonly payoutsService: PayoutsService
   ) {}
 
   private statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -67,6 +69,17 @@ export class ListernersService {
     } catch (error) {
       this.logger.error(
         `Failed to trigger disburse-on-create for group ${payload.groupUuid}: ${error}`
+      );
+    }
+  }
+
+  @OnEvent(EVENTS.BENEFICIARY_REDEEM_COMPLETED)
+  async onBeneficiaryRedeemCompleted(payload: { payoutId: string }) {
+    try {
+      await this.payoutsService.checkAndCompletePayout(payload.payoutId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to check payout completion for payout ${payload.payoutId}: ${error}`
       );
     }
   }
