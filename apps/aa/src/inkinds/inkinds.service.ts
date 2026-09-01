@@ -1500,7 +1500,7 @@ export class InkindsService {
       );
       return vendor;
     }
-    
+
     const { value } = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
@@ -1556,10 +1556,16 @@ export class InkindsService {
 
     this.logger.log(`otp exemption reasons comes as: `, options);
     try {
-      const vendor = options?.skipVendorAndPhaseValidation
-        ? options.vendor
-        : await this.validateVendorAndPayoutPhase(user);
+      let vendor;
 
+      if (options?.skipVendorAndPhaseValidation) {
+        if (!options.vendor) {
+          vendor = await this.validateVendorAndPayoutPhase(user, true);
+        } else {
+          vendor = options.vendor;
+        }
+      }
+      
       if (!vendor) {
         throw new RpcException(
           `User '${user.name}' is not registered as a vendor`
