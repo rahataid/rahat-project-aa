@@ -94,8 +94,10 @@ export const JOBS = {
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
-    REVOKE_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.revokeSponsorshipForGroup',
-    GET_SPONSORSHIP_STATUS_FOR_GROUP: 'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    REVOKE_SPONSORSHIP_FOR_GROUP:
+      'aa.jobs.beneficiary.revokeSponsorshipForGroup',
+    GET_SPONSORSHIP_STATUS_FOR_GROUP:
+      'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
     RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
   },
   STELLAR: {
@@ -231,6 +233,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    BACK_FILL: 'aa.jobs.stats.backFill',
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
@@ -403,8 +406,10 @@ export const EVENTS = {
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
   BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
-  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE: 'events.beneficiary_group_sponsorship_revoke',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE:
+    'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -469,12 +474,4 @@ export const FIELD_MAP = {
   NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
-};
-
-export const SSE_EVENTS = {
-  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
-};
-
-export const REDIS_CHANNELS = {
-  SSE_LISTENER: 'sse:listener',
 };

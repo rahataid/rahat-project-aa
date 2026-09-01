@@ -23,7 +23,6 @@ export function mapAgeGroupCounts(data: any[]): Record<string, number> {
       counts[group]++;
     }
   }
-
   return counts;
 }
 

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ListernersService } from './listeners.service';
-import { StatsService } from '../stats';
+import { StatsModule } from '../stats';
 import { BeneficiaryStatService } from '../beneficiary/beneficiaryStat.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, TRIGGGERS_MODULE } from '../constants';
@@ -34,11 +34,11 @@ import { PayoutsModule } from '../payouts/payouts.module';
     StakeholdersModule,
     SettingsModule,
     ChainModule,
+    StatsModule,
     PayoutsModule,
   ],
   providers: [
     ListernersService,
-    StatsService,
     BeneficiaryStatService,
     CvaDisbursementService,
   ],
