@@ -1405,10 +1405,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         'RAHATTOKEN'
       );
 
+      const decimal = await rahatTokenContract.decimals.staticCall();
+
       // Call the balanceOf function to get the wallet's RahatToken balance
       const tokenBalance = await rahatTokenContract.balanceOf.staticCall(
         walletAddress
       );
+
+      const formattedAmount = ethers.formatUnits(tokenBalance, decimal);
 
       this.logger.log(
         `RahatToken balance for ${walletAddress}: ${tokenBalance.toString()}`,
@@ -1416,7 +1420,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       );
 
       return {
-        balance: tokenBalance.toString(),
+        balance: formattedAmount.toString(),
         address: walletAddress,
       };
     } catch (error) {
