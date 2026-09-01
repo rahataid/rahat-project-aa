@@ -1553,10 +1553,17 @@ export class InkindsService {
         ? options.vendor
         : await this.validateVendorAndPayoutPhase(user);
 
+<<<<<<< Updated upstream
       if (!vendor) {
         throw new RpcException(
           `User '${user.name}' is not registered as a vendor`
         );
+=======
+      if (options?.skipVendorAndPhaseValidation) {
+        vendor = options.vendor ?? (await this.validateVendorAndPayoutPhase(user, true));
+      } else {
+        vendor = await this.validateVendorAndPayoutPhase(user);
+>>>>>>> Stashed changes
       }
 
       // ===== STEP 1: Fetch and validate common data =====
