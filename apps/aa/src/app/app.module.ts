@@ -111,6 +111,7 @@ import { SseModule } from '../sse/sse.module';
     OtpModule,
     FundallocationModule,
     AuthModule,
+    SseModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
