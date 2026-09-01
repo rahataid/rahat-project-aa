@@ -27,9 +27,13 @@ import { PayoutsService } from '../payouts/payouts.service';
 import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
+import { RedisService } from '../redis/redis.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
+const DISBURSE_CACHE_TTL = 300;
+const DISBURSE_CACHE_KEY_PREFIX = 'disburse:progress:';
+
 interface DataItem {
   groupId: UUID;
   [key: string]: any;
@@ -54,7 +58,8 @@ export class BeneficiaryService {
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
     private readonly qrPdfService: QrPdfService,
-    private readonly sseService: SseService
+    private readonly sseService: SseService,
+    private readonly redisService: RedisService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -949,10 +954,25 @@ export class BeneficiaryService {
         ? await this.syncDisbursementStatusFromSdp(d)
         : null;
 
+      const groupUuid = d['groupId'] as string;
+      const cachedProgress = await this.getDisburseProgressCache(groupUuid);
+
+      const totalBeneficiaries =
+        cachedProgress?.totalBeneficiaries ||
+        (await this.getBeneficiaryCountByGroup(groupUuid));
+
+      const totalSuccess = cachedProgress
+        ? cachedProgress.completedCount
+        : d['isDisbursed']
+        ? totalBeneficiaries
+        : 0;
+
       formattedData.push({
         ...d,
         ...synced,
         group,
+        totalBeneficiaries,
+        totalSuccess,
       });
     }
 
@@ -1088,6 +1108,102 @@ export class BeneficiaryService {
     });
 
     return benfGroupToken;
+  }
+
+  async getBeneficiaryCountByGroup(groupUuid: string): Promise<number> {
+    const count = await this.prisma.beneficiaryToGroup.count({
+      where: { groupId: groupUuid },
+    });
+    return count;
+  }
+
+  async initDisburseProgressCache(
+    groupUuid: string,
+    totalBeneficiaries: number
+  ): Promise<void> {
+    const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+    await this.redisService.set(
+      cacheKey,
+      {
+        totalBeneficiaries,
+        completedCount: 0,
+        status: 'STARTED',
+        lastUpdated: Date.now(),
+      },
+      DISBURSE_CACHE_TTL
+    );
+  }
+
+  async incrementDisburseProgressCache(groupUuid: string): Promise<void> {
+    try {
+      const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+      const cached = await this.redisService.get<{
+        totalBeneficiaries: number;
+        completedCount: number;
+        status: string;
+      }>(cacheKey);
+
+      if (!cached) return;
+
+      const newCompleted = Math.min(
+        cached.completedCount + 1,
+        cached.totalBeneficiaries
+      );
+      const isComplete = newCompleted >= cached.totalBeneficiaries;
+
+      await this.redisService.set(
+        cacheKey,
+        {
+          ...cached,
+          completedCount: newCompleted,
+          status: isComplete ? 'DISBURSED' : 'STARTED',
+          lastUpdated: Date.now(),
+        },
+        DISBURSE_CACHE_TTL
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to increment disburse cache for ${groupUuid}: ${error.message}`
+      );
+    }
+  }
+
+  async setDisburseProgressStatus(
+    groupUuid: string,
+    status: string
+  ): Promise<void> {
+    try {
+      const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+      const cached = await this.redisService.get<{
+        totalBeneficiaries: number;
+        completedCount: number;
+      }>(cacheKey);
+
+      const totalBeneficiaries = cached?.totalBeneficiaries || 0;
+
+      await this.redisService.set(
+        cacheKey,
+        {
+          totalBeneficiaries,
+          completedCount: status === 'DISBURSED' ? totalBeneficiaries : (cached?.completedCount || 0),
+          status,
+          lastUpdated: Date.now(),
+        },
+        DISBURSE_CACHE_TTL
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to set disburse cache status for ${groupUuid}: ${error.message}`
+      );
+    }
+  }
+
+  async getDisburseProgressCache(groupUuid: string): Promise<{
+    totalBeneficiaries: number;
+    completedCount: number;
+    status: string;
+  } | null> {
+    return this.redisService.get(`${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`);
   }
 
   async getReservationStats(payload) {

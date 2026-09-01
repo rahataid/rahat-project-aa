@@ -153,6 +153,12 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         throw new RpcException('Beneficiary Token Balance not found');
       }
 
+      const groupUuid = Array.isArray(groups) ? groups[0] : groups;
+      await this.beneficiaryService.initDisburseProgressCache(
+        groupUuid,
+        bens.length
+      );
+
       const multicallTxnPayload = [];
 
       const contract = await this.getContractSettings();
@@ -416,6 +422,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
             },
           });
           this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+          await this.beneficiaryService.setDisburseProgressStatus(
+            groupUuid,
+            'DISBURSED'
+          );
         } else {
           this.logger.log(
             `Transaction ${txHash} failed on blockchain`,
@@ -436,6 +446,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
               },
             },
           });
+          await this.beneficiaryService.setDisburseProgressStatus(
+            groupUuid,
+            'FAILED'
+          );
         }
       } catch (error) {
         this.logger.error(

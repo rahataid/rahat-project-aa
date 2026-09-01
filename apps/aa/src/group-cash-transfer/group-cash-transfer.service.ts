@@ -13,9 +13,12 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
+import { RedisService } from '../redis/redis.service';
 import bcrypt from 'bcryptjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
+const GCT_CACHE_TTL = 300;
+const GCT_CACHE_KEY_PREFIX = 'gct:progress:';
 
 @Injectable()
 export class GroupCashTransferService {
@@ -27,7 +30,8 @@ export class GroupCashTransferService {
     prisma: PrismaService,
     private readonly treasuryService: GctTreasuryService,
     private readonly offrampClient: GctOfframpClient,
-    private readonly otpService: OtpService
+    private readonly otpService: OtpService,
+    private readonly redisService: RedisService
   ) {
     this.db = prisma;
   }
@@ -611,6 +615,16 @@ export class GroupCashTransferService {
         },
       });
 
+      await this.redisService.set(
+        `${GCT_CACHE_KEY_PREFIX}${recordUuid}`,
+        {
+          status: 'TOKEN_TRANSFERRED',
+          totalAmount: record.amount,
+          lastUpdated: Date.now(),
+        },
+        GCT_CACHE_TTL
+      );
+
       this.logger.log(
         `Token transferred for record=${recordUuid}, txHash=${txHash}`
       );
@@ -694,6 +708,16 @@ export class GroupCashTransferService {
             disbursementInfo: { result },
           },
         });
+
+        await this.redisService.set(
+          `${GCT_CACHE_KEY_PREFIX}${recordUuid}`,
+          {
+            status: isRejected ? 'REJECTED' : 'COMPLETED',
+            totalAmount: record.amount,
+            lastUpdated: Date.now(),
+          },
+          GCT_CACHE_TTL
+        );
 
         if (isRejected) {
           this.logger.warn(
