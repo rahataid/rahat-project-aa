@@ -1481,7 +1481,7 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  private async validateVendorAndPayoutPhase(user: UserObject) {
+  private async validateVendorAndPayoutPhase(user: UserObject, skipVendorAndPhaseValidation?: boolean) {
     const vendor = await this.prisma.vendor.findFirst({
       where: {
         uuid: user?.uuid,
@@ -1492,6 +1492,13 @@ export class InkindsService {
       throw new RpcException(
         `User '${user.name}' is not registered as a vendor`
       );
+    }
+
+    if (skipVendorAndPhaseValidation) {
+      this.logger.log(
+        `Skipping vendor and payout phase validation for user: ${user.name}`
+      );
+      return vendor;
     }
 
     const { value } = await this.appService.getSettings({
@@ -2134,6 +2141,7 @@ export class InkindsService {
   async beneficiaryBulkInkindRedeem(
     payloads: BeneficiaryInkindRedeemDto[],
     user: UserObject,
+    skipVendorAndPhaseValidation?: boolean,
     batchSize = DEFAULT_BULK_BATCH_SIZE
   ) {
     if (!payloads || payloads.length === 0) {
@@ -2146,7 +2154,7 @@ export class InkindsService {
 
     try {
       // guard: vendor must be registered and payout phase must be open
-      const vendor = await this.validateVendorAndPayoutPhase(user);
+      const vendor = await this.validateVendorAndPayoutPhase(user, skipVendorAndPhaseValidation);
 
       // split payloads into fixed-size chunks
       const batches: BeneficiaryInkindRedeemDto[][] = [];
@@ -2493,7 +2501,7 @@ export class InkindsService {
   }
 
   async redeemOfflineInkindByVendor(payload: RedeemOfflineInkindByVendorDto) {
-    const { redeemedInkinds, user } = payload;
+    const { redeemedInkinds, user, skipVendorAndPhaseValidation } = payload;
 
     this.logger.log(
       `Processing offline inkind redemption for vendor: ${user.uuid}`
@@ -2522,7 +2530,7 @@ export class InkindsService {
         }
       );
 
-      return await this.beneficiaryBulkInkindRedeem(bulkPayloads, user);
+      return await this.beneficiaryBulkInkindRedeem(bulkPayloads, user, skipVendorAndPhaseValidation);
     } catch (error: any) {
       this.logger.error(
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
