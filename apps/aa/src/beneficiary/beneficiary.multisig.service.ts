@@ -10,13 +10,17 @@ import {
   MetaTransactionData,
   OperationType,
 } from '@safe-global/safe-core-sdk-types';
+import { SseService } from '../sse/sse.service';
 
 @Injectable()
 export class BeneficiaryMultisigService {
   private safeApiKit: SafeApiKit;
   private NETWORK_PROVIDER: string;
   private SAFE_PROPOSER_PRIVATE_ADDRESS: string;
-  constructor(protected prisma: PrismaService) {}
+  constructor(
+    protected prisma: PrismaService,
+    private readonly sseService: SseService
+  ) {}
 
   async onModuleInit() {
     const fundManagementConfig = await this.prisma.setting.findFirst({
@@ -207,21 +211,19 @@ export class BeneficiaryMultisigService {
 
       // Propose transaction to the service
 
-      await this.safeApiKit.proposeTransaction({
-        safeAddress: safeAddress,
-        safeTransactionData: safeTransaction.data,
-        safeTxHash,
-        senderAddress: deployerWallet.address,
-        senderSignature: signature.data,
-      });
+      const proposeTransactionResponse =
+        await this.safeApiKit.proposeTransaction({
+          safeAddress: safeAddress,
+          safeTransactionData: safeTransaction.data,
+          safeTxHash,
+          senderAddress: deployerWallet.address,
+          senderSignature: signature.data,
+        });
 
-      // console.log({
-      //   safeAddress,
-      //   safeTransactionData: safeTransaction.data,
-      //   safeTxHash,
-      //   senderAddress: deployerWallet.address,
-      //   senderSignature: signature.data,
-      // });
+      await this.sseService.publishEvent(
+        'fund.event',
+        proposeTransactionResponse
+      );
 
       return {
         safeAddress: safeAddress,

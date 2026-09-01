@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bull';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -8,7 +9,7 @@ import bcrypt from 'bcryptjs';
 import { Queue } from 'bull';
 import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
-import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../../constants';
 import type { ContractProcessor } from '../../processors/contract.processor';
 import type { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
 import {
@@ -56,7 +57,8 @@ export class EvmChainService implements IChainService, OnModuleInit {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async onModuleInit() {
@@ -886,6 +888,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
           status: 'COMPLETED',
         },
       });
+
+      if (existingRedeem.payoutId) {
+        // emitAsync (not emit) — callers of sendAssetToVendor read payout
+        // status/gap right after this returns, so the listener's write must
+        // land before we respond, not fire-and-forget in the background.
+        await this.eventEmitter.emitAsync(EVENTS.BENEFICIARY_REDEEM_COMPLETED, {
+          payoutId: existingRedeem.payoutId,
+        });
+      }
 
       return {
         txHash: result.txHash,

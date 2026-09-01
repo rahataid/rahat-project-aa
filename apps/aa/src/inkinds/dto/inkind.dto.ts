@@ -78,6 +78,7 @@ export class UpdateInkindDto {
   image?: string;
 
   user?: any;
+  appId?: string;
 }
 
 export class GetInkindDto {

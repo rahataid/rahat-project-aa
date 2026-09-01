@@ -24,7 +24,9 @@ import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
+import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
+import { SseService } from '../sse/sse.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -51,7 +53,8 @@ export class BeneficiaryService {
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
-    private readonly qrPdfService: QrPdfService
+    private readonly qrPdfService: QrPdfService,
+    private readonly sseService: SseService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -873,7 +876,7 @@ export class BeneficiaryService {
 
     // Tx definies a single transaction with a number of operations that either all succeed or all fail together
     // Which is crucial for maintaining data integrity when reserving tokens and creating payouts.
-    return this.prisma.$transaction(async (tx) => {
+    const createTokenReservation = this.prisma.$transaction(async (tx) => {
       const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
@@ -917,6 +920,8 @@ export class BeneficiaryService {
         message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
       };
     });
+    await this.sseService.publishEvent('fund.event', createTokenReservation);
+    return createTokenReservation;
   }
 
   async getAllTokenReservations(dto) {
@@ -1283,6 +1288,18 @@ export class BeneficiaryService {
 
       this.logger.log(`Beneficiary redeem updated: ${beneficiaryRedeem.uuid}`);
 
+      // single chokepoint for every caller of this helper (offramp, stellar
+      // transfer processors, etc.) — catch payout completion at the real
+      // write instead of relying on each call site to remember to check
+      if (
+        beneficiaryRedeem.payoutId &&
+        REDEEM_COMPLETED_STATUSES.includes(payload.status as string)
+      ) {
+        await this.payoutService.checkAndCompletePayout(
+          beneficiaryRedeem.payoutId
+        );
+      }
+
       return beneficiaryRedeem;
     } catch (error) {
       this.logger.error(`Error updating beneficiary redeem: ${error}`);
@@ -1300,6 +1317,20 @@ export class BeneficiaryService {
       data: payload,
     });
     this.logger.log(`Bulk updated ${result.count} beneficiary redeems`);
+
+    if (REDEEM_COMPLETED_STATUSES.includes(payload.status as string)) {
+      const updated = await this.prisma.beneficiaryRedeem.findMany({
+        where: { uuid: { in: uuids } },
+        select: { payoutId: true },
+      });
+      const payoutIds = [
+        ...new Set(updated.map((r) => r.payoutId).filter(Boolean)),
+      ];
+      await Promise.all(
+        payoutIds.map((id) => this.payoutService.checkAndCompletePayout(id))
+      );
+    }
+
     return result;
   }
 

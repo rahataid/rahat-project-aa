@@ -9,6 +9,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { SettingsModule } from '@rumsan/settings';
 import { ChainModule } from '../chain/chain.module';
+import { PayoutsModule } from '../payouts/payouts.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ChainModule } from '../chain/chain.module';
     StakeholdersModule,
     SettingsModule,
     ChainModule,
+    PayoutsModule,
   ],
   providers: [
     ListernersService,

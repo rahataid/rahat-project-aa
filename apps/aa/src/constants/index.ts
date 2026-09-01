@@ -386,6 +386,9 @@ export const JOBS = {
     TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
     TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
+  HEALTH: {
+    GET: 'rahat.jobs.health.getcheck',
+  },
 };
 
 export const EVENTS = {
@@ -399,6 +402,7 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
+  BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
   BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
   BENEFICIARY_GROUP_SPONSORSHIP_REVOKE: 'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
@@ -465,4 +469,12 @@ export const FIELD_MAP = {
   NO_OF_LACTATING_WOMEN: 'no_of_lactating_women',
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
+};
+
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
 };
