@@ -25,6 +25,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 
@@ -250,6 +251,7 @@ async function updateDeploymentFile(fileName, chainSettingsEntry) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 1: Chain settings');
 	const chainType = await askChainType();
 	const networkTier = await askNetworkTier(chainType);
 	const preset = await askPreset(chainType, networkTier);

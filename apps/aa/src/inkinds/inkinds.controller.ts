@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { InkindsService } from './inkinds.service';
@@ -27,8 +27,11 @@ import {
   GetVendorInkindRedemptionDto,
   UpdateVendorInkindRedeemStatusDto,
 } from './dto/vendorInkindRedem.dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class InkindsController {
   constructor(private readonly inkindsService: InkindsService) {}
 
@@ -36,6 +39,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.CREATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.INKIND)
   create(@Payload() createInkindDto: CreateInkindDto) {
     return this.inkindsService.create(createInkindDto);
   }
@@ -44,6 +48,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.UPDATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.INKIND)
   update(@Payload() updateInkindDto: UpdateInkindDto) {
     return this.inkindsService.update(updateInkindDto);
   }
@@ -52,6 +57,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.DELETE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.DELETE, SUBJECTS.INKIND)
   delete(@Payload() deleteInkindDto: DeleteInkindDto) {
     return this.inkindsService.delete(deleteInkindDto.uuid);
   }
@@ -68,8 +74,8 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_SUMMARY,
     uuid: process.env.PROJECT_ID,
   })
-  getInkindSummary() {
-    return this.inkindsService.getInkindSummary();
+  getInkindSummary(@Payload() payload: any) {
+    return this.inkindsService.getInkindSummary(payload);
   }
 
   @MessagePattern({
@@ -85,6 +91,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.ADD_INKIND_STOCK,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.INKIND)
   addInkindStock(@Payload() addInkindStockDto: AddInkindStockDto) {
     return this.inkindsService.addInkindStock(addInkindStockDto);
   }
@@ -101,6 +108,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.REMOVE_INKIND_STOCK,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.INKIND)
   removeInkindStock(@Payload() removeInkindStockDto: RemoveInkindStockDto) {
     return this.inkindsService.removeInkindStock(removeInkindStockDto);
   }
@@ -110,6 +118,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.ASSIGN_GROUP_INKIND,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.INKIND)
   assignGroupInkind(@Payload() assignGroupInkindDto: AssignGroupInkindDto) {
     return this.inkindsService.assignGroupInkind(assignGroupInkindDto);
   }
@@ -223,27 +232,33 @@ export class InkindsController {
 
   @MessagePattern({
     cmd: JOBS.INKINDS.GET_ALL_OFFLINE_BENEFICIARY_BY_VENDOR,
-    uuid: process.env.PROJECT_ID
+    uuid: process.env.PROJECT_ID,
   })
   getAllOfflineBeneficiaryByVendor(@Payload() payload: { vendorId: string }) {
-    return this.inkindsService.getAllOfflineBeneficiaryByVendor(payload.vendorId);
+    return this.inkindsService.getAllOfflineBeneficiaryByVendor(
+      payload.vendorId
+    );
   }
 
   @MessagePattern({
     cmd: JOBS.INKINDS.REDEEM_OFFLINE_INKIND_BY_VENDOR,
-    uuid: process.env.PROJECT_ID
+    uuid: process.env.PROJECT_ID,
   })
-  redeemOfflineInkindByVendor(@Payload() payload: RedeemOfflineInkindByVendorDto) {
+  redeemOfflineInkindByVendor(
+    @Payload() payload: RedeemOfflineInkindByVendorDto
+  ) {
     return this.inkindsService.redeemOfflineInkindByVendor(payload);
   }
 
   // ============== Vendor Redemption ============================
-@MessagePattern({
+  @MessagePattern({
     cmd: JOBS.INKINDS.GET_VENDOR_AVAILABLE_INKIND_DETAILS,
     uuid: process.env.PROJECT_ID,
   })
   getVendorAvailableInkindsDetails(@Payload() payload: { vendorUuid: string }) {
-    return this.inkindsService.getVendorAvailableInkindsDetails(payload.vendorUuid);
+    return this.inkindsService.getVendorAvailableInkindsDetails(
+      payload.vendorUuid
+    );
   }
 
   @MessagePattern({

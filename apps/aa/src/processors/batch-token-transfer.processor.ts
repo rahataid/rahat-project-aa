@@ -13,6 +13,7 @@ import {
   SingleTransfer,
 } from './types';
 import { lowerCaseObjectKeys } from '../utils/utility';
+import { PayoutsService } from '../payouts/payouts.service';
 
 const BATCH_SIZE = 10;
 
@@ -25,6 +26,7 @@ export class BatchTokenTransferProcessor {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prismaService: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly payoutsService: PayoutsService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue
   ) {}
@@ -463,6 +465,11 @@ export class BatchTokenTransferProcessor {
               },
             },
           });
+          if (existingRedeem.payoutId) {
+            await this.payoutsService.checkAndCompletePayout(
+              existingRedeem.payoutId
+            );
+          }
         } else {
           // Create new record
           await this.prismaService.beneficiaryRedeem.create({
@@ -571,6 +578,11 @@ export class BatchTokenTransferProcessor {
               },
             },
           });
+          if (existingRedeem.payoutId) {
+            await this.payoutsService.checkAndCompletePayout(
+              existingRedeem.payoutId
+            );
+          }
         } else {
           // Create new record
           await this.prismaService.beneficiaryRedeem.create({
@@ -707,7 +719,7 @@ export class BatchTokenTransferProcessor {
       'FUNDMANAGEMENT_TAB_CONFIG'
     );
     return fundManagementConfig.tabs?.some(
-      (tab: any) => tab.value === 'multisigWallet'
+      (tab: any) => tab.value === 'multisigWallet' || 'treasury'
     );
   }
 

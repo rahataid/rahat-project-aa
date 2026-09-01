@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { PayoutsService } from './payouts.service';
@@ -7,9 +7,11 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import { GetPayoutDetailsDto } from './dto/get-payout-details.dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class PayoutsController {
   constructor(
     private readonly payoutsService: PayoutsService,
@@ -17,6 +19,7 @@ export class PayoutsController {
   ) {}
 
   @MessagePattern({ cmd: JOBS.PAYOUT.CREATE, uuid: process.env.PROJECT_ID })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.PAYOUT)
   create(@Payload() createPayoutDto: CreatePayoutDto) {
     return this.payoutsService.create(createPayoutDto);
   }
@@ -32,6 +35,7 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.UPDATE, uuid: process.env.PROJECT_ID })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.PAYOUT)
   update(@Payload() updatePayoutDto: UpdatePayoutDto & { uuid: string }) {
     return this.payoutsService.update(updatePayoutDto.uuid, updatePayoutDto);
   }
@@ -45,17 +49,31 @@ export class PayoutsController {
   }
 
   @MessagePattern({
+    cmd: JOBS.PAYOUT.SEND_OTP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sendOtp(@Payload() payload: { email: string }) {
+    return this.payoutsService.sendOtp(payload.email);
+  }
+
+  @MessagePattern({
     cmd: JOBS.PAYOUT.TRIGGER_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
-  triggerPayout(@Payload() payload: { uuid: string; user?: any }) {
-    return this.payoutsService.triggerPayout(payload.uuid, payload.user);
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
+  triggerPayout(@Payload() payload: { uuid: string; user?: any; otp: string }) {
+    return this.payoutsService.triggerPayout(
+      payload.uuid,
+      payload.user,
+      payload.otp
+    );
   }
 
   @MessagePattern({
     cmd: JOBS.PAYOUT.TRIGGER_ONE_FAILED_PAYOUT_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerOneFailedPayoutRequest(
     @Payload() payload: { beneficiaryRedeemUuid: string }
   ) {
@@ -66,6 +84,7 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.TRIGGER_FAILED_PAYOUT_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerFailedPayoutRequest(@Payload() payload: { payoutUUID: string }) {
     return this.payoutsService.triggerFailedPayoutRequest(payload);
   }
@@ -87,9 +106,8 @@ export class PayoutsController {
   }
 
   @MessagePattern({ cmd: JOBS.PAYOUT.GET_STATS, uuid: process.env.PROJECT_ID })
-  getPayoutStats() {
-    console.log('first');
-    return this.payoutsService.getPayoutStats();
+  getPayoutStats(@Payload() payload: { startDate?: string; endDate?: string }) {
+    return this.payoutsService.getPayoutStats(payload);
   }
 
   @MessagePattern({
@@ -104,7 +122,12 @@ export class PayoutsController {
     cmd: JOBS.PAYOUT.VERIFY_MANUAL_PAYOUT,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.PAYOUT)
   verifyManualPayout(@Payload() payload: any) {
-    return this.payoutsService.verifyManualPayout(payload.payoutUUID, payload?.data, payload?.matchBy);
+    return this.payoutsService.verifyManualPayout(
+      payload.payoutUUID,
+      payload?.data,
+      payload?.matchBy
+    );
   }
 }

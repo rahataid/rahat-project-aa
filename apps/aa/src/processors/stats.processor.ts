@@ -4,13 +4,15 @@ import { EVENTS } from '../constants';
 import { BeneficiaryStatService } from '../beneficiary/beneficiaryStat.service';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
+import { SseService } from '../sse/sse.service';
 
 @Injectable()
 export class StatsProcessor implements OnApplicationBootstrap {
   constructor(
     private readonly benefStats: BeneficiaryStatService,
     private readonly stakeholderStats: StakeholdersService,
-    private readonly beneficiaryService: BeneficiaryService
+    private readonly beneficiaryService: BeneficiaryService,
+    private readonly sseService: SseService
   ) {}
 
   async onApplicationBootstrap() {
@@ -21,5 +23,10 @@ export class StatsProcessor implements OnApplicationBootstrap {
   @OnEvent(EVENTS.TOKEN_DISBURSED)
   async onTokenDisbursed(groupUuid) {
     this.beneficiaryService.benTokensUpdate(groupUuid);
+  }
+
+  @OnEvent(EVENTS.TOKEN_DISBURSED)
+  async onTokenDisburse(groupUuid) {
+    this.sseService.publishEvent('token.disbursed', { groupUuid });
   }
 }

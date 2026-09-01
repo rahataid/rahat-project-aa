@@ -24,7 +24,9 @@ import axios from 'axios';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { PayoutsService } from '../payouts/payouts.service';
+import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
+import { SseService } from '../sse/sse.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -51,7 +53,8 @@ export class BeneficiaryService {
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
-    private readonly qrPdfService: QrPdfService
+    private readonly qrPdfService: QrPdfService,
+    private readonly sseService: SseService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -178,7 +181,6 @@ export class BeneficiaryService {
       hasPayout,
       excludeGroupPurpose,
     } = dto;
-
     const orderBy: Record<string, 'asc' | 'desc'> = {};
     orderBy[sort] = order;
 
@@ -223,27 +225,34 @@ export class BeneficiaryService {
       ],
     };
 
-    const benfGroups = await paginate(
-      this.prisma.beneficiaryGroups,
-      {
-        where: {
-          ...where,
-        },
-        include: {
-          _count: {
-            select: {
-              beneficiaries: true,
-            },
+    const query = {
+      where,
+      include: {
+        _count: {
+          select: {
+            beneficiaries: true,
           },
-          tokensReserved: true,
         },
-        orderBy,
+        tokensReserved: true,
       },
-      {
-        page,
-        perPage,
-      }
-    );
+      orderBy,
+    };
+
+    if (page === undefined || perPage === undefined) {
+      const data = await this.prisma.beneficiaryGroups.findMany(query);
+
+      return {
+        data,
+        meta: {
+          total: data.length,
+        },
+      };
+    }
+
+    const benfGroups = await paginate(this.prisma.beneficiaryGroups, query, {
+      page,
+      perPage,
+    });
 
     this.logger.debug(
       `Fetched ${benfGroups.data.length} groups, forwarding to project service`
@@ -447,7 +456,6 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
-    this.logger.debug(`Fetching beneficiary group: ${uuid}`);
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
@@ -465,7 +473,6 @@ export class BeneficiaryService {
 
     if (!benfGroup) throw new RpcException('Beneficiary group not found.');
 
-    this.logger.debug(`Group found: ${uuid}, fetching project data`);
     const data = await lastValueFrom(
       this.client.send(
         { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
@@ -509,6 +516,137 @@ export class BeneficiaryService {
       group,
       groupedBeneficiaries,
     };
+  }
+
+  /**
+   * Called from the core repo (e.g. when a project closes) to tear down a
+   * group's Stellar sponsorship. Just emits the event — StellarSponsorService
+   * (stellar-sponsor.service.ts) picks it up, batches the group's
+   * beneficiaries, and closes out their sponsored accounts (trustline close +
+   * accountMerge) if the chain is Stellar and sponsorship is configured; a
+   * no-op otherwise. This method doesn't touch beneficiary records directly.
+   */
+  async revokeSponsorshipForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Received revoke-sponsorship request for group ${groupUuid}`);
+
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_SPONSORSHIP_REVOKE, { groupUuid });
+
+    return { groupUuid, queued: true };
+  }
+
+  /**
+   * Called from the core repo to re-attempt Stellar sponsorship for a
+   * group's not-yet-sponsored beneficiaries — e.g. after a transient
+   * failure (insufficient sponsor balance, network error) is resolved.
+   * Checks current status first via `getSponsorshipStatusForGroup` and:
+   *  - no-ops if the chain isn't Stellar, or every beneficiary is already sponsored.
+   *  - otherwise re-emits BENEFICIARY_GROUP_ADDED_TO_PROJECT, the same event
+   *    that first triggers sponsorship. Safe to re-run: the underlying batch
+   *    (`createSponsoredAccountsBatch`) already skips accounts it finds
+   *    already sponsored, so already-sponsored beneficiaries in the group
+   *    aren't touched again.
+   * `no-wallet` beneficiaries are reported separately since retrying can
+   * never fix them — they need a wallet address before sponsorship can even
+   * be attempted.
+   */
+  async retrySponsorshipForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Received retry-sponsorship request for group ${groupUuid}`);
+
+    const status = await this.getSponsorshipStatusForGroup({ groupUuid });
+
+    if (!status.isStellarChain) {
+      return { ...status, queued: false, reason: 'Chain is not Stellar — sponsorship does not apply' };
+    }
+
+    const retriable = status.pending + status.failed;
+    if (retriable === 0) {
+      return { ...status, queued: false, reason: 'No pending or failed beneficiaries to retry' };
+    }
+
+    this.logger.log(
+      `Retrying sponsorship for group ${groupUuid}: ${retriable} beneficiary/ies eligible (pending: ${status.pending}, failed: ${status.failed}, no-wallet skipped: ${status.noWallet})`
+    );
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, { groupUuid });
+
+    return { ...status, queued: true, retrying: retriable };
+  }
+
+  /**
+   * Reports Stellar sponsorship status for every beneficiary in a group, by
+   * reading what StellarSponsorProcessor has already written to
+   * `beneficiary.extras` — no live Stellar calls. Returns `isStellarChain:
+   * false` with all counts zeroed (no DB scan) when the project's chain
+   * isn't Stellar — sponsorship doesn't apply, so there's nothing to report.
+   * Status per beneficiary:
+   *  - `sponsored`: extras.stellarSponsored === true (extras.stellarSponsorAction says how — create/trustline-only/already-sponsored)
+   *  - `failed`: extras.stellarSponsorError is set (the error message is the reason)
+   *  - `no-wallet`: beneficiary has no walletAddress on file — was never even queued
+   *  - `pending`: none of the above — not yet processed (queued-but-not-run and never-triggered both land here; this doesn't inspect live queue state)
+   */
+  async getSponsorshipStatusForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+
+    if (!(await this.isStellarChain())) {
+      return {
+        groupUuid,
+        isStellarChain: false,
+        total: 0,
+        sponsored: 0,
+        pending: 0,
+        failed: 0,
+        noWallet: 0,
+        accounts: [],
+      };
+    }
+
+    const records = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId: groupUuid },
+      select: { beneficiary: { select: { uuid: true, walletAddress: true, extras: true } } },
+    });
+
+    const accounts = records.map(({ beneficiary }) => {
+      const extras = (beneficiary.extras as Record<string, unknown>) ?? {};
+      const base = { beneficiaryId: beneficiary.uuid, walletAddress: beneficiary.walletAddress || null };
+
+      if (!beneficiary.walletAddress) {
+        return { ...base, status: 'no-wallet' as const, reason: 'No wallet address on file' };
+      }
+      if (extras.stellarSponsored === true) {
+        return { ...base, status: 'sponsored' as const, action: extras.stellarSponsorAction as string | undefined };
+      }
+      if (typeof extras.stellarSponsorError === 'string') {
+        return {
+          ...base,
+          status: 'failed' as const,
+          reason: extras.stellarSponsorError,
+          failedAt: extras.stellarSponsorFailedAt as string | undefined,
+        };
+      }
+      return { ...base, status: 'pending' as const };
+    });
+
+    return {
+      groupUuid,
+      isStellarChain: true,
+      total: accounts.length,
+      sponsored: accounts.filter((a) => a.status === 'sponsored').length,
+      pending: accounts.filter((a) => a.status === 'pending').length,
+      failed: accounts.filter((a) => a.status === 'failed').length,
+      noWallet: accounts.filter((a) => a.status === 'no-wallet').length,
+      accounts,
+    };
+  }
+
+  private async isStellarChain(): Promise<boolean> {
+    try {
+      const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+      return (chainSettings?.value as any)?.type === 'stellar';
+    } catch (err: any) {
+      this.logger.warn(`Failed to load CHAIN_SETTINGS: ${err?.message}`);
+      return false;
+    }
   }
 
   async checkIsTokenAlreadyAssigned(groupId: UUID) {
@@ -703,9 +841,24 @@ export class BeneficiaryService {
       return tokenAssignmentCheck;
     }
 
+    const sponsorshipStatus = await this.getSponsorshipStatusForGroup({
+      groupUuid: beneficiaryGroupId,
+    });
+    if (sponsorshipStatus.isStellarChain) {
+      const notSponsored = sponsorshipStatus.total - sponsorshipStatus.sponsored;
+      if (notSponsored > 0) {
+        this.logger.warn(
+          `Group ${beneficiaryGroupId} has ${notSponsored}/${sponsorshipStatus.total} beneficiary/ies not yet sponsored on Stellar (pending: ${sponsorshipStatus.pending}, failed: ${sponsorshipStatus.failed}, no-wallet: ${sponsorshipStatus.noWallet}) — refusing to reserve tokens`
+        );
+        throw new RpcException(
+          'Beneficiary sponsorship is still in progress for this group. Please wait until all beneficiaries are sponsored before assigning funds.'
+        );
+      }
+    }
+
     // Tx definies a single transaction with a number of operations that either all succeed or all fail together
     // Which is crucial for maintaining data integrity when reserving tokens and creating payouts.
-    return this.prisma.$transaction(async (tx) => {
+    const createTokenReservation = this.prisma.$transaction(async (tx) => {
       const data = await tx.beneficiaryGroupTokens.create({
         data: {
           title,
@@ -749,6 +902,8 @@ export class BeneficiaryService {
         message: `Successfully reserved ${totalTokensReserved} tokens for group ${benfGroup.name}.`,
       };
     });
+    await this.sseService.publishEvent('fund.event', createTokenReservation);
+    return createTokenReservation;
   }
 
   async getAllTokenReservations(dto) {
@@ -779,9 +934,10 @@ export class BeneficiaryService {
       DataItem & { group: ReturnType<typeof this.getOneGroup> }
     > = [];
 
-    const disburseOnCreate = await this.settingsService.getPublic(
-      'DISBURSED_ON_CREATE'
-    );
+    const disburseOnCreate = await this.settingsService
+      .getPublic('DISBURSED_ON_CREATE')
+      .catch(() => null);
+
     const shouldSyncFromSdp =
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
@@ -1108,6 +1264,18 @@ export class BeneficiaryService {
 
       this.logger.log(`Beneficiary redeem updated: ${beneficiaryRedeem.uuid}`);
 
+      // single chokepoint for every caller of this helper (offramp, stellar
+      // transfer processors, etc.) — catch payout completion at the real
+      // write instead of relying on each call site to remember to check
+      if (
+        beneficiaryRedeem.payoutId &&
+        REDEEM_COMPLETED_STATUSES.includes(payload.status as string)
+      ) {
+        await this.payoutService.checkAndCompletePayout(
+          beneficiaryRedeem.payoutId
+        );
+      }
+
       return beneficiaryRedeem;
     } catch (error) {
       this.logger.error(`Error updating beneficiary redeem: ${error}`);
@@ -1125,6 +1293,20 @@ export class BeneficiaryService {
       data: payload,
     });
     this.logger.log(`Bulk updated ${result.count} beneficiary redeems`);
+
+    if (REDEEM_COMPLETED_STATUSES.includes(payload.status as string)) {
+      const updated = await this.prisma.beneficiaryRedeem.findMany({
+        where: { uuid: { in: uuids } },
+        select: { payoutId: true },
+      });
+      const payoutIds = [
+        ...new Set(updated.map((r) => r.payoutId).filter(Boolean)),
+      ];
+      await Promise.all(
+        payoutIds.map((id) => this.payoutService.checkAndCompletePayout(id))
+      );
+    }
+
     return result;
   }
 

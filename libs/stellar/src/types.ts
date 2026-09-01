@@ -12,6 +12,10 @@ export interface StellarClientConfig {
   assetCode: string;
   /** Public key of the account that issued the asset */
   assetIssuer: string;
+  /** Secret key for the distribution wallet used for direct batch disbursement. Required only when calling sendBatchPayment. */
+  distributionWalletSecret?: string;
+  /** Maximum allowed bactch transfered during payment sending **/
+  maxBatchTransfers?: number;
 }
 
 export interface SponsoredAccount {
@@ -29,8 +33,35 @@ export interface CreateSponsoredAccountResult extends TransactionResult {
   account: SponsoredAccount;
 }
 
-export interface CreateSponsoredAccountsBatchResult extends TransactionResult {
-  accounts: SponsoredAccount[];
+export interface SponsoredAccountBatchItem extends SponsoredAccount {
+  /** What the batch call did for this account: created it + trustline, added only the trustline (account already existed), or found it already fully sponsored. */
+  action: 'create' | 'trustline-only' | 'already-sponsored';
+}
+
+export interface CreateSponsoredAccountsBatchResult {
+  /** Null when every account in the batch was already fully sponsored — nothing was submitted. */
+  hash: string | null;
+  successful?: boolean;
+  ledger?: number;
+  accounts: SponsoredAccountBatchItem[];
+}
+
+export interface MergedAccountItem {
+  publicKey: string;
+  /**
+   * `mergeable`: account was closed out (trustline closed if present, account merged into the sponsor).
+   * `not-found`: no account exists at this address — nothing to merge.
+   * `nonzero-balance`: account still holds some of the configured asset — skipped rather than force-closing a funded trustline.
+   */
+  status: 'mergeable' | 'not-found' | 'nonzero-balance';
+}
+
+export interface MergeSponsoredAccountsBatchResult {
+  /** Null when nothing in the batch was mergeable — no transaction was submitted. */
+  hash: string | null;
+  successful?: boolean;
+  ledger?: number;
+  accounts: MergedAccountItem[];
 }
 
 export type PaymentResult = TransactionResult;
@@ -59,6 +90,10 @@ export interface PaymentOpContext {
 export interface SendPaymentContext {
   server: Horizon.Server;
   networkPassphrase: string;
+}
+
+export interface SendBatchPaymentResult extends TransactionResult {
+  items: { destination: string; amount: string; paymentId: string }[];
 }
 
 export interface StellarOperationErrorOptions {

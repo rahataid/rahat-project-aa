@@ -2,6 +2,14 @@ import { Payouts } from '@prisma/client';
 
 export type RedeemStatus = 'FAILED' | 'COMPLETED' | 'NOT_STARTED' | 'PENDING';
 
+// a beneficiaryRedeem status that marks one leg (fiat/token) of a redemption as done —
+// used to decide whether a payout-completion check needs to run after a status write
+export const REDEEM_COMPLETED_STATUSES = [
+  'COMPLETED',
+  'FIAT_TRANSACTION_COMPLETED',
+  'TOKEN_TRANSACTION_COMPLETED',
+];
+
 export type PayoutWithRelations = Payouts & {
   beneficiaryGroupToken?: {
     uuid: string;
@@ -14,7 +22,7 @@ export type PayoutWithRelations = Payouts & {
         beneficiaries: number;
       };
     };
-  };
+  } | null;
   beneficiaryRedeem: { status: string }[];
 };
 
@@ -26,11 +34,7 @@ export function calculatePayoutStatus(
     'FIAT_TRANSACTION_FAILED',
     'TOKEN_TRANSACTION_FAILED',
   ];
-  const COMPLETED_STATUSES = [
-    'COMPLETED',
-    'FIAT_TRANSACTION_COMPLETED',
-    'TOKEN_TRANSACTION_COMPLETED',
-  ];
+  const COMPLETED_STATUSES = REDEEM_COMPLETED_STATUSES;
   const PENDING_STATUSES = [
     'PENDING',
     'FIAT_TRANSACTION_INITIATED',

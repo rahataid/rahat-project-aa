@@ -2,6 +2,7 @@ import { Asset, BASE_FEE, Horizon, Keypair, Operation, TransactionBuilder } from
 import {
   PaymentOpContext,
   PaymentResult,
+  SendBatchPaymentResult,
   SendFromSponsoredBatchResult,
   SendPaymentContext,
   SponsoredBatchTransferItem,
@@ -9,6 +10,7 @@ import {
 } from '../types';
 import { describePaymentError } from '../utils/errors';
 import { submitTransaction } from './submit';
+
 
 /**
  * Sponsor sends the configured asset to a (sponsored) account. Only the
@@ -223,4 +225,68 @@ export async function sendPayment(
   } catch (error) {
     throw describePaymentError(error, asset);
   }
+}
+
+export async function sendBatchPayment(
+  ctx: SendPaymentContext,
+  asset: Asset,
+  distributionWalletKeypair: Keypair,
+  receivers: {
+    destination: string,
+    amount: string
+  }[],
+  maxBatchTransfers: number
+): Promise<SendBatchPaymentResult> {
+  const maximumAllowedBatchTransfers = maxBatchTransfers;
+
+  if (receivers.length < 1 || receivers.length > maximumAllowedBatchTransfers) {
+    throw new RangeError(`receivers.length must be between 1 and ${maximumAllowedBatchTransfers} (got ${receivers.length})`);
+  }
+
+  const distributionAccount = await ctx.server.loadAccount(distributionWalletKeypair.publicKey());
+
+  let builder = new TransactionBuilder(distributionAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: ctx.networkPassphrase
+  })
+
+  receivers.forEach((receiver) => {
+    builder = builder.addOperation(
+      Operation.payment({
+        destination: receiver.destination,
+        amount: receiver.amount,
+        asset: asset
+      })
+    )
+  })
+
+  const tx = builder.setTimeout(100).build();
+
+  tx.sign(distributionWalletKeypair);
+
+  const result = await submitTransaction(ctx.server, tx);
+
+  const opPage = await ctx.server.operations().forTransaction(result.hash).order('asc').limit(receivers.length).call();
+  const paymentOps = opPage.records.filter(isPaymentOperationRecord);
+
+  if (paymentOps.length !== receivers.length) {
+    throw new StellarOperationError(
+      `Expected ${receivers.length} payment operation(s) for batch transaction ${result.hash}, found ${paymentOps.length}`,
+      { raw: opPage.records }
+    );
+  }
+
+  return {
+    hash: result.hash,
+    successful: result.successful,
+    ledger: result.ledger,
+    items: receivers.map((item, idx) => {
+      const op = paymentOps[idx];
+      return {
+        destination: item.destination,
+        amount: item.amount,
+        paymentId: op.id,
+      };
+    }),
+  };
 }

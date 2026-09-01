@@ -41,6 +41,8 @@ import {
 } from '../processors/types';
 import { StellarTransferService } from '../stellar-transfer/stellar-transfer.service';
 import { ListPayoutDto } from './dto/list-payout.dto';
+import { OtpService } from '../otp/otp.service';
+import bcrypt from 'bcryptjs';
 import {
   calculatePayoutStatus,
   PayoutWithRelations,
@@ -54,6 +56,7 @@ import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
+import { ethers } from 'ethers';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -76,29 +79,109 @@ export class PayoutsService {
     @Inject(forwardRef(() => BeneficiaryService))
     private readonly beneficiaryService: BeneficiaryService,
     private settingService: SettingsService,
+    private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue
   ) {}
+
+  async sendOtp(email: string) {
+    if (!email) {
+      throw new RpcException('Email is required to send OTP');
+    }
+
+    const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
+
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+
+    // if existing OTP is expired, purge it so we can issue a fresh one
+    if (defaultOpt && !isExistingValid) {
+      await this.prisma.otp.delete({ where: { email } });
+    }
+
+    const { otp } = await this.otpService.sendEmail(
+      email,
+      'Payout Trigger OTP',
+      'Your OTP for triggering payout is:',
+      isExistingValid ? defaultOpt.otp : undefined
+    );
+
+    // if otp is set in db and not expired, do not update otp, just resend the existing otp
+    if (isExistingValid) {
+      return { success: true, message: 'OTP sent successfully' };
+    }
+
+    const expiry = new Date(Date.now() + 50 * 60 * 1000); // OTP valid for 50 minutes
+    const otpHash = await bcrypt.hash(otp, 10);
+    await this.prisma.otp.create({
+      data: {
+        otpHash,
+        otp,
+        email,
+        expiresAt: expiry,
+        amount: 0,
+      },
+    });
+
+    this.logger.log(`Payout OTP sent to email: ${email}`);
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  private async verifyOtp(email?: string, otp?: string) {
+    if (!email || !otp) {
+      throw new RpcException('Email and OTP are required');
+    }
+
+    const otpRecord = await this.prisma.otp.findUnique({ where: { email } });
+    if (!otpRecord) {
+      throw new RpcException('OTP record not found');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new RpcException('OTP has expired');
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    if (!isValid) {
+      throw new RpcException('Invalid OTP');
+    }
+
+    // consume OTP so it cannot be reused
+    await this.prisma.otp.delete({ where: { email } });
+  }
 
   /**
    * Find payout stats
    * This is used to find the payout stats including counts by payout type
    * and isCompleted status.
    */
-  async getPayoutStats(): Promise<PayoutStats> {
+  async getPayoutStats(payload: any): Promise<PayoutStats> {
     try {
+      const { startDate, endDate } = payload || {};
+      const dateFilter =
+        startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {};
+
       const [fspCount, vendorCount, failed, success, beneficiaryRedeems] =
         await Promise.all([
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'FIAT_TRANSFER',
               status: 'FIAT_TRANSACTION_COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
             where: {
               transactionType: 'VENDOR_REIMBURSEMENT',
               status: 'COMPLETED',
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -110,6 +193,7 @@ export class PayoutsService {
                   'TOKEN_TRANSACTION_FAILED',
                 ],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.count({
@@ -117,6 +201,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
           this.prisma.beneficiaryRedeem.findMany({
@@ -127,6 +212,7 @@ export class PayoutsService {
               status: {
                 in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'],
               },
+              ...dateFilter,
             },
           }),
         ]);
@@ -366,7 +452,8 @@ export class PayoutsService {
     payload: ListPayoutDto
   ): Promise<PaginatedResult<Omit<PayoutWithRelations, 'beneficiaryRedeem'>>> {
     try {
-      const { page, perPage, groupName, payoutType } = payload;
+      const { page, perPage, groupName, payoutType, startDate, endDate } =
+        payload;
 
       this.logger.log('Fetching all payouts');
       const where: Prisma.PayoutsWhereInput = {
@@ -384,6 +471,14 @@ export class PayoutsService {
           Object.values(PayoutType).includes(payoutType as PayoutType) && {
             type: payoutType as PayoutType,
           }),
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: new Date(startDate) }),
+                ...(endDate && { lte: new Date(endDate) }),
+              },
+            }
+          : {}),
       };
 
       const query: Prisma.PayoutsFindManyArgs = {
@@ -521,17 +616,79 @@ export class PayoutsService {
     }
   }
 
+  /**
+   * Re-evaluates a payout's status right after a beneficiaryRedeem write and
+   * persists it (with the completion gap snapshot) if it just became COMPLETED.
+   * Call this from processors immediately after updating a redeem's status,
+   * instead of relying on a later findOne/findAll read to discover completion.
+   *
+   * @param payoutUuid - The UUID of the payout to re-check
+   */
+  async checkAndCompletePayout(payoutUuid: string): Promise<void> {
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      include: {
+        beneficiaryRedeem: { select: { status: true } },
+        beneficiaryGroupToken: {
+          select: {
+            uuid: true,
+            status: true,
+            numberOfTokens: true,
+            isDisbursed: true,
+            createdBy: true,
+            beneficiaryGroup: {
+              select: { _count: { select: { beneficiaries: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payout) {
+      this.logger.warn(
+        `[checkAndCompletePayout] payout not found: ${payoutUuid}`
+      );
+      return;
+    }
+
+    const calculatedStatus = calculatePayoutStatus(
+      payout as PayoutWithRelations
+    );
+    await this.syncPayoutStatus(payout as PayoutWithRelations, calculatedStatus);
+  }
+
   //  Sync payout status in DB if changed, and update object
   async syncPayoutStatus(
     payout: PayoutWithRelations,
     newStatus: RedeemStatus
   ): Promise<void> {
     if (payout.status !== newStatus) {
+      const data: { status: RedeemStatus; extras?: any } = {
+        status: newStatus,
+      };
+
+      // ponytail: snapshot the gap the moment a payout completes, since the
+      // activation phase can be reverted+reactivated later and lose its
+      // original activatedAt, making later recalculation wrong/negative.
+      if (newStatus === 'COMPLETED') {
+        const payoutGap = await this.calculatePayoutCompletionGap(
+          payout.uuid
+        );
+        data.extras = { ...(payout.extras as object), payoutGap };
+
+        // group_gap: time from triggerPayout call to payout completion, FSP only.
+        if (payout.type === 'FSP') {
+          const groupGap = await this.calculateGroupGap(payout);
+          if (groupGap) data.extras.group_gap = groupGap;
+        }
+      }
+
       await this.prisma.payouts.update({
         where: { uuid: payout.uuid },
-        data: { status: newStatus },
+        data,
       });
       payout.status = newStatus;
+      if (data.extras) payout.extras = data.extras;
     }
   }
 
@@ -654,7 +811,12 @@ export class PayoutsService {
       let payoutGap = 'N/A';
 
       if (isCompleted && isPayoutTriggered) {
-        payoutGap = await this.calculatePayoutCompletionGap(uuid);
+        const storedGap = (payout.extras as { payoutGap?: string })
+          ?.payoutGap;
+
+        // backfill for payouts completed before the gap started getting
+        // stored on completion
+        payoutGap = storedGap ?? (await this.calculatePayoutCompletionGap(uuid));
       }
 
       return {
@@ -718,7 +880,8 @@ export class PayoutsService {
       };
     }
   ): Promise<boolean> {
-    if (payout.type === 'VENDOR') {
+    const extras = payout.extras as { paymentProviderType?: string } | null;
+    if (payout.type === 'VENDOR' || (payout.type === 'FSP' && extras?.paymentProviderType === "manual_bank_transfer")) {
       return (
         payout.beneficiaryRedeem.length > 0 &&
         payout.beneficiaryRedeem.length ===
@@ -730,9 +893,8 @@ export class PayoutsService {
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
-        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
-          2 &&
-      payout.beneficiaryRedeem.every((r) => r.isCompleted)
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2 &&
+      payout.beneficiaryRedeem.every((r) => r.isCompleted)    
     );
   }
 
@@ -934,7 +1096,10 @@ export class PayoutsService {
     return this.offrampService.getPaymentProvider();
   }
 
-  async triggerPayout(uuid: string, user?: any): Promise<any> {
+  async triggerPayout(uuid: string, user?: any, otp?: string): Promise<any> {
+    // Verify OTP before proceeding with payout trigger
+    await this.verifyOtp(user?.email, otp);
+
     //TODO: verify trustline of beneficiary wallet addresses
     const payoutDetails = await this.findOne(uuid);
     const projectId = this.configService.get('PROJECT_ID');
@@ -970,6 +1135,19 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Stash trigger time for group_gap (trigger -> completion), FSP only.
+    if (payoutDetails.type === 'FSP') {
+      await this.prisma.payouts.update({
+        where: { uuid },
+        data: {
+          extras: {
+            ...(payoutDetails.extras as object),
+            payoutTriggeredAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
 
     // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
@@ -1331,6 +1509,10 @@ export class PayoutsService {
         );
       }
 
+      // const info = log.info as Record<string, any> | null;
+
+      // return { ...log, mediaUrl: info?.mediaUrl };
+
       return log;
     } catch (error) {
       this.logger.error(
@@ -1520,6 +1702,7 @@ export class PayoutsService {
     if (!projectInfo) {
       throw new RpcException('Project info not found, in SETTINGS');
     }
+
     const activeYear = projectInfo?.value?.active_year;
     const riverBasin = projectInfo?.value?.river_basin;
 
@@ -1539,7 +1722,7 @@ export class PayoutsService {
       )
     );
 
-    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+    const activationPhase = data.data.find((p) => p?.disbursementConfig?.disbursementMethods?.includes('TOKEN'));
 
     if (!activationPhase) {
       this.logger.warn(
@@ -1549,15 +1732,37 @@ export class PayoutsService {
       return 'N/A';
     }
 
-    if (!activationPhase.isActive) {
+    // ponytail: activatedAt goes null once a phase is reverted; fall back to the
+    // last trigger-history snapshot (taken right before the null-out) so a
+    // completed payout keeps its gap instead of going negative/N/A.
+    let activatedAtRaw = activationPhase.activatedAt;
+
+    this.logger.log(`Activation phase found for riverBasin ${riverBasin} and activeYear ${activeYear}, activatedAt: ${activatedAtRaw}`
+    );
+
+    if (!activatedAtRaw) {
+      const history = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.revertPhase.getAll' },
+          { phaseUuid: activationPhase.uuid }
+        )
+      );
+
+      this.logger.log(`Revert history found for phase ${activationPhase.uuid}: ${JSON.stringify(history)}`);
+
+      activatedAtRaw = history?.data?.[0]?.phaseActivationDate;
+      this.logger.log(`Fallback to last trigger-history snapshot, activatedAt: ${activatedAtRaw}`)
+    }
+
+    if (!activatedAtRaw) {
       this.logger.warn(
-        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+        `No activation timestamp (current or historical) found for riverBasin ${riverBasin} and activeYear ${activeYear}`
       );
 
       return 'N/A';
     }
 
-    const activatedAt = new Date(activationPhase.activatedAt);
+    const activatedAt = new Date(activatedAtRaw);
     const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
       where: { payout: { uuid: payoutUuid } },
       orderBy: {
@@ -1572,9 +1777,50 @@ export class PayoutsService {
     }
 
     const diffInMs =
-      new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+      new Date(payoutLastLog?.updatedAt).getTime() - activatedAt.getTime();
 
     console.log(`Payout completion gap in ms: ${diffInMs}`);
+
+    return getFormattedTimeDiff(diffInMs);
+  }
+
+  /**
+   * Calculate group_gap: time from triggerPayout call to payout completion.
+   * FSP payouts only. Uses the `payoutTriggeredAt` timestamp stashed in
+   * extras by triggerPayout, and the last beneficiaryRedeem update as the
+   * completion time.
+   *
+   * @param payout - The payout (must have uuid, type, extras)
+   * @returns { Promise<string | null> } - formatted gap, or null if trigger time unknown
+   */
+  async calculateGroupGap(
+    payout: Pick<Payouts, 'uuid' | 'type' | 'extras'>
+  ): Promise<string | null> {
+    const payoutTriggeredAt = (payout.extras as { payoutTriggeredAt?: string })
+      ?.payoutTriggeredAt;
+
+    if (!payoutTriggeredAt) {
+      this.logger.warn(
+        `[calculateGroupGap] payoutTriggeredAt not found for payout ${payout.uuid}, skipping group_gap`
+      );
+      return null;
+    }
+
+    const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
+      where: { payout: { uuid: payout.uuid } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!payoutLastLog) {
+      this.logger.warn(
+        `[calculateGroupGap] payout last log not found for payout with UUID ${payout.uuid}`
+      );
+      return null;
+    }
+
+    const diffInMs =
+      new Date(payoutLastLog.updatedAt).getTime() -
+      new Date(payoutTriggeredAt).getTime();
 
     return getFormattedTimeDiff(diffInMs);
   }
@@ -1616,8 +1862,8 @@ export class PayoutsService {
       matchBy
     );
 
-    this.logVerificationStats(verificationResult, payoutRows.length);
-    this.validateMatchedBeneficiaries(verificationResult);
+    this.logVerificationStats(verificationResult, payoutRows.length, matchBy);
+    this.validateMatchedBeneficiaries(verificationResult, matchBy);
 
     const fieldOfficerAddress = await this.getFieldOfficerWalletAddress();
     const tokenAmount = this.calculateTokenAmountPerBeneficiary(payout);
@@ -1722,6 +1968,13 @@ export class PayoutsService {
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
+      if (!row['Transaction Status']) {
+        throw new RpcException(
+          `Payout verification failed: Missing transaction status in row ${
+            index + 1
+          }`
+        );
+      }
       if (matchBy === 'phoneNumber') {
         if (!row['Phone Number']) {
           throw new RpcException(
@@ -1773,8 +2026,9 @@ export class PayoutsService {
     const enrichedRows: EnrichedManualPayoutRow[] = payoutRows.map((row) => {
       const matchedBeneficiary = beneficiaries.find((beneficiary) =>
         matchBy === 'phoneNumber'
-          ? beneficiary.phoneNumber === row['Phone Number']
-          : beneficiary.bankDetails.accountNumber === row['Bank Account Number']
+          ? beneficiary.phoneNumber === String(row['Phone Number']).trim()
+          : beneficiary.bankDetails.accountNumber ===
+            String(row['Bank Account Number']).trim()
       );
 
       return {
@@ -1804,7 +2058,8 @@ export class PayoutsService {
    */
   private logVerificationStats(
     result: ManualPayoutVerificationResult,
-    totalRows: number
+    totalRows: number,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     const matchPercentage = ((result.matched.length / totalRows) * 100).toFixed(
       1
@@ -1820,7 +2075,9 @@ export class PayoutsService {
     if (result.unmatched.length > 0) {
       this.logger.warn(
         `Found ${result.unmatched.length} unmatched records. ` +
-          `These beneficiaries may not be registered or have incorrect bank account information.`
+          `These beneficiaries may not be registered or have incorrect ${
+            matchBy === 'phoneNumber' ? 'phone number' : 'bank account'
+          } information.`
       );
     }
   }
@@ -1829,9 +2086,16 @@ export class PayoutsService {
    * Validates that we have matched beneficiaries to process
    */
   private validateMatchedBeneficiaries(
-    result: ManualPayoutVerificationResult
+    result: ManualPayoutVerificationResult,
+    matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): void {
     if (result.matched.length === 0) {
+      if (matchBy === 'phoneNumber') {
+        throw new RpcException(
+          'Payout verification failed: No beneficiary phone numbers matched with the provided data. ' +
+            'Please verify that the phone numbers in your file match the registered beneficiaries.'
+        );
+      }
       throw new RpcException(
         'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
           'Please verify that the bank account numbers in your file match the registered beneficiaries.'
@@ -1843,6 +2107,32 @@ export class PayoutsService {
    * Retrieves field officer wallet address from settings
    */
   private async getFieldOfficerWalletAddress(): Promise<string> {
+    const fundManagementConfig = await this.getFromSettings(
+      'FUNDMANAGEMENT_TAB_CONFIG'
+    );
+
+    const isProjectCashTracker = !fundManagementConfig.tabs?.some(
+      (tab: any) => tab.value === 'cashTracker'
+    );
+
+    const deployerPrivateKey = await this.settingService.getPublic(
+      'DEPLOYER_PRIVATE_KEY'
+    );
+
+    if (!isProjectCashTracker) {
+      if (!deployerPrivateKey.value) {
+        throw new RpcException(
+          'Payout verification failed: Deployer private key not configured in system settings'
+        );
+      }
+
+      const deployerWalletAddress = new ethers.Wallet(
+        deployerPrivateKey.value as string
+      ).address;
+
+      return deployerWalletAddress;
+    }
+
     const entitiesSettings = await this.settingService.getPublic('ENTITIES');
 
     if (!entitiesSettings?.value) {
@@ -2137,5 +2427,24 @@ export class PayoutsService {
     }
 
     return filteredRedeems;
+  }
+
+  private async getFromSettings(key: string): Promise<any> {
+    try {
+      const settings = await this.prisma.setting.findUnique({
+        where: {
+          name: key,
+        },
+      });
+
+      if (!settings?.value) {
+        throw new Error(`${key} not found`);
+      }
+
+      return settings.value;
+    } catch (error) {
+      this.logger.error(`Error getting setting ${key}: ${error.message}`);
+      throw error;
+    }
   }
 }

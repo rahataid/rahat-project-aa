@@ -18,6 +18,7 @@ import { AppService } from './app.service';
 import { CommsModule } from '../comms/comms.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { VendorsModule } from '../vendors/vendors.module';
+import { AuthModule } from '../auth/auth.module';
 import { PayoutsModule } from '../payouts/payouts.module';
 import { QueueService } from '../queue/queue.service';
 import { BQUEUE } from '../constants';
@@ -25,7 +26,11 @@ import { ChainModule } from '../chain/chain.module';
 import { OtpModule } from '../otp/otp.module';
 import { FundallocationModule } from '../fundallocation/fundallocation.module';
 import { GroupCashTransferModule } from '../group-cash-transfer/group-cash-transfer.module';
+import { IvrTemplatesModule } from '../ivr-templates/ivr-templates.module';
 import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module';
+import { HealthModule } from '../health/health.module';
+import { CronModule } from '../cron/cron.module';
+import { SseModule } from '../sse/sse.module';
 
 @Module({
   imports: [
@@ -88,6 +93,8 @@ import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module'
     StellarSponsorModule,
     BeneficiaryModule,
     StakeholdersModule,
+    HealthModule,
+    CronModule,
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
@@ -100,8 +107,11 @@ import { StellarSponsorModule } from '../stellar-sponsor/stellar-sponsor.module'
     GrievancesModule,
     InkindsModule,
     GroupCashTransferModule,
+    IvrTemplatesModule,
     OtpModule,
     FundallocationModule,
+    AuthModule,
+    SseModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],

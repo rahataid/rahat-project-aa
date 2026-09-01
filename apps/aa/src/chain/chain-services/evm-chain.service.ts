@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bull';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
@@ -8,7 +9,7 @@ import bcrypt from 'bcryptjs';
 import { Queue } from 'bull';
 import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
-import { BQUEUE, CORE_MODULE, JOBS } from '../../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../../constants';
 import type { ContractProcessor } from '../../processors/contract.processor';
 import type { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
 import {
@@ -56,11 +57,14 @@ export class EvmChainService implements IChainService, OnModuleInit {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async onModuleInit() {
-    const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+    const chainSettings = await this.settingsService.getPublic(
+      'CHAIN_SETTINGS'
+    );
     const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
     if (typeof chainType === 'string' && chainType.toLowerCase() !== 'evm') {
       this.logger.log(
@@ -70,7 +74,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
       return;
     }
     await this.initializeProvider().catch((err) =>
-      this.logger.error(`Failed to initialize EVM provider: ${err.message}`, err.stack, EvmChainService.name)
+      this.logger.error(
+        `Failed to initialize EVM provider: ${err.message}`,
+        err.stack,
+        EvmChainService.name
+      )
     );
   }
 
@@ -316,7 +324,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   // Required interface methods
   async assignTokens(data: AssignTokensDto): Promise<any> {
-    this.logger.log(`Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`);
+    this.logger.log(
+      `Assigning ${data.amount} tokens to ${data.beneficiaryAddress}`
+    );
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.ASSIGN_TOKENS,
@@ -378,16 +388,20 @@ export class EvmChainService implements IChainService, OnModuleInit {
     //     },
     //   }))
     // );
-    
+
     let count = 0;
     for (const { uuid, tokensReserved } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
-        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
+        this.logger.warn(
+          `Group ${uuid} has no active token reservation, skipping`
+        );
         continue;
       }
       this.logger.log(`loop counter: ${count++}`);
-      this.logger.log(`Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`);
+      this.logger.log(
+        `Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`
+      );
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
@@ -419,7 +433,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
     };
   }
 
-  async getDisbursementStats(): Promise<any[]> {
+  async getDisbursementStats(payload: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any[]> {
     try {
       this.logger.log(
         'Getting disbursement stats for EVM chain',
@@ -466,7 +483,20 @@ export class EvmChainService implements IChainService, OnModuleInit {
         this.logger.warn('Contract details not found');
       }
 
+      const dateFilter =
+        payload?.startDate || payload?.endDate
+          ? {
+              createdAt: {
+                ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+                ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+              },
+            }
+          : {};
+
       const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+        where: {
+          ...dateFilter,
+        },
         include: {
           beneficiaryGroup: {
             include: {
@@ -479,6 +509,19 @@ export class EvmChainService implements IChainService, OnModuleInit {
           },
         },
       });
+
+      // Apply date filter to beneficiaryRedeem for token stats
+      const redeemDateFilter =
+        payload?.startDate || payload?.endDate
+          ? {
+              createdAt: {
+                ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+                ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+              },
+            }
+          : {};
+
+      const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
 
       const totalDisbursedTokens = benfTokens.reduce((acc, token) => {
         if (token.isDisbursed) {
@@ -571,6 +614,22 @@ export class EvmChainService implements IChainService, OnModuleInit {
               ? this.getFormattedTimeDiff(averageDuration)
               : 'N/A',
         },
+        {
+          name: 'Assigned Tokens',
+          value: tokenStatsResult.assignedTokens,
+        },
+        {
+          name: 'Disbursed Tokens',
+          value: tokenStatsResult.disbursedTokens,
+        },
+        {
+          name: 'Pending Disbursement',
+          value: tokenStatsResult.pendingDisbursement,
+        },
+        {
+          name: 'Redeemed Tokens',
+          value: tokenStatsResult.redeemedTokens,
+        },
       ];
     } catch (error) {
       this.logger.error(
@@ -580,6 +639,55 @@ export class EvmChainService implements IChainService, OnModuleInit {
       );
       throw error;
     }
+  }
+
+  private async getTokenStats(dateFilter?: any) {
+    const REDEEMED_LEGS = [
+      { transactionType: 'VENDOR_REIMBURSEMENT', status: 'COMPLETED' },
+      {
+        transactionType: 'FIAT_TRANSFER',
+        status: 'FIAT_TRANSACTION_COMPLETED',
+      },
+    ] as const;
+    let assignedTokens = 0;
+    let disbursedTokens = 0;
+    let redeemedTokens = 0;
+
+    const groupTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: dateFilter,
+      select: {
+        numberOfTokens: true,
+        isDisbursed: true,
+        payout: { select: { type: true, mode: true } },
+      },
+    });
+    for (const gt of groupTokens) {
+      const tokens = gt.numberOfTokens || 0;
+      assignedTokens += tokens;
+      if (gt.isDisbursed) disbursedTokens += tokens;
+    }
+    const pendingDisbursement = assignedTokens - disbursedTokens;
+
+    const redeemRecords = await this.prisma.beneficiaryRedeem.findMany({
+      where: { OR: [...REDEEMED_LEGS], ...dateFilter },
+      select: {
+        amount: true,
+        transactionType: true,
+        beneficiaryWalletAddress: true,
+        payout: { select: { mode: true } },
+      },
+    });
+
+    for (const r of redeemRecords) {
+      redeemedTokens += r.amount;
+    }
+    const result = {
+      assignedTokens,
+      disbursedTokens,
+      pendingDisbursement,
+      redeemedTokens,
+    };
+    return result;
   }
 
   /**
@@ -750,6 +858,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
         },
       });
 
+      if (existingRedeem.payoutId) {
+        // emitAsync (not emit) — callers of sendAssetToVendor read payout
+        // status/gap right after this returns, so the listener's write must
+        // land before we respond, not fire-and-forget in the background.
+        await this.eventEmitter.emitAsync(EVENTS.BENEFICIARY_REDEEM_COMPLETED, {
+          payoutId: existingRedeem.payoutId,
+        });
+      }
+
       return {
         txHash: result.txHash,
       };
@@ -763,7 +880,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
     }
   }
 
-  async transferOfflineRedemptionBatch(items: OfflineTransferItem[]): Promise<OfflineTransferResult[]> {
+  async transferOfflineRedemptionBatch(
+    items: OfflineTransferItem[]
+  ): Promise<OfflineTransferResult[]> {
     const results: OfflineTransferResult[] = [];
     for (const item of items) {
       try {
@@ -772,9 +891,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
           item.vendorWalletAddress,
           item.amount.toString()
         );
-        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, txHash: result.txHash });
+        results.push({
+          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+          txHash: result.txHash,
+        });
       } catch (err: any) {
-        results.push({ beneficiaryWalletAddress: item.beneficiaryWalletAddress, error: err?.message });
+        results.push({
+          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+          error: err?.message,
+        });
       }
     }
     return results;
@@ -806,17 +931,24 @@ export class EvmChainService implements IChainService, OnModuleInit {
     }
   }
 
-  async getRahatTokenBalance(data: { address: string }): Promise<any> {
+  async getRahatTokenBalance(data: {
+    address: string;
+    role?: string;
+  }): Promise<any> {
     try {
+      let balance;
       this.logger.log(
         `Getting RahatToken balance for address: ${data.address}`,
         EvmChainService.name
       );
 
-      // Delegate to EVM processor for getting RahatToken balance
-      const balance = await this.evmProcessor.getRahatTokenBalance(
-        data.address
-      );
+      if (data.role && data.role?.toLowerCase() == 'vendor') {
+        balance = await this.evmProcessor.getRahatTokenBalance(data.address);
+      }
+
+      // Delegate to EVM processor for getting token assign for beneficiary
+      else
+        balance = await this.evmProcessor.getBeneficiaryBalance(data.address);
 
       this.logger.log(
         `Successfully retrieved RahatToken balance for ${data.address}: ${balance.balance}`,
@@ -835,7 +967,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async fundAccount(data: FundAccountDto): Promise<any> {
-    this.logger.log(`Funding account ${data.walletAddress} with amount ${data.amount}`);
+    this.logger.log(
+      `Funding account ${data.walletAddress} with amount ${data.amount}`
+    );
     const chainConfig = await this.getChainConfig();
     return this.evmTxQueue.add({
       type: JOBS.CONTRACT.FUND_ACCOUNT,
@@ -1336,7 +1470,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
       const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true 
+        (t) => t.isDisbursed === true
       );
 
       if (!activeToken) {
@@ -1385,7 +1519,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async redeemInkind(redeemDto: RedeemInkindDto) {
-    this.logger.log(`Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`);
+    this.logger.log(
+      `Redeeming inkind for beneficiary ${redeemDto.beneficiaryAddress}`
+    );
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND, ...redeemDto },
       {
@@ -1400,8 +1536,12 @@ export class EvmChainService implements IChainService, OnModuleInit {
     );
   }
 
-  async redeemVendorInkindTokens(redeemVendorInkindDto: RedeemInkindTokenForCashDto) {
-    this.logger.log(`Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`);
+  async redeemVendorInkindTokens(
+    redeemVendorInkindDto: RedeemInkindTokenForCashDto
+  ) {
+    this.logger.log(
+      `Redeeming vendor inkind tokens for ${redeemVendorInkindDto.vendorAddress}, amount: ${redeemVendorInkindDto.amount}`
+    );
     return this.evmTxQueue.add(
       { type: JOBS.EVM.REDEEM_INKIND_TOKEN_FOR_CASH, ...redeemVendorInkindDto },
       {
