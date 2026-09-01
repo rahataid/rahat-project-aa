@@ -1556,20 +1556,21 @@ export class InkindsService {
 
     this.logger.log(`otp exemption reasons comes as: `, options);
     try {
-      let vendor;
+      const vendor = options?.skipVendorAndPhaseValidation
+        ? options.vendor
+        : await this.validateVendorAndPayoutPhase(user);
 
-      if (options?.skipVendorAndPhaseValidation) {
-        if (!options.vendor) {
-          vendor = await this.validateVendorAndPayoutPhase(user, true);
-        } else {
-          vendor = options.vendor;
-        }
-      }
-      
+<<<<<<< Updated upstream
       if (!vendor) {
         throw new RpcException(
           `User '${user.name}' is not registered as a vendor`
         );
+=======
+      if (options?.skipVendorAndPhaseValidation) {
+        vendor = options.vendor ?? (await this.validateVendorAndPayoutPhase(user, true));
+      } else {
+        vendor = await this.validateVendorAndPayoutPhase(user);
+>>>>>>> Stashed changes
       }
 
       // ===== STEP 1: Fetch and validate common data =====
