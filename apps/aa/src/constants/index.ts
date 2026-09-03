@@ -443,6 +443,14 @@ export const BQUEUE = {
   OFFLINE_REDEEM: `OFFLINE_REDEEM_${process.env.PROJECT_ID}`,
 };
 
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
+};
+
 export const VULNERABILITY_FIELD = {
   HOW_MANY_LACTATING: 'if_yes_how_many_lactating',
   HOW_MANY_PREGNANT: 'if_yes_how_many_pregnant',

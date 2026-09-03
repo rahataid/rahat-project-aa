@@ -1591,6 +1591,13 @@ export class InkindsService {
       return vendor;
     }
 
+    if (skipVendorAndPhaseValidation) {
+      this.logger.log(
+        `Skipping vendor and payout phase validation for user: ${user.name}`
+      );
+      return vendor;
+    }
+
     const { value } = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
