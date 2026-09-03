@@ -37,7 +37,7 @@ export class CreatePayoutDto {
 
   @IsString()
   @IsOptional()
-  disbursementStatus?: DisbursementStatus;
+  disbursementStatus?: string;
 
   @IsOptional()
   user?: PayoutCreatedByUser;

@@ -59,7 +59,7 @@ export interface AddTokenToGroup {
     extras?: any;
     payoutProcessorId?: string;
     user?: any;
-    disbursementStatus?: DisbursementStatus;
+    disbursementStatus?: string;
   };
 }
 
