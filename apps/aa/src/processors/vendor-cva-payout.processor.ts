@@ -131,7 +131,7 @@ export class VendorOfflinePayoutProcessor {
     const data = job.data;
     let status;
     if (data?.disbursementStatus) status = data.disbursementStatus;
-    else status = 'NOT_DISBURSED';
+    else status = 'DISBURSED';
     this.logger.log(
       `Processing vendor offline payout for group ${data.beneficiaryGroupUuid}`,
       VendorOfflinePayoutProcessor.name

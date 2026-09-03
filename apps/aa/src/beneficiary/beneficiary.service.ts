@@ -920,7 +920,7 @@ export class BeneficiaryService {
             payoutProcessorId: params.payoutProcessorId,
             status: params.status,
             user: user,
-            disbursementStatus: params?.disbursementStatus,
+            disbursementStatus: 'NOT_DISBURSED',
           },
           tx as any
         );
