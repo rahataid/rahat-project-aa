@@ -1,4 +1,4 @@
-import {  Process, Processor } from '@nestjs/bull';
+import { Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable, Inject } from '@nestjs/common';
 import { Job } from 'bull';
 import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
@@ -24,9 +24,7 @@ export class VendorOfflinePayoutProcessor {
 
   constructor(
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
-    private readonly prismaService: PrismaService,
-    // TODO: STELLAR DETACH - re-add once stellar module is rewritten.
-    // private readonly stellarService: StellarService,
+    private readonly prismaService: PrismaService // TODO: STELLAR DETACH - re-add once stellar module is rewritten. // private readonly stellarService: StellarService,
   ) {}
 
   @Process({ name: JOBS.VENDOR.ONLINE_PAYOUT, concurrency: 5 })
@@ -41,7 +39,10 @@ export class VendorOfflinePayoutProcessor {
       // Fetch beneficiary group tokens and payout details
       const beneficiaryGroupTokens =
         await this.prismaService.beneficiaryGroupTokens.findFirst({
-          where: { groupId: data.beneficiaryGroupUuid, status: 'NOT_DISBURSED' },
+          where: {
+            groupId: data.beneficiaryGroupUuid,
+            status: 'NOT_DISBURSED',
+          },
           include: {
             payout: true,
             beneficiaryGroup: {
@@ -128,6 +129,9 @@ export class VendorOfflinePayoutProcessor {
   @Process({ name: JOBS.VENDOR.OFFLINE_PAYOUT, concurrency: 5 })
   async processVendorOfflinePayout(job: Job<VendorOfflinePayoutDto>) {
     const data = job.data;
+    let status;
+    if (data?.disbursementStatus) status = data.disbursementStatus;
+    else status = 'NOT_DISBURSED';
     this.logger.log(
       `Processing vendor offline payout for group ${data.beneficiaryGroupUuid}`,
       VendorOfflinePayoutProcessor.name
@@ -137,7 +141,10 @@ export class VendorOfflinePayoutProcessor {
       // Fetch beneficiary group tokens and payout details
       const beneficiaryGroupTokens =
         await this.prismaService.beneficiaryGroupTokens.findFirst({
-          where: { groupId: data.beneficiaryGroupUuid, status: 'NOT_DISBURSED' },
+          where: {
+            groupId: data.beneficiaryGroupUuid,
+            status: status,
+          },
           include: {
             payout: true,
             beneficiaryGroup: {

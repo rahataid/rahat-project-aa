@@ -550,6 +550,7 @@ export class VendorsService {
       await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.OFFLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
+        disbursementStatus: payload?.disbursementStatus,
       });
 
       this.logger.log(
