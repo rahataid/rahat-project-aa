@@ -1121,46 +1121,48 @@ export class BeneficiaryService {
     groupUuid: string,
     totalBeneficiaries: number
   ): Promise<void> {
-    const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+    const metaKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+    const counterKey = `${DISBURSE_CACHE_KEY_PREFIX}count:${groupUuid}`;
     await this.redisService.set(
-      cacheKey,
+      metaKey,
       {
         totalBeneficiaries,
-        completedCount: 0,
         status: 'STARTED',
         lastUpdated: Date.now(),
       },
       DISBURSE_CACHE_TTL
     );
+    await this.redisService.set(counterKey, 0, DISBURSE_CACHE_TTL);
   }
 
-  async incrementDisburseProgressCache(groupUuid: string): Promise<void> {
+  async incrementDisburseProgressCache(
+    groupUuid: string,
+    count: number = 1
+  ): Promise<void> {
     try {
-      const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+      const metaKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+      const counterKey = `${DISBURSE_CACHE_KEY_PREFIX}count:${groupUuid}`;
+
       const cached = await this.redisService.get<{
         totalBeneficiaries: number;
-        completedCount: number;
         status: string;
-      }>(cacheKey);
-
+      }>(metaKey);
       if (!cached) return;
 
-      const newCompleted = Math.min(
-        cached.completedCount + 1,
-        cached.totalBeneficiaries
-      );
-      const isComplete = newCompleted >= cached.totalBeneficiaries;
+      const newCount = await this.redisService.incrby(counterKey, count);
+      const clampedCount = Math.min(newCount, cached.totalBeneficiaries);
+      const isComplete = clampedCount >= cached.totalBeneficiaries;
 
       await this.redisService.set(
-        cacheKey,
+        metaKey,
         {
           ...cached,
-          completedCount: newCompleted,
-          status: isComplete ? 'DISBURSED' : 'STARTED',
+          status: isComplete ? 'DISBURSED' : cached.status,
           lastUpdated: Date.now(),
         },
         DISBURSE_CACHE_TTL
       );
+      await this.redisService.expire(counterKey, DISBURSE_CACHE_TTL);
     } catch (error) {
       this.logger.error(
         `Failed to increment disburse cache for ${groupUuid}: ${error.message}`
@@ -1173,19 +1175,16 @@ export class BeneficiaryService {
     status: string
   ): Promise<void> {
     try {
-      const cacheKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+      const metaKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
       const cached = await this.redisService.get<{
         totalBeneficiaries: number;
-        completedCount: number;
-      }>(cacheKey);
-
-      const totalBeneficiaries = cached?.totalBeneficiaries || 0;
+        status: string;
+      }>(metaKey);
 
       await this.redisService.set(
-        cacheKey,
+        metaKey,
         {
-          totalBeneficiaries,
-          completedCount: status === 'DISBURSED' ? totalBeneficiaries : (cached?.completedCount || 0),
+          totalBeneficiaries: cached?.totalBeneficiaries || 0,
           status,
           lastUpdated: Date.now(),
         },
@@ -1203,7 +1202,19 @@ export class BeneficiaryService {
     completedCount: number;
     status: string;
   } | null> {
-    return this.redisService.get(`${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`);
+    const metaKey = `${DISBURSE_CACHE_KEY_PREFIX}${groupUuid}`;
+    const counterKey = `${DISBURSE_CACHE_KEY_PREFIX}count:${groupUuid}`;
+    const meta = await this.redisService.get<{
+      totalBeneficiaries: number;
+      status: string;
+    }>(metaKey);
+    if (!meta) return null;
+    const countRaw = await this.redisService.get<number>(counterKey);
+    return {
+      totalBeneficiaries: meta.totalBeneficiaries,
+      completedCount: typeof countRaw === 'number' ? countRaw : 0,
+      status: meta.status,
+    };
   }
 
   async getReservationStats(payload) {

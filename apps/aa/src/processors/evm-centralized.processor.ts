@@ -55,7 +55,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
     if (typeof chainType !== 'string' || chainType.toLowerCase() !== 'evm') {
       this.logger.log(
-        `Chain type is "${chainType ?? 'unset'}", skipping EVM provider initialization`
+        `Chain type is "${
+          chainType ?? 'unset'
+        }", skipping EVM provider initialization`
       );
       return;
     }
@@ -86,7 +88,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private async getDeployerPrivateKey() {
     if (!this.deployerPrivateKey) {
-      this.deployerPrivateKey = await this.getFromSettings('DEPLOYER_PRIVATE_KEY');
+      this.deployerPrivateKey = await this.getFromSettings(
+        'DEPLOYER_PRIVATE_KEY'
+      );
       this.logger.log('Cached DEPLOYER_PRIVATE_KEY');
     }
     return this.deployerPrivateKey;
@@ -125,7 +129,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
     this.logger.log('Starting handleAssignTokens with job data: ', job.data);
     const { groups } = job.data;
-    const BATCH_SIZE = 10;
+    // const BATCH_SIZE = 10;
+    const BATCH_SIZE = 1;
 
     try {
       this.logger.log(
@@ -173,7 +178,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const decimal = await rahatTokenContract.decimals.staticCall();
 
       for (const benf of bens) {
-        this.logger.log(`Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`);
+        this.logger.log(
+          `Processing beneficiary ${benf.walletAddress} with amount ${benf.amount}`
+        );
         if (benf.amount) {
           const formattedAmountBn = ethers.parseUnits(
             benf.amount.toString(),
@@ -348,8 +355,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         return;
       }
 
+      const freshGroup =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
+      const updatedAt = freshGroup?.updatedAt || group.updatedAt;
+
       if (
-        new Date(group.updatedAt).getTime() <
+        new Date(updatedAt).getTime() <
         new Date().getTime() - 60 * 60 * 1000
       ) {
         this.logger.log(
@@ -393,7 +406,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
         if (txReceipt.status === 1) {
           this.logger.log(
-            `Transaction ${txHash} confirmed successfully`,
+            `Transaction ${txHash} confirmed successfully (batch ${batchNumber}/${totalBatches})`,
             EVMCentralizedProcessor.name
           );
 
@@ -406,49 +419,42 @@ export class EVMCentralizedProcessor implements OnModuleInit {
               batchNumber,
               totalBatches
             );
+           }
+
+          await this.beneficiaryService.incrementDisburseProgressCache(
+            groupUuid,
+            beneficiaries?.length || 0
+          );
+          const cache = await this.beneficiaryService.getDisburseProgressCache(groupUuid);
+          if (cache && cache.completedCount >= cache.totalBeneficiaries) {
+            this.logger.log(
+              `All ${cache.totalBeneficiaries} beneficiaries processed for group ${groupUuid}, marking as DISBURSED`,
+              EVMCentralizedProcessor.name
+            );
+            await this.beneficiaryService.updateGroupToken({
+              groupUuid,
+              status: 'DISBURSED',
+              isDisbursed: true,
+              info: {
+                ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+                txReceipt: {
+                  blockNumber: txReceipt.blockNumber,
+                  gasUsed: txReceipt.gasUsed?.toString(),
+                  status: 'SUCCESS',
+                },
+              },
+            });
+            this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+          } else {
+            this.logger.log(
+              `Batch ${batchNumber}/${totalBatches} confirmed for group ${groupUuid} (${cache?.completedCount || 0}/${cache?.totalBeneficiaries || '?'})`,
+              EVMCentralizedProcessor.name
+            );
           }
-
-          await this.beneficiaryService.updateGroupToken({
-            groupUuid,
-            status: 'DISBURSED',
-            isDisbursed: true,
-            info: {
-              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-              txReceipt: {
-                blockNumber: txReceipt.blockNumber,
-                gasUsed: txReceipt.gasUsed?.toString(),
-                status: 'SUCCESS',
-              },
-            },
-          });
-          this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
-          await this.beneficiaryService.setDisburseProgressStatus(
-            groupUuid,
-            'DISBURSED'
-          );
         } else {
-          this.logger.log(
-            `Transaction ${txHash} failed on blockchain`,
+          this.logger.error(
+            `Transaction ${txHash} failed on blockchain (batch ${batchNumber}/${totalBatches})`,
             EVMCentralizedProcessor.name
-          );
-
-          await this.beneficiaryService.updateGroupToken({
-            groupUuid,
-            status: 'FAILED',
-            isDisbursed: false,
-            info: {
-              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-              error: 'Transaction failed on blockchain',
-              txReceipt: {
-                blockNumber: txReceipt.blockNumber,
-                gasUsed: txReceipt.gasUsed?.toString(),
-                status: 'FAILED',
-              },
-            },
-          });
-          await this.beneficiaryService.setDisburseProgressStatus(
-            groupUuid,
-            'FAILED'
           );
         }
       } catch (error) {
@@ -456,16 +462,6 @@ export class EVMCentralizedProcessor implements OnModuleInit {
           `Error checking transaction status for ${txHash}: ${error.message}`,
           EVMCentralizedProcessor.name
         );
-
-        await this.beneficiaryService.updateGroupToken({
-          groupUuid,
-          status: 'FAILED',
-          isDisbursed: false,
-          info: {
-            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-            error: `Error checking transaction status: ${error.message}`,
-          },
-        });
       }
     } catch (error) {
       this.logger.error(
@@ -805,7 +801,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         EVMCentralizedProcessor.name
       );
 
-       await this.inkindService.updateVendorRedemptionTxHash(
+      await this.inkindService.updateVendorRedemptionTxHash(
         redemptionUuid,
         receipt.hash
       );
@@ -999,16 +995,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   }
 
   private async getDisbursableGroupsUuids() {
-    const benGroups = await this.prismaService.beneficiaryGroupTokens.findFirst({
-      where: {
-        AND: [
-          { numberOfTokens: { gt: 0 } },
-          { isDisbursed: false },
-          { payout: { is: null } },
-        ],
-      },
-      select: { uuid: true, groupId: true },
-    });
+    const benGroups = await this.prismaService.beneficiaryGroupTokens.findFirst(
+      {
+        where: {
+          AND: [
+            { numberOfTokens: { gt: 0 } },
+            { isDisbursed: false },
+            { payout: { is: null } },
+          ],
+        },
+        select: { uuid: true, groupId: true },
+      }
+    );
     return benGroups?.uuid;
   }
 
@@ -1046,7 +1044,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private computeBeneficiaryTokenDistribution(
     groups: any[],
-    tokens: { numberOfTokens: number; groupId: string }[] 
+    tokens: { numberOfTokens: number; groupId: string }[]
   ) {
     const csvData: Record<
       string,
