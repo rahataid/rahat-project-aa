@@ -13,6 +13,7 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
+import { translateCipsMessage } from './group-cash-transfer.constants';
 import bcrypt from 'bcryptjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
@@ -945,8 +946,9 @@ export class GroupCashTransferService {
         (record.bankDetails as Record<string, unknown>) ?? {};
 
       if (!isValid) {
-        const errorMessage =
-          result?.cipsData?.responseMessage ?? 'Bank account validation failed';
+        const errorMessage = translateCipsMessage(
+          result?.cipsData?.responseMessage ?? 'Bank account validation failed'
+        );
         this.logger.error(
           `Bank account validation failed for group ${dto.groupUuid}: ${errorMessage}`
         );
