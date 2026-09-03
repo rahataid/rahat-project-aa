@@ -1,7 +1,8 @@
-import { Process, Processor } from '@nestjs/bull';
-import { Logger, Injectable } from '@nestjs/common';
-import { Job } from 'bull';
-import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { InjectQueue, Processor } from '@nestjs/bull';
+import { Logger, Injectable, OnModuleInit } from '@nestjs/common';
+import { Job, Queue } from 'bull';
+import { SettingsService } from '@rumsan/settings';
+import { BQUEUE, EVENTS, JOBS, STELLAR_TRANSFER_BATCH_SIZE } from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
 import { RpcException } from '@nestjs/microservices';
@@ -11,20 +12,48 @@ import { CipsResponseData } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
+import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
+
+const DEFAULT_OFFRAMP_CONCURRENCY = 10;
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
-export class OfframpProcessor {
+export class OfframpProcessor implements OnModuleInit {
   private readonly logger = new Logger(OfframpProcessor.name);
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
     private readonly eventEmitter: EventEmitter2,
     private readonly appService: AppService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private readonly settingsService: SettingsService,
+    private readonly chainServiceRegistry: ChainServiceRegistry,
+    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue
   ) {}
 
-  @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 2 })
+  async onModuleInit(): Promise<void> {
+    const concurrency = await this.getConcurrency();
+    this.logger.log(`Offramp instant transfer concurrency set to ${concurrency}`);
+    this.offrampQueue.process(
+      JOBS.OFFRAMP.INSTANT_OFFRAMP,
+      concurrency,
+      this.sendInstantOfframpRequest.bind(this)
+    );
+  }
+
+  private async getConcurrency(): Promise<number> {
+    try {
+      const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+      if (chainType !== 'stellar') return DEFAULT_OFFRAMP_CONCURRENCY;
+
+      const setting = await this.settingsService.getPublic('STELLAR_DISBURSEMENT_SETTINGS');
+      const value = (setting?.value as Record<string, unknown>) || {};
+      return Number(value.STELLAR_PAYOUT_TRANSFER_BATCH_SIZE) || STELLAR_TRANSFER_BATCH_SIZE;
+    } catch {
+      return DEFAULT_OFFRAMP_CONCURRENCY;
+    }
+  }
+
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
     // const projectName = await this.appService.getSettings({
