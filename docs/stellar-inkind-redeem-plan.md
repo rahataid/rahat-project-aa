@@ -67,6 +67,24 @@ Rewrite `apps/aa/src/chain/chain-services/stellar-chain.service.ts:817-843`:
 6. On failure, `throw new RpcException(...)` without touching the redemption row — leaves `status: 'PENDING'`/`txHash: null` so it can be retried, matching the failure-handling convention in `processSendAssetToVendor`.
 7. Drop the `generateRandomTxHash('stellar')` call and its now-unused import from this file — the utility itself stays (only used here today, but not part of this task to delete the shared util).
 
+## Other approaches considered
+
+Alternatives to the chosen design, for reference — not being pursued now, but worth knowing why:
+
+- **Generalize `StellarClient` instead of a second instance.** Add optional `asset?: Asset` params to `sendFromSponsored`/`createSponsoredAccountsBatch`/`hasTrustline` in `libs/stellar`, so one client handles both RAHAT and inkind. Rejected: touches shared library code already used in production disbursement/sponsorship flows — higher blast radius for no real gain over just instantiating a second client.
+
+- **Per-inkind-item asset** (each `Inkind` row — rice, voucher, etc. — is its own Stellar asset/issuer). More expressive (lets you track "3kg rice" vs "1 voucher" as genuinely different assets on-chain, could feed reporting/reconciliation directly from Horizon). Rejected for now: needs a schema migration (`assetCode`/`assetIssuer` on `Inkind`), and a trustline per item per beneficiary instead of one shared trustline — multiplies trustline-batch and reserve-cost overhead per beneficiary. Worth revisiting if inkind items need independent on-chain audit trails later.
+
+- **No real transfer at all — memo-only proof.** Keep it cheap: send a 1-stroop native XLM payment (or reuse an existing sponsor operation) with the redemption details in the transaction memo, instead of a custom asset + trustline. Simpler, no trustline management. Rejected because it doesn't give the beneficiary an actual on-chain balance representing "I hold N redeemed units" — weaker as a receipt, and doesn't match the "asset represents item count" framing already agreed.
+
+- **Claimable balances instead of trustlines.** Sponsor creates a `ClaimableBalanceEntry` for the inkind asset addressed to the beneficiary; beneficiary claims it later (claiming auto-establishes the trustline need only at claim time). Avoids needing to batch-create trustlines ahead of redemption entirely — trustline cost is deferred to whoever claims. Rejected for now: adds a claim step (extra tx, extra beneficiary/sponsor action) and doesn't fit "redemption is already the beneficiary's terminal action" — but worth reconsidering if trustline-batch failures/timing become a recurring problem.
+
+- **Vendor receives the asset, not the beneficiary.** Sponsor sends the inkind asset to `vendorAddress` (currently unused in `RedeemInkindDto`) instead of the beneficiary, modeling "vendor got paid/credited for handing over goods" rather than "beneficiary holds a receipt token." Rejected for the initial version since it changes who the trustline/reserve burden falls on and there's no current vendor-side reconciliation flow consuming it — but it's the natural next step if vendors need to reconcile against Stellar balances (parallel to `sendAssetToVendor` for cash redemption).
+
+- **Soroban token contract (SAC or custom) instead of a classic Stellar asset.** A smart-contract token gives programmable transfer rules (e.g. rate limits, non-transferability) without relying on classic `changeTrust`. Rejected: `libs/stellar` and the whole sponsorship pattern are built around classic assets/trustlines; adopting Soroban here would be a much larger, separate infrastructure change, not a targeted fix to `redeemInkind`.
+
+- **Batch redemption transfers** (mirroring `sendFromSponsoredBatch`) instead of one `sendToSponsored` per redemption call. Would cut fees/tx count for the bulk/offline vendor path (`processBulkBatch`), which already batches DB writes by wallet. Not in the initial plan to keep the first version simple, but a natural follow-up optimization once real transfers are live and volume is known.
+
 ## Verification plan
 
 - `npm run build` (or the `aa` app's build target) to confirm TS compiles across the interface change (`RedeemInkindDto.quantity`), new module, and constants.
