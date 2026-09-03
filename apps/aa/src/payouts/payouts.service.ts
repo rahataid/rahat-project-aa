@@ -57,10 +57,13 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
+import { RedisService } from '../redis/redis.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 export const ONE_TOKEN_VALUE = 1;
+
+const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Injectable()
 export class PayoutsService {
@@ -81,7 +84,8 @@ export class PayoutsService {
     private settingService: SettingsService,
     private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
-    private readonly batchTransferQueue: Queue
+    private readonly batchTransferQueue: Queue,
+    private readonly redisService: RedisService
   ) {}
 
   async sendOtp(email: string) {
@@ -551,6 +555,22 @@ export class PayoutsService {
                 ONE_TOKEN_VALUE,
             };
           }
+
+          const cacheKey = `${PAYOUT_CACHE_KEY_PREFIX}${eachPayout.uuid}`;
+          const cached = await this.redisService.get<{
+            completedCount: number;
+            totalBeneficiaries: number;
+            totalSuccessAmount: number;
+            status: string;
+          }>(cacheKey);
+
+          if (cached) {
+            this.logger.debug(
+              `[findAll] payout=${eachPayout.uuid} served from cache: ${cached.completedCount}/${cached.totalBeneficiaries}`
+            );
+            return { ...rest, totalSuccessAmount: cached.totalSuccessAmount };
+          }
+
           const calculatedStatus = calculatePayoutStatus(eachPayout);
           await this.syncPayoutStatus(eachPayout, calculatedStatus);
 
