@@ -131,8 +131,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
     this.logger.log('Starting handleAssignTokens with job data: ', job.data);
     const { groups } = job.data;
-    // const BATCH_SIZE = 10;
-    const BATCH_SIZE = 1;
+    const BATCH_SIZE = 10;
 
     try {
       this.logger.log(
