@@ -8,6 +8,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { JOBS, TRIGGGERS_MODULE } from '../constants';
 import { firstValueFrom } from 'rxjs';
 import { Prisma } from '@prisma/client';
+import { UUID } from 'crypto';
 
 @Injectable()
 export class StatsService {
@@ -72,7 +73,7 @@ export class StatsService {
     });
   }
 
-  async findAll(payload) {
+  async findAll(payload: { appId: UUID }) {
     this.logger.log('Received payload for findAll:', payload);
     try {
       const benefStats = await this.prismaService.stats.findMany();

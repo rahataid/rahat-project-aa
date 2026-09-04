@@ -1307,7 +1307,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const beneficiaryBalance = await aaContract.benTokens.staticCall(
         beneficiaryAddress
       );
-      const transferAmount = amount;
+
+      const contract = await this.getContractSettings();
+      const formatedAbi = this.lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
+
+      const rahatTokenContract = new ethers.Contract(
+        contract.RAHATTOKEN.ADDRESS,
+        formatedAbi,
+        this.provider
+      );
+
+      const decimal = await rahatTokenContract.decimals.staticCall();
+      const transferAmount = ethers.parseUnits(amount, decimal);
 
       const aaContractSigner = await this.createContractInstanceSign(
         'AAPROJECT',
@@ -1415,10 +1426,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         'RAHATTOKEN'
       );
 
+      const decimal = await rahatTokenContract.decimals.staticCall();
+
       // Call the balanceOf function to get the wallet's RahatToken balance
       const tokenBalance = await rahatTokenContract.balanceOf.staticCall(
         walletAddress
       );
+
+      const formattedAmount = ethers.formatUnits(tokenBalance, decimal);
 
       this.logger.log(
         `RahatToken balance for ${walletAddress}: ${tokenBalance.toString()}`,
@@ -1426,12 +1441,59 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       );
 
       return {
-        balance: tokenBalance.toString(),
+        balance: formattedAmount.toString(),
         address: walletAddress,
       };
     } catch (error) {
       this.logger.error(
         `Error getting RahatToken balance for ${walletAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to get RahatToken balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get RahatToken ERC20 assigned for a given wallet address
+   * @param walletAddress - The wallet address to check RahatToken assign for
+   * @returns Promise<{ balance: string; address: string }> - The RahatToken balance and address
+   */
+  async getBeneficiaryBalance(
+    walletAddress: string
+  ): Promise<{ balance: string; address: string; decimals: string }> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${walletAddress}`,
+        EVMCentralizedProcessor.name
+      );
+      await this.ensureInitialized();
+
+      // Create RahatToken contract instance using the existing method
+      const aaContract = await this.createContractInstanceSign('AAPROJECT');
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
+      );
+
+      const decimals = await rahatTokenContract.decimals.staticCall();
+      // Call the balanceOf function to get the wallet's RahatToken balance
+      const tokenBalance = await aaContract.benTokens.staticCall(walletAddress);
+
+      this.logger.log(
+        `RahatToken assign for ${walletAddress}: ${tokenBalance.toString()}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return {
+        balance: tokenBalance.toString(),
+        address: walletAddress,
+        decimals: decimals.toString(),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting RahatToken assign for ${walletAddress}: ${error.message}`,
         error.stack,
         EVMCentralizedProcessor.name
       );
