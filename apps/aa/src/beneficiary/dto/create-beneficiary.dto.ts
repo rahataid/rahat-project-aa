@@ -1,4 +1,9 @@
-import { GroupPurpose, PayoutMode, PayoutType } from '@prisma/client';
+import {
+  DisbursementStatus,
+  GroupPurpose,
+  PayoutMode,
+  PayoutType,
+} from '@prisma/client';
 import { BaseBeneficiaryDto } from '@rahat-project/cva';
 import { Enums } from '@rahataid/sdk';
 import {
@@ -54,6 +59,7 @@ export interface AddTokenToGroup {
     extras?: any;
     payoutProcessorId?: string;
     user?: any;
+    disbursementStatus?: string;
   };
 }
 

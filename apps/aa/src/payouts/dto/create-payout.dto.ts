@@ -5,7 +5,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { PayoutType, PayoutMode } from '@prisma/client';
+import { PayoutType, PayoutMode, DisbursementStatus } from '@prisma/client';
 
 export interface PayoutCreatedByUser {
   name: string;
@@ -34,6 +34,10 @@ export class CreatePayoutDto {
   @IsString()
   @IsOptional()
   payoutProcessorId?: string;
+
+  @IsString()
+  @IsOptional()
+  disbursementStatus?: string;
 
   @IsOptional()
   user?: PayoutCreatedByUser;
