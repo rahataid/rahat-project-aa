@@ -1090,9 +1090,19 @@ export class BeneficiaryService {
 
     const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
 
+    // Total beneficiaries in this group
+    const totalBeneficiaries = await this.getBeneficiaryCountByGroup(
+      benfGroupToken.groupId as string
+    );
+
+    // If disbursement is complete, all beneficiaries received tokens; otherwise 0
+    const totalSuccess = benfGroupToken.isDisbursed ? totalBeneficiaries : 0;
+
     return {
       ...benfGroupToken,
       ...groupDetails,
+      totalBeneficiaries,
+      totalSuccess,
     };
   }
 
