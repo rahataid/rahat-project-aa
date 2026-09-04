@@ -113,6 +113,7 @@ import { SseModule } from '../sse/sse.module';
     FundallocationModule,
     RedisModule,
     AuthModule,
+    SseModule,
   ],
   controllers: [AppController],
   providers: [AppService, QueueService],
