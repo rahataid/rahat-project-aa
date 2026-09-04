@@ -10,6 +10,7 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { InkindsService } from '../inkinds';
 import { ModuleRef } from '@nestjs/core';
 import { lastValueFrom } from 'rxjs';
+import { SseService } from '../sse/sse.service';
 
 const AAProjectABI = require('../contracts/abis/AAProject.json');
 const TriggerManagerABI = require('../contracts/abis/TriggerManager.json');
@@ -45,7 +46,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     @InjectQueue(BQUEUE.EVM_TX) private readonly evmTxQueue: Queue,
     @InjectQueue(BQUEUE.EVM_QUERY) private readonly evmQueryQueue: Queue,
     private readonly prismaService: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly sseService: SseService
   ) {}
 
   async onModuleInit() {
@@ -271,6 +273,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         },
       });
 
+      // SSE Event to notify frontend about the disbursement start
+      await this.sseService.publishEvent('fund.event', {
+        status: 'STARTED',
+        groupUuid: Array.isArray(groups) ? groups[0] : groups,
+        transactionHashes,
+        totalBatches: numberOfBatches,
+        totalBeneficiaries,
+      });
+
       for (let i = 0; i < transactionHashes.length; i++) {
         const txHash = transactionHashes[i];
         const startIndex = i * BATCH_SIZE;
@@ -419,13 +430,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
               batchNumber,
               totalBatches
             );
-           }
+          }
 
           await this.beneficiaryService.incrementDisburseProgressCache(
             groupUuid,
             beneficiaries?.length || 0
           );
-          const cache = await this.beneficiaryService.getDisburseProgressCache(groupUuid);
+          const cache = await this.beneficiaryService.getDisburseProgressCache(
+            groupUuid
+          );
           if (cache && cache.completedCount >= cache.totalBeneficiaries) {
             this.logger.log(
               `All ${cache.totalBeneficiaries} beneficiaries processed for group ${groupUuid}, marking as DISBURSED`,
@@ -436,7 +449,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
               status: 'DISBURSED',
               isDisbursed: true,
               info: {
-                ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
+                ...(group.info && {
+                  ...JSON.parse(JSON.stringify(group.info)),
+                }),
                 txReceipt: {
                   blockNumber: txReceipt.blockNumber,
                   gasUsed: txReceipt.gasUsed?.toString(),
@@ -447,7 +462,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
             this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
           } else {
             this.logger.log(
-              `Batch ${batchNumber}/${totalBatches} confirmed for group ${groupUuid} (${cache?.completedCount || 0}/${cache?.totalBeneficiaries || '?'})`,
+              `Batch ${batchNumber}/${totalBatches} confirmed for group ${groupUuid} (${
+                cache?.completedCount || 0
+              }/${cache?.totalBeneficiaries || '?'})`,
               EVMCentralizedProcessor.name
             );
           }
