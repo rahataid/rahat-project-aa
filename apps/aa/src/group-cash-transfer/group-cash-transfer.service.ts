@@ -14,6 +14,7 @@ import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
+import { SseService } from '../sse/sse.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -27,7 +28,8 @@ export class GroupCashTransferService {
     prisma: PrismaService,
     private readonly treasuryService: GctTreasuryService,
     private readonly offrampClient: GctOfframpClient,
-    private readonly otpService: OtpService
+    private readonly otpService: OtpService,
+    private readonly sseService: SseService
   ) {
     this.db = prisma;
   }
@@ -478,7 +480,8 @@ export class GroupCashTransferService {
 
     const defaultOpt = await this.db.otp.findUnique({ where: { email } });
 
-    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
 
     // if existing OTP is expired, purge it so we can issue a fresh one
     if (defaultOpt && !isExistingValid) {
@@ -680,6 +683,11 @@ export class GroupCashTransferService {
         await this.db.groupCashTransferRecord.update({
           where: { uuid: recordUuid },
           data: { status: 'PENDING', payoutProcessorId: paymentProviderId },
+        });
+        await this.sseService.publishEvent('payout.event', {
+          recordUuid,
+          status: 'PENDING',
+          payoutProcessorId: paymentProviderId,
         });
 
         const result = await this.offrampClient.instantOfframpV2(payload);

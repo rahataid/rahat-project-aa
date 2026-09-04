@@ -556,6 +556,7 @@ export class PayoutsService {
             };
           }
 
+          // Serve from Redis cache if available (5s TTL during active payout processing)
           const cacheKey = `${PAYOUT_CACHE_KEY_PREFIX}${eachPayout.uuid}`;
           const cached = await this.redisService.get<{
             completedCount: number;
@@ -871,6 +872,42 @@ export class PayoutsService {
 
       delete tokenData.info;
 
+      // Calculate totalSuccessAmount from DB (same logic as findAll)
+      let totalSuccessAmount = 0;
+      const calculatedStatus = calculatePayoutStatus({
+        ...rest,
+        beneficiaryRedeem,
+        beneficiaryGroupToken,
+      } as any);
+      const beneficiariesCount = beneficiaries?.length || 0;
+
+      if (calculatedStatus === 'COMPLETED') {
+        totalSuccessAmount =
+          tokenData.numberOfTokens * ONE_TOKEN_VALUE;
+      } else if (rest.type === 'FSP') {
+        const successRequests = beneficiaryRedeem.filter(
+          (redeem) => redeem.status === 'FIAT_TRANSACTION_COMPLETED'
+        );
+        const eachBeneficiaryTokenCount = beneficiariesCount
+          ? tokenData.numberOfTokens / beneficiariesCount
+          : 0;
+        totalSuccessAmount =
+          successRequests.length *
+          ONE_TOKEN_VALUE *
+          eachBeneficiaryTokenCount;
+      } else {
+        const successRequests = beneficiaryRedeem.filter(
+          (redeem) => redeem.status === 'COMPLETED'
+        );
+        const eachBeneficiaryTokenCount = beneficiariesCount
+          ? tokenData.numberOfTokens / beneficiariesCount
+          : 0;
+        totalSuccessAmount =
+          successRequests.length *
+          ONE_TOKEN_VALUE *
+          eachBeneficiaryTokenCount;
+      }
+
       return {
         ...rest,
         beneficiaryGroupToken: {
@@ -879,6 +916,7 @@ export class PayoutsService {
             ...otherData,
           },
         },
+        totalSuccessAmount,
       };
     } catch (error) {
       this.logger.error(

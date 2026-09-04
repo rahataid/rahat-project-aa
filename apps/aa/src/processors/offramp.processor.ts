@@ -1,7 +1,13 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
-import { BQUEUE, EVENTS, JOBS } from '../constants';
+import {
+  BQUEUE,
+  EVENTS,
+  JOBS,
+  PAYOUT_CACHE_KEY_PREFIX,
+  PAYOUT_CACHE_TTL,
+} from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
 import { RpcException } from '@nestjs/microservices';
@@ -13,9 +19,6 @@ import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 import { PrismaService } from '@rumsan/prisma';
-
-const PAYOUT_CACHE_TTL = 5;
-const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -157,7 +160,10 @@ export class OfframpProcessor {
         this.logger.log(
           `Offramp request successful for beneficiary redeem UUID: ${log.uuid}, transaction hash: ${fspOfframpDetails.transactionHash}`
         );
-        await this.updatePayoutProgressCache(
+        // Update Redis cache so the UI can show real-time payout progress
+        // via the GET_PROGRESS endpoint (increment completedCount and totalSuccessAmount)
+        // Fire-and-forget: non-critical cache update, no need to block payout processing
+        this.updatePayoutProgressCache(
           fspOfframpDetails.payoutUUID,
           +fspOfframpDetails.amount
         );
@@ -166,10 +172,7 @@ export class OfframpProcessor {
 
       console.log('Offramp request failed from cips', result);
 
-      this.logger.log(
-        `Offramp request failed for beneficiary redeem`
-      );
-
+      this.logger.log(`Offramp request failed for beneficiary redeem`);
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
@@ -177,7 +180,10 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      await this.updatePayoutProgressCache(
+      // Update cache even on failure so completedCount stays accurate
+      // (each beneficiary is counted exactly once, success or failure)
+      // Fire-and-forget: non-critical cache update, no need to block payout processing
+      this.updatePayoutProgressCache(
         fspOfframpDetails.payoutUUID,
         +fspOfframpDetails.amount
       );
@@ -194,12 +200,17 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      await this.updatePayoutProgressCache(
+      // Update cache on exception so completedCount stays accurate
+      // (ensures progress reflects all processed beneficiaries, not just successes)
+      // Fire-and-forget: non-critical cache update, no need to block payout processing
+      this.updatePayoutProgressCache(
         fspOfframpDetails.payoutUUID,
         +fspOfframpDetails.amount
       );
       if (job.attemptsMade === job.opts.attempts) {
-        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
+        this.logger.log(
+          `all attempts exhausted for job ${job.id}, sending notification but commented for now`
+        );
       }
       throw error;
     }
@@ -215,7 +226,8 @@ export class OfframpProcessor {
         cipsBatchResponse.responseMessage || 'Offramp request failed from CIPS.'
       }`,
       ...(cipsTxnResponseList || []).map(
-        (txn) => `creditStatus:${txn.creditStatus},${txn.responseMessage || 'FAILED'}`
+        (txn) =>
+          `creditStatus:${txn.creditStatus},${txn.responseMessage || 'FAILED'}`
       ),
     ];
 
@@ -239,6 +251,11 @@ export class OfframpProcessor {
     });
   }
 
+  /**
+   * Increments the Redis payout progress cache after each beneficiary transfer attempt.
+   * Called on success, failure, and exception — each beneficiary is counted exactly once.
+   * The UI polls GET_PROGRESS endpoint which reads this cache to show real-time progress.
+   */
   private async updatePayoutProgressCache(
     payoutUUID: string,
     amount: number

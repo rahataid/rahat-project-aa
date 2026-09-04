@@ -94,8 +94,10 @@ export const JOBS = {
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
-    REVOKE_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.revokeSponsorshipForGroup',
-    GET_SPONSORSHIP_STATUS_FOR_GROUP: 'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    REVOKE_SPONSORSHIP_FOR_GROUP:
+      'aa.jobs.beneficiary.revokeSponsorshipForGroup',
+    GET_SPONSORSHIP_STATUS_FOR_GROUP:
+      'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
     RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
   },
   STELLAR: {
@@ -403,8 +405,10 @@ export const EVENTS = {
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
   BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
-  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE: 'events.beneficiary_group_sponsorship_revoke',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE:
+    'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -478,3 +482,6 @@ export const SSE_EVENTS = {
 export const REDIS_CHANNELS = {
   SSE_LISTENER: 'sse:listener',
 };
+
+export const PAYOUT_CACHE_TTL = 5;
+export const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
