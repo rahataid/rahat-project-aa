@@ -10,6 +10,7 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { InkindsService } from '../inkinds';
 import { ModuleRef } from '@nestjs/core';
 import { lastValueFrom } from 'rxjs';
+import { SseService } from '../sse/sse.service';
 
 const AAProjectABI = require('../contracts/abis/AAProject.json');
 const TriggerManagerABI = require('../contracts/abis/TriggerManager.json');
@@ -45,7 +46,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     @InjectQueue(BQUEUE.EVM_TX) private readonly evmTxQueue: Queue,
     @InjectQueue(BQUEUE.EVM_QUERY) private readonly evmQueryQueue: Queue,
     private readonly prismaService: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly sseService: SseService
   ) {}
 
   async onModuleInit() {
@@ -157,6 +159,12 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         throw new RpcException('Beneficiary Token Balance not found');
       }
 
+      const groupUuid = Array.isArray(groups) ? groups[0] : groups;
+      await this.beneficiaryService.initDisburseProgressCache(
+        groupUuid,
+        bens.length
+      );
+
       const multicallTxnPayload = [];
 
       const contract = await this.getContractSettings();
@@ -264,6 +272,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         },
       });
 
+      // SSE Event to notify frontend about the disbursement start
+      await this.sseService.publishEvent('fund.event', {
+        status: 'STARTED',
+        groupUuid: Array.isArray(groups) ? groups[0] : groups,
+        transactionHashes,
+        totalBatches: numberOfBatches,
+        totalBeneficiaries,
+      });
+
       for (let i = 0; i < transactionHashes.length; i++) {
         const txHash = transactionHashes[i];
         const startIndex = i * BATCH_SIZE;
@@ -348,8 +365,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         return;
       }
 
+      const freshGroup =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
+      const updatedAt = freshGroup?.updatedAt || group.updatedAt;
+
       if (
-        new Date(group.updatedAt).getTime() <
+        new Date(updatedAt).getTime() <
         new Date().getTime() - 60 * 60 * 1000
       ) {
         this.logger.log(
@@ -393,7 +416,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
         if (txReceipt.status === 1) {
           this.logger.log(
-            `Transaction ${txHash} confirmed successfully`,
+            `Transaction ${txHash} confirmed successfully (batch ${batchNumber}/${totalBatches})`,
             EVMCentralizedProcessor.name
           );
 
@@ -408,56 +431,53 @@ export class EVMCentralizedProcessor implements OnModuleInit {
             );
           }
 
-          await this.beneficiaryService.updateGroupToken({
+          await this.beneficiaryService.incrementDisburseProgressCache(
             groupUuid,
-            status: 'DISBURSED',
-            isDisbursed: true,
-            info: {
-              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-              txReceipt: {
-                blockNumber: txReceipt.blockNumber,
-                gasUsed: txReceipt.gasUsed?.toString(),
-                status: 'SUCCESS',
+            beneficiaries?.length || 0
+          );
+          const cache = await this.beneficiaryService.getDisburseProgressCache(
+            groupUuid
+          );
+          if (cache && cache.completedCount >= cache.totalBeneficiaries) {
+            this.logger.log(
+              `All ${cache.totalBeneficiaries} beneficiaries processed for group ${groupUuid}, marking as DISBURSED`,
+              EVMCentralizedProcessor.name
+            );
+            await this.beneficiaryService.updateGroupToken({
+              groupUuid,
+              status: 'DISBURSED',
+              isDisbursed: true,
+              info: {
+                ...(group.info && {
+                  ...JSON.parse(JSON.stringify(group.info)),
+                }),
+                txReceipt: {
+                  blockNumber: txReceipt.blockNumber,
+                  gasUsed: txReceipt.gasUsed?.toString(),
+                  status: 'SUCCESS',
+                },
               },
-            },
-          });
-          this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+            });
+            this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+          } else {
+            this.logger.log(
+              `Batch ${batchNumber}/${totalBatches} confirmed for group ${groupUuid} (${
+                cache?.completedCount || 0
+              }/${cache?.totalBeneficiaries || '?'})`,
+              EVMCentralizedProcessor.name
+            );
+          }
         } else {
-          this.logger.log(
-            `Transaction ${txHash} failed on blockchain`,
+          this.logger.error(
+            `Transaction ${txHash} failed on blockchain (batch ${batchNumber}/${totalBatches})`,
             EVMCentralizedProcessor.name
           );
-
-          await this.beneficiaryService.updateGroupToken({
-            groupUuid,
-            status: 'FAILED',
-            isDisbursed: false,
-            info: {
-              ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-              error: 'Transaction failed on blockchain',
-              txReceipt: {
-                blockNumber: txReceipt.blockNumber,
-                gasUsed: txReceipt.gasUsed?.toString(),
-                status: 'FAILED',
-              },
-            },
-          });
         }
       } catch (error) {
         this.logger.error(
           `Error checking transaction status for ${txHash}: ${error.message}`,
           EVMCentralizedProcessor.name
         );
-
-        await this.beneficiaryService.updateGroupToken({
-          groupUuid,
-          status: 'FAILED',
-          isDisbursed: false,
-          info: {
-            ...(group.info && { ...JSON.parse(JSON.stringify(group.info)) }),
-            error: `Error checking transaction status: ${error.message}`,
-          },
-        });
       }
     } catch (error) {
       this.logger.error(

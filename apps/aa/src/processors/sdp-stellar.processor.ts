@@ -89,6 +89,11 @@ export class SdpStellarProcessor {
         `Generating CSV for ${benData.length} beneficiaries in group ${groupUuid}`
       );
 
+      await this.beneficiaryService.initDisburseProgressCache(
+        groupUuid,
+        benData.length
+      );
+
       const csvBuffer = this.stellarChainService.generateCsv(benData);
       const sdpClient = await this.getSdpClient();
       console.log('SDP Client initialized:');
@@ -219,6 +224,11 @@ export class SdpStellarProcessor {
 
         this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
 
+        await this.beneficiaryService.setDisburseProgressStatus(
+          groupUuid,
+          'DISBURSED'
+        );
+
         this.logger.log(`SDP disbursement completed for group ${groupUuid}`);
         return;
       }
@@ -234,6 +244,11 @@ export class SdpStellarProcessor {
             failedAt: new Date().toISOString(),
           },
         });
+
+        await this.beneficiaryService.setDisburseProgressStatus(
+          groupUuid,
+          'FAILED'
+        );
 
         this.logger.error(`SDP disbursement ${status} for group ${groupUuid}`);
         return;
@@ -256,6 +271,12 @@ export class SdpStellarProcessor {
             failedAt: new Date().toISOString(),
           },
         });
+
+        await this.beneficiaryService.setDisburseProgressStatus(
+          groupUuid,
+          'FAILED'
+        );
+
         return;
       }
 
