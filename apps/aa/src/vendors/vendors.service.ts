@@ -579,6 +579,7 @@ export class VendorsService {
       await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.OFFLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
+        disbursementStatus: payload?.disbursementStatus,
       });
 
       this.logger.log(
@@ -623,7 +624,11 @@ export class VendorsService {
     });
 
     if (pending.length === 0) {
-      return { success: true, message: 'No pending offline redemptions', totalBatches: 0 };
+      return {
+        success: true,
+        message: 'No pending offline redemptions',
+        totalBatches: 0,
+      };
     }
 
     const chainType = await this.chainServiceRegistry.detectChainFromSettings();
@@ -831,7 +836,7 @@ export class VendorsService {
           params: { uuid: payload.vendorUuid },
         });
       }
-
+      //just need to fetch the offline beneficiary
       // Find all beneficiaryRedeem records for this vendor
       const redeems = await this.prisma.beneficiaryRedeem.findMany({
         where: {
@@ -851,7 +856,24 @@ export class VendorsService {
       }
 
       // Get beneficiary wallet addresses for API call
-      const beneficiaryWalletAddresses = redeems
+      const offlineRedeems = redeems.filter((redeem) => {
+        const info = redeem.info as any;
+        return (
+          info &&
+          typeof info === 'object' &&
+          !Array.isArray(info) &&
+          info.mode === 'OFFLINE'
+        );
+      });
+
+      if (!offlineRedeems.length) {
+        this.logger.log(
+          `No offline beneficiary records found for vendor ${payload.vendorUuid}`
+        );
+        return [];
+      }
+
+      const beneficiaryWalletAddresses = offlineRedeems
         .map((redeem) => redeem.Beneficiary?.walletAddress)
         .filter(Boolean);
 
@@ -868,7 +890,7 @@ export class VendorsService {
 
       // For each redeem, get the OTP hash from the OTP table
       const beneficiaries: OfflineBeneficiaryDetail[] = [];
-      for (const redeem of redeems) {
+      for (const redeem of offlineRedeems) {
         const beneficiary = redeem.Beneficiary;
         if (!beneficiary) continue;
 
@@ -899,19 +921,19 @@ export class VendorsService {
         `Found ${beneficiaries.length} offline beneficiaries for vendor ${payload.vendorUuid}`
       );
 
-      // Check if records are in PENDING state and update to TOKEN_TRANSACTION_INITIATED
-      if (redeems.length > 0) {
-        // Filter only PENDING records that can be updated
-        const pendingRedeems = redeems.filter(
+      // Check if offline records are in PENDING state and update to TOKEN_TRANSACTION_INITIATED
+      if (offlineRedeems.length > 0) {
+        // Filter only PENDING offline records that can be updated
+        const pendingRedeems = offlineRedeems.filter(
           (redeem) => redeem.status === 'PENDING'
         );
 
         if (pendingRedeems.length > 0) {
           this.logger.log(
-            `Updating ${pendingRedeems.length} PENDING beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+            `Updating ${pendingRedeems.length} PENDING offline beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
           );
 
-          // Update only PENDING redeem records to TOKEN_TRANSACTION_INITIATED
+          // Update only PENDING offline redeem records to TOKEN_TRANSACTION_INITIATED
           await this.prisma.beneficiaryRedeem.updateMany({
             where: {
               uuid: {
@@ -924,11 +946,11 @@ export class VendorsService {
           });
 
           this.logger.log(
-            `Successfully updated ${pendingRedeems.length} beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
+            `Successfully updated ${pendingRedeems.length} offline beneficiary redeem records to TOKEN_TRANSACTION_INITIATED for vendor ${payload.vendorUuid}`
           );
         } else {
           this.logger.log(
-            `No PENDING records found to update. Total records: ${redeems.length}`
+            `No PENDING offline records found to update. Total offline records: ${offlineRedeems.length}`
           );
         }
       }
@@ -960,7 +982,7 @@ export class VendorsService {
 
       // Get verified beneficiary UUIDs + OTP map
       const verifiedMap = new Map(
-        payload.verifiedBeneficiaries.map(b => [b.beneficiaryUuid, b.otp])
+        payload.verifiedBeneficiaries.map((b) => [b.beneficiaryUuid, b.otp])
       );
 
       // Fetch all pending VENDOR_REIMBURSEMENT for vendor
@@ -975,7 +997,7 @@ export class VendorsService {
       });
 
       // Filter to only verified beneficiaries
-      const verified = pending.filter(r =>
+      const verified = pending.filter((r) =>
         verifiedMap.has(r.Beneficiary?.uuid)
       );
 
@@ -988,9 +1010,10 @@ export class VendorsService {
         };
       }
 
-      const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+      const chainType =
+        await this.chainServiceRegistry.detectChainFromSettings();
 
-      const items = verified.map(r => ({
+      const items = verified.map((r) => ({
         redeemUuid: r.uuid,
         beneficiaryWalletAddress: r.beneficiaryWalletAddress,
         vendorWalletAddress: vendor.walletAddress,
@@ -1004,7 +1027,7 @@ export class VendorsService {
       }
 
       const batchRecords = await Promise.all(
-        batches.map(batch =>
+        batches.map((batch) =>
           this.prisma.tempOfflineRedemption.create({
             data: {
               chainType,

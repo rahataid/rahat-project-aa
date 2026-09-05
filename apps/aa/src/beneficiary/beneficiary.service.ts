@@ -534,9 +534,13 @@ export class BeneficiaryService {
    */
   async revokeSponsorshipForGroup(payload: { groupUuid: string }) {
     const { groupUuid } = payload;
-    this.logger.debug(`Received revoke-sponsorship request for group ${groupUuid}`);
+    this.logger.debug(
+      `Received revoke-sponsorship request for group ${groupUuid}`
+    );
 
-    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_SPONSORSHIP_REVOKE, { groupUuid });
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_SPONSORSHIP_REVOKE, {
+      groupUuid,
+    });
 
     return { groupUuid, queued: true };
   }
@@ -558,23 +562,35 @@ export class BeneficiaryService {
    */
   async retrySponsorshipForGroup(payload: { groupUuid: string }) {
     const { groupUuid } = payload;
-    this.logger.debug(`Received retry-sponsorship request for group ${groupUuid}`);
+    this.logger.debug(
+      `Received retry-sponsorship request for group ${groupUuid}`
+    );
 
     const status = await this.getSponsorshipStatusForGroup({ groupUuid });
 
     if (!status.isStellarChain) {
-      return { ...status, queued: false, reason: 'Chain is not Stellar — sponsorship does not apply' };
+      return {
+        ...status,
+        queued: false,
+        reason: 'Chain is not Stellar — sponsorship does not apply',
+      };
     }
 
     const retriable = status.pending + status.failed;
     if (retriable === 0) {
-      return { ...status, queued: false, reason: 'No pending or failed beneficiaries to retry' };
+      return {
+        ...status,
+        queued: false,
+        reason: 'No pending or failed beneficiaries to retry',
+      };
     }
 
     this.logger.log(
       `Retrying sponsorship for group ${groupUuid}: ${retriable} beneficiary/ies eligible (pending: ${status.pending}, failed: ${status.failed}, no-wallet skipped: ${status.noWallet})`
     );
-    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, { groupUuid });
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
+      groupUuid,
+    });
 
     return { ...status, queued: true, retrying: retriable };
   }
@@ -609,18 +625,33 @@ export class BeneficiaryService {
 
     const records = await this.prisma.beneficiaryToGroup.findMany({
       where: { groupId: groupUuid },
-      select: { beneficiary: { select: { uuid: true, walletAddress: true, extras: true } } },
+      select: {
+        beneficiary: {
+          select: { uuid: true, walletAddress: true, extras: true },
+        },
+      },
     });
 
     const accounts = records.map(({ beneficiary }) => {
       const extras = (beneficiary.extras as Record<string, unknown>) ?? {};
-      const base = { beneficiaryId: beneficiary.uuid, walletAddress: beneficiary.walletAddress || null };
+      const base = {
+        beneficiaryId: beneficiary.uuid,
+        walletAddress: beneficiary.walletAddress || null,
+      };
 
       if (!beneficiary.walletAddress) {
-        return { ...base, status: 'no-wallet' as const, reason: 'No wallet address on file' };
+        return {
+          ...base,
+          status: 'no-wallet' as const,
+          reason: 'No wallet address on file',
+        };
       }
       if (extras.stellarSponsored === true) {
-        return { ...base, status: 'sponsored' as const, action: extras.stellarSponsorAction as string | undefined };
+        return {
+          ...base,
+          status: 'sponsored' as const,
+          action: extras.stellarSponsorAction as string | undefined,
+        };
       }
       if (typeof extras.stellarSponsorError === 'string') {
         return {
@@ -647,7 +678,9 @@ export class BeneficiaryService {
 
   private async isStellarChain(): Promise<boolean> {
     try {
-      const chainSettings = await this.settingsService.getPublic('CHAIN_SETTINGS');
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
       return (chainSettings?.value as any)?.type === 'stellar';
     } catch (err: any) {
       this.logger.warn(`Failed to load CHAIN_SETTINGS: ${err?.message}`);
@@ -862,7 +895,8 @@ export class BeneficiaryService {
       groupUuid: beneficiaryGroupId,
     });
     if (sponsorshipStatus.isStellarChain) {
-      const notSponsored = sponsorshipStatus.total - sponsorshipStatus.sponsored;
+      const notSponsored =
+        sponsorshipStatus.total - sponsorshipStatus.sponsored;
       if (notSponsored > 0) {
         this.logger.warn(
           `Group ${beneficiaryGroupId} has ${notSponsored}/${sponsorshipStatus.total} beneficiary/ies not yet sponsored on Stellar (pending: ${sponsorshipStatus.pending}, failed: ${sponsorshipStatus.failed}, no-wallet: ${sponsorshipStatus.noWallet}) — refusing to reserve tokens`
@@ -902,6 +936,7 @@ export class BeneficiaryService {
             payoutProcessorId: params.payoutProcessorId,
             status: params.status,
             user: user,
+            disbursementStatus: 'NOT_DISBURSED',
           },
           tx as any
         );
