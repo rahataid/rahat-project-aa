@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { SettingsService } from '@rumsan/settings';
 import {
   IChainService,
@@ -31,7 +32,11 @@ export class ChainServiceRegistry {
 
     const service = this.chainServices.get(detectedChain);
     if (!service) {
-      throw new Error(`Chain service not found for type: ${detectedChain}`);
+      throw new RpcException({
+        message: `Chain service not found for type: ${detectedChain}`,
+        code: 'CHAIN_SERVICE_NOT_FOUND',
+        params: { detectedChain },
+      });
     }
 
     return service;

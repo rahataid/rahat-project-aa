@@ -64,7 +64,10 @@ export class VendorsService {
     this.logger.log(`Updating vendor details for ${uuid}`);
 
     if (!uuid) {
-      throw new RpcException('Either id or uuid must be provided');
+      throw new RpcException({
+        message: 'Either id or uuid must be provided',
+        code: 'VENDOR_ID_OR_UUID_REQUIRED',
+      });
     }
 
     try {
@@ -73,7 +76,10 @@ export class VendorsService {
       });
 
       if (!vendorDetails) {
-        throw new RpcException('Vendor not found');
+        throw new RpcException({
+          message: 'Vendor not found',
+          code: 'VENDOR_NOT_FOUND_GENERIC',
+        });
       }
 
       return this.prisma.vendor.update({
@@ -82,6 +88,7 @@ export class VendorsService {
       });
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -126,7 +133,11 @@ export class VendorsService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with id ${vendorWallet.uuid} not found`);
+        throw new RpcException({
+          message: `Vendor with id ${vendorWallet.uuid} not found`,
+          code: 'VENDOR_NOT_FOUND',
+          params: { uuid: vendorWallet.uuid },
+        });
       }
 
       // TODO: STELLAR DETACH - re-enable vendor on-chain balance lookup once the
@@ -161,6 +172,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -194,6 +206,7 @@ export class VendorsService {
       return totalAssignedTokens;
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -215,6 +228,7 @@ export class VendorsService {
       return result._sum.amount || 0;
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -230,12 +244,16 @@ export class VendorsService {
       });
 
       if (!redemptionRequest.length) {
-        throw new RpcException('No redemption requests found for vendor');
+        throw new RpcException({
+          message: 'No redemption requests found for vendor',
+          code: 'NO_REDEMPTION_REQUESTS',
+        });
       }
 
       return redemptionRequest;
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -321,6 +339,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -340,9 +359,11 @@ export class VendorsService {
       });
 
       if (!transactions) {
-        throw new RpcException(
-          `Transactions not found for vendor with id ${walletBalanceDto.uuid}`
-        );
+        throw new RpcException({
+          message: `Transactions not found for vendor with id ${walletBalanceDto.uuid}`,
+          code: 'VENDOR_TRANSACTIONS_NOT_FOUND',
+          params: { uuid: walletBalanceDto.uuid },
+        });
       }
 
       const beneficiaryWalletAddresses = transactions.map(
@@ -357,7 +378,10 @@ export class VendorsService {
       );
 
       if (!benResponse) {
-        throw new RpcException(`Failed to get beneficiaries info`);
+        throw new RpcException({
+          message: `Failed to get beneficiaries info`,
+          code: 'VENDOR_BENEFICIARIES_INFO_FAILED',
+        });
       }
 
       return transactions.map((txn) => {
@@ -374,6 +398,7 @@ export class VendorsService {
       });
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -390,9 +415,11 @@ export class VendorsService {
       });
 
       if (!vendor) {
-        throw new RpcException(
-          `Vendor with id ${payload.vendorUuid} not found`
-        );
+        throw new RpcException({
+          message: `Vendor with id ${payload.vendorUuid} not found`,
+          code: 'VENDOR_NOT_FOUND',
+          params: { uuid: payload.vendorUuid },
+        });
       }
 
       // Build where clause for beneficiary redeem query
@@ -511,6 +538,7 @@ export class VendorsService {
       );
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -537,6 +565,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -564,6 +593,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -577,7 +607,11 @@ export class VendorsService {
       where: { uuid: payload.vendorUuid },
     });
     if (!vendor) {
-      throw new RpcException(`Vendor with id ${payload.vendorUuid} not found`);
+      throw new RpcException({
+      message: `Vendor with id ${payload.vendorUuid} not found`,
+      code: 'VENDOR_NOT_FOUND',
+      params: { uuid: payload.vendorUuid },
+    });
     }
 
     const pending = await this.prisma.beneficiaryRedeem.findMany({
@@ -680,6 +714,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -698,9 +733,11 @@ export class VendorsService {
       });
 
       if (!vendor) {
-        throw new RpcException(
-          `Vendor with id ${payload.vendorUuid} not found`
-        );
+        throw new RpcException({
+          message: `Vendor with id ${payload.vendorUuid} not found`,
+          code: 'VENDOR_NOT_FOUND',
+          params: { uuid: payload.vendorUuid },
+        });
       }
 
       // Get OTP data for the phone number
@@ -775,6 +812,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -792,9 +830,11 @@ export class VendorsService {
         where: { uuid: payload.vendorUuid },
       });
       if (!vendor) {
-        throw new RpcException(
-          `Vendor with id ${payload.vendorUuid} not found`
-        );
+        throw new RpcException({
+          message: `Vendor with id ${payload.vendorUuid} not found`,
+          code: 'VENDOR_NOT_FOUND',
+          params: { uuid: payload.vendorUuid },
+        });
       }
       //just need to fetch the offline beneficiary
       // Find all beneficiaryRedeem records for this vendor
@@ -918,6 +958,7 @@ export class VendorsService {
       return beneficiaries;
     } catch (error) {
       this.logger.error(error.message);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -932,9 +973,11 @@ export class VendorsService {
         where: { uuid: payload.vendorUuid },
       });
       if (!vendor) {
-        throw new RpcException(
-          `Vendor with id ${payload.vendorUuid} not found`
-        );
+        throw new RpcException({
+          message: `Vendor with id ${payload.vendorUuid} not found`,
+          code: 'VENDOR_NOT_FOUND',
+          params: { uuid: payload.vendorUuid },
+        });
       }
 
       // Get verified beneficiary UUIDs + OTP map
@@ -1024,6 +1067,7 @@ export class VendorsService {
       };
     } catch (error) {
       this.logger.error(`Error syncing vendor offline data: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }

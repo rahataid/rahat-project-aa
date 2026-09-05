@@ -98,9 +98,11 @@ export class GctTreasuryService implements OnModuleInit {
 
   private assertConfigured() {
     if (this.misconfigured) {
-      throw new RpcException(
-        'GCT treasury is misconfigured: GCT_PUBLIC_KEY does not match the active chain. Fix CHAIN_SETTINGS/GCT_TREASURY before disbursing.'
-      );
+      throw new RpcException({
+        message:
+          'GCT treasury is misconfigured: GCT_PUBLIC_KEY does not match the active chain. Fix CHAIN_SETTINGS/GCT_TREASURY before disbursing.',
+        code: 'GCT_TREASURY_MISCONFIGURED',
+      });
     }
   }
 
@@ -114,7 +116,10 @@ export class GctTreasuryService implements OnModuleInit {
     const chainSettings = await this.appService.getSettings({ name: 'CHAIN_SETTINGS' });
     const rpcUrl = (chainSettings?.value as any)?.rpcurl;
     if (!rpcUrl) {
-      throw new RpcException('CHAIN_SETTINGS.rpcUrl not found');
+      throw new RpcException({
+        message: 'CHAIN_SETTINGS.rpcUrl not found',
+        code: 'CHAIN_RPC_URL_NOT_FOUND',
+      });
     }
     return rpcUrl;
   }
@@ -131,7 +136,10 @@ export class GctTreasuryService implements OnModuleInit {
     const gctPublicKey = value?.gct_public_key;
 
     if (!gctToken || !gctSecretKey || !gctPublicKey) {
-      throw new RpcException('GCT_TREASURY setting is missing GCT_TOKEN/GCT_SECRET_KEY/GCT_PUBLIC_KEY');
+      throw new RpcException({
+        message: 'GCT_TREASURY setting is missing GCT_TOKEN/GCT_SECRET_KEY/GCT_PUBLIC_KEY',
+        code: 'GCT_TREASURY_SETTING_MISSING',
+      });
     }
 
     return { gctToken, gctSecretKey, gctPublicKey };
@@ -146,7 +154,10 @@ export class GctTreasuryService implements OnModuleInit {
   private parseStellarAsset(gctToken: string): { assetCode: string; assetIssuer: string } {
     const [assetCode, assetIssuer] = gctToken.split(':');
     if (!assetCode || !assetIssuer) {
-      throw new RpcException('GCT_TOKEN must be in "<asset_code>:<asset_issuer>" format for stellar');
+      throw new RpcException({
+        message: 'GCT_TOKEN must be in "<asset_code>:<asset_issuer>" format for stellar',
+        code: 'GCT_TOKEN_FORMAT_INVALID',
+      });
     }
     return { assetCode, assetIssuer };
   }

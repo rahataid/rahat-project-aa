@@ -40,15 +40,19 @@ export class OfframpService {
       name: 'OFFRAMP_SETTINGS',
     });
     if (!offrampSettings) {
-      throw new RpcException(`Offramp settings not found.`);
+      throw new RpcException({
+        message: `Offramp settings not found.`,
+        code: 'PAYOUT_ERR_OFFRAMP_SETTINGS_NOT_FOUND',
+      });
     }
     const url = offrampSettings?.value?.url as string;
     const appId = offrampSettings?.value?.appid as string;
     const accessToken = offrampSettings?.value?.accesstoken as string;
     if (!url || !appId || !accessToken) {
-      throw new RpcException(
-        `Offramp url/Appid/AccessToken not found in settings.`
-      );
+      throw new RpcException({
+        message: `Offramp url/Appid/AccessToken not found in settings.`,
+        code: 'PAYOUT_ERR_OFFRAMP_CONFIG_MISSING',
+      });
     }
 
     return {
@@ -122,9 +126,11 @@ export class OfframpService {
       return data.wallet;
     } catch (error) {
       console.log(error);
-      throw new RpcException(
-        `Failed to fetch offramp wallet address: ${error.message}`
-      );
+      throw new RpcException({
+        message: `Failed to fetch offramp wallet address: ${error.message}`,
+        code: 'PAYOUT_ERR_OFFRAMP_WALLET_FETCH',
+        params: { message: error.message },
+      });
     }
   }
 
@@ -156,11 +162,12 @@ export class OfframpService {
       console.log('#'.repeat(100));
       return data;
     } catch (error) {
-      throw new RpcException(
-        `Failed to initiate instant offramp: ${
-          error?.response?.data?.message || error?.message
-        }`
-      );
+      const errMsg = error?.response?.data?.message || error?.message;
+      throw new RpcException({
+        message: `Failed to initiate instant offramp: ${errMsg}`,
+        code: 'FAILED_TO_INITIATE_INSTANT_OFFRAMP',
+        params: { message: errMsg },
+      });
     }
   }
 
@@ -186,11 +193,12 @@ export class OfframpService {
 
       return data;
     } catch (error) {
-      throw new RpcException(
-        `Failed to initiate instant offramp: ${
-          error?.response?.data?.message || error?.message
-        }`
-      );
+      const errMsg = error?.response?.data?.message || error?.message;
+      throw new RpcException({
+        message: `Failed to initiate instant offramp: ${errMsg}`,
+        code: 'FAILED_TO_INITIATE_INSTANT_OFFRAMP_V2',
+        params: { message: errMsg },
+      });
     }
   }
 

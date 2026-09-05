@@ -13,6 +13,7 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
+import { translateCipsMessage } from './group-cash-transfer.constants';
 import bcrypt from 'bcryptjs';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
@@ -54,6 +55,7 @@ export class GroupCashTransferService {
         `Failed to create group cash transfer: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -97,6 +99,7 @@ export class GroupCashTransferService {
         `Failed to update group cash transfer: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -111,9 +114,10 @@ export class GroupCashTransferService {
       });
 
       if (fundCount > 0) {
-        throw new RpcException(
-          'Cannot delete: fund has already been assigned to this group'
-        );
+        throw new RpcException({
+          message: 'Cannot delete: fund has already been assigned to this group',
+          code: 'CANNOT_DELETE_FUND_ALREADY_ASSIGNED',
+        });
       }
 
       await this.db.groupCashTransferDetail.update({
@@ -131,6 +135,7 @@ export class GroupCashTransferService {
         `Failed to delete group cash transfer: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -236,6 +241,7 @@ export class GroupCashTransferService {
         `Failed to fetch group cash transfers: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -264,9 +270,11 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(
-          `Group cash transfer with UUID ${uuid} not found`
-        );
+        throw new RpcException({
+          message: `Group cash transfer with UUID ${uuid} not found`,
+          code: 'GCT_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
       const totalAmount = record.groupCashTransferRecords.reduce(
@@ -306,9 +314,11 @@ export class GroupCashTransferService {
       // }
 
       if (!gctDetail.extras.isBankValidated) {
-        throw new RpcException(
-          'Bank account for this group has not been validated. Please validate the bank account before assigning funds.'
-        );
+        throw new RpcException({
+          message:
+            'Bank account for this group has not been validated. Please validate the bank account before assigning funds.',
+          code: 'BANK_NOT_VALIDATED_BEFORE_ASSIGN',
+        });
       }
 
       const record = await this.db.groupCashTransferRecord.create({
@@ -325,6 +335,7 @@ export class GroupCashTransferService {
       return record;
     } catch (error: any) {
       this.logger.error(`Failed to assign fund: ${error.message}`, error.stack);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -354,9 +365,11 @@ export class GroupCashTransferService {
           },
         });
         if (!group) {
-          throw new RpcException(
-            `Group cash transfer '${groupCashTransferName}' not found`
-          );
+          throw new RpcException({
+            message: `Group cash transfer '${groupCashTransferName}' not found`,
+            code: 'GROUP_CASH_TRANSFER_NAME_NOT_FOUND',
+            params: { name: groupCashTransferName },
+          });
         }
         groupCashTransferId = group.uuid;
       }
@@ -399,6 +412,7 @@ export class GroupCashTransferService {
         `Failed to fetch records: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -417,9 +431,11 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(
-          `Group cash transfer record ${recordUuid} not found`
-        );
+        throw new RpcException({
+          message: `Group cash transfer record ${recordUuid} not found`,
+          code: 'GCT_RECORD_NOT_FOUND',
+          params: { recordUuid },
+        });
       }
 
       return record;
@@ -442,20 +458,28 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(`Record ${uuid} not found`);
+        throw new RpcException({
+          message: `Record ${uuid} not found`,
+          code: 'RECORD_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
       if (record.disbursedAt) {
-        throw new RpcException(
-          'Cannot edit: disbursal has already been initiated for this record'
-        );
+        throw new RpcException({
+          message:
+            'Cannot edit: disbursal has already been initiated for this record',
+          code: 'CANNOT_EDIT_DISBURSAL_INITIATED',
+        });
       }
 
       const editableStatuses = ['NOT_STARTED', 'FAILED'];
       if (!editableStatuses.includes(record.status)) {
-        throw new RpcException(
-          `Cannot edit: record status is '${record.status}'. Only NOT_STARTED or FAILED records can be edited`
-        );
+        throw new RpcException({
+          message: `Cannot edit: record status is '${record.status}'. Only NOT_STARTED or FAILED records can be edited`,
+          code: 'CANNOT_EDIT_RECORD_STATUS',
+          params: { status: record.status },
+        });
       }
 
       return this.db.groupCashTransferRecord.update({
@@ -467,13 +491,17 @@ export class GroupCashTransferService {
         `Failed to update record: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
 
   async sendOtp(email: string) {
     if (!email) {
-      throw new RpcException('Email is required to send OTP');
+      throw new RpcException({
+        message: 'Email is required to send OTP',
+        code: 'EMAIL_REQUIRED_TO_SEND_OTP',
+      });
     }
 
     const defaultOpt = await this.db.otp.findUnique({ where: { email } });
@@ -515,21 +543,30 @@ export class GroupCashTransferService {
 
   private async verifyOtp(email?: string, otp?: string) {
     if (!email || !otp) {
-      throw new RpcException('Email and OTP are required');
+      throw new RpcException({
+        message: 'Email and OTP are required',
+        code: 'EMAIL_AND_OTP_REQUIRED',
+      });
     }
 
     const otpRecord = await this.db.otp.findUnique({ where: { email } });
     if (!otpRecord) {
-      throw new RpcException('OTP record not found');
+      throw new RpcException({
+        message: 'OTP record not found',
+        code: 'OTP_RECORD_NOT_FOUND',
+      });
     }
 
     if (otpRecord.expiresAt < new Date()) {
-      throw new RpcException('OTP has expired');
+      throw new RpcException({
+        message: 'OTP has expired',
+        code: 'OTP_EXPIRED',
+      });
     }
 
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
     if (!isValid) {
-      throw new RpcException('Invalid OTP');
+      throw new RpcException({ message: 'Invalid OTP', code: 'INVALID_OTP' });
     }
 
     // consume OTP so it cannot be reused
@@ -549,15 +586,19 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(
-          `Group cash transfer record ${recordUuid} not found`
-        );
+        throw new RpcException({
+          message: `Group cash transfer record ${recordUuid} not found`,
+          code: 'GCT_RECORD_NOT_FOUND',
+          params: { recordUuid },
+        });
       }
 
       if (record.status === 'COMPLETED') {
-        throw new RpcException(
-          `Record ${recordUuid} has already been disbursed`
-        );
+        throw new RpcException({
+          message: `Record ${recordUuid} has already been disbursed`,
+          code: 'RECORD_ALREADY_DISBURSED',
+          params: { recordUuid },
+        });
       }
 
       if (record.txHash) {
@@ -578,9 +619,11 @@ export class GroupCashTransferService {
 
       const balance = await this.treasuryService.getBalance();
       if (balance < (record.amount ?? 0)) {
-        throw new RpcException(
-          `Insufficient budget: treasury balance ${balance} is less than requested amount ${record.amount}`
-        );
+        throw new RpcException({
+          message: `Insufficient budget: treasury balance ${balance} is less than requested amount ${record.amount}`,
+          code: 'INSUFFICIENT_TREASURY_BUDGET',
+          params: { balance, amount: record.amount },
+        });
       }
 
       const offrampWallet = await this.offrampClient.getOfframpWalletAddress();
@@ -599,7 +642,11 @@ export class GroupCashTransferService {
             disbursementInfo: { error: error.message },
           },
         });
-        throw new RpcException(`Token transfer failed: ${error.message}`);
+        throw new RpcException({
+          message: `Token transfer failed: ${error.message}`,
+          code: 'TOKEN_TRANSFER_FAILED',
+          params: { message: error.message },
+        });
       }
 
       await this.db.groupCashTransferRecord.update({
@@ -622,6 +669,7 @@ export class GroupCashTransferService {
       };
     } catch (error: any) {
       this.logger.error(`Failed to disburse: ${error.message}`, error.stack);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -638,25 +686,34 @@ export class GroupCashTransferService {
       });
 
       if (!record) {
-        throw new RpcException(
-          `Group cash transfer record ${recordUuid} not found`
-        );
+        throw new RpcException({
+          message: `Group cash transfer record ${recordUuid} not found`,
+          code: 'GCT_RECORD_NOT_FOUND',
+          params: { recordUuid },
+        });
       }
 
       if (record.status === 'COMPLETED') {
-        throw new RpcException(
-          `Record ${recordUuid} has already been disbursed`
-        );
+        throw new RpcException({
+          message: `Record ${recordUuid} has already been disbursed`,
+          code: 'RECORD_ALREADY_DISBURSED',
+          params: { recordUuid },
+        });
       }
 
       if (!record.txHash) {
-        throw new RpcException('Transfer not initiated — call disburse first');
+        throw new RpcException({
+          message: 'Transfer not initiated — call disburse first',
+          code: 'TRANSFER_NOT_INITIATED',
+        });
       }
 
       if (!paymentProviderId) {
-        throw new RpcException(
-          'payoutProcessorId not set — call disburse with a payoutProcessorId first'
-        );
+        throw new RpcException({
+          message:
+            'payoutProcessorId not set — call disburse with a payoutProcessorId first',
+          code: 'PAYOUT_PROCESSOR_NOT_SET',
+        });
       }
 
       const bankDetails = (record.groupCashTransfer?.bankDetails as any) || {};
@@ -717,13 +774,18 @@ export class GroupCashTransferService {
             payoutProcessorId: paymentProviderId,
           },
         });
-        throw new RpcException(`Offramp request failed: ${error.message}`);
+        throw new RpcException({
+          message: `Offramp request failed: ${error.message}`,
+          code: 'OFFRAMP_REQUEST_FAILED',
+          params: { message: error.message },
+        });
       }
     } catch (error: any) {
       this.logger.error(
         `Failed to confirm disburse: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -736,6 +798,7 @@ export class GroupCashTransferService {
         `Failed to fetch treasury info: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -842,6 +905,7 @@ export class GroupCashTransferService {
         `Failed to fetch GCT overview data: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -858,7 +922,11 @@ export class GroupCashTransferService {
       const record = await this.findOneOrThrow(dto.groupUuid);
 
       if (!dto.bankId)
-        throw new RpcException(`Bank not found: ${dto.bankName}`);
+        throw new RpcException({
+          message: `Bank not found: ${dto.bankName}`,
+          code: 'BANK_NOT_FOUND',
+          params: { bankName: dto.bankName },
+        });
 
       const result = await this.offrampClient.validateBankAccount({
         bankId: dto.bankId,
@@ -878,8 +946,9 @@ export class GroupCashTransferService {
         (record.bankDetails as Record<string, unknown>) ?? {};
 
       if (!isValid) {
-        const errorMessage =
-          result?.cipsData?.responseMessage ?? 'Bank account validation failed';
+        const errorMessage = translateCipsMessage(
+          result?.cipsData?.responseMessage ?? 'Bank account validation failed'
+        );
         this.logger.error(
           `Bank account validation failed for group ${dto.groupUuid}: ${errorMessage}`
         );
@@ -919,6 +988,7 @@ export class GroupCashTransferService {
         `Failed to validate bank account: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -940,6 +1010,7 @@ export class GroupCashTransferService {
         `Failed to fetch valid group transfers: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -998,9 +1069,11 @@ export class GroupCashTransferService {
     );
     const hit = results.findIndex((r) => r !== null);
     if (hit !== -1)
-      throw new RpcException(
-        `A group with this ${checks[hit].field} already exists`
-      );
+      throw new RpcException({
+        message: `A group with this ${checks[hit].field} already exists`,
+        code: 'GROUP_WITH_THIS_FIELD_ALREADY_EXISTS',
+        params: { field: checks[hit].field },
+      });
   }
 
   private async findOneOrThrow(uuid: string) {
@@ -1009,7 +1082,11 @@ export class GroupCashTransferService {
     });
 
     if (!record) {
-      throw new RpcException(`Group cash transfer with UUID ${uuid} not found`);
+      throw new RpcException({
+        message: `Group cash transfer with UUID ${uuid} not found`,
+        code: 'GCT_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return record;
