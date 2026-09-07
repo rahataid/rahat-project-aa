@@ -1,6 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { CONTROLLERS, JOBS } from '../constants';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CONTROLLERS, EVENTS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
@@ -11,13 +12,16 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { GroupUuidDto } from './dto/group-uuid.dto';
+import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
 export class BeneficiaryController {
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly beneficiaryMultisigService: BeneficiaryMultisigService
+    private readonly beneficiaryMultisigService: BeneficiaryMultisigService,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
@@ -106,6 +110,43 @@ export class BeneficiaryController {
   async addGroupToProject(payload) {
     console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.SPONSOR_BENEFICIARY_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  sponsorBeneficiaryGroup(@Payload() payload: GroupUuidDto) {
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
+      groupUuid: payload.groupUuid,
+    });
+  }
+
+  //NOTE: called from core repo when a group's Stellar sponsorship should be torn down (e.g. project closes)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.REVOKE_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async revokeSponsorshipForGroup(payload: RevokeSponsorshipForGroupDto) {
+    return this.beneficiaryService.revokeSponsorshipForGroup(payload);
+  }
+
+  //NOTE: called from core repo to report Stellar sponsorship status for a group's beneficiaries (sponsored/pending/failed counts + per-account reasons)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_SPONSORSHIP_STATUS_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getSponsorshipStatusForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.getSponsorshipStatusForGroup(payload);
+  }
+
+  //NOTE: called from core repo to re-attempt Stellar sponsorship for a group's not-yet-sponsored beneficiaries
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.RETRY_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async retrySponsorshipForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.retrySponsorshipForGroup(payload);
   }
 
   @MessagePattern({

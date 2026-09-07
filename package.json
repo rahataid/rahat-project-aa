@@ -76,6 +76,7 @@
     "@rumsan/connect": "1.0.0",
     "@rumsan/prisma": "1.0.130",
     "@rumsan/settings": "^0.0.108",
+    "@rumsan/user": "3.0.170-rc.12",
     "@safe-global/api-kit": "^4.0.1",
     "@safe-global/protocol-kit": "^6.1.2",
     "@safe-global/safe-core-sdk-types": "^5.1.0",
