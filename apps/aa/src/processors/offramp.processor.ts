@@ -24,11 +24,6 @@ import { PrismaService } from '@rumsan/prisma';
 import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
 
 const DEFAULT_OFFRAMP_CONCURRENCY = 10;
-import { RedisService } from '../redis/redis.service';
-import { PrismaService } from '@rumsan/prisma';
-
-const PAYOUT_CACHE_TTL = 5;
-const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
