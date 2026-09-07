@@ -38,9 +38,12 @@ export class StakeholdersController {
       throw new Error('No data provided for validation');
     }
 
-    const normalizedData = Array.isArray(payload)
-      ? payload
-      : Object.values(payload);
+    const normalizedData =
+      payload.data && Array.isArray(payload.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : Object.values(payload);
     return this.stakeholdersService.validateBulkStakeholders(normalizedData);
   }
 
