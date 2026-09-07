@@ -233,6 +233,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    BACK_FILL: 'aa.jobs.stats.backFill',
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
@@ -440,6 +441,14 @@ export const BQUEUE = {
   STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
   MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,
   OFFLINE_REDEEM: `OFFLINE_REDEEM_${process.env.PROJECT_ID}`,
+};
+
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
 };
 
 export const VULNERABILITY_FIELD = {

@@ -370,6 +370,7 @@ export class PayoutsService {
           await this.vendorsService.processVendorOfflinePayout({
             beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
             amount: String(beneficiaryGroupTokens.numberOfTokens),
+            disbursementStatus: createPayoutDto?.disbursementStatus,
           });
         } else {
           await this.vendorsService.processVendorOnlinePayout({

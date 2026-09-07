@@ -8,7 +8,7 @@ import {
   IsIn,
   IsArray,
   IsObject,
-  IsBoolean,
+  IsBoolean
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -229,6 +229,10 @@ export class RedeemOfflineInkindByVendorDto {
 
   @IsArray()
   redeemedInkinds: RedeemedOfflineInkinds[];
+
+  @IsOptional()
+  @IsBoolean()
+  skipVendorAndPhaseValidation?: boolean;
 }
 
 export class RedeemedOfflineInkinds {
