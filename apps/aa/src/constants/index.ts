@@ -484,13 +484,5 @@ export const FIELD_MAP = {
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
 };
 
-export const SSE_EVENTS = {
-  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
-};
-
-export const REDIS_CHANNELS = {
-  SSE_LISTENER: 'sse:listener',
-};
-
 export const PAYOUT_CACHE_TTL = 5;
 export const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
