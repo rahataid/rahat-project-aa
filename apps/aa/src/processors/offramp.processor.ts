@@ -24,6 +24,11 @@ import { PrismaService } from '@rumsan/prisma';
 import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
 
 const DEFAULT_OFFRAMP_CONCURRENCY = 10;
+import { RedisService } from '../redis/redis.service';
+import { PrismaService } from '@rumsan/prisma';
+
+const PAYOUT_CACHE_TTL = 5;
+const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
@@ -39,7 +44,9 @@ export class OfframpProcessor implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     private readonly chainServiceRegistry: ChainServiceRegistry,
-    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue
+    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue,
+    private readonly redisService: RedisService,
+    private readonly prisma: PrismaService
   ) {}
 
   async onModuleInit(): Promise<void> {

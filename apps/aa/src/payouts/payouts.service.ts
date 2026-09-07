@@ -63,11 +63,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
-import { RedisService } from '../redis/redis.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 export const ONE_TOKEN_VALUE = 1;
+
+const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Injectable()
 export class PayoutsService {
