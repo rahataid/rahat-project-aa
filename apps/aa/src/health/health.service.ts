@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BQUEUE } from '../constants';
 import { PrismaService } from '@rumsan/prisma';
 import { Queue } from 'bull';
@@ -11,10 +11,12 @@ import {
   updateHealthStatus,
 } from '../utils/health.check';
 import { TriggerType } from '@rumsan/connect';
+import { lastValueFrom } from 'rxjs';
+import { ClientProxy } from '@nestjs/microservices';
 
 // Stores the last-known set of down services (JSON array of names).
 // Diffed each run to detect newly-down (alert) and restored (notice) services.
-const ALERT_STATE_KEY = 'health_alert_state';
+const ALERT_STATE_KEY = 'project_health_alert_state';
 
 @Injectable()
 export class HealthService {
@@ -25,7 +27,10 @@ export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly commsService: CommsService,
-    @InjectQueue(BQUEUE.COMMUNICATION) private readonly rahatQueue: Queue
+    @Inject('CORE_CLIENT') private readonly coreClient: ClientProxy,
+
+    @InjectQueue(BQUEUE.COMMUNICATION)
+    private readonly rahatQueue: Queue
   ) {}
 
   async getHealthStatus(): Promise<HealthStatus> {
@@ -63,7 +68,8 @@ export class HealthService {
   }
 
   async sendHealthAlertEmail(
-    downServices: Array<{ name: string; message?: string }>
+    downServices: Array<{ name: string; message?: string }>,
+    frontendUrl?: string
   ): Promise<void> {
     try {
       this._logger.log('Health status alert email sending..');
@@ -84,7 +90,7 @@ export class HealthService {
         maxAttempts: 3,
         trigger: TriggerType.IMMEDIATE,
         message: {
-          content: this.buildHealthEmailHtml('down', downServices),
+          content: this.buildHealthEmailHtml('down', downServices, frontendUrl),
           meta: {
             subject: `[ALERT] ${downServices.length} service(s) down – Rahat Health Check`,
           },
@@ -98,7 +104,10 @@ export class HealthService {
     }
   }
 
-  async sendHealthRestoredEmail(restoredServices: string[]): Promise<void> {
+  async sendHealthRestoredEmail(
+    restoredServices: Array<{ name: string; restored: boolean }>,
+    frontendUrl?: string
+  ): Promise<void> {
     try {
       const transportId = await this.commsService.getEmailTransportId();
       const recipients = (process.env.HEALTH_ALERT_EMAILS ?? '')
@@ -116,7 +125,8 @@ export class HealthService {
         message: {
           content: this.buildHealthEmailHtml(
             'up',
-            restoredServices.map((name) => ({ name }))
+            restoredServices.map(({ name }) => ({ name })),
+            frontendUrl
           ),
           meta: {
             subject: `[NOTICE] All services restored – Rahat Health Check`,
@@ -142,7 +152,10 @@ export class HealthService {
 
       const newlyDown = downNow.filter((s) => !downBefore.includes(s));
       const restored = downBefore.filter((s) => !downNow.includes(s));
-
+      const [frontendSetting] = await lastValueFrom(
+        this.coreClient.send({ cmd: 'appJobs.frontendUrl.get' }, {})
+      );
+      const frontendUrl = frontendSetting?.value ?? '';
       // No emails on first run/baseline — just record current state.
       if (downBefore.length || newlyDown.length) {
         if (newlyDown.length) {
@@ -155,17 +168,21 @@ export class HealthService {
                 name: SERVICE_LABELS[name] ?? name,
                 message: svc?.message,
               };
-            })
+            }),
+            frontendUrl
           );
         }
         if (restored.length) {
           this._logger.log('health status up ');
-          await this.sendHealthRestoredEmail(
-            restored.map((name) => SERVICE_LABELS[name] ?? name)
-          );
+          const upServices = Object.entries(result.services)
+            .filter(([, status]) => status.status === 'up')
+            .map(([name]) => ({
+              name: SERVICE_LABELS[name] ?? name,
+              restored: restored.includes(name),
+            }));
+          await this.sendHealthRestoredEmail(upServices, frontendUrl);
         }
       }
-
       await this.rahatQueue.client.setex(
         ALERT_STATE_KEY,
         24 * 60 * 60, // 24h safety TTL; overwritten every run while alive
@@ -193,24 +210,27 @@ export class HealthService {
 
   private buildHealthEmailHtml(
     type: 'down' | 'up',
-    services: Array<{ name: string; message?: string }>
+    services: Array<{ name: string; message?: string; restored?: boolean }>,
+    frontendUrl?: string
   ): string {
     const isDown = type === 'down';
     const accent = isDown ? '#d9534f' : '#5cb85c';
-    const statusLabel = isDown ? 'DOWN' : 'UP';
-    const heading = isDown
-      ? '⚠ Service Health Alert'
-      : '✓ Service Health Restored';
+    const heading = isDown ? '⚠ Service Health Alert' : '✓ Services Restored';
     const intro = isDown
       ? 'The following service(s) are currently unavailable:'
-      : 'The following service(s) have been restored:';
+      : 'All services are now healthy:';
 
     const rows = services
-      .map(
-        ({ name, message }) => `
+      .map(({ name, message, restored }) => {
+        const label = isDown ? 'DOWN' : restored ? 'RESTORED' : 'UP';
+        const time = new Date().toLocaleTimeString();
+        const color = isDown ? '#d9534f' : restored ? '#f0ad4e' : '#5cb85c';
+        return `
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #eee">${name}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${accent};font-weight:500">${statusLabel}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-weight:500">${label}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-weight:500">${time}</td>
+
           ${
             isDown
               ? `<td style="padding:8px 12px;border-bottom:1px solid #eee;color:#666;font-size:.9em">${
@@ -218,8 +238,8 @@ export class HealthService {
                 }</td>`
               : ''
           }
-        </tr>`
-      )
+        </tr>`;
+      })
       .join('');
 
     const extraHeader = isDown
@@ -247,13 +267,14 @@ export class HealthService {
         <thead><tr>
           <th style="width:30%">Service</th>
           <th style="width:20%">Status</th>
+          <th style="width:20%">Time</th>
           ${extraHeader}
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
       </div>
       <div class="foot">
-      <p>Automated alert from Rahat Health Check · ${new Date().toISOString()}</p>
+      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard</a>· ${new Date().toLocaleString()} </p>
       </div>
       </div>
     </body>
