@@ -366,6 +366,7 @@ export class PayoutsService {
           await this.vendorsService.processVendorOfflinePayout({
             beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
             amount: String(beneficiaryGroupTokens.numberOfTokens),
+            disbursementStatus: createPayoutDto?.disbursementStatus,
           });
         } else {
           await this.vendorsService.processVendorOnlinePayout({
@@ -901,7 +902,11 @@ export class PayoutsService {
     }
   ): Promise<boolean> {
     const extras = payout.extras as { paymentProviderType?: string } | null;
-    if (payout.type === 'VENDOR' || (payout.type === 'FSP' && extras?.paymentProviderType === "manual_bank_transfer")) {
+    if (
+      payout.type === 'VENDOR' ||
+      (payout.type === 'FSP' &&
+        extras?.paymentProviderType === 'manual_bank_transfer')
+    ) {
       return (
         payout.beneficiaryRedeem.length > 0 &&
         payout.beneficiaryRedeem.length ===

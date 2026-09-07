@@ -7,12 +7,14 @@ import {
 import { PrismaService } from '@rumsan/prisma';
 import { ethers } from 'ethers';
 import { AddFund, TransferListQuery } from './dto/fundallocation.dto';
+import { SseService } from '../sse/sse.service';
 
 @Injectable()
 export class FundService {
   constructor(
     private readonly settingService: SettingsService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly sseService: SseService
   ) {}
 
   async addFundToProject(payload: AddFund) {
@@ -20,7 +22,7 @@ export class FundService {
       const { amount } = payload;
       const contractSettings = await this.settingService.getPublic('CONTRACT');
       const contractValue = contractSettings?.value as any;
-      const cashTokenAddress = contractValue?.CASHTOKEN?.ADDRESS
+      const cashTokenAddress = contractValue?.CASHTOKEN?.ADDRESS;
       const rahatTokenAddress = contractValue?.RAHATTOKEN?.ADDRESS;
       const projectAddress = contractValue?.AAPROJECT?.ADDRESS;
 
@@ -70,6 +72,7 @@ export class FundService {
             transactionType: 'TREASURY',
           },
         });
+        await this.sseService.publishEvent('fund.event', transfer);
       }
       return {
         receipt,
@@ -77,6 +80,7 @@ export class FundService {
         transfer,
       };
     } catch (err) {
+      console.error('Error in addFundToProject:', err);
       throw err;
     }
   }
