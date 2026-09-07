@@ -966,6 +966,13 @@ export class VendorsService {
         verifiedMap.has(r.Beneficiary?.uuid)
       );
       this.logger.debug(
+        `Payload beneficiaryUuids: ${JSON.stringify(
+          Array.from(verifiedMap.keys())
+        )} | Pending record Beneficiary.uuids: ${JSON.stringify(
+          pending.map((r) => r.Beneficiary?.uuid ?? null)
+        )}`
+      );
+      this.logger.debug(
         `${verified.length} of ${pending.length} pending records matched verified beneficiaries`
       );
 
