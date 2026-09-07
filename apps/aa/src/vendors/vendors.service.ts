@@ -937,14 +937,9 @@ export class VendorsService {
           `Vendor with id ${payload.vendorUuid} not found`
         );
       }
-      this.logger.debug(`Found vendor ${vendor.uuid} (${vendor.walletAddress})`);
-
       // Get verified beneficiary UUIDs + OTP map
       const verifiedMap = new Map(
         payload.verifiedBeneficiaries.map((b) => [b.beneficiaryUuid, b.otp])
-      );
-      this.logger.debug(
-        `Verified beneficiary map built with ${verifiedMap.size} entries`
       );
 
       // Fetch all pending VENDOR_REIMBURSEMENT for vendor
@@ -957,23 +952,16 @@ export class VendorsService {
         },
         include: { Beneficiary: true },
       });
-      this.logger.debug(
-        `Found ${pending.length} pending VENDOR_REIMBURSEMENT redeem records for vendor ${payload.vendorUuid}`
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: found ${pending.length} pending redeem(s) awaiting sync`
       );
 
       // Filter to only verified beneficiaries
       const verified = pending.filter((r) =>
         verifiedMap.has(r.Beneficiary?.uuid)
       );
-      this.logger.debug(
-        `Payload beneficiaryUuids: ${JSON.stringify(
-          Array.from(verifiedMap.keys())
-        )} | Pending record Beneficiary.uuids: ${JSON.stringify(
-          pending.map((r) => r.Beneficiary?.uuid ?? null)
-        )}`
-      );
-      this.logger.debug(
-        `${verified.length} of ${pending.length} pending records matched verified beneficiaries`
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: ${verified.length}/${pending.length} pending redeem(s) matched a verified beneficiaryUuid`
       );
 
       if (verified.length === 0) {
@@ -990,7 +978,7 @@ export class VendorsService {
 
       const chainType =
         await this.chainServiceRegistry.detectChainFromSettings();
-      this.logger.debug(`Detected chain type: ${chainType}`);
+      this.logger.log(`Vendor ${payload.vendorUuid}: chain type resolved to ${chainType}`);
 
       const items = verified.map((r) => ({
         redeemUuid: r.uuid,
@@ -1004,8 +992,8 @@ export class VendorsService {
       for (let i = 0; i < items.length; i += OFFLINE_REDEEM_BATCH_SIZE) {
         batches.push(items.slice(i, i + OFFLINE_REDEEM_BATCH_SIZE));
       }
-      this.logger.debug(
-        `Split ${items.length} items into ${batches.length} batch(es) of up to ${OFFLINE_REDEEM_BATCH_SIZE}`
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: split ${items.length} item(s) into ${batches.length} batch(es) (max ${OFFLINE_REDEEM_BATCH_SIZE}/batch)`
       );
 
       let batchRecords;
@@ -1029,8 +1017,8 @@ export class VendorsService {
         );
         throw dbError;
       }
-      this.logger.debug(
-        `Created ${batchRecords.length} tempOfflineRedemption record(s): ${batchRecords
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: created ${batchRecords.length} tempOfflineRedemption record(s): ${batchRecords
           .map((r: any) => r.uuid)
           .join(', ')}`
       );
@@ -1056,8 +1044,8 @@ export class VendorsService {
         );
         throw queueError;
       }
-      this.logger.debug(
-        `Queued ${batchRecords.length} batch job(s) onto offlineRedeemQueue`
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: queued ${batchRecords.length} batch job(s) onto offlineRedeemQueue`
       );
 
       this.logger.log(
