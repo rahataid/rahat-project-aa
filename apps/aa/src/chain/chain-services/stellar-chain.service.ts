@@ -468,23 +468,51 @@ export class StellarChainService implements IChainService {
     };
     return result;
   }
-  async getRahatTokenBalance(data: { address: string }): Promise<any> {
-    this.logger.debug(`getRahatTokenBalance address=${data.address}`);
-    if (!this.validateAddress(data.address)) {
-      throw new RpcException(`Invalid Stellar address: ${data.address}`);
+  async getRahatTokenBalance(data: {
+    address: string;
+    role?: string;
+  }): Promise<any> {
+    try {
+      this.logger.log(
+        `Getting RahatToken balance for address: ${data.address}`,
+        StellarChainService.name
+      );
+
+      if (!this.validateAddress(data.address)) {
+        throw new RpcException(`Invalid Stellar address: ${data.address}`);
+      }
+
+      const stellarSettings = await this.getFromSettings(
+        'STELLAR_SPONSOR_SETTINGS'
+      );
+      const client = new StellarClient(
+        stellarSettings as unknown as StellarClientConfig
+      );
+      const balance = await getBalance(
+        client.server,
+        data.address,
+        client.config.assetCode,
+        client.config.assetIssuer
+      );
+
+      this.logger.log(
+        `Successfully retrieved RahatToken balance for ${data.address}: ${balance}`,
+        StellarChainService.name
+      );
+
+      if (data.role && data.role.toLowerCase() === 'vendor') {
+        return { balance, address: data.address };
+      }
+
+      return { balance, address: data.address, decimals: '0' };
+    } catch (error: any) {
+      this.logger.error(
+        `Error getting RahatToken balance for ${data.address}: ${error.message}`,
+        error.stack,
+        StellarChainService.name
+      );
+      throw error;
     }
-    const stellarSettings = await this.getFromSettings(
-      'STELLAR_SPONSOR_SETTINGS'
-    );
-    const client = new StellarClient(
-      stellarSettings as unknown as StellarClientConfig
-    );
-    return getBalance(
-      client.server,
-      data.address,
-      client.config.assetCode,
-      client.config.assetIssuer
-    );
   }
 
   // --- Public helpers (used by SDP processor) ---

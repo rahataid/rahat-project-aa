@@ -1,7 +1,13 @@
-import { Process, Processor } from '@nestjs/bull';
-import { Logger, Injectable } from '@nestjs/common';
-import { Job } from 'bull';
-import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { InjectQueue, Processor } from '@nestjs/bull';
+import { Logger, Injectable, OnModuleInit } from '@nestjs/common';
+import { Job, Queue } from 'bull';
+import { SettingsService } from '@rumsan/settings';
+import {
+  BQUEUE,
+  EVENTS,
+  JOBS,
+  STELLAR_TRANSFER_BATCH_SIZE,
+} from '../constants';
 import { OfframpService } from '../payouts/offramp.service';
 import { FSPOfframpDetails } from './types';
 import { RpcException } from '@nestjs/microservices';
@@ -11,20 +17,63 @@ import { CipsResponseData } from '../payouts/dto/types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AppService } from '../app/app.service';
 import { ConfigService } from '@nestjs/config';
+import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
+
+const DEFAULT_OFFRAMP_CONCURRENCY = 10;
+import { RedisService } from '../redis/redis.service';
+import { PrismaService } from '@rumsan/prisma';
+
+const PAYOUT_CACHE_TTL = 5;
+const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Processor(BQUEUE.OFFRAMP)
 @Injectable()
-export class OfframpProcessor {
+export class OfframpProcessor implements OnModuleInit {
   private readonly logger = new Logger(OfframpProcessor.name);
   constructor(
     private readonly offrampService: OfframpService,
     private readonly beneficiaryService: BeneficiaryService,
     private readonly eventEmitter: EventEmitter2,
     private readonly appService: AppService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private readonly settingsService: SettingsService,
+    private readonly chainServiceRegistry: ChainServiceRegistry,
+    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue,
+    private readonly redisService: RedisService,
+    private readonly prisma: PrismaService
   ) {}
 
-  @Process({ name: JOBS.OFFRAMP.INSTANT_OFFRAMP, concurrency: 2 })
+  async onModuleInit(): Promise<void> {
+    const concurrency = await this.getConcurrency();
+    this.logger.log(
+      `Offramp instant transfer concurrency set to ${concurrency}`
+    );
+    this.offrampQueue.process(
+      JOBS.OFFRAMP.INSTANT_OFFRAMP,
+      concurrency,
+      this.sendInstantOfframpRequest.bind(this)
+    );
+  }
+
+  private async getConcurrency(): Promise<number> {
+    try {
+      const chainType =
+        await this.chainServiceRegistry.detectChainFromSettings();
+      if (chainType !== 'stellar') return DEFAULT_OFFRAMP_CONCURRENCY;
+
+      const setting = await this.settingsService.getPublic(
+        'STELLAR_DISBURSEMENT_SETTINGS'
+      );
+      const value = (setting?.value as Record<string, unknown>) || {};
+      return (
+        Number(value.STELLAR_PAYOUT_TRANSFER_BATCH_SIZE) ||
+        STELLAR_TRANSFER_BATCH_SIZE
+      );
+    } catch {
+      return DEFAULT_OFFRAMP_CONCURRENCY;
+    }
+  }
+
   async sendInstantOfframpRequest(job: Job<FSPOfframpDetails>) {
     const fspOfframpDetails = job.data;
     // const projectName = await this.appService.getSettings({
@@ -150,26 +199,16 @@ export class OfframpProcessor {
         this.logger.log(
           `Offramp request successful for beneficiary redeem UUID: ${log.uuid}, transaction hash: ${fspOfframpDetails.transactionHash}`
         );
-        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-        //   payload: {
-        //     title: `Fiat Transaction Completed`,
-        //     description: `Fiat Transaction has been completed in ${
-        //       projectName.value['project_name'] || process.env.PROJECT_ID
-        //     }`,
-        //     group: 'Payout',
-        //     projectId: process.env.PROJECT_ID,
-        //     notify: true,
-        //   },
-        // });
+        await this.updatePayoutProgressCache(
+          fspOfframpDetails.payoutUUID,
+          +fspOfframpDetails.amount
+        );
         return result;
       }
 
       console.log('Offramp request failed from cips', result);
 
-      this.logger.log(
-        `Offramp request failed for beneficiary redeem`
-      );
-
+      this.logger.log(`Offramp request failed for beneficiary redeem`);
 
       await this.updateBeneficiaryRedeemAsFailed(
         log.uuid,
@@ -177,17 +216,10 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
-      // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-      //   payload: {
-      //     title: `Fiat Transaction Failed`,
-      //     description: `Fiat Transaction has been failed in ${
-      //       projectName.value['project_name'] || projectId
-      //     }`,
-      //     group: 'Payout',
-      //     projectId: projectId,
-      //     notify: true,
-      //   },
-      // });
+      await this.updatePayoutProgressCache(
+        fspOfframpDetails.payoutUUID,
+        +fspOfframpDetails.amount
+      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -201,19 +233,14 @@ export class OfframpProcessor {
         attemptsMade,
         log.info
       );
+      await this.updatePayoutProgressCache(
+        fspOfframpDetails.payoutUUID,
+        +fspOfframpDetails.amount
+      );
       if (job.attemptsMade === job.opts.attempts) {
-        this.logger.log(`all attempts exhausted for job ${job.id}, sending notification but commented for now`);
-        // this.eventEmitter.emit(EVENTS.NOTIFICATION.CREATE, {
-        //   payload: {
-        //     title: `Fiat Transaction Failed`,
-        //     description: `Fiat Transaction has been failed in ${
-        //       projectName.value['project_name'] || process.env.PROJECT_ID
-        //     }`,
-        //     group: 'Payout',
-        //     notify: true,
-        //     projectId: process.env.PROJECT_ID,
-        //   },
-        // });
+        this.logger.log(
+          `all attempts exhausted for job ${job.id}, sending notification but commented for now`
+        );
       }
       throw error;
     }
@@ -229,7 +256,8 @@ export class OfframpProcessor {
         cipsBatchResponse.responseMessage || 'Offramp request failed from CIPS.'
       }`,
       ...(cipsTxnResponseList || []).map(
-        (txn) => `creditStatus:${txn.creditStatus},${txn.responseMessage || 'FAILED'}`
+        (txn) =>
+          `creditStatus:${txn.creditStatus},${txn.responseMessage || 'FAILED'}`
       ),
     ];
 
@@ -251,6 +279,73 @@ export class OfframpProcessor {
         ...(numberOfAttempts && { numberOfAttempts: numberOfAttempts }),
       },
     });
+  }
+
+  private async updatePayoutProgressCache(
+    payoutUUID: string,
+    amount: number
+  ): Promise<void> {
+    try {
+      const payout = await this.prisma.payouts.findUnique({
+        where: { uuid: payoutUUID },
+        select: {
+          type: true,
+          payoutProcessorId: true,
+          beneficiaryGroupToken: {
+            select: {
+              numberOfTokens: true,
+              beneficiaryGroup: {
+                select: { _count: { select: { beneficiaries: true } } },
+              },
+            },
+          },
+        },
+      });
+
+      if (!payout?.beneficiaryGroupToken) return;
+
+      const totalBeneficiaries =
+        payout.beneficiaryGroupToken.beneficiaryGroup?._count?.beneficiaries ||
+        0;
+      if (totalBeneficiaries === 0) return;
+
+      const cacheKey = `${PAYOUT_CACHE_KEY_PREFIX}${payoutUUID}`;
+      const cached = await this.redisService.get<{
+        completedCount: number;
+        totalBeneficiaries: number;
+        totalSuccessAmount: number;
+        status: string;
+        lastUpdated: number;
+      }>(cacheKey);
+
+      const currentCompleted = cached?.completedCount || 0;
+      const currentAmount = cached?.totalSuccessAmount || 0;
+
+      const newCompleted = Math.min(currentCompleted + 1, totalBeneficiaries);
+      const newAmount = currentAmount + amount;
+      const isComplete = newCompleted >= totalBeneficiaries;
+      const status = isComplete ? 'COMPLETED' : 'PENDING';
+
+      await this.redisService.set(
+        cacheKey,
+        {
+          completedCount: newCompleted,
+          totalBeneficiaries,
+          totalSuccessAmount: newAmount,
+          status,
+          lastUpdated: Date.now(),
+        },
+        PAYOUT_CACHE_TTL
+      );
+
+      this.logger.debug(
+        `Updated payout cache for ${payoutUUID}: ${newCompleted}/${totalBeneficiaries}, status=${status}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to update payout cache for ${payoutUUID}: ${error.message}`
+      );
+    }
   }
 
   private async generateOfframpPayload(
