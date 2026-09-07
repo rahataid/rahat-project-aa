@@ -39,9 +39,7 @@ export class OfframpProcessor implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     private readonly chainServiceRegistry: ChainServiceRegistry,
-    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue,
-    private readonly redisService: RedisService,
-    private readonly prisma: PrismaService
+    @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue
   ) {}
 
   async onModuleInit(): Promise<void> {

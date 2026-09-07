@@ -32,7 +32,6 @@ import { RedisModule } from '../redis/redis.module';
 import { HealthModule } from '../health/health.module';
 import { CronModule } from '../cron/cron.module';
 import { SseModule } from '../sse/sse.module';
-import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
