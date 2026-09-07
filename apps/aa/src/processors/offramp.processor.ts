@@ -254,36 +254,17 @@ export class OfframpProcessor {
   /**
    * Increments the Redis payout progress cache after each beneficiary transfer attempt.
    * Called on success, failure, and exception — each beneficiary is counted exactly once.
-   * The UI polls GET_PROGRESS endpoint which reads this cache to show real-time progress.
+   * The UI polls the findAll endpoint which reads this cache to show real-time progress.
+   *
+   * Optimization: payout metadata (type, numberOfTokens, totalBeneficiaries) is cached
+   * in Redis alongside progress data. DB is only queried on the first call per payout;
+   * subsequent calls read metadata from Redis to avoid repeated DB reads.
    */
   private async updatePayoutProgressCache(
     payoutUUID: string,
     amount: number
   ): Promise<void> {
     try {
-      const payout = await this.prisma.payouts.findUnique({
-        where: { uuid: payoutUUID },
-        select: {
-          type: true,
-          payoutProcessorId: true,
-          beneficiaryGroupToken: {
-            select: {
-              numberOfTokens: true,
-              beneficiaryGroup: {
-                select: { _count: { select: { beneficiaries: true } } },
-              },
-            },
-          },
-        },
-      });
-
-      if (!payout?.beneficiaryGroupToken) return;
-
-      const totalBeneficiaries =
-        payout.beneficiaryGroupToken.beneficiaryGroup?._count?.beneficiaries ||
-        0;
-      if (totalBeneficiaries === 0) return;
-
       const cacheKey = `${PAYOUT_CACHE_KEY_PREFIX}${payoutUUID}`;
       const cached = await this.redisService.get<{
         completedCount: number;
@@ -291,7 +272,47 @@ export class OfframpProcessor {
         totalSuccessAmount: number;
         status: string;
         lastUpdated: number;
+        // Payout metadata — stored once, reused on every subsequent call
+        payoutType?: string;
+        numberOfTokens?: number;
       }>(cacheKey);
+
+      let totalBeneficiaries: number;
+      let payoutType: string;
+      let numberOfTokens: number;
+
+      if (cached?.payoutType && cached?.numberOfTokens) {
+        // Metadata already cached — skip DB query entirely
+        totalBeneficiaries = cached.totalBeneficiaries;
+        payoutType = cached.payoutType;
+        numberOfTokens = cached.numberOfTokens;
+      } else {
+        // First call for this payout — fetch from DB and cache metadata
+        const payout = await this.prisma.payouts.findUnique({
+          where: { uuid: payoutUUID },
+          select: {
+            type: true,
+            beneficiaryGroupToken: {
+              select: {
+                numberOfTokens: true,
+                beneficiaryGroup: {
+                  select: { _count: { select: { beneficiaries: true } } },
+                },
+              },
+            },
+          },
+        });
+
+        if (!payout?.beneficiaryGroupToken) return;
+
+        totalBeneficiaries =
+          payout.beneficiaryGroupToken.beneficiaryGroup?._count?.beneficiaries ||
+          0;
+        if (totalBeneficiaries === 0) return;
+
+        payoutType = payout.type;
+        numberOfTokens = payout.beneficiaryGroupToken.numberOfTokens;
+      }
 
       const currentCompleted = cached?.completedCount || 0;
       const currentAmount = cached?.totalSuccessAmount || 0;
@@ -309,6 +330,9 @@ export class OfframpProcessor {
           totalSuccessAmount: newAmount,
           status,
           lastUpdated: Date.now(),
+          // Persist metadata so subsequent calls skip DB
+          payoutType,
+          numberOfTokens,
         },
         PAYOUT_CACHE_TTL
       );

@@ -30,7 +30,13 @@ import {
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
-import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
+import {
+  BQUEUE,
+  CORE_MODULE,
+  EVENTS,
+  JOBS,
+  PAYOUT_CACHE_KEY_PREFIX,
+} from '../constants';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import {
@@ -62,8 +68,6 @@ import { RedisService } from '../redis/redis.service';
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 export const ONE_TOKEN_VALUE = 1;
-
-const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Injectable()
 export class PayoutsService {
@@ -675,7 +679,10 @@ export class PayoutsService {
     const calculatedStatus = calculatePayoutStatus(
       payout as PayoutWithRelations
     );
-    await this.syncPayoutStatus(payout as PayoutWithRelations, calculatedStatus);
+    await this.syncPayoutStatus(
+      payout as PayoutWithRelations,
+      calculatedStatus
+    );
   }
 
   //  Sync payout status in DB if changed, and update object
@@ -692,9 +699,7 @@ export class PayoutsService {
       // activation phase can be reverted+reactivated later and lose its
       // original activatedAt, making later recalculation wrong/negative.
       if (newStatus === 'COMPLETED') {
-        const payoutGap = await this.calculatePayoutCompletionGap(
-          payout.uuid
-        );
+        const payoutGap = await this.calculatePayoutCompletionGap(payout.uuid);
         data.extras = { ...(payout.extras as object), payoutGap };
 
         // group_gap: time from triggerPayout call to payout completion, FSP only.
@@ -832,12 +837,12 @@ export class PayoutsService {
       let payoutGap = 'N/A';
 
       if (isCompleted && isPayoutTriggered) {
-        const storedGap = (payout.extras as { payoutGap?: string })
-          ?.payoutGap;
+        const storedGap = (payout.extras as { payoutGap?: string })?.payoutGap;
 
         // backfill for payouts completed before the gap started getting
         // stored on completion
-        payoutGap = storedGap ?? (await this.calculatePayoutCompletionGap(uuid));
+        payoutGap =
+          storedGap ?? (await this.calculatePayoutCompletionGap(uuid));
       }
 
       return {
@@ -882,8 +887,7 @@ export class PayoutsService {
       const beneficiariesCount = beneficiaries?.length || 0;
 
       if (calculatedStatus === 'COMPLETED') {
-        totalSuccessAmount =
-          tokenData.numberOfTokens * ONE_TOKEN_VALUE;
+        totalSuccessAmount = tokenData.numberOfTokens * ONE_TOKEN_VALUE;
       } else if (rest.type === 'FSP') {
         const successRequests = beneficiaryRedeem.filter(
           (redeem) => redeem.status === 'FIAT_TRANSACTION_COMPLETED'
@@ -892,9 +896,7 @@ export class PayoutsService {
           ? tokenData.numberOfTokens / beneficiariesCount
           : 0;
         totalSuccessAmount =
-          successRequests.length *
-          ONE_TOKEN_VALUE *
-          eachBeneficiaryTokenCount;
+          successRequests.length * ONE_TOKEN_VALUE * eachBeneficiaryTokenCount;
       } else {
         const successRequests = beneficiaryRedeem.filter(
           (redeem) => redeem.status === 'COMPLETED'
@@ -903,9 +905,7 @@ export class PayoutsService {
           ? tokenData.numberOfTokens / beneficiariesCount
           : 0;
         totalSuccessAmount =
-          successRequests.length *
-          ONE_TOKEN_VALUE *
-          eachBeneficiaryTokenCount;
+          successRequests.length * ONE_TOKEN_VALUE * eachBeneficiaryTokenCount;
       }
 
       return {
@@ -939,7 +939,11 @@ export class PayoutsService {
     }
   ): Promise<boolean> {
     const extras = payout.extras as { paymentProviderType?: string } | null;
-    if (payout.type === 'VENDOR' || (payout.type === 'FSP' && extras?.paymentProviderType === "manual_bank_transfer")) {
+    if (
+      payout.type === 'VENDOR' ||
+      (payout.type === 'FSP' &&
+        extras?.paymentProviderType === 'manual_bank_transfer')
+    ) {
       return (
         payout.beneficiaryRedeem.length > 0 &&
         payout.beneficiaryRedeem.length ===
@@ -951,8 +955,9 @@ export class PayoutsService {
     return (
       payout.beneficiaryRedeem.length > 0 &&
       payout.beneficiaryRedeem.length ===
-        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length * 2 &&
-      payout.beneficiaryRedeem.every((r) => r.isCompleted)    
+        payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length *
+          2 &&
+      payout.beneficiaryRedeem.every((r) => r.isCompleted)
     );
   }
 
@@ -1780,7 +1785,9 @@ export class PayoutsService {
       )
     );
 
-    const activationPhase = data.data.find((p) => p?.disbursementConfig?.disbursementMethods?.includes('TOKEN'));
+    const activationPhase = data.data.find((p) =>
+      p?.disbursementConfig?.disbursementMethods?.includes('TOKEN')
+    );
 
     if (!activationPhase) {
       this.logger.warn(
@@ -1795,7 +1802,8 @@ export class PayoutsService {
     // completed payout keeps its gap instead of going negative/N/A.
     let activatedAtRaw = activationPhase.activatedAt;
 
-    this.logger.log(`Activation phase found for riverBasin ${riverBasin} and activeYear ${activeYear}, activatedAt: ${activatedAtRaw}`
+    this.logger.log(
+      `Activation phase found for riverBasin ${riverBasin} and activeYear ${activeYear}, activatedAt: ${activatedAtRaw}`
     );
 
     if (!activatedAtRaw) {
@@ -1806,10 +1814,16 @@ export class PayoutsService {
         )
       );
 
-      this.logger.log(`Revert history found for phase ${activationPhase.uuid}: ${JSON.stringify(history)}`);
+      this.logger.log(
+        `Revert history found for phase ${
+          activationPhase.uuid
+        }: ${JSON.stringify(history)}`
+      );
 
       activatedAtRaw = history?.data?.[0]?.phaseActivationDate;
-      this.logger.log(`Fallback to last trigger-history snapshot, activatedAt: ${activatedAtRaw}`)
+      this.logger.log(
+        `Fallback to last trigger-history snapshot, activatedAt: ${activatedAtRaw}`
+      );
     }
 
     if (!activatedAtRaw) {
