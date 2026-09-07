@@ -237,7 +237,7 @@ export async function checkOffRampService(
   } catch (err) {
     return {
       status: 'down',
-      message: err,
+      message: err as any,
       latency: `${(performance.now() - start).toFixed(2)}ms`,
       last_checked,
       link: endpoint,
