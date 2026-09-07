@@ -23,6 +23,14 @@ export interface HealthStatus {
   };
 }
 
+export const SERVICE_LABELS: Record<string, string> = {
+  database: 'Database',
+  redis: 'Redis',
+  rpcUrl: 'RPC URL',
+  cloudflare: 'Cloudflare',
+  offRamp: 'Off-Ramp',
+};
+
 export async function checkDatabase(
   prisma: PrismaService
 ): Promise<ServiceStatus> {
