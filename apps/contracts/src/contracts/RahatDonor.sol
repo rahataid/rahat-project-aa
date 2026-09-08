@@ -32,7 +32,7 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
 
   mapping(address => bool) public _registeredProject;
 
-  IRahatTreasury public RahatTreasury;
+  // IRahatTreasury constant public RahatTreasury;
 
   constructor(
     address _admin,
@@ -56,7 +56,7 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
   // }
 
   function mintToken(address _token, uint256 _amount) public {
-    RahatToken(_token).mint(address(this), _amount);
+   require(RahatToken(_token).mint(address(this), _amount) == _amount, 'Mint failed');
   }
 
   modifier onlyValidAddress(address _address) {
@@ -72,7 +72,7 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
     uint256 _amount
   ) public returns (bool) {
     RahatToken token = RahatToken(_projectToken);
-    token.mint(_projectAddress, _amount);
+    require(token.mint(_projectAddress, _amount) == _amount, 'Mint failed');
     CashToken(_cashToken).mint(_cashTokenReciever,_amount);
    // IAAProject(_projectAddress).increaseTokenBudget(_projectToken, _amount);
     emit TokenMintedAndApproved(_projectToken, _projectAddress,_cashToken,_cashTokenReciever, _amount);
@@ -81,7 +81,7 @@ contract RahatDonor is AbstractTokenActions, ERC165, AccessManaged {
   }
 
   function addTokenOwner(address _token, address _ownerAddress) public restricted {
-    RahatToken(_token).addOwner(_ownerAddress);
+   require( RahatToken(_token).addOwner(_ownerAddress), 'Unable to add owner');
   }
 
   function registerProject(address _projectAddress, bool status) public restricted {

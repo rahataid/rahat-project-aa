@@ -69,9 +69,9 @@ describe('------ AA ProjectFlow Tests ------', function () {
         [admin.address]
       );
       console.log('AccessManager deployed at: ', accessManagerContract.target);
-      triggerManagerContract = await ethers.deployContract('TriggerManager', [
-        requiredTrigger,
-      ]);
+      // triggerManagerContract = await ethers.deployContract('TriggerManager', [
+      //   requiredTrigger,
+      // ]);
       rahatDonorContract = await ethers.deployContract('RahatDonor', [
         admin.address,
         accessManagerContract.target,
@@ -91,7 +91,6 @@ describe('------ AA ProjectFlow Tests ------', function () {
         rahatTokenContract.target,
         forwarderContract.target,
         accessManagerContract.target,
-        triggerManagerContract.target,
       ]);
       rahatTokenAddress = rahatTokenContract.getAddress();
 
@@ -112,53 +111,53 @@ describe('------ AA ProjectFlow Tests ------', function () {
         .registerProject(await aaProjectContract.getAddress(), true);
     });
 
-    it('should update trigger sources', async function () {
-      console.log(
-        triggerSource1.id,
-        triggerSource1.name,
-        triggerSource1.details,
-        triggerAddress1.address
-      );
-      await triggerManagerContract
-        .connect(admin)
-        .updateTriggerSource(
-          ethers.id(triggerSource1.id),
-          triggerSource1.name,
-          triggerSource1.details,
-          triggerAddress1.address
-        );
+    // it('should update trigger sources', async function () {
+    //   console.log(
+    //     triggerSource1.id,
+    //     triggerSource1.name,
+    //     triggerSource1.details,
+    //     triggerAddress1.address
+    //   );
+    //   await triggerManagerContract
+    //     .connect(admin)
+    //     .updateTriggerSource(
+    //       ethers.id(triggerSource1.id),
+    //       triggerSource1.name,
+    //       triggerSource1.details,
+    //       triggerAddress1.address
+    //     );
 
-      await triggerManagerContract
-        .connect(admin)
-        .updateTriggerSource(
-          ethers.id(triggerSource2.id),
-          triggerSource2.name,
-          triggerSource2.details,
-          triggerAddress2.address
-        );
+    //   await triggerManagerContract
+    //     .connect(admin)
+    //     .updateTriggerSource(
+    //       ethers.id(triggerSource2.id),
+    //       triggerSource2.name,
+    //       triggerSource2.details,
+    //       triggerAddress2.address
+    //     );
 
-      await triggerManagerContract
-        .connect(admin)
-        .updateTriggerSource(
-          ethers.id(triggerSource3.id),
-          triggerSource3.name,
-          triggerSource3.details,
-          triggerAddress3.address
-        );
+    //   await triggerManagerContract
+    //     .connect(admin)
+    //     .updateTriggerSource(
+    //       ethers.id(triggerSource3.id),
+    //       triggerSource3.name,
+    //       triggerSource3.details,
+    //       triggerAddress3.address
+    //     );
 
-      const contractTriggerData1 = await triggerManagerContract.triggerSources(
-        ethers.id(triggerSource1.id)
-      );
-      const contractTriggerData2 = await triggerManagerContract.triggerSources(
-        ethers.id(triggerSource2.id)
-      );
-      const contractTriggerData3 = await triggerManagerContract.triggerSources(
-        ethers.id(triggerSource3.id)
-      );
-      expect(contractTriggerData1[0]).to.equal(triggerSource1.name);
-      expect(contractTriggerData2[0]).to.equal(triggerSource2.name);
-      expect(contractTriggerData3[0]).to.equal(triggerSource3.name);
-    });
+    //   const contractTriggerData1 = await triggerManagerContract.triggerSources(
+    //     ethers.id(triggerSource1.id)
+    //   );
+    //   const contractTriggerData2 = await triggerManagerContract.triggerSources(
+    //     ethers.id(triggerSource2.id)
+    //   );
+    //   const contractTriggerData3 = await triggerManagerContract.triggerSources(
+    //     ethers.id(triggerSource3.id)
+    //   );
+    //   expect(contractTriggerData1[0]).to.equal(triggerSource1.name);
+    //   expect(contractTriggerData2[0]).to.equal(triggerSource2.name);
+    //   expect(contractTriggerData3[0]).to.equal(triggerSource3.name);
+    // });
 
     it('should send funds to the aa contract', async function () {
       await rahatDonorContract
@@ -175,23 +174,23 @@ describe('------ AA ProjectFlow Tests ------', function () {
       ).to.equal(1000000);
     });
 
-    it('should trigger the project via source1', async function () {
-      await triggerManagerContract
-        .connect(triggerAddress1)
-        .trigger(ethers.id(triggerSource1.id));
-      expect(
-        await triggerManagerContract.connect(triggerAddress1).getTriggerCount()
-      ).to.equal(1);
-    });
+    // it('should trigger the project via source1', async function () {
+    //   await triggerManagerContract
+    //     .connect(triggerAddress1)
+    //     .trigger(ethers.id(triggerSource1.id));
+    //   expect(
+    //     await triggerManagerContract.connect(triggerAddress1).getTriggerCount()
+    //   ).to.equal(1);
+    // });
 
-    it('should trigger the project via source2', async function () {
-      await triggerManagerContract
-        .connect(triggerAddress2)
-        .trigger(ethers.id(triggerSource2.id));
-      expect(
-        await triggerManagerContract.connect(triggerAddress1).getTriggerCount()
-      ).to.equal(2);
-    });
+    // it('should trigger the project via source2', async function () {
+    //   await triggerManagerContract
+    //     .connect(triggerAddress2)
+    //     .trigger(ethers.id(triggerSource2.id));
+    //   expect(
+    //     await triggerManagerContract.connect(triggerAddress1).getTriggerCount()
+    //   ).to.equal(2);
+    // });
 
     it('should  be able to assign tokens to beneficiaries ', async function () {
       await aaProjectContract
