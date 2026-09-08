@@ -973,13 +973,13 @@ export class VendorsService {
         where: { uuid: payload.vendorUuid },
       });
       if (!vendor) {
+        this.logger.error(`Vendor with id ${payload.vendorUuid} not found`);
         throw new RpcException({
           message: `Vendor with id ${payload.vendorUuid} not found`,
           code: 'VENDOR_NOT_FOUND',
           params: { uuid: payload.vendorUuid },
         });
       }
-
       // Get verified beneficiary UUIDs + OTP map
       const verifiedMap = new Map(
         payload.verifiedBeneficiaries.map((b) => [b.beneficiaryUuid, b.otp])
@@ -995,13 +995,22 @@ export class VendorsService {
         },
         include: { Beneficiary: true },
       });
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: found ${pending.length} pending redeem(s) awaiting sync`
+      );
 
       // Filter to only verified beneficiaries
       const verified = pending.filter((r) =>
         verifiedMap.has(r.Beneficiary?.uuid)
       );
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: ${verified.length}/${pending.length} pending redeem(s) matched a verified beneficiaryUuid`
+      );
 
       if (verified.length === 0) {
+        this.logger.warn(
+          `No matching verified beneficiaries found for vendor ${payload.vendorUuid}`
+        );
         return {
           success: true,
           message: 'No matching verified beneficiaries found',
@@ -1012,6 +1021,7 @@ export class VendorsService {
 
       const chainType =
         await this.chainServiceRegistry.detectChainFromSettings();
+      this.logger.log(`Vendor ${payload.vendorUuid}: chain type resolved to ${chainType}`);
 
       const items = verified.map((r) => ({
         redeemUuid: r.uuid,
@@ -1025,32 +1035,60 @@ export class VendorsService {
       for (let i = 0; i < items.length; i += OFFLINE_REDEEM_BATCH_SIZE) {
         batches.push(items.slice(i, i + OFFLINE_REDEEM_BATCH_SIZE));
       }
-
-      const batchRecords = await Promise.all(
-        batches.map((batch) =>
-          this.prisma.tempOfflineRedemption.create({
-            data: {
-              chainType,
-              vendorId: vendor.uuid,
-              payloads: batch,
-              status: 'PENDING',
-            },
-          })
-        )
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: split ${items.length} item(s) into ${batches.length} batch(es) (max ${OFFLINE_REDEEM_BATCH_SIZE}/batch)`
       );
 
-      await Promise.all(
-        batchRecords.map((record: any) =>
-          this.offlineRedeemQueue.add(
-            JOBS.VENDOR.OFFLINE_REDEEM_BATCH,
-            { batchId: record.uuid },
-            {
-              jobId: record.uuid,
-              attempts: 3,
-              backoff: { type: 'exponential', delay: 2000 },
-            }
+      let batchRecords;
+      try {
+        batchRecords = await Promise.all(
+          batches.map((batch) =>
+            this.prisma.tempOfflineRedemption.create({
+              data: {
+                chainType,
+                vendorId: vendor.uuid,
+                payloads: batch,
+                status: 'PENDING',
+              },
+            })
           )
-        )
+        );
+      } catch (dbError: any) {
+        this.logger.error(
+          `Failed to create tempOfflineRedemption records for vendor ${payload.vendorUuid}: ${dbError.message}`,
+          dbError.stack
+        );
+        throw dbError;
+      }
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: created ${batchRecords.length} tempOfflineRedemption record(s): ${batchRecords
+          .map((r: any) => r.uuid)
+          .join(', ')}`
+      );
+
+      try {
+        await Promise.all(
+          batchRecords.map((record: any) =>
+            this.offlineRedeemQueue.add(
+              JOBS.VENDOR.OFFLINE_REDEEM_BATCH,
+              { batchId: record.uuid },
+              {
+                jobId: record.uuid,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 2000 },
+              }
+            )
+          )
+        );
+      } catch (queueError: any) {
+        this.logger.error(
+          `Failed to queue offline redeem batch job(s) for vendor ${payload.vendorUuid}: ${queueError.message}`,
+          queueError.stack
+        );
+        throw queueError;
+      }
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: queued ${batchRecords.length} batch job(s) onto offlineRedeemQueue`
       );
 
       this.logger.log(
