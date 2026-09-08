@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 
@@ -32,7 +32,7 @@ import { StellarClientConfig } from 'libs/stellar/src/types';
 import bcrypt from 'bcryptjs';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
-import { generateRandomTxHash } from '../../utils/utility';
+import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -43,23 +43,79 @@ export interface BeneficiaryCsvData {
 }
 
 @Injectable()
-export class StellarChainService implements IChainService {
+export class StellarChainService implements IChainService, OnModuleInit {
   private readonly logger = new Logger(StellarChainService.name);
 
   // Lazy-loaded service to avoid circular dependency issues
   private _inkindService: InkindsService | null = null;
+
+  // Cached at startup so the ~1000s of concurrent redeemInkind calls reuse one
+  // client/Horizon connection instead of rebuilding it (and refetching
+  // settings) on every call.
+  private inkindClient: StellarClient | null = null;
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SDP) private stellarSdpQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR_DISBURSE) private stellarDisburseQueue: Queue,
     @InjectQueue(BQUEUE.STELLAR_SEND_ASSET)
     private stellarSendAssetQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_INKIND_REDEEM)
+    private stellarInkindQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef,
     private readonly eventEmitter: EventEmitter2
   ) { }
+
+  async onModuleInit() {
+    await this.initializeInkindClient().catch((err) =>
+      this.logger.warn(
+        `STELLAR_INKIND_SETTINGS not ready at startup, will retry lazily on first redeemInkind: ${err.message}`
+      )
+    );
+  }
+
+  private async initializeInkindClient(): Promise<StellarClient> {
+    const settings = await this.getFromSettings('STELLAR_INKIND_SETTINGS');
+    if (!settings) {
+      throw new Error('STELLAR_INKIND_SETTINGS not configured');
+    }
+    const cfg = settings as {
+      network: 'testnet' | 'mainnet';
+      horizonUrl?: string;
+      assetCode: string;
+      assetIssuer: string;
+      distribution_wallet_secret_key: string;
+    };
+    if (
+      !cfg.network ||
+      !cfg.assetCode ||
+      !cfg.assetIssuer ||
+      !cfg.distribution_wallet_secret_key
+    ) {
+      throw new Error(
+        'STELLAR_INKIND_SETTINGS missing required fields (network, assetCode, assetIssuer, distribution_wallet_secret_key)'
+      );
+    }
+
+    this.inkindClient = new StellarClient({
+      network: cfg.network,
+      horizonUrl: cfg.horizonUrl,
+      sponsorSecret: cfg.distribution_wallet_secret_key,
+      assetCode: cfg.assetCode,
+      assetIssuer: cfg.assetIssuer,
+    } as unknown as StellarClientConfig);
+
+    this.logger.log(
+      `Stellar inkind distribution client initialized [network=${cfg.network}]`
+    );
+    return this.inkindClient;
+  }
+
+  private async getInkindClient(): Promise<StellarClient> {
+    return this.inkindClient ?? this.initializeInkindClient();
+  }
 
   getChainType(): ChainType {
     return 'stellar';
@@ -842,31 +898,83 @@ export class StellarChainService implements IChainService {
     throw new RpcException('Not supported on Stellar SDP chain');
   }
 
-  async redeemInkind(_data: RedeemInkindDto): Promise<any> {
-    const { beneficiaryAddress, inkindId: inkinds } = _data; // Destructure to avoid unused variable warning
+  async redeemInkind(data: RedeemInkindDto): Promise<any> {
     this.logger.log(
-      `Redeeming inkind for beneficiary ${_data.beneficiaryAddress}`
+      `Queuing inkind redemption: vendor=${data.vendorAddress}, beneficiary=${data.beneficiaryAddress}, amount=${data.amount}`
     );
-    this.logger.log(
-      `Skipping actual Stellar transfer for inkind redemption and generating a random txHash for record-keeping`
+    return this.stellarInkindQueue.add(
+      JOBS.STELLAR.REDEEM_INKIND,
+      data,
+      {
+        attempts: 3,
+        removeOnComplete: true,
+        removeOnFail: false,
+        backoff: { type: 'exponential', delay: 5000 },
+      }
     );
+  }
 
-    const randomTxHash = generateRandomTxHash('stellar');
+  /**
+   * Sends the inkind asset directly from the distribution wallet to the
+   * vendor (no beneficiary-owned account involved) and records the tx hash.
+   */
+  async processRedeemInkind(
+    data: RedeemInkindDto,
+    isLastAttempt = true
+  ): Promise<void> {
+    const { beneficiaryAddress, inkindId: inkinds, vendorAddress, amount } =
+      data;
+
+    if (!amount || amount <= 0) {
+      throw new RpcException(
+        `Invalid inkind redemption amount: ${amount}`
+      );
+    }
 
     try {
+      const client = await this.getInkindClient();
+      const settings = await this.getFromSettings('STELLAR_INKIND_SETTINGS');
+      const distributionSecret = (settings as { distribution_wallet_secret_key?: string })
+        ?.distribution_wallet_secret_key;
+      if (!distributionSecret) {
+        throw new Error('STELLAR_INKIND_SETTINGS missing distribution_wallet_secret_key');
+      }
+
+      const result = await client.sendPayment(
+        distributionSecret,
+        vendorAddress,
+        client.asset,
+        amount.toString()
+      );
+
       await this.inkindService.updateRedeemInkindTxHash(
         inkinds,
-        randomTxHash,
+        result.hash,
         beneficiaryAddress
       );
+
       this.logger.log(
-        `Inkind redemption recorded for beneficiary ${_data.beneficiaryAddress}`
+        `Inkind redemption COMPLETED beneficiary=${beneficiaryAddress} vendor=${vendorAddress} amount=${amount} txHash=${result.hash}`
       );
-    } catch (err) {
-      this.logger.error(
-        `Error redeeming in-kind for beneficiary ${_data.beneficiaryAddress}: ${err.message}`
-      );
-      throw new RpcException(`Error redeeming in-kind: ${err.message}`);
+    } catch (err: any) {
+      if (isLastAttempt) {
+        await this.prisma.beneficiaryInkindRedemption.updateMany({
+          where: {
+            beneficiaryWallet: beneficiaryAddress,
+            groupInkind: { inkindId: { in: inkinds } },
+          },
+          data: { status: InkindTxStatus.FAILED },
+        });
+        this.logger.error(
+          `Inkind redemption FAILED beneficiary=${beneficiaryAddress} vendor=${vendorAddress} amount=${amount}: ${err.message}`,
+          err.stack
+        );
+      } else {
+        this.logger.warn(
+          `Inkind redemption attempt failed, will retry beneficiary=${beneficiaryAddress} vendor=${vendorAddress}: ${err.message}`
+        );
+      }
+      throw err instanceof RpcException ? err : new RpcException(err.message);
     }
   }
 
