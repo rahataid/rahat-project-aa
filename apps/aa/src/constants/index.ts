@@ -483,3 +483,6 @@ export const FIELD_MAP = {
   NO_OF_PERSONS_WITH_DISABILITY: 'no_of_persons_with_disability',
   NO_OF_PREGNANT_WOMEN: 'no_of_pregnant_women',
 };
+
+export const DISBURSE_CACHE_TTL = 300;
+export const DISBURSE_CACHE_KEY_PREFIX = 'disburse:progress:';
