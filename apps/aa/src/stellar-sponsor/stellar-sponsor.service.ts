@@ -44,32 +44,9 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     const { groupUuid } = payload;
     this.logger.debug(`Sponsoring beneficiaries for group ${groupUuid}`);
 
-    if (!this.isStellarChain) {
-      this.logger.debug(`Chain is not Stellar — skipping sponsorship for group ${groupUuid}`);
-      return;
-    }
+    if (!(await this.isSponsorshipEnabled(groupUuid))) return;
 
-    try {
-      const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-      if (!sponsorSettings?.value) {
-        this.logger.debug(`STELLAR_SPONSOR_SETTINGS not configured — skipping group ${groupUuid}`);
-        return;
-      }
-    } catch {
-      this.logger.debug(`STELLAR_SPONSOR_SETTINGS unavailable — skipping group ${groupUuid}`);
-      return;
-    }
-
-    const records = await this.prisma.beneficiaryToGroup.findMany({
-      where: { groupId: groupUuid },
-      select: { beneficiary: { select: { uuid: true, walletAddress: true } } },
-    });
-
-    const beneficiaries = records
-      .map((r) => r.beneficiary)
-      .filter((b) => b.walletAddress)
-      .map((b) => ({ beneficiaryId: b.uuid, walletAddress: b.walletAddress as string }));
-
+    const beneficiaries = await this.getGroupBeneficiaries(groupUuid);
     if (!beneficiaries.length) {
       this.logger.warn(`No wallet addresses found for group ${groupUuid}`);
       return;
@@ -85,5 +62,79 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     this.logger.log(
       `Queued ${Math.ceil(beneficiaries.length / STELLAR_SPONSOR_BATCH_SIZE)} sponsorship batch(es) for group ${groupUuid}`
     );
+  }
+
+  /**
+   * Closes out every beneficiary in the group entirely: closes their
+   * trustline and merges the account into the sponsor (see
+   * StellarSponsorProcessor.revokeSponsorshipBatch / mergeSponsoredAccountsBatch
+   * for why — a plain revoke can't work when beneficiaries hold 0 XLM, since
+   * revoke drops the reserve requirement onto an account that can't cover
+   * it; merging deletes the entries instead, which needs no balance at all.
+   * One-way door: beneficiaries' Stellar accounts are gone afterward.
+   * Triggered whenever something wants a group's sponsorship torn down —
+   * e.g. a project closes, or an admin explicitly reclaims reserves. Reuses
+   * the same queue/processor as `sponsorBeneficiaries`, just a different job
+   * type, since both operate on "a group's worth of beneficiaries" batched
+   * the same way.
+   */
+  @OnEvent(EVENTS.BENEFICIARY_GROUP_SPONSORSHIP_REVOKE)
+  async revokeSponsorshipForGroup(payload: { groupUuid: string }) {
+    const { groupUuid } = payload;
+    this.logger.debug(`Closing out sponsorship for group ${groupUuid}`);
+
+    if (!(await this.isSponsorshipEnabled(groupUuid))) return;
+
+    const beneficiaries = await this.getGroupBeneficiaries(groupUuid);
+    if (!beneficiaries.length) {
+      this.logger.warn(`No wallet addresses found for group ${groupUuid}`);
+      return;
+    }
+
+    this.logger.log(
+      `Queuing close-out for ${beneficiaries.length} beneficiaries in batches of ${STELLAR_SPONSOR_BATCH_SIZE} for group ${groupUuid}`
+    );
+
+    for (let i = 0; i < beneficiaries.length; i += STELLAR_SPONSOR_BATCH_SIZE) {
+      const batch = beneficiaries.slice(i, i + STELLAR_SPONSOR_BATCH_SIZE);
+      await this.queue.add(JOBS.STELLAR.REVOKE_SPONSORSHIP_BATCH, { groupUuid, beneficiaries: batch });
+    }
+
+    this.logger.log(
+      `Queued ${Math.ceil(beneficiaries.length / STELLAR_SPONSOR_BATCH_SIZE)} close-out batch(es) for group ${groupUuid}`
+    );
+  }
+
+  /** Guards both event handlers: chain must be Stellar and sponsor settings must be configured. */
+  private async isSponsorshipEnabled(groupUuid: string): Promise<boolean> {
+    if (!this.isStellarChain) {
+      this.logger.debug(`Chain is not Stellar — skipping group ${groupUuid}`);
+      return false;
+    }
+
+    try {
+      const sponsorSettings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
+      if (!sponsorSettings?.value) {
+        this.logger.debug(`STELLAR_SPONSOR_SETTINGS not configured — skipping group ${groupUuid}`);
+        return false;
+      }
+    } catch {
+      this.logger.debug(`STELLAR_SPONSOR_SETTINGS unavailable — skipping group ${groupUuid}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  private async getGroupBeneficiaries(groupUuid: string): Promise<{ beneficiaryId: string; walletAddress: string }[]> {
+    const records = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId: groupUuid },
+      select: { beneficiary: { select: { uuid: true, walletAddress: true } } },
+    });
+
+    return records
+      .map((r) => r.beneficiary)
+      .filter((b) => b.walletAddress)
+      .map((b) => ({ beneficiaryId: b.uuid, walletAddress: b.walletAddress as string }));
   }
 }

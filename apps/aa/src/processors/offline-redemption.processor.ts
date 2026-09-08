@@ -5,6 +5,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { BQUEUE, JOBS } from '../constants';
 import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
 import { ChainType } from '../chain/interfaces/chain-service.interface';
+import { PayoutsService } from '../payouts/payouts.service';
 
 interface OfflineRedeemItem {
   redeemUuid: string;
@@ -26,7 +27,8 @@ export class OfflineRedemptionProcessor implements OnModuleInit {
     private readonly prisma: PrismaService,
     @InjectQueue(BQUEUE.OFFLINE_REDEEM)
     private readonly offlineRedeemQueue: Queue,
-    private readonly chainServiceRegistry: ChainServiceRegistry
+    private readonly chainServiceRegistry: ChainServiceRegistry,
+    private readonly payoutsService: PayoutsService
   ) {}
 
   async onModuleInit() {
@@ -94,7 +96,7 @@ export class OfflineRedemptionProcessor implements OnModuleInit {
       try {
         if (!result?.txHash) throw new Error(result?.error || 'Transfer failed');
 
-        await this.prisma.beneficiaryRedeem.update({
+        const updatedRedeem = await this.prisma.beneficiaryRedeem.update({
           where: { uuid: item.redeemUuid },
           data: {
             txHash: result.txHash,
@@ -103,6 +105,12 @@ export class OfflineRedemptionProcessor implements OnModuleInit {
             vendorUid: batch.vendorId,
           },
         });
+
+        if (updatedRedeem.payoutId) {
+          await this.payoutsService.checkAndCompletePayout(
+            updatedRedeem.payoutId
+          );
+        }
 
         this.logger.log(`[JOB ${job.id}] Redeemed ${item.redeemUuid} — tx ${result.txHash}`);
       } catch (err: any) {

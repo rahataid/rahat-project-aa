@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BeneficiaryStatService } from './beneficiaryStat.service';
 import { PrismaService } from '@rumsan/prisma';
+import { SettingsService } from '@rumsan/settings';
 import { StatsService } from '../stats';
 
 describe('BeneficiaryStatService', () => {
@@ -21,6 +22,10 @@ describe('BeneficiaryStatService', () => {
     saveMany: jest.fn(),
   };
 
+  const mockSettingsService = {
+    getPublic: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -32,6 +37,10 @@ describe('BeneficiaryStatService', () => {
         {
           provide: StatsService,
           useValue: mockStatsService,
+        },
+        {
+          provide: SettingsService,
+          useValue: mockSettingsService,
         },
       ],
     }).compile();

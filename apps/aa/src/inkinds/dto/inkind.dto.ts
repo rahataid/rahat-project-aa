@@ -8,7 +8,7 @@ import {
   IsIn,
   IsArray,
   IsObject,
-  IsBoolean,
+  IsBoolean
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -76,6 +76,9 @@ export class UpdateInkindDto {
   @IsOptional()
   @IsString()
   image?: string;
+
+  user?: any;
+  appId?: string;
 }
 
 export class GetInkindDto {
@@ -222,10 +225,14 @@ export class GetVendorInkindLogsDto {
 
 export class RedeemOfflineInkindByVendorDto {
   @IsObject()
-  user: UserObject
+  user: UserObject;
 
   @IsArray()
   redeemedInkinds: RedeemedOfflineInkinds[];
+
+  @IsOptional()
+  @IsBoolean()
+  skipVendorAndPhaseValidation?: boolean;
 }
 
 export class RedeemedOfflineInkinds {
