@@ -68,12 +68,12 @@ export class GetBenfGroupDto {
 
 export class getGroupByUuidDto {
   @IsArray()
-  @ArrayNotEmpty({ message: 'uuids array cannot be empty' })
-  @IsString({ each: true, message: 'Each UUID must be a string' })
+  @ArrayNotEmpty({ message: '[UUIDS_ARRAY_CANNOT_BE_EMPTY] uuids array cannot be empty' })
+  @IsString({ each: true, message: '[UUID_MUST_BE_STRING] Each UUID must be a string' })
   uuids: string[];
 
   @IsArray()
-  @ArrayNotEmpty({ message: 'selectField array cannot be empty' })
-  @IsString({ each: true, message: 'Each field name must be a string' })
+  @ArrayNotEmpty({ message: '[SELECT_FIELD_ARRAY_CANNOT_BE_EMPTY] selectField array cannot be empty' })
+  @IsString({ each: true, message: '[FIELD_NAME_MUST_BE_STRING] Each field name must be a string' })
   selectField: string[];
 }

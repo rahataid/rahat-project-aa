@@ -170,12 +170,18 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   async addTrigger(data: AddTriggerDto): Promise<any> {
     // EVM triggers are not implemented yet - throw error for now
-    throw new Error('EVM triggers not implemented yet');
+    throw new RpcException({
+      message: 'EVM triggers not implemented yet',
+      code: 'EVM_TRIGGERS_NOT_IMPLEMENTED',
+    });
   }
 
   async updateTriggerParams(triggerUpdate: any): Promise<any> {
     // EVM triggers are not implemented yet - throw error for now
-    throw new Error('EVM triggers not implemented yet');
+    throw new RpcException({
+      message: 'EVM triggers not implemented yet',
+      code: 'EVM_TRIGGERS_NOT_IMPLEMENTED',
+    });
   }
 
   async addBeneficiary(beneficiaryAddress: string): Promise<any> {
@@ -337,11 +343,18 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async transferTokens(data: TransferTokensDto): Promise<any> {
-    throw new Error('Transfer tokens not implemented for EVM');
+    throw new RpcException({
+      message: 'Transfer tokens not implemented for EVM',
+      code: 'TRANSFER_TOKENS_NOT_IMPLEMENTED_FOR_EVM',
+    });
   }
 
   async preDisburse(_data: DisburseDto): Promise<any> {
-    throw new RpcException('Disburse-on-create not supported on EVM chain');
+    throw new RpcException({
+      message: 'Disburse-on-create not supported on EVM chain',
+      code: 'CHAIN_DISBURSE_ON_CREATE_UNSUPPORTED',
+      params: { chainType: 'EVM' },
+    });
   }
 
   async disburse(data: DisburseDto): Promise<any> {
@@ -742,17 +755,26 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
     if (!payoutType) {
       this.logger.error('Payout not initiated');
-      throw new RpcException('Payout not initiated');
+      throw new RpcException({
+        message: 'Payout not initiated',
+        code: 'PAYOUT_ERR_SEND_OTP_NOT_INITIATED',
+      });
     }
 
     if (payoutType.type != 'VENDOR') {
       this.logger.error('Payout type is not VENDOR');
-      throw new RpcException('Payout type is not VENDOR');
+      throw new RpcException({
+        message: 'Payout type is not VENDOR',
+        code: 'PAYOUT_ERR_SEND_OTP_TYPE_NOT_VENDOR',
+      });
     }
 
     if (payoutType.mode != 'ONLINE') {
       this.logger.error('Payout mode is not ONLINE');
-      throw new RpcException('Payout mode is not ONLINE');
+      throw new RpcException({
+        message: 'Payout mode is not ONLINE',
+        code: 'PAYOUT_ERR_SEND_OTP_MODE_NOT_ONLINE',
+      });
     }
 
     return this.sendOtpByPhone(sendOtpDto, payoutType.uuid);
@@ -767,7 +789,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
 
       if (!vendor) {
-        throw new RpcException('Vendor not found');
+        throw new RpcException({ message: 'Vendor not found', code: 'PAYOUT_ERR_VENDOR_NOT_FOUND' });
       }
 
       const amount = verifyOtpDto?.amount;
@@ -787,7 +809,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
       )) as any;
 
       if (!keys) {
-        throw new RpcException('Beneficiary address not found');
+        throw new RpcException({
+          message: 'Beneficiary address not found',
+          code: 'PAYOUT_ERR_BENEFICIARY_ADDRESS_NOT_FOUND',
+        });
       }
 
       console.log('keys', keys);
@@ -804,9 +829,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
           `Beneficiary ${keys.address} has no tokens in contract. Transfer denied.`,
           EvmChainService.name
         );
-        throw new RpcException(
-          'Beneficiary has no tokens available for transfer'
-        );
+        throw new RpcException({
+          message: 'Beneficiary has no tokens available for transfer',
+          code: 'BENEFICIARY_NO_TOKENS_AVAILABLE',
+        });
       }
 
       this.logger.log(
@@ -821,9 +847,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
       );
 
       if (!result) {
-        throw new RpcException(
-          `Token transfer to ${verifyOtpDto.receiverAddress} failed`
-        );
+        throw new RpcException({
+          message: `Token transfer to ${verifyOtpDto.receiverAddress} failed`,
+          code: 'TOKEN_TRANSFER_TO_ADDRESS_FAILED',
+          params: { address: verifyOtpDto.receiverAddress },
+        });
       }
 
       this.logger.log(`Transfer successful: ${result.txHash}`);
@@ -842,7 +870,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
 
       if (!existingRedeem) {
-        throw new RpcException('No pending BeneficiaryRedeem record found');
+        throw new RpcException({
+          message: 'No pending BeneficiaryRedeem record found',
+          code: 'NO_PENDING_BENEFICIARY_REDEEM_FOUND',
+        });
       }
 
       // Update the BeneficiaryRedeem record with transaction details
@@ -989,9 +1020,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
       const keys = await this.getSecretByPhone(data.phoneNumber);
 
       if (!keys || !keys.address) {
-        throw new RpcException(
-          'Beneficiary wallet not found for this phone number'
-        );
+        throw new RpcException({
+          message: 'Beneficiary wallet not found for this phone number',
+          code: 'BENEFICIARY_WALLET_NOT_FOUND_FOR_PHONE',
+        });
       }
 
       // Proceed with OTP verification
@@ -1010,7 +1042,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
         error.stack,
         EvmChainService.name
       );
-      throw new RpcException(`OTP verification failed: ${error.message}`);
+      throw new RpcException({
+        message: `OTP verification failed: ${error.message}`,
+        code: 'STELLAR_ERR_OTP_VERIFY_FAILED',
+      });
     }
   }
 
@@ -1035,7 +1070,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
       );
 
       if (!resolvedData || !Array.isArray(resolvedData.beneficiaries)) {
-        throw new Error('Invalid group resolution response');
+        throw new RpcException({
+          message: 'Invalid group resolution response',
+          code: 'INVALID_GROUP_RESOLUTION_RESPONSE',
+        });
       }
 
       return {
@@ -1046,14 +1084,17 @@ export class EvmChainService implements IChainService, OnModuleInit {
           (b: any) => b.tokenAmount?.toString() || '0'
         ),
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Error resolving groups: ${error.message}`,
         error.stack
       );
-      throw new Error(
-        `Failed to resolve groups to addresses: ${error.message}`
-      );
+      if (error instanceof RpcException) throw error;
+      throw new RpcException({
+        message: `Failed to resolve groups to addresses: ${error.message}`,
+        code: 'FAILED_TO_RESOLVE_GROUPS_TO_ADDRESSES',
+        params: { message: error.message },
+      });
     }
   }
 
@@ -1083,7 +1124,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
     try {
       const settings = await this.settingsService.getPublic('CHAIN_SETTINGS');
       if (!settings?.value) {
-        throw new Error('CHAIN_SETTINGS not found in settings');
+        throw new RpcException({
+          message: 'CHAIN_SETTINGS not found in settings',
+          code: 'CHAIN_SETTINGS_NOT_FOUND',
+        });
       }
 
       const config = settings.value as unknown as EVMChainConfig;
@@ -1093,7 +1137,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       for (const field of requiredFields) {
         if (!config[field as keyof EVMChainConfig]) {
-          throw new Error(`Missing required field ${field} in CHAIN_SETTINGS`);
+          throw new RpcException({
+            message: `Missing required field ${field} in CHAIN_SETTINGS`,
+            code: 'MISSING_REQUIRED_FIELD_IN_CHAIN_SETTINGS',
+            params: { field },
+          });
         }
       }
       console.log(config);
@@ -1153,25 +1201,34 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
     if (!record) {
       this.logger.log('OTP record not found');
-      throw new RpcException('OTP record not found');
+      throw new RpcException({
+        message: 'OTP record not found',
+        code: 'OTP_RECORD_NOT_FOUND',
+      });
     }
 
     if (record.isVerified) {
       this.logger.log('OTP already verified');
-      throw new RpcException('OTP already verified');
+      throw new RpcException({
+        message: 'OTP already verified',
+        code: 'OTP_ALREADY_VERIFIED',
+      });
     }
 
     const now = new Date();
     if (record.expiresAt < now) {
       this.logger.log('OTP has expired');
-      throw new RpcException('OTP has expired');
+      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
     }
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
 
     if (!isValid) {
       this.logger.log('Invalid OTP or amount mismatch');
-      throw new RpcException('Invalid OTP or amount mismatch');
+      throw new RpcException({
+        message: 'Invalid OTP or amount mismatch',
+        code: 'INVALID_OTP_OR_AMOUNT_MISMATCH',
+      });
     }
 
     this.logger.log('OTP verified successfully');
@@ -1208,7 +1265,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
         `Couldn't find secret for phone ${phoneNumber}`,
         error.message
       );
-      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+      throw new RpcException({
+        message: `Beneficiary with phone ${phoneNumber} not found`,
+        code: 'PAYOUT_ERR_BENEFICIARY_PHONE_NOT_FOUND',
+        params: { phoneNumber },
+      });
     }
   }
 
@@ -1294,13 +1355,13 @@ export class EvmChainService implements IChainService, OnModuleInit {
       },
     });
     if (!vendor) {
-      throw new RpcException('Vendor not found');
+      throw new RpcException({ message: 'Vendor not found', code: 'PAYOUT_ERR_VENDOR_NOT_FOUND' });
     }
 
     // Get beneficiary wallet address first
     const keys = await this.getSecretByPhone(sendOtpDto.phoneNumber);
     if (!keys) {
-      throw new RpcException('Beneficiary address not found');
+      throw new RpcException({ message: 'Beneficiary address not found', code: 'PAYOUT_ERR_BENEFICIARY_ADDRESS_NOT_FOUND' });
     }
 
     let beneficiaryTokenBalance: number;
@@ -1309,7 +1370,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
     beneficiaryTokenBalance = Number(balanceData.balance);
 
     if (!beneficiaryTokenBalance) {
-      throw new RpcException('Beneficiary token balance not found');
+      throw new RpcException({ message: 'Beneficiary token balance not found', code: 'STELLAR_ERR_TOKEN_BALANCE_NOT_FOUND' });
     }
 
     this.logger.log(
@@ -1322,13 +1383,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
     // Validate amount
     if (Number(amount) > beneficiaryTokenBalance) {
-      throw new RpcException(
-        `Requested amount ${amount} is greater than available token balance ${beneficiaryTokenBalance}`
-      );
+      throw new RpcException({
+        message: `Requested amount ${amount} is greater than available token balance ${beneficiaryTokenBalance}`,
+        code: 'PAYOUT_ERR_AMOUNT_EXCEEDS_BALANCE',
+        params: { amount, balance: beneficiaryTokenBalance },
+      });
     }
 
     if (Number(amount) <= 0) {
-      throw new RpcException('Amount must be greater than 0');
+      throw new RpcException({ message: 'Amount must be greater than 0', code: 'PAYOUT_ERR_AMOUNT_NOT_POSITIVE' });
     }
 
     // Check if beneficiary has tokens in the contract before sending OTP
@@ -1341,9 +1404,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
         `Beneficiary ${keys.address} has no tokens in contract. OTP sending denied.`,
         EvmChainService.name
       );
-      throw new RpcException(
-        'Beneficiary has no tokens available for redemption'
-      );
+      throw new RpcException({
+        message: 'Beneficiary has no tokens available for redemption',
+        code: 'BENEFICIARY_NO_TOKENS_AVAILABLE',
+      });
     }
 
     this.logger.log(
@@ -1416,12 +1480,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       if (!beneficiary) {
         this.logger.error('Beneficiary not found');
-        throw new RpcException('Beneficiary not found');
+        throw new RpcException({ message: 'Beneficiary not found', code: 'PAYOUT_ERR_BENEFICIARY_NOT_FOUND' });
       }
 
       if (!beneficiary.groupedBeneficiaries) {
         this.logger.error('Beneficiary has no grouped beneficiaries');
-        throw new RpcException('Beneficiary has no grouped beneficiaries');
+        throw new RpcException({
+          message: 'Beneficiary has no grouped beneficiaries',
+          code: 'BENEFICIARY_NO_GROUPED_BENEFICIARIES',
+        });
       }
 
       // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
@@ -1431,9 +1498,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       if (!payoutEligibleGroups.length) {
         this.logger.error('No payout-eligible group found for beneficiary');
-        throw new RpcException(
-          'No payout-eligible group found for beneficiary'
-        );
+        throw new RpcException({
+          message: 'No payout-eligible group found for beneficiary',
+          code: 'PAYOUT_ERR_NO_ELIGIBLE_GROUP',
+        });
       }
 
       if (payoutEligibleGroups.length > 1) {
@@ -1442,9 +1510,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
             .map((g) => g.beneficiaryGroupId)
             .join(', ')}`
         );
-        throw new RpcException(
-          'Multiple payout-eligible groups found for beneficiary. Please contact support.'
-        );
+        throw new RpcException({
+          message:
+            'Multiple payout-eligible groups found for beneficiary. Please contact support.',
+          code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
+        });
       }
 
       // Use the first payout-eligible group for the lookup
@@ -1465,7 +1535,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
         this.logger.error(
           `Beneficiary group not found for ID: ${payoutEligibleGroups[0].beneficiaryGroupId}`
         );
-        throw new RpcException('Beneficiary group not found');
+        throw new RpcException({ message: 'Beneficiary group not found', code: 'PAYOUT_ERR_GROUP_NOT_FOUND' });
       }
 
       // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
@@ -1475,14 +1545,16 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       if (!activeToken) {
         this.logger.error('Tokens not reserved for the group');
-        throw new RpcException('Tokens not reserved for the group');
+        throw new RpcException({ message: 'Tokens not reserved for the group', code: 'PAYOUT_ERR_TOKENS_NOT_RESERVED' });
       }
 
       return activeToken.payout;
     } catch (error) {
-      throw new RpcException(
-        `Failed to retrieve payout type: ${error.message}`
-      );
+      throw new RpcException({
+        message: `Failed to retrieve payout type: ${error.message}`,
+        code: 'PAYOUT_ERR_RETRIEVE_TYPE',
+        params: { message: error.message },
+      });
     }
   }
 
