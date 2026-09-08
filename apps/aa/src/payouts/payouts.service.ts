@@ -375,7 +375,9 @@ export class PayoutsService {
         data: {
           type: createPayoutDto.type,
           mode: createPayoutDto.mode,
-          status: createPayoutDto.status,
+          // Default to NOT_STARTED if status not provided — prevents NULL in DB
+          // which causes "N/A" on first load before syncPayoutStatus runs
+          status: createPayoutDto.status || 'NOT_STARTED',
           extras: createPayoutDto.extras,
           payoutProcessorId: createPayoutDto.payoutProcessorId,
           beneficiaryGroupToken: {
