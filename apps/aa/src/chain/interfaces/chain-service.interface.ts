@@ -123,6 +123,8 @@ export interface RedeemInkindDto {
   beneficiaryAddress: string;
   inkindId: string[];
   vendorAddress: string;
+  /** Total quantity redeemed across inkindId — used by chains that move real value (e.g. Stellar). */
+  amount?: number;
 }
 
 export interface RedeemInkindTokenForCashDto {
