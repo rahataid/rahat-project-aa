@@ -1,4 +1,4 @@
-import { IsEnum, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { GrievanceStatus } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -10,4 +10,9 @@ export class UpdateGrievanceStatusDto {
   @ApiProperty({ enum: GrievanceStatus })
   @IsEnum(GrievanceStatus)
   status: GrievanceStatus;
+
+  @ApiProperty({ description: 'User making the update', required: false })
+  @IsOptional()
+  user?: any;
+
 }

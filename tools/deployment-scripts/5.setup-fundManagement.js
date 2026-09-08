@@ -27,6 +27,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const FUNDMANAGEMENT_TAB_CONFIG_NAME = 'FUNDMANAGEMENT_TAB_CONFIG';
@@ -224,6 +225,7 @@ async function updateDeploymentFile(fileName, settingsToUpsert) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 5: Fund management');
 	const selectedOptionalTabs = await askOptionalFundManagementTabs();
 	const { tabs, settings } = buildSettingsToUpsert(selectedOptionalTabs);
 	const confirmed = await confirmSelection(selectedFile, tabs, settings);
