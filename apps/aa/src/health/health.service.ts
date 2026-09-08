@@ -14,9 +14,16 @@ import { TriggerType } from '@rumsan/connect';
 import { lastValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 
-// Stores the last-known set of down services (JSON array of names).
+// Stores the last-known set of down services + timestamp of last down-alert.
 // Diffed each run to detect newly-down (alert) and restored (notice) services.
+// Re-alerts every 24h while the same services remain down.
 const ALERT_STATE_KEY = 'project_health_alert_state';
+const RE_ALERT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+interface AlertState {
+  down: string[];
+  lastAlertAt: number | null;
+}
 
 @Injectable()
 export class HealthService {
@@ -146,50 +153,90 @@ export class HealthService {
   private async handleAlertTransitions(result: HealthStatus): Promise<void> {
     try {
       const downNow = this.getDownServices(result);
-      const stored =
-        (await this.rahatQueue.client.get(ALERT_STATE_KEY)) ?? '[]';
-      const downBefore: string[] = JSON.parse(stored) ?? [];
+      const prev = await this.getAlertState();
 
-      const newlyDown = downNow.filter((s) => !downBefore.includes(s));
-      const restored = downBefore.filter((s) => !downNow.includes(s));
+      const newlyDown = downNow.filter((s) => !prev.down.includes(s));
+      const restored = prev.down.filter((s) => !downNow.includes(s));
       const [frontendSetting] = await lastValueFrom(
         this.coreClient.send({ cmd: 'appJobs.frontendUrl.get' }, {})
       );
       const frontendUrl = frontendSetting?.value ?? '';
-      // No emails on first run/baseline — just record current state.
-      if (downBefore.length || newlyDown.length) {
-        if (newlyDown.length) {
-          await this.sendHealthAlertEmail(
-            newlyDown.map((name) => {
-              const svc = (result.services as Record<string, ServiceStatus>)[
-                name
-              ];
-              return {
-                name: SERVICE_LABELS[name] ?? name,
-                message: svc?.message,
-              };
-            }),
-            frontendUrl
-          );
-        }
-        if (restored.length) {
-          this._logger.log('health status up ');
-          const upServices = Object.entries(result.services)
-            .filter(([, status]) => status.status === 'up')
-            .map(([name]) => ({
+      const noTransition = newlyDown.length === 0 && restored.length === 0;
+
+      if (newlyDown.length) {
+        await this.sendHealthAlertEmail(
+          newlyDown.map((name) => {
+            const svc = (result.services as Record<string, ServiceStatus>)[
+              name
+            ];
+            return {
               name: SERVICE_LABELS[name] ?? name,
-              restored: restored.includes(name),
-            }));
-          await this.sendHealthRestoredEmail(upServices, frontendUrl);
-        }
+              message: svc?.message,
+            };
+          }),
+          frontendUrl
+        );
+        prev.lastAlertAt = Date.now();
       }
+
+      if (restored.length) {
+        this._logger.log('health status up ');
+        const upServices = Object.entries(result.services)
+          .filter(([, status]) => status.status === 'up')
+          .map(([name]) => ({
+            name: SERVICE_LABELS[name] ?? name,
+            restored: restored.includes(name),
+          }));
+        await this.sendHealthRestoredEmail(upServices, frontendUrl);
+      }
+
+      // Re-alert only when state is stable (no transition) and the same
+      // services have been continuously down for 24h since the last alert.
+      if (
+        noTransition &&
+        downNow.length > 0 &&
+        (prev.lastAlertAt === null ||
+          Date.now() - prev.lastAlertAt >= RE_ALERT_INTERVAL_MS)
+      ) {
+        await this.sendHealthAlertEmail(
+          downNow.map((name) => {
+            const svc = (result.services as Record<string, ServiceStatus>)[
+              name
+            ];
+            return {
+              name: SERVICE_LABELS[name] ?? name,
+              message: svc?.message,
+            };
+          }),
+          frontendUrl
+        );
+        prev.lastAlertAt = Date.now();
+      }
+
+      const state: AlertState = {
+        down: downNow,
+        lastAlertAt: downNow.length ? prev.lastAlertAt : null,
+      };
       await this.rahatQueue.client.setex(
         ALERT_STATE_KEY,
         24 * 60 * 60, // 24h safety TTL; overwritten every run while alive
-        JSON.stringify(downNow)
+        JSON.stringify(state)
       );
     } catch (err) {
       this._logger.error(`Failed to send health alert email: ${err}`);
+    }
+  }
+
+  private async getAlertState(): Promise<AlertState> {
+    const stored = (await this.rahatQueue.client.get(ALERT_STATE_KEY)) ?? '';
+    if (!stored) return { down: [], lastAlertAt: null };
+    try {
+      const parsed = JSON.parse(stored);
+      // Backwards-compatible with legacy array format.
+      if (Array.isArray(parsed)) return { down: parsed, lastAlertAt: null };
+      return parsed as AlertState;
+    } catch {
+      return { down: [], lastAlertAt: null };
     }
   }
 
