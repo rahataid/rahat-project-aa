@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsNumber, IsObject, IsUUID, IsBoolean, IsArray } 
 import { UserObject } from '../../inkinds';
 
 export class CreateGroupCashTransferDto {
-  @IsString()
+  @IsString({ message: '[GCT_NAME_MUST_BE_STRING] name must be a string' })
   name!: string;
 
   @IsOptional()
@@ -19,7 +19,7 @@ export class CreateGroupCashTransferDto {
 }
 
 export class UpdateGroupCashTransferDto {
-  @IsUUID()
+  @IsUUID(undefined, { message: '[GCT_UUID_MUST_BE_VALID] uuid must be a valid UUID' })
   uuid!: string;
 
   @IsOptional()
@@ -76,13 +76,13 @@ export class ListGroupCashTransferDto {
 }
 
 export class AssignFundDto {
-  @IsUUID()
+  @IsUUID(undefined, { message: '[GCT_GROUP_ID_MUST_BE_VALID] groupCashTransferId must be a valid UUID' })
   groupCashTransferId!: string;
 
-  @IsString()
+  @IsString({ message: '[GCT_FUND_TITLE_MUST_BE_STRING] title must be a string' })
   title!: string;
 
-  @IsNumber()
+  @IsNumber({}, { message: '[GCT_AMOUNT_MUST_BE_NUMBER] amount must be a number' })
   amount!: number;
 
     @IsObject()
@@ -90,7 +90,7 @@ export class AssignFundDto {
 }
 
 export class UpdateGroupCashTransferRecordDto {
-  @IsUUID()
+  @IsUUID(undefined, { message: '[GCT_UUID_MUST_BE_VALID] uuid must be a valid UUID' })
   uuid!: string;
 
   @IsOptional()

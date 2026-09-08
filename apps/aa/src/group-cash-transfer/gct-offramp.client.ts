@@ -16,7 +16,10 @@ export class GctOfframpClient {
     const accessToken = offrampSettings?.value?.accesstoken as string;
 
     if (!url || !appId || !accessToken) {
-      throw new RpcException('Offramp url/AppId/AccessToken not found in settings.');
+      throw new RpcException({
+        message: 'Offramp url/AppId/AccessToken not found in settings.',
+        code: 'OFFRAMP_SETTINGS_MISSING',
+      });
     }
 
     return { url, appId, accessToken };
@@ -33,7 +36,11 @@ export class GctOfframpClient {
       return data.wallet;
     } catch (error: any) {
       this.logger.error(`Failed to fetch offramp wallet address: ${error.message}`);
-      throw new RpcException(`Failed to fetch offramp wallet address: ${error.message}`);
+      throw new RpcException({
+        message: `Failed to fetch offramp wallet address: ${error.message}`,
+        code: 'FAILED_TO_FETCH_OFFRAMP_WALLET',
+        params: { message: error.message },
+      });
     }
   }
 
@@ -50,9 +57,12 @@ export class GctOfframpClient {
       
       return data;
     } catch (error: any) {
-      throw new RpcException(
-        `Failed to validate bank account: ${error?.response?.data?.message || error?.message}`
-      );
+      const detailMessage = error?.response?.data?.message || error?.message;
+      throw new RpcException({
+        message: `Failed to validate bank account: ${detailMessage}`,
+        code: 'FAILED_TO_VALIDATE_BANK_ACCOUNT',
+        params: { message: detailMessage },
+      });
     }
   }
 
@@ -66,9 +76,12 @@ export class GctOfframpClient {
       });
       return data;
     } catch (error: any) {
-      throw new RpcException(
-        `Failed to initiate instant offramp: ${error?.response?.data?.message || error?.message}`
-      );
+      const detailMessage = error?.response?.data?.message || error?.message;
+      throw new RpcException({
+        message: `Failed to initiate instant offramp: ${detailMessage}`,
+        code: 'FAILED_TO_INITIATE_INSTANT_OFFRAMP',
+        params: { message: detailMessage },
+      });
     }
   }
 
@@ -82,9 +95,12 @@ export class GctOfframpClient {
       });
       return data;
     } catch (error: any) {
-      throw new RpcException(
-        `Failed to initiate instant offramp v2: ${error?.response?.data?.message || error?.message}`
-      );
+      const detailMessage = error?.response?.data?.message || error?.message;
+      throw new RpcException({
+        message: `Failed to initiate instant offramp v2: ${detailMessage}`,
+        code: 'FAILED_TO_INITIATE_INSTANT_OFFRAMP_V2',
+        params: { message: detailMessage },
+      });
     }
   }
 }
