@@ -229,12 +229,28 @@ export async function checkTriggerService(
         .send({ cmd: 'ms.jobs.sources.getHealth' }, {})
         .pipe(timeout(5000))
     );
-    return {
-      status: 'up',
-      latency: `${(performance.now() - start).toFixed(2)}ms`,
-      last_checked,
-      notes: (res as any) ?? {},
-    };
+    if (res.overall_status.toLowerCase() == 'healthy') {
+      return {
+        status: 'up',
+        latency: `${(performance.now() - start).toFixed(2)}ms`,
+        last_checked,
+        notes: (res as any) ?? {},
+      };
+    } else {
+      const sourceStats = res?.sources?.map((source: any) => {
+        return {
+          name: source?.name,
+          currentStatus: source?.currentStatus,
+        };
+      });
+      return {
+        status: 'down',
+        latency: `${(performance.now() - start).toFixed(2)}ms`,
+        last_checked,
+        message: 'Some data sources are down',
+        notes: { ...sourceStats, triggerServiceStatus: 'up' },
+      };
+    }
   } catch (err) {
     return {
       status: 'down',
