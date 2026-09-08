@@ -65,22 +65,11 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  async incrby(key: string, increment: number): Promise<number> {
-    try {
-      return await this.client.incrby(key, increment);
-    } catch (error) {
-      this.logger.error(`Redis INCRBY error for key ${key}: ${error.message}`);
-      return 0;
-    }
-  }
-
   async expire(key: string, seconds: number): Promise<void> {
     try {
       await this.client.expire(key, seconds);
     } catch (error) {
-      this.logger.error(
-        `Redis EXPIRE error for key ${key}: ${error.message}`
-      );
+      this.logger.error(`Redis EXPIRE error for key ${key}: ${error.message}`);
     }
   }
 
