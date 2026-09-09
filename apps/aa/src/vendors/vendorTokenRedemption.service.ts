@@ -16,6 +16,8 @@ import {
 } from './dto/vendorTokenRedemption.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
+import { EvmChainService } from '../chain/chain-services/evm-chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -28,7 +30,9 @@ export class VendorTokenRedemptionService {
     @InjectQueue(BQUEUE.VENDOR)
     private readonly vendorQueue: Queue,
     private readonly eventEmitter: EventEmitter2,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private readonly chainServiceRegistry: ChainServiceRegistry,
+    private readonly evmChainService: EvmChainService
   ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
@@ -138,6 +142,9 @@ export class VendorTokenRedemptionService {
     try {
       const redemption = await this.prisma.vendorTokenRedemption.findUnique({
         where: { uuid: dto.uuid },
+        include: {
+          vendor: true,
+        },
       });
 
       if (!redemption) {
@@ -172,13 +179,38 @@ export class VendorTokenRedemptionService {
       let updatedRedemption;
       // Update the redemption status
       if (dto.redemptionStatus === 'APPROVED') {
+        const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+
+        let txHash = dto.transactionHash;
+
+        // Stellar sends the settlement transaction hash directly in the dto.
+        // EVM has no on-chain settlement yet at this point, so the deployer
+        // wallet must pull the already-approved allowance from the vendor.
+        if (chainType === 'evm') {
+          if (!redemption.vendor?.walletAddress) {
+            throw new RpcException(
+              `Vendor wallet address not found for redemption ${dto.uuid}`
+            );
+          }
+
+          this.logger.log(
+            `Token redemption ${dto.uuid} is PROCESSING: settling ${redemption.tokenAmount} tokens from vendor ${redemption.vendor.walletAddress} on EVM`
+          );
+
+          const result = await this.evmChainService.settleVendorTokenRedemption(
+            redemption.vendor.walletAddress,
+            redemption.tokenAmount
+          );
+          txHash = result.txHash;
+        }
+
         updatedRedemption = await this.prisma.vendorTokenRedemption.update({
           where: { uuid: dto.uuid },
           data: {
             redemptionStatus: 'APPROVED',
             approvedBy: dto.approvedBy,
             approvedAt: new Date(),
-            transactionHash: dto.transactionHash,
+            transactionHash: txHash,
           },
           include: {
             vendor: true,
