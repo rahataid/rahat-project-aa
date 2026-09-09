@@ -6,14 +6,7 @@ import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
 import bcrypt from 'bcryptjs';
-import {
-  BQUEUE,
-  CORE_MODULE,
-  DISBURSE_CACHE_KEY_PREFIX,
-  DISBURSE_CACHE_TTL,
-  EVENTS,
-  JOBS,
-} from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
@@ -35,6 +28,10 @@ import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
 import { RedisService } from '../redis/redis.service';
+import {
+  DISBURSE_CACHE_KEY_PREFIX,
+  DISBURSE_CACHE_TTL,
+} from '../constants/redis-keys';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;

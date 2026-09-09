@@ -15,10 +15,9 @@ import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
 import { RedisService } from '../redis/redis.service';
 import bcrypt from 'bcryptjs';
+import { GCT_CACHE_KEY_PREFIX, GCT_CACHE_TTL } from '../constants/redis-keys';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
-const GCT_CACHE_TTL = 300;
-const GCT_CACHE_KEY_PREFIX = 'gct:progress:';
 
 @Injectable()
 export class GroupCashTransferService {
@@ -482,7 +481,8 @@ export class GroupCashTransferService {
 
     const defaultOpt = await this.db.otp.findUnique({ where: { email } });
 
-    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
 
     // if existing OTP is expired, purge it so we can issue a fresh one
     if (defaultOpt && !isExistingValid) {
