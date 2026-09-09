@@ -1455,28 +1455,21 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         'RAHATTOKEN'
       );
 
-      // RahatToken does not implement ERC2771Context, so the vendor's approve
-      // (relayed gasless through the ERC2771Forwarder) is recorded on-chain
-      // with the forwarder contract itself as the owner/msg.sender, not the
-      // vendor's own address. The allowance to pull from is therefore
-      // allowance[forwarder][deployer], not allowance[vendor][deployer].
-      const contractSettings = await this.getContractSettings();
-      const forwarderAddress = contractSettings?.ERC2771FORWARDER?.ADDRESS;
-      if (!forwarderAddress) {
-        throw new Error('ERC2771FORWARDER address not found in CONTRACT settings');
-      }
-
+      // RahatToken extends ERC2771Context and correctly overrides _msgSender(),
+      // so a vendor's approve() relayed gasless through the trusted
+      // ERC2771Forwarder is still recorded with the vendor as owner. The
+      // allowance to pull from is allowance[vendor][deployer].
       const decimal = await rahatTokenContract.decimals.staticCall();
       const transferAmount = ethers.parseUnits(amount.toString(), decimal);
       const deployerAddress = await this.signer.getAddress();
 
       this.logger.log(
-        `Settling vendor token redemption for vendor ${vendorWalletAddress}: pulling ${amount} tokens from forwarder ${forwarderAddress} to deployer ${deployerAddress}`,
+        `Settling vendor token redemption: pulling ${amount} tokens from vendor ${vendorWalletAddress} to deployer ${deployerAddress}`,
         EVMCentralizedProcessor.name
       );
 
       const tx = await rahatTokenContract.transferFrom(
-        forwarderAddress,
+        vendorWalletAddress,
         deployerAddress,
         transferAmount
       );
