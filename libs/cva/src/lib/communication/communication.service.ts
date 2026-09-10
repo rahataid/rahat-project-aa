@@ -49,18 +49,38 @@ export class CvaCommunicationService {
 
   async triggerCommunication(dto: TriggerCommunicationDto) {
     const comm = await this.findOne(dto.communicationId);
-    if (!comm) throw new RpcException('Communication not found');
+    if (!comm)
+      throw new RpcException({
+        message: 'Communication not found',
+        code: 'ACTIVITY_COMMUNICATION_NOT_FOUND',
+      });
     const { sessionId, transportId, groupUID, message } = comm;
-    if (!groupUID) throw new RpcException('Group not found');
-    if (sessionId) throw new RpcException('Communication already triggered');
+    if (!groupUID)
+      throw new RpcException({
+        message: 'Group not found',
+        code: 'GROUP_NOT_FOUND',
+      });
+    if (sessionId)
+      throw new RpcException({
+        message: 'Communication already triggered',
+        code: 'COMMUNICATION_ALREADY_TRIGGERED',
+      });
     const transport = await this.commsClient.transport.get(transportId);
-    if (!transport) throw new RpcException('Transport not found');
+    if (!transport)
+      throw new RpcException({
+        message: 'Transport not found',
+        code: 'SELECTED_TRANSPORT_NOT_FOUND',
+      });
     const beneficiaries = await this.listBenefByGroup(groupUID);
     const addresses = this.pickPhoneOrEmail(
       beneficiaries,
       transport.data?.type
     );
-    if (!addresses.length) throw new RpcException('No valid addresses found!');
+    if (!addresses.length)
+      throw new RpcException({
+        message: 'No valid addresses found!',
+        code: 'NO_VALID_ADDRESSES_FOUND',
+      });
     return this.broadcastMessages({
       uuid: dto.communicationId,
       addresses,

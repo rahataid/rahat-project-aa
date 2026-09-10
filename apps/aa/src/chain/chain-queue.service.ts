@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { ChainServiceRegistry } from './registries/chain-service.registry';
 import {
   IChainService,
@@ -29,9 +30,11 @@ export class ChainQueueService {
     );
 
     if (!chainService.addTrigger) {
-      throw new Error(
-        `Trigger functionality not supported for ${chainService.getChainType()} chain`
-      );
+      throw new RpcException({
+        message: `Trigger functionality not supported for ${chainService.getChainType()} chain`,
+        code: 'CHAIN_TRIGGER_UNSUPPORTED',
+        params: { chainType: chainService.getChainType() },
+      });
     }
 
     return chainService.getDisbursementStats(payload || {});
@@ -74,9 +77,11 @@ export class ChainQueueService {
     );
 
     if (!chainService.preDisburse) {
-      throw new Error(
-        `Disburse-on-create not supported for ${chainService.getChainType()} chain`
-      );
+      throw new RpcException({
+        message: `Disburse-on-create not supported for ${chainService.getChainType()} chain`,
+        code: 'CHAIN_DISBURSE_ON_CREATE_UNSUPPORTED',
+        params: { chainType: chainService.getChainType() },
+      });
     }
 
     return chainService.preDisburse(data);
@@ -180,9 +185,11 @@ export class ChainQueueService {
     );
 
     if (!chainService.addTrigger) {
-      throw new Error(
-        `Trigger functionality not supported for ${chainService.getChainType()} chain`
-      );
+      throw new RpcException({
+        message: `Trigger functionality not supported for ${chainService.getChainType()} chain`,
+        code: 'CHAIN_TRIGGER_UNSUPPORTED',
+        params: { chainType: chainService.getChainType() },
+      });
     }
 
     return chainService.addTrigger(data);
@@ -198,9 +205,11 @@ export class ChainQueueService {
     );
 
     if (!chainService.updateTrigger) {
-      throw new Error(
-        `Trigger update functionality not supported for ${chainService.getChainType()} chain`
-      );
+      throw new RpcException({
+        message: `Trigger update functionality not supported for ${chainService.getChainType()} chain`,
+        code: 'CHAIN_TRIGGER_UNSUPPORTED',
+        params: { chainType: chainService.getChainType() },
+      });
     }
 
     return chainService.updateTrigger(data);
