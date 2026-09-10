@@ -131,7 +131,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
     this.logger.log('Starting handleAssignTokens with job data: ', job.data);
     const { groups } = job.data;
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 9; // Adjusted batch size for better performance and error handling
 
     try {
       this.logger.log(
@@ -926,6 +926,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       functionName,
       callData
     );
+    console.log('Encoded Data for multisend:', encodedData);
     const tx = await contract.multicall(encodedData);
     const result = await tx.wait();
     return result;
