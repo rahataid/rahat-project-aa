@@ -207,5 +207,10 @@ describe('------ AA ProjectFlow Tests ------', function () {
       expect(await rahatTokenContract.balanceOf(ven1.address), 10);
       expect(await aaProjectContract.benTokens(ben1.address)).to.equal(90);
     });
+
+    it('Should revert if the total assignable amount  is greater than the total project fund ', async function(){
+      await  expect (aaProjectContract.connect(admin).assignTokenToBeneficiary(ben2.address, 1000000)).to.be.revertedWith('not enough tokens');
+    })
   });
+
 });
