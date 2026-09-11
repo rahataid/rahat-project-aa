@@ -129,6 +129,11 @@ export class StellarDirectDisburseProcessor {
         `Found ${benData.length} beneficiaries for group ${groupUuid}`
       );
 
+      await this.beneficiaryService.initDisburseProgressCache(
+        groupUuid,
+        benData.length
+      );
+
       // 3. Validate individual amounts (mirrors generateCsv guard in stellar-chain.service)
       for (const ben of benData) {
         const amount = parseFloat(ben.amount);
@@ -320,6 +325,10 @@ export class StellarDirectDisburseProcessor {
             },
           });
 
+          await this.beneficiaryService.incrementDisburseProgressCache(
+            groupUuid
+          );
+
           this.logger.log(
             `Batch ${batchIndex}/${totalBatches} done — tx: ${result.hash} (${elapsed}ms)`
           );
@@ -421,6 +430,10 @@ export class StellarDirectDisburseProcessor {
 
       // 9. Emit token disbursed event
       this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+      await this.beneficiaryService.setDisburseProgressStatus(
+        groupUuid,
+        'DISBURSED'
+      );
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error(
@@ -444,6 +457,11 @@ export class StellarDirectDisburseProcessor {
             }`
           )
         );
+
+      await this.beneficiaryService.setDisburseProgressStatus(
+        groupUuid,
+        'FAILED'
+      );
 
       throw err;
     }
