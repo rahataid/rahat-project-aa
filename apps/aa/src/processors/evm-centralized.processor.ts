@@ -929,7 +929,6 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       functionName,
       callData
     );
-    console.log('Encoded Data for multisend:', encodedData);
     const tx = await contract.multicall(encodedData);
     const result = await tx.wait();
     return result;
