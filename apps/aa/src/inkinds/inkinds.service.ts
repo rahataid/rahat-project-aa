@@ -1801,10 +1801,15 @@ export class InkindsService {
             user.wallet
           }, inkinds=${batchedInkinds.join(', ')}`
         );
+        const totalAmount = redemptionResults.reduce(
+          (sum, r) => sum + (r.quantityRedeemed ?? 0),
+          0
+        );
         this.chainService.redeemInkind({
           beneficiaryAddress: walletAddress,
           vendorAddress: user.wallet,
           inkindId: batchedInkinds,
+          amount: totalAmount,
         });
       } catch (error) {
         this.logger.error(
@@ -2568,11 +2573,15 @@ export class InkindsService {
           `Enqueuing bulk contract job for ${allBatchedInkindsToQueue.length} inkinds total.`
         );
         const inkindsByWallet: Record<string, string[]> = {};
+        const amountByWallet: Record<string, number> = {};
         for (let i = 0; i < validRedemptionsToInsert.length; i++) {
           const wallet = validRedemptionsToInsert[i].beneficiaryWallet;
           const inkindUuid = formattedRedemptionResults[i].inkindUuid;
           if (!inkindsByWallet[wallet]) inkindsByWallet[wallet] = [];
           inkindsByWallet[wallet].push(inkindUuid);
+          amountByWallet[wallet] =
+            (amountByWallet[wallet] ?? 0) +
+            (formattedRedemptionResults[i].quantityRedeemed ?? 0);
         }
 
         for (const [wallet, inkinds] of Object.entries(inkindsByWallet)) {
@@ -2581,6 +2590,7 @@ export class InkindsService {
               beneficiaryAddress: wallet,
               vendorAddress: user.wallet,
               inkindId: inkinds,
+              amount: amountByWallet[wallet],
             });
           }
         }
