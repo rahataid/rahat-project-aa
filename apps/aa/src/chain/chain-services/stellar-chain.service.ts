@@ -242,7 +242,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
   async preDisburse(data: DisburseDto): Promise<any> {
     const groupUuid = data.groups?.[0];
     if (!groupUuid) {
-      throw new RpcException('preDisburse requires a single group uuid');
+      throw new RpcException({
+        message: 'preDisburse requires a single group uuid',
+        code: 'PRE_DISBURSE_REQUIRES_SINGLE_GROUP_UUID',
+      });
     }
 
     const disbursementSettings = await this.getDisbursementSettings();
@@ -535,7 +538,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
       );
 
       if (!this.validateAddress(data.address)) {
-        throw new RpcException(`Invalid Stellar address: ${data.address}`);
+        throw new RpcException({
+        message: `Invalid Stellar address: ${data.address}`,
+        code: 'INVALID_STELLAR_ADDRESS',
+        params: { address: data.address },
+      });
       }
 
       const stellarSettings = await this.getFromSettings(
@@ -596,9 +603,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
       .map((ben) => {
         const amount = parseFloat(ben.amount);
         if (isNaN(amount) || amount < 1) {
-          throw new RpcException(
-            `Invalid amount for beneficiary ${ben.id}: must be >= 1`
-          );
+          throw new RpcException({
+            message: `Invalid amount for beneficiary ${ben.id}: must be >= 1`,
+            code: 'INVALID_AMOUNT_FOR_BENEFICIARY',
+            params: { id: ben.id },
+          });
         }
 
         const randomNumber = Math.floor(Math.random() * 100000);
@@ -626,11 +635,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
   // --- Stub methods ---
 
   async assignTokens(_data: AssignTokensDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async transferTokens(_data: TransferTokensDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async sendOtp(data: SendOtpDto): Promise<any> {
@@ -643,17 +658,26 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     if (!payoutType) {
       this.logger.error('Payout not initiated');
-      throw new RpcException('Payout not initiated');
+      throw new RpcException({
+        message: 'Payout not initiated',
+        code: 'PAYOUT_ERR_SEND_OTP_NOT_INITIATED',
+      });
     }
 
     if (payoutType.type !== 'VENDOR') {
       this.logger.error('Payout type is not VENDOR');
-      throw new RpcException('Payout type is not VENDOR');
+      throw new RpcException({
+        message: 'Payout type is not VENDOR',
+        code: 'PAYOUT_ERR_SEND_OTP_TYPE_NOT_VENDOR',
+      });
     }
 
     if (payoutType.mode !== 'ONLINE') {
       this.logger.error('Payout mode is not ONLINE');
-      throw new RpcException('Payout mode is not ONLINE');
+      throw new RpcException({
+        message: 'Payout mode is not ONLINE',
+        code: 'PAYOUT_ERR_SEND_OTP_MODE_NOT_ONLINE',
+      });
     }
 
     return this.sendOtpByPhone(data, payoutType.uuid);
@@ -663,7 +687,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const vendor = await this.prisma.vendor.findUnique({
       where: { walletAddress: data.receiverAddress },
     });
-    if (!vendor) throw new RpcException('Vendor not found');
+    if (!vendor)
+      throw new RpcException({
+        message: 'Vendor not found',
+        code: 'PAYOUT_ERR_VENDOR_NOT_FOUND',
+      });
 
     const amount = data.amount;
     await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
@@ -673,7 +701,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       privateKey: string;
     } | null;
     if (!keys?.privateKey)
-      throw new RpcException('Beneficiary secret not found');
+      throw new RpcException({
+        message: 'Beneficiary secret not found',
+        code: 'BENEFICIARY_SECRET_NOT_FOUND',
+      });
 
     if (data.mediaUrl) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -739,7 +770,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       privateKey: string;
     } | null;
     if (!keys?.privateKey)
-      throw new RpcException('Beneficiary secret not found');
+      throw new RpcException({
+        message: 'Beneficiary secret not found',
+        code: 'BENEFICIARY_SECRET_NOT_FOUND',
+      });
 
     const walletAddress = keys.address;
 
@@ -754,7 +788,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
     });
 
     if (!existingRedeem)
-      throw new RpcException('No pending BeneficiaryRedeem record found');
+      throw new RpcException({
+        message: 'No pending BeneficiaryRedeem record found',
+        code: 'NO_PENDING_BENEFICIARY_REDEEM_FOUND',
+      });
 
     try {
       const stellarSettings = await this.getFromSettings(
@@ -772,9 +809,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       );
 
       if (parseFloat(tokenBalance) <= 0) {
-        throw new RpcException(
-          'Beneficiary has no tokens available for transfer'
-        );
+        throw new RpcException({
+          message: 'Beneficiary has no tokens available for transfer',
+          code: 'BENEFICIARY_NO_TOKENS_AVAILABLE',
+        });
       }
 
       const result = await stellarClient.sendFromSponsored(
@@ -875,27 +913,45 @@ export class StellarChainService implements IChainService, OnModuleInit {
   }
 
   async fundAccount(_data: FundAccountDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async checkBalance(_address: string): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async verifyOtp(_data: VerifyOtpDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async getDisbursementStatus(_id: string): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async addTrigger(_data: AddTriggerDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async updateTrigger(_data: UpdateTriggerDto): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   async redeemInkind(data: RedeemInkindDto): Promise<any> {
@@ -974,14 +1030,19 @@ export class StellarChainService implements IChainService, OnModuleInit {
           `Inkind redemption attempt failed, will retry beneficiary=${beneficiaryAddress} vendor=${vendorAddress}: ${err.message}`
         );
       }
-      throw err instanceof RpcException ? err : new RpcException(err.message);
+      throw err instanceof RpcException ? err : new RpcException({message: `Error redeeming in-kind: ${err.message}`,
+        code: 'ERROR_REDEEMING_INKIND',
+        params: { message: err.message },});
     }
   }
 
   async redeemVendorInkindTokens(
     _data: RedeemInkindTokenForCashDto
   ): Promise<any> {
-    throw new RpcException('Not supported on Stellar SDP chain');
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
   }
 
   // --- Private helpers ---
@@ -1099,19 +1160,27 @@ export class StellarChainService implements IChainService, OnModuleInit {
       this.logger.log(`Beneficiary found: ${ben.address}`);
       return ben;
     } catch {
-      throw new RpcException(`Beneficiary with phone ${phoneNumber} not found`);
+      throw new RpcException({
+        message: `Beneficiary with phone ${phoneNumber} not found`,
+        code: 'PAYOUT_ERR_BENEFICIARY_PHONE_NOT_FOUND',
+        params: { phoneNumber },
+      });
     }
   }
 
   private async verifyOTP(otp: string, phoneNumber: string, amount: number) {
     const record = await this.prisma.otp.findUnique({ where: { phoneNumber } });
-    if (!record) throw new RpcException('OTP record not found');
-    if (record.isVerified) throw new RpcException('OTP already verified');
+    if (!record)
+      throw new RpcException({
+        message: 'OTP record not found',
+        code: 'OTP_RECORD_NOT_FOUND',
+      });
+    if (record.isVerified) throw new RpcException({ message: 'OTP already verified', code: 'OTP_ALREADY_VERIFIED' });
     if (record.expiresAt < new Date())
-      throw new RpcException('OTP has expired');
+      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
-    if (!isValid) throw new RpcException('Invalid OTP or amount mismatch');
+    if (!isValid) throw new RpcException({ message: 'Invalid OTP or amount mismatch', code: 'INVALID_OTP_OR_AMOUNT_MISMATCH' });
 
     await this.prisma.otp.update({
       where: { phoneNumber },
@@ -1149,20 +1218,31 @@ export class StellarChainService implements IChainService, OnModuleInit {
       )
     );
 
-    if (!beneficiary) throw new RpcException('Beneficiary not found');
+    if (!beneficiary)
+      throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'PAYOUT_ERR_BENEFICIARY_NOT_FOUND',
+      });
     if (!beneficiary.groupedBeneficiaries)
-      throw new RpcException('Beneficiary has no grouped beneficiaries');
+      throw new RpcException({
+        message: 'Beneficiary has no grouped beneficiaries',
+        code: 'BENEFICIARY_NO_GROUPED_BENEFICIARIES',
+      });
 
     const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
       (g: any) => g.groupPurpose !== 'COMMUNICATION'
     );
 
     if (!payoutEligibleGroups.length)
-      throw new RpcException('No payout-eligible group found for beneficiary');
+      throw new RpcException({
+        message: 'No payout-eligible group found for beneficiary',
+        code: 'PAYOUT_ERR_NO_ELIGIBLE_GROUP',
+      });
     if (payoutEligibleGroups.length > 1)
-      throw new RpcException(
-        'Multiple payout-eligible groups found for beneficiary'
-      );
+      throw new RpcException({
+        message: 'Multiple payout-eligible groups found for beneficiary',
+        code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
+      });
 
     const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
@@ -1170,7 +1250,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
     });
 
     if (!beneficiaryGroups)
-      throw new RpcException('Beneficiary group not found');
+      throw new RpcException({
+        message: 'Beneficiary group not found',
+        code: 'PAYOUT_ERR_GROUP_NOT_FOUND',
+      });
 
     this.logger.log(
       `Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`
@@ -1179,7 +1262,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       `Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`
     );
     if (!beneficiaryGroups.tokensReserved)
-      throw new RpcException('Tokens not reserved for the group');
+      throw new RpcException({
+        message: 'Tokens not reserved for the group',
+        code: 'PAYOUT_ERR_TOKENS_NOT_RESERVED',
+      });
 
     const activeToken = beneficiaryGroups.tokensReserved.find(
       (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
@@ -1187,7 +1273,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     if (!activeToken) {
       this.logger.error('No active payout found for the group');
-      throw new RpcException('No active payout found for the group');
+      throw new RpcException({
+        message: 'No active payout found for the group',
+        code: 'NO_ACTIVE_PAYOUT_FOUND_FOR_GROUP',
+      });
     }
 
     return activeToken.payout;
@@ -1197,10 +1286,18 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const vendor = await this.prisma.vendor.findUnique({
       where: { uuid: data.vendorUuid },
     });
-    if (!vendor) throw new RpcException('Vendor not found');
+    if (!vendor)
+      throw new RpcException({
+        message: 'Vendor not found',
+        code: 'PAYOUT_ERR_VENDOR_NOT_FOUND',
+      });
 
     const keys = (await this.getSecretByPhone(data.phoneNumber)) as any;
-    if (!keys) throw new RpcException('Beneficiary address not found');
+    if (!keys)
+      throw new RpcException({
+        message: 'Beneficiary address not found',
+        code: 'PAYOUT_ERR_BENEFICIARY_ADDRESS_NOT_FOUND',
+      });
 
     const stellarSettings = await this.getFromSettings(
       'STELLAR_SPONSOR_SETTINGS'
@@ -1218,15 +1315,23 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     const beneficiaryTokenBalance = parseFloat(tokenBalance);
     if (!beneficiaryTokenBalance)
-      throw new RpcException('Beneficiary token balance not found');
+      throw new RpcException({
+        message: 'Beneficiary token balance not found',
+        code: 'STELLAR_ERR_TOKEN_BALANCE_NOT_FOUND',
+      });
 
     const amount = data.amount || beneficiaryTokenBalance;
     if (Number(amount) > beneficiaryTokenBalance)
-      throw new RpcException(
-        `Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`
-      );
+      throw new RpcException({
+        message: `Requested amount ${amount} exceeds available balance ${beneficiaryTokenBalance}`,
+        code: 'PAYOUT_ERR_AMOUNT_EXCEEDS_BALANCE',
+        params: { amount, balance: beneficiaryTokenBalance },
+      });
     if (Number(amount) <= 0)
-      throw new RpcException('Amount must be greater than 0');
+      throw new RpcException({
+        message: 'Amount must be greater than 0',
+        code: 'PAYOUT_ERR_AMOUNT_NOT_POSITIVE',
+      });
 
     const res = await lastValueFrom(
       this.client.send(
