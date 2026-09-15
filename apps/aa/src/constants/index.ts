@@ -198,6 +198,9 @@ export const JOBS = {
     UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
   },
+  VERSION: {
+    GET: 'aa.jobs.version.get',
+  },
   CONTRACT: {
     // Token Management
     ASSIGN_TOKENS: 'aa.jobs.contract.assignTokens',

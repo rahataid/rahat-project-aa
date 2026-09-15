@@ -7,6 +7,7 @@ import {
   normalizeRequiredFields,
   parseValueForPrisma,
 } from '../utils/utility';
+import { getVersionFromPackageJson } from '../utils/version.helper';
 import { sanitizeSettingValue } from './settings-sanitizer';
 import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
 import { UpdateSettingsByNameDto } from './dto/update-settings-by-name.dto';
@@ -24,6 +25,12 @@ export class AppService {
 
   getData(): { message: string } {
     return { message: 'Hello API' };
+  }
+
+  // AA version — local cached readFile, no DB.
+  async getVersion(): Promise<{ version: string }> {
+    const version = await getVersionFromPackageJson();
+    return { version };
   }
 
   async addSettings(dto: any) {
