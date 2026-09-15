@@ -23,6 +23,14 @@ export interface HealthStatus {
   };
 }
 
+export const SERVICE_LABELS: Record<string, string> = {
+  database: 'Database',
+  redis: 'Redis',
+  rpcUrl: 'RPC URL',
+  cloudflare: 'Cloudflare',
+  offRamp: 'Off-Ramp',
+};
+
 export async function checkDatabase(
   prisma: PrismaService
 ): Promise<ServiceStatus> {
@@ -237,7 +245,7 @@ export async function checkOffRampService(
   } catch (err) {
     return {
       status: 'down',
-      message: err,
+      message: err as any,
       latency: `${(performance.now() - start).toFixed(2)}ms`,
       last_checked,
       link: endpoint,
