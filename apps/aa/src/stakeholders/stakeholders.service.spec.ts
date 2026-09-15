@@ -85,7 +85,7 @@ describe('StakeholdersService', () => {
     expect(service).toBeDefined();
   });
 
-  // ==================== add() ====================
+  // =================== add() ====================
   describe('add', () => {
     const basePayload = {
       name: 'John Doe',
