@@ -54,8 +54,8 @@ export class AppController {
     return this.appService.setupProjectSettings(payload);
   }
 
-  // AA version via Redis — needs uuid (multi-tenant), cached readFile.
-  @MessagePattern({ cmd: JOBS.VERSION.GET, uuid: process.env.PROJECT_ID })
+  // AA version via Redis — package.json version only, not scoped to a specific project's uuid.
+  @MessagePattern({ cmd: JOBS.VERSION.GET })
   getVersion() {
     return this.appService.getVersion();
   }
