@@ -114,7 +114,7 @@ export class GrievancesService {
   }
 
   async updateStatus(dto: UpdateGrievanceStatusDto) {
-    const { uuid, ...updateDto } = dto;
+    const { uuid, user: updatedByUser, ...updateDto } = dto;
 
     const existingGrievance = await this.prisma.grievance.findUnique({
       where: { uuid },
@@ -163,7 +163,16 @@ export class GrievancesService {
 
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: updateData,
+        data: {
+          ...updateData,
+          createdByUser: updatedByUser
+            ? {
+                id: updatedByUser.id,
+                name: updatedByUser.name,
+                email: updatedByUser.email,
+              }
+            : Prisma.JsonNull,
+        },
       });
 
       await handleMicroserviceCall({
