@@ -722,36 +722,59 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     batchNumber: number,
     totalBatches: number
   ): Promise<void> {
-    // Create log entries in chunks of 500 for bulk insert efficiency
-    const CHUNK_SIZE = 500;
-    
-    for (let i = 0; i < beneficiaries.length; i += CHUNK_SIZE) {
-      const chunk = beneficiaries.slice(i, i + CHUNK_SIZE);
-      const chunkAmounts = amounts.slice(i, i + CHUNK_SIZE);
+    try {
+      this.logger.log(
+        `Creating DisbursementLogs for batch ${batchNumber}/${totalBatches} with ${beneficiaries.length} beneficiaries`,
+        EVMCentralizedProcessor.name
+      );
+
+      const groupToken =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
+
+      if (!groupToken) {
+        this.logger.error(
+          `Group token not found for group ${groupUuid}`,
+          EVMCentralizedProcessor.name
+        );
+        return;
+      }
+
+      // Create log entries in chunks of 500 for bulk insert efficiency
+      const CHUNK_SIZE = 500;
       
-      // Build array of log entries for this chunk
-      const logEntries = chunk.map((beneficiary, idx) => ({
-        groupUuid,
-        beneficiary,
-        amount: chunkAmounts[idx],
-        txHash,
-        batchNumber,
-        totalBatches,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
+      for (let i = 0; i < beneficiaries.length; i += CHUNK_SIZE) {
+        const chunk = beneficiaries.slice(i, i + CHUNK_SIZE);
+        const chunkAmounts = amounts.slice(i, i + CHUNK_SIZE);
+        
+        // Build array of log entries for this chunk
+        const logEntries = chunk.map((beneficiaryWalletAddress, idx) => ({
+          txnHash: txHash,
+          beneficiaryGroupTokenId: groupToken.uuid,
+          beneficiaryWalletAddress: beneficiaryWalletAddress,
+          createdAt: new Date(),
+        }));
+        
+        // Bulk insert using createMany for efficiency
+        await this.prismaService.disbursementLogs.createMany({
+          data: logEntries,
+          skipDuplicates: true, // Prevent duplicate entries if job runs twice
+        });
+      }
       
-      // Bulk insert using createMany for efficiency
-      await this.prisma.disbursementLog.createMany({
-        data: logEntries,
-        skipDuplicates: true, // Prevent duplicate entries if job runs twice
-      });
+      this.logger.log(
+        `Created ${beneficiaries.length} disbursement logs for batch ${batchNumber}/${totalBatches}`,
+        EVMCentralizedProcessor.name
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error creating DisbursementLogs for batch ${batchNumber}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw error;
     }
-    
-    this.logger.log(
-      `Created ${beneficiaries.length} disbursement logs for batch ${batchNumber}/${totalBatches}`,
-      EVMCentralizedProcessor.name
-    );
   }
 
   async handleCheckBalance(
@@ -1108,67 +1131,6 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     }
   }
   // ===== HELPER METHODS =====
-
-  private async createDisbursementLogsForBatch(
-    groupUuid: string,
-    txHash: string,
-    beneficiaries: string[],
-    amounts: string[],
-    batchNumber: number,
-    totalBatches: number
-  ) {
-    try {
-      this.logger.log(
-        `Creating DisbursementLogs for batch ${batchNumber}/${totalBatches} with ${beneficiaries.length} beneficiaries`,
-        EVMCentralizedProcessor.name
-      );
-
-      const groupToken =
-        await this.beneficiaryService.getOneTokenReservationByGroupId(
-          groupUuid
-        );
-
-      if (!groupToken) {
-        this.logger.error(
-          `Group token not found for group ${groupUuid}`,
-          EVMCentralizedProcessor.name
-        );
-        return;
-      }
-
-      const disbursementLogs = beneficiaries.map((beneficiaryWalletAddress, i) => ({
-        uuid: undefined, // Prisma will generate
-        txnHash: txHash,
-        beneficiaryGroupTokenId: groupToken.uuid,
-        beneficiaryWalletAddress,
-        createdAt: new Date(),
-      }));
-
-      // Bulk insert in chunks of 500
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < disbursementLogs.length; i += CHUNK_SIZE) {
-        const chunk = disbursementLogs.slice(i, i + CHUNK_SIZE);
-        await this.prismaService.disbursementLogs.createMany({
-          data: chunk,
-          skipDuplicates: true,
-        });
-      }
-
-      this.logger.log(
-        `Successfully created ${disbursementLogs.length} DisbursementLogs records for batch ${batchNumber}`,
-        EVMCentralizedProcessor.name
-      );
-
-      return disbursementLogs;
-    } catch (error) {
-      this.logger.error(
-        `Error creating DisbursementLogs for batch ${batchNumber}: ${error.message}`,
-        error.stack,
-        EVMCentralizedProcessor.name
-      );
-      throw error;
-    }
-  }
 
   private async getFromSettings(key: string): Promise<any> {
     try {
