@@ -129,7 +129,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   async handleAssignTokens(job: Job<{ groups: string }>): Promise<any> {
     this.logger.log('Starting handleAssignTokens with job data: ', job.data);
     const { groups } = job.data;
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 35;
 
     try {
       this.logger.log(
@@ -154,7 +154,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const bens = await this.getBeneficiaryTokenBalance(groups);
 
       if (!bens || bens.length === 0) {
-        throw new RpcException('Beneficiary Token Balance not found');
+        throw new RpcException({
+          message: 'Beneficiary Token Balance not found',
+          code: 'STELLAR_ERR_TOKEN_BALANCE_NOT_FOUND',
+        });
       }
 
       const multicallTxnPayload = [];

@@ -39,7 +39,10 @@ export class OtpService {
       const transportId = data.find((item: any) => item.name === 'SMS')?.cuid;
 
       if (!transportId || !appId || !url) {
-        throw new RpcException('SMS_TRANSPORT_ID, APP_ID, URL are required');
+        throw new RpcException({
+          message: 'SMS_TRANSPORT_ID, APP_ID, URL are required',
+          code: 'SMS_TRANSPORT_CONFIG_MISSING',
+        });
       }
 
       const finalMessage = `${message} ${otp}`;
@@ -54,7 +57,10 @@ export class OtpService {
       return { otp };
     } catch (error) {
       this.logger.error(`Error sending SMS: ${(error as any).message}`);
-      throw new RpcException('Failed to send SMS');
+      throw new RpcException({
+        message: 'Failed to send SMS',
+        code: 'FAILED_TO_SEND_SMS',
+      });
     }
   }
 
@@ -88,7 +94,10 @@ export class OtpService {
       return { otp };
     } catch (error: any) {
       this.logger.error(`Error sending email: ${error.message}`);
-      throw new RpcException('Failed to send email');
+      throw new RpcException({
+        message: 'Failed to send email',
+        code: 'FAILED_TO_SEND_EMAIL',
+      });
     }
   }
 

@@ -35,6 +35,8 @@ export class HealthService {
     private readonly prisma: PrismaService,
     private readonly commsService: CommsService,
     @Inject('CORE_CLIENT') private readonly coreClient: ClientProxy,
+    @Inject('RAHAT_TRIGGER_CLIENT')
+    private readonly triggerClient: ClientProxy,
 
     @InjectQueue(BQUEUE.COMMUNICATION)
     private readonly rahatQueue: Queue
@@ -53,7 +55,11 @@ export class HealthService {
 
   async checkHealthStatus(): Promise<HealthStatus> {
     this._logger.log('Check the health status of all  used services');
-    const result = await updateHealthStatus(this.prisma, this.rahatQueue);
+    const result = await updateHealthStatus(
+      this.prisma,
+      this.rahatQueue,
+      this.triggerClient
+    );
     await this.setCache(result);
     await this.handleAlertTransitions(result);
     return result;
