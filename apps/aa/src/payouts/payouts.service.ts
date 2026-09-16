@@ -2501,6 +2501,8 @@ export class PayoutsService {
 
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
+          'Beneficiary First Name': extras?.firstName || '',
+          'Beneficiary Last Name': extras?.lastName || '',
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
