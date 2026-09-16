@@ -120,7 +120,11 @@ export class GrievancesService {
       where: { uuid },
     });
     if (!existingGrievance) {
-      throw new RpcException('Grievance not found');
+      throw new RpcException({
+        message: 'Grievance not found',
+        code: 'GRIEVANCE_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -191,7 +195,11 @@ export class GrievancesService {
       where: { uuid },
     });
     if (!existingGrievance) {
-      throw new RpcException('Grievance not found');
+      throw new RpcException({
+        message: 'Grievance not found',
+        code: 'GRIEVANCE_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
