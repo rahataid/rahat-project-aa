@@ -2,6 +2,8 @@ import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '@rumsan/prisma';
 import axios from 'axios';
 import { Queue } from 'bull';
+import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom, timeout } from 'rxjs';
 
 export interface ServiceStatus {
   status: 'up' | 'down';
@@ -20,6 +22,7 @@ export interface HealthStatus {
     rpcUrl: ServiceStatus;
     cloudflare: ServiceStatus;
     offRamp: ServiceStatus;
+    trigger: ServiceStatus;
   };
 }
 
@@ -29,6 +32,7 @@ export const SERVICE_LABELS: Record<string, string> = {
   rpcUrl: 'RPC URL',
   cloudflare: 'Cloudflare',
   offRamp: 'Off-Ramp',
+  trigger: 'Trigger Service',
 };
 
 export async function checkDatabase(
@@ -214,6 +218,49 @@ export async function checkCloudflare(
   }
 }
 
+export async function checkTriggerService(
+  triggerClient: ClientProxy
+): Promise<ServiceStatus> {
+  const start = performance.now();
+  const last_checked = new Date().toISOString();
+  try {
+    const res = await lastValueFrom(
+      triggerClient
+        .send({ cmd: 'ms.jobs.sources.getHealth' }, {})
+        .pipe(timeout(5000))
+    );
+    if (res.overall_status.toLowerCase() == 'healthy') {
+      return {
+        status: 'up',
+        latency: `${(performance.now() - start).toFixed(2)}ms`,
+        last_checked,
+        notes: (res as any) ?? {},
+      };
+    } else {
+      const sourceStats = res?.sources?.map((source: any) => {
+        return {
+          name: source?.name,
+          currentStatus: source?.currentStatus,
+        };
+      });
+      return {
+        status: 'down',
+        latency: `${(performance.now() - start).toFixed(2)}ms`,
+        last_checked,
+        message: 'Some data sources are down',
+        notes: { ...sourceStats, triggerServiceStatus: 'up' },
+      };
+    }
+  } catch (err) {
+    return {
+      status: 'down',
+      message: (err as Error).message,
+      latency: `${(performance.now() - start).toFixed(2)}ms`,
+      last_checked,
+    };
+  }
+}
+
 export async function checkOffRampService(
   prisma: PrismaService
 ): Promise<ServiceStatus> {
@@ -255,15 +302,18 @@ export async function checkOffRampService(
 
 export async function updateHealthStatus(
   prisma: PrismaService,
-  rahatQueue: Queue
+  rahatQueue: Queue,
+  triggerClient: ClientProxy
 ): Promise<HealthStatus> {
-  const [database, redis, rpcUrl, cloudflare, offRamp] = await Promise.all([
-    checkDatabase(prisma),
-    checkRedis(rahatQueue),
-    checkRPCUrl(prisma),
-    checkCloudflare(prisma),
-    checkOffRampService(prisma),
-  ]);
+  const [database, redis, rpcUrl, cloudflare, offRamp, trigger] =
+    await Promise.all([
+      checkDatabase(prisma),
+      checkRedis(rahatQueue),
+      checkRPCUrl(prisma),
+      checkCloudflare(prisma),
+      checkOffRampService(prisma),
+      checkTriggerService(triggerClient),
+    ]);
   const allUp = database.status === 'up' && redis.status === 'up';
   const result: HealthStatus = {
     status: allUp ? 'up' : 'degraded',
@@ -273,6 +323,7 @@ export async function updateHealthStatus(
       rpcUrl,
       cloudflare,
       offRamp,
+      trigger,
     },
   };
   return result;
