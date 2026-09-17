@@ -1949,4 +1949,35 @@ export class BeneficiaryService {
 
     return { message: 'Sync process completed successfully' };
   }
+
+  async getBeneficiaryPayoutMode(payload: { benId: string }) {
+    const { benId } = payload;
+    const payoutDetails = await this.prisma.beneficiary.findUnique({
+      where: { uuid: benId },
+      include: {
+        BeneficiaryToGroup: {
+          include: {
+            group: {
+              include: {
+                tokensReserved: {
+                  where: { payoutId: { not: null } },
+                  include: {
+                    payout: { select: { mode: true } },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const payoutMode =
+      payoutDetails?.BeneficiaryToGroup?.find(
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+      )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
+
+    return { benId, payoutMode };
+  }
 }
