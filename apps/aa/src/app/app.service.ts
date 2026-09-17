@@ -27,10 +27,10 @@ export class AppService {
     return { message: 'Hello API' };
   }
 
-  // AA version — local cached readFile, no DB.
-  async getVersion(): Promise<{ version: string }> {
+  // Returns the current app version and runtime environment.
+  async getVersion(): Promise<{ version: string; env: string | null }> {
     const version = await getVersionFromPackageJson();
-    return { version };
+    return { version, env: process.env.NODE_ENV || null };
   }
 
   async addSettings(dto: any) {

@@ -54,7 +54,7 @@ export class AppController {
     return this.appService.setupProjectSettings(payload);
   }
 
-  // AA version via Redis — package.json version only, not scoped to a specific project's uuid.
+  // Returns the AA service version.
   @MessagePattern({ cmd: JOBS.VERSION.GET })
   getVersion() {
     return this.appService.getVersion();
