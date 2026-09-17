@@ -1210,11 +1210,7 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(
-        `Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(
-          data
-        )}`
-      );
+      this.logger.log(`Group token ${benfGroupToken.uuid} updated to status: ${data.status}`);
 
       return benfGroupToken;
     } catch (error) {
