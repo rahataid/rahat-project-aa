@@ -940,6 +940,13 @@ export class StellarChainService implements IChainService, OnModuleInit {
     });
   }
 
+  async getDisbursementProgress(_groupUuid: string): Promise<any> {
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
+  }
+
   async addTrigger(_data: AddTriggerDto): Promise<any> {
     throw new RpcException({
       message: 'Not supported on Stellar SDP chain',

@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
@@ -12,6 +12,7 @@ import { lastValueFrom } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../../constants';
 import type { ContractProcessor } from '../../processors/contract.processor';
 import type { EVMCentralizedProcessor } from '../../processors/evm-centralized.processor';
+import { BeneficiaryService } from '../../beneficiary/beneficiary.service';
 import {
   AddTriggerDto,
   AssignTokensDto,
@@ -58,7 +59,9 @@ export class EvmChainService implements IChainService, OnModuleInit {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly moduleRef: ModuleRef,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => BeneficiaryService))
+    private readonly beneficiaryService: BeneficiaryService
   ) {}
 
   async onModuleInit() {
@@ -124,35 +127,121 @@ export class EvmChainService implements IChainService, OnModuleInit {
     groupUuid: string
   ): Promise<any> {
     try {
+      // Get chain configuration (RPC URL, contract addresses, etc.)
+      // This fetches RPC URL, contract addresses, and other chain-specific settings
       const chainConfig = await this.getChainConfig();
 
-      const job = await this.evmTxQueue.add(
-        {
-          type: JOBS.CONTRACT.DISBURSE_BATCH,
-          beneficiaries,
-          amounts,
+      // Handle edge case: no beneficiaries to process
+      // Prevents unnecessary processing when there's nothing to disburse
+      if (beneficiaries.length === 0) {
+        this.logger.warn(`disburseBatch called with empty beneficiaries for group ${groupUuid}`);
+        return {
+          message: 'No beneficiaries to disburse',
           groupUuid,
-          projectContract: chainConfig.projectContractAddress,
+          status: 'COMPLETED',
+        };
+      }
+
+      // Define batch size - process 30 beneficiaries per transaction to avoid gas limits
+      // Why 30? Based on empirical testing - balances gas cost with transaction reliability
+      // Larger batches risk exceeding block gas limits; smaller batches increase overhead
+      const BATCH_SIZE = 30;
+
+      // Check existing batch status for idempotency (re-disburse support)
+      // Only look for active (not yet disbursed) token reservations
+      // This allows us to resume interrupted disbursements or re-disburse to same group
+      const groupToken = await this.prisma.beneficiaryGroupTokens.findFirst({
+        where: { groupId: groupUuid, isDisbursed: false },
+        orderBy: { createdAt: 'desc' },
+        select: { uuid: true, info: true },
+      });
+      const existingBatchStatus = (groupToken?.info as any)?.batchStatus || [];
+
+      // Split beneficiaries and amounts into batches of BATCH_SIZE
+      // This prevents exceeding block gas limits with large transactions
+      // Each batch will be processed as a separate job to avoid gas limit issues
+      const batches: Array<{ beneficiaries: string[]; amounts: string[] }> = [];
+      for (let i = 0; i < beneficiaries.length; i += BATCH_SIZE) {
+        batches.push({
+          beneficiaries: beneficiaries.slice(i, i + BATCH_SIZE),
+          amounts: amounts.slice(i, i + BATCH_SIZE),
+        });
+      }
+
+      // Initialize batchStatus array in info field if not present
+      // For re-disburse: preserve CONFIRMED batches, reset others to PENDING
+      // This enables idempotent re-disburse - already confirmed batches are not reprocessed
+      const initialBatchStatus = batches.map((_, index) => {
+        const existing = existingBatchStatus[index];
+        // If batch was already confirmed, keep it confirmed (idempotent re-disburse)
+        // Reset retryCount to 0 so failed batches can be retried
+        if (existing?.status === 'CONFIRMED') {
+          return { ...existing, retryCount: 0 };
+        }
+        // Otherwise mark as pending for processing
+        // beneficiaryCount will be used later for progress tracking and log creation
+        return {
+          batchIndex: index,
+          status: 'PENDING',
+          beneficiaryCount: batches[index].beneficiaries.length,
+          retryCount: 0,
+        };
+      });
+
+      // Update group token with initial batch status in info JSON field
+      // This stores batch tracking info without requiring schema changes
+      // Using info JSON field avoids migration complexity and keeps all data together
+      await this.prisma.beneficiaryGroupTokens.update({
+        where: { uuid: groupToken!.uuid },
+        data: {
+          status: 'STARTED', // Mark group as started (not yet disbursed)
+          isDisbursed: false, // Not yet fully disbursed
+          info: {
+            ...(groupToken?.info && { ...JSON.parse(JSON.stringify(groupToken.info)) }), // Preserve existing info fields
+            batchStatus: initialBatchStatus, // Array of batch objects with status tracking
+            totalBatches: batches.length, // Total number of batches for reference
+            totalBeneficiaries: beneficiaries.length, // Total beneficiaries to disburse
+            disbursedBeneficiariesCount: initialBatchStatus.filter(b => b.status === 'CONFIRMED').reduce((sum, b) => sum + b.beneficiaryCount, 0), // Already confirmed count
+            lastUpdated: new Date().toISOString(), // Timestamp for tracking when disbursement started/resumed
+          },
+        },
+      });
+
+      // Queue first batch job for processing
+      // Uses deterministic jobId for idempotency (prevents duplicate processing)
+      // Same groupUuid + batchIndex always produces same jobId
+      const jobId = `${groupUuid}-batch-0`;
+      await this.evmTxQueue.add(
+        {
+          type: JOBS.EVM.ASSIGN_TOKENS, // Job type for EVM token assignment (write operation)
+          groupUuid, // Target group UUID
+          batchIndex: 0, // First batch (0-indexed)
+          totalBatches: batches.length, // Total batches for reference in processor
+          beneficiaries: batches[0].beneficiaries, // Beneficiary addresses for this batch
+          amounts: batches[0].amounts, // Token amounts for this batch
         },
         {
-          attempts: 3,
+          jobId, // Deterministic job ID prevents duplicates (same input = same jobId)
+          attempts: 3, // Retry failed jobs up to 3 times before giving up
+          delay: 2000, // Initial delay before first attempt (2 seconds) - allows for quick retries
+          removeOnComplete: true, // Clean up completed jobs to prevent queue buildup
           backoff: {
-            type: 'exponential',
-            delay: 2000,
+            type: 'exponential', // Exponential backoff for retries (2s, 4s, 8s...)
+            delay: 1000, // Base delay of 1 second
           },
         }
       );
 
       this.logger.log(
-        `Queued EVM disbursement job ${job.id} for group ${groupUuid}`,
-        EvmChainService.name
+        `Queued EVM disburseBatch job ${jobId} for group ${groupUuid} (${batches.length} batches, ${beneficiaries.length} beneficiaries)`
       );
 
       return {
-        jobId: job.id,
+        jobId,
         status: 'QUEUED',
         groupUuid,
         beneficiariesCount: beneficiaries.length,
+        totalBatches: batches.length,
         totalAmount: amounts.reduce(
           (sum, amount) => sum + parseFloat(amount),
           0
@@ -160,7 +249,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       };
     } catch (error) {
       this.logger.error(
-        `Error queuing EVM disbursement: ${error.message}`,
+        `Error queuing EVM disbursement batch: ${error.message}`,
         error.stack,
         EvmChainService.name
       );
@@ -358,91 +447,126 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   async disburse(data: DisburseDto): Promise<any> {
-    this.logger.log(
-      `Starting disbursement for ${data.dName} with groups: ${data.groups}`
-    );
+    this.logger.log(`Starting disbursement for ${data.dName}`);
+
     const groupUuids =
-      (data?.groups && data?.groups.length) > 0
+      data?.groups?.length > 0
         ? data.groups
         : await this.getDisbursableGroupsUuids();
 
     if (groupUuids.length === 0) {
       this.logger.warn('No groups found for disbursement');
-      return {
-        message: 'No groups found for disbursement',
-        groups: [],
-      };
+      return { message: 'No groups found for disbursement', groups: [] };
     }
-    this.logger.log(
-      `Found ${groupUuids.length} groups for disbursement: ${groupUuids.join(
-        ', '
-      )}`
-    );
 
     const groups = await this.getGroupsFromUuid(groupUuids);
+    const BATCH_SIZE = 30;
 
-    this.logger.log(`Resolved groups to addresses for ${groups.length} groups`);
-
-    // const jobs = await this.evmTxQueue.add(
-    //   groups.map(({ uuid, tokensReserved }) => ({
-    //     data: {
-    //       type: JOBS.EVM.ASSIGN_TOKENS,
-    //       dName: `${tokensReserved.title.toLocaleLowerCase()}_${data.dName}`,
-    //       groups: uuid,
-    //     },
-    //     opts: {
-    //       attempts: 3,
-    //       delay: 2000,
-    //       removeOnComplete: true,
-    //       backoff: {
-    //         type: 'exponential',
-    //         delay: 1000,
-    //       },
-    //     },
-    //   }))
-    // );
-
-    let count = 0;
     for (const { uuid, tokensReserved } of groups) {
       const activeToken = tokensReserved.find((t) => t.isDisbursed === false);
       if (!activeToken) {
-        this.logger.warn(
-          `Group ${uuid} has no active token reservation, skipping`
-        );
+        this.logger.warn(`Group ${uuid} has no active token reservation, skipping`);
         continue;
       }
-      this.logger.log(`loop counter: ${count++}`);
-      this.logger.log(
-        `Adding disbursement job for group ${uuid} with ${activeToken.numberOfTokens} tokens reserved`
-      );
+
+      // Use same resolution as processor to ensure consistent amounts
+      const resolved = await this.evmProcessor.getBeneficiaryTokenBalance(uuid);
+      if (!resolved || resolved.length === 0) {
+        this.logger.warn(`Group ${uuid} has no beneficiaries, skipping`);
+        continue;
+      }
+
+      const beneficiaryAddresses = resolved.map(b => b.walletAddress);
+      const amounts = resolved.map(b => b.amount);
+
+      const groupToken = await this.prisma.beneficiaryGroupTokens.findFirst({
+        where: { groupId: uuid, isDisbursed: false },
+        orderBy: { createdAt: 'desc' },
+        select: { uuid: true, info: true },
+      });
+
+      if (!groupToken) {
+        this.logger.warn(`No undisbursed token record for group ${uuid}, skipping`);
+        continue;
+      }
+
+      const existingBatchStatus = (groupToken?.info as any)?.batchStatus || [];
+
+      const batches: Array<{ beneficiaries: string[]; amounts: string[] }> = [];
+      for (let i = 0; i < beneficiaryAddresses.length; i += BATCH_SIZE) {
+        batches.push({
+          beneficiaries: beneficiaryAddresses.slice(i, i + BATCH_SIZE),
+          amounts: amounts.slice(i, i + BATCH_SIZE),
+        });
+      }
+
+      const initialBatchStatus = batches.map((_, index) => {
+        const existing = existingBatchStatus[index];
+        if (existing?.status === 'CONFIRMED') {
+          return { ...existing, retryCount: 0 };
+        }
+        return {
+          batchIndex: index,
+          status: 'PENDING',
+          beneficiaryCount: batches[index].beneficiaries.length,
+          retryCount: 0,
+        };
+      });
+
+      const dName = `${activeToken.title.toLocaleLowerCase()}_${data.dName}`;
+
+      await this.prisma.beneficiaryGroupTokens.update({
+        where: { uuid: groupToken.uuid },
+        data: {
+          status: 'STARTED',
+          isDisbursed: false,
+          info: {
+            ...(groupToken.info && JSON.parse(JSON.stringify(groupToken.info))),
+            batchStatus: initialBatchStatus,
+            totalBatches: batches.length,
+            totalBeneficiaries: resolved.length,
+            disbursedBeneficiariesCount: initialBatchStatus
+              .filter(b => b.status === 'CONFIRMED')
+              .reduce((sum, b) => sum + b.beneficiaryCount, 0),
+            dName,
+            lastUpdated: new Date().toISOString(),
+          },
+        },
+      });
+
+      // Only queue batch 0 — it self-requeues subsequent batches
+      const firstUnconfirmedIndex = initialBatchStatus.findIndex(b => b.status !== 'CONFIRMED');
+      if (firstUnconfirmedIndex === -1) {
+        this.logger.log(`Group ${uuid} all batches already confirmed, skipping`);
+        continue;
+      }
+
+      const jobId = `${uuid}-batch-${firstUnconfirmedIndex}`;
       await this.evmTxQueue.add(
         {
           type: JOBS.EVM.ASSIGN_TOKENS,
-          dName: `${activeToken.title.toLocaleLowerCase()}_${data.dName}`,
-          groups: uuid,
+          groupUuid: uuid,
+          batchIndex: firstUnconfirmedIndex,
+          totalBatches: batches.length,
+          beneficiaries: batches[firstUnconfirmedIndex].beneficiaries,
+          amounts: batches[firstUnconfirmedIndex].amounts,
+          dName,
         },
         {
+          jobId,
           attempts: 3,
           delay: 2000,
           removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
+          backoff: { type: 'exponential', delay: 1000 },
         }
       );
-    }
 
-    this.logger.log(
-      `Added ${groups.length} disbursement jobs to EVM TX queue for ${groups.length} groups`
-    );
+      this.logger.log(`Queued disbursement for group ${uuid}: ${batches.length} batches, ${resolved.length} beneficiaries`);
+    }
 
     return {
       message: `Disbursement jobs added for ${groups.length} groups`,
-      groups: groups.map((group) => ({
-        uuid: group.uuid,
-        status: 'PENDING',
-      })),
+      groups: groups.map((group) => ({ uuid: group.uuid, status: 'PENDING' })),
     };
   }
 
@@ -746,6 +870,22 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
   async getDisbursementStatus(id: string): Promise<any> {
     return this.getTransactionStatus(id);
+  }
+
+  /**
+   * Get disbursement progress for a beneficiary group
+   * Delegates to beneficiary service which reads batchStatus from info JSON field
+   * Returns progress metrics including completed/failed/pending batches and percentage
+   * 
+   * Why delegate to beneficiary service:
+   * - Keeps chain service focused on chain-specific operations
+   * - Beneficiary service has direct access to group token records
+   * - Centralizes progress calculation logic in one place
+   * @param groupUuid - The UUID of the beneficiary group
+   * @returns Progress metrics including completed/failed/pending batches and percentage
+   */
+  async getDisbursementProgress(groupUuid: string): Promise<any> {
+    return this.beneficiaryService.getDisbursementProgress(groupUuid);
   }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<any> {
@@ -1144,7 +1284,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
           });
         }
       }
-      console.log(config);
       return config;
     } catch (error) {
       this.logger.error(
@@ -1157,21 +1296,15 @@ export class EvmChainService implements IChainService, OnModuleInit {
   }
 
   private async getDisbursableGroupsUuids() {
-    this.logger.debug('Fetching disbursable group UUIDs');
     const benGroups = await this.prisma.beneficiaryGroupTokens.findMany({
       where: {
-        AND: [
-          {
-            numberOfTokens: {
-              gt: 0,
-            },
-          },
-          { isDisbursed: false },
-        ],
+        numberOfTokens: { gt: 0 },
+        isDisbursed: false,
+        // Exclude groups already in progress or finalized
+        status: { notIn: ['STARTED', 'DISBURSED', 'PARTIALLY_DISBURSED'] },
       },
-      select: { uuid: true, groupId: true },
+      select: { groupId: true },
     });
-    this.logger.debug(`Found ${benGroups.length} disbursable groups`);
     return benGroups.map((group) => group.groupId);
   }
 
