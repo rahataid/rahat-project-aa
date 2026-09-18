@@ -119,10 +119,13 @@ export class BeneficiaryService {
         locationMap[ben.uuid ?? ''] ??
         locationMap[ben.walletAddress ?? ''] ??
         '';
-
       return [
         {
-          name: String(extras.name ?? ''),
+          name: String(
+            extras.name ||
+              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
+              ''
+          ),
           phone: ben.phone ?? '',
           gender: ben.gender ?? 'UNKNOWN',
           government_id_number: String(extras.govtIDNumber ?? ''),
@@ -157,7 +160,10 @@ export class BeneficiaryService {
 
       return Object.fromEntries(
         beneficiaries.flatMap((item) => {
-          const { uuid, walletAddress, location } = item.projectData ?? {};
+          // Core getOneGroupByProject returns groupedBeneficiaries[].Beneficiary
+          const coreBen =
+            item.Beneficiary ?? item.beneficiary ?? item.projectData ?? item;
+          const { uuid, walletAddress, location } = coreBen ?? {};
 
           if (typeof location !== 'string' || !location.trim()) {
             return [];
