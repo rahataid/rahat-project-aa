@@ -909,8 +909,13 @@ export class PayoutsService {
 
       delete tokenData.info;
 
+      const totalSkipOtp = (beneficiaryRedeem ?? []).filter(
+        (redeem) => (redeem.info as Record<string, any>)?.otpSkip === true
+      ).length;
+
       return {
         ...rest,
+        totalSkipOtp,
         beneficiaryGroupToken: {
           ...tokenData,
           beneficiaryGroup: {

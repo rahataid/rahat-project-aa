@@ -798,11 +798,13 @@ export class EvmChainService implements IChainService, OnModuleInit {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      if (!verifyOtpDto.skipOtpVerification) {
+        await this.verifyOTP(
+          verifyOtpDto.otp,
+          verifyOtpDto.phoneNumber,
+          amount as number
+        );
+      }
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -876,6 +878,12 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
+      const info = (existingRedeem.info as Record<string, any>) ?? {};
+      if (verifyOtpDto.skipOtpVerification) {
+        info.otpSkip = true;
+        info.otpSkipReason = verifyOtpDto.otpSkipReason;
+      }
+
       // Update the BeneficiaryRedeem record with transaction details
       await this.prisma.beneficiaryRedeem.update({
         where: {
@@ -886,6 +894,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
           txHash: result.txHash,
           isCompleted: true,
           status: 'COMPLETED',
+          info,
         },
       });
 
