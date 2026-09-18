@@ -40,6 +40,14 @@ interface PaginateResult<T> {
   meta: any;
 }
 
+interface GroupBeneficiaryExcelRow {
+  name: string;
+  phone: string;
+  gender: string;
+  address: string;
+  otp: string;
+}
+
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
@@ -65,6 +73,59 @@ export class BeneficiaryService {
 
   getQrPdf(groupId: string) {
     return this.qrPdfService.getJobStatus(groupId);
+  }
+
+  async exportGroupBeneficiariesExcel(
+    groupId: string
+  ): Promise<GroupBeneficiaryExcelRow[]> {
+    const links = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId },
+      include: {
+        beneficiary: {
+          select: {
+            walletAddress: true,
+            phone: true,
+            gender: true,
+            extras: true,
+          },
+        },
+      },
+    });
+
+    const walletAddresses = links
+      .map((l) => l.beneficiary?.walletAddress)
+      .filter((address): address is string => !!address);
+
+    const otps = await this.prisma.otp.findMany({
+      where: { walletAddress: { in: walletAddresses } },
+      select: { walletAddress: true, otp: true },
+    });
+
+    const otpMap = Object.fromEntries(
+      otps.map((o) => [o.walletAddress, o.otp ?? ''])
+    );
+
+    return links.flatMap(({ beneficiary: ben }) => {
+      if (!ben) return [];
+
+      const extras = (ben.extras as Record<string, unknown>) ?? {};
+      return [
+        {
+          name: String(extras.name ?? ''),
+          phone: ben.phone ?? '',
+          gender: ben.gender ?? 'UNKNOWN',
+          address: [
+            extras.district,
+            extras.municipality,
+            extras.ward ? `Ward ${extras.ward}` : null,
+            extras.tole_name,
+          ]
+            .filter(Boolean)
+            .join(', '),
+          otp: otpMap[ben.walletAddress ?? ''] ?? '',
+        },
+      ];
+    });
   }
 
   async getAllBenfs() {
