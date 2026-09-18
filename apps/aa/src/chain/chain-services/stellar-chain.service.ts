@@ -59,7 +59,7 @@ export class StellarChainService implements IChainService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef,
     private readonly eventEmitter: EventEmitter2
-  ) { }
+  ) {}
 
   getChainType(): ChainType {
     return 'stellar';
@@ -77,7 +77,8 @@ export class StellarChainService implements IChainService {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
+        data.groups || 'all'
       }`
     );
 
@@ -217,7 +218,8 @@ export class StellarChainService implements IChainService {
     skipStatusUpdate = false
   ): Promise<void> {
     this.logger.debug(
-      `Queuing SDP disbursement job for group ${groupUuid}${numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      `Queuing SDP disbursement job for group ${groupUuid}${
+        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
       }, dName: ${dName}`
     );
     await this.stellarSdpQueue.add(
@@ -297,11 +299,11 @@ export class StellarChainService implements IChainService {
     const dateFilter =
       payload?.startDate || payload?.endDate
         ? {
-          createdAt: {
-            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-          },
-        }
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
         : {};
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
@@ -326,11 +328,11 @@ export class StellarChainService implements IChainService {
     const redeemDateFilter =
       payload?.startDate || payload?.endDate
         ? {
-          createdAt: {
-            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-          },
-        }
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
         : {};
 
     const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
@@ -364,7 +366,7 @@ export class StellarChainService implements IChainService {
     const averageDisbursementTime =
       disbursementsInfo.length > 0
         ? disbursementsInfo.reduce((acc, time) => acc + time, 0) /
-        disbursementsInfo.length
+          disbursementsInfo.length
         : 0;
 
     const activityActivationTime = await this.getActivityActivationTime();
@@ -483,10 +485,10 @@ export class StellarChainService implements IChainService {
 
       if (!this.validateAddress(data.address)) {
         throw new RpcException({
-        message: `Invalid Stellar address: ${data.address}`,
-        code: 'INVALID_STELLAR_ADDRESS',
-        params: { address: data.address },
-      });
+          message: `Invalid Stellar address: ${data.address}`,
+          code: 'INVALID_STELLAR_ADDRESS',
+          params: { address: data.address },
+        });
       }
 
       const stellarSettings = await this.getFromSettings(
@@ -638,7 +640,10 @@ export class StellarChainService implements IChainService {
       });
 
     const amount = data.amount;
-    await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+
+    if (!data.skipOtpVerification) {
+      await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+    }
 
     const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
       address: string;
@@ -650,7 +655,7 @@ export class StellarChainService implements IChainService {
         code: 'BENEFICIARY_SECRET_NOT_FOUND',
       });
 
-    if (data.mediaUrl) {
+    if (data.mediaUrl || data.skipOtpVerification) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
         where: {
           beneficiaryWalletAddress: keys.address,
@@ -661,16 +666,26 @@ export class StellarChainService implements IChainService {
         orderBy: { createdAt: 'desc' },
       });
 
-      this.logger.log(
-        `Updating mediaUrl for redeem record ${existingRedeem?.uuid} to ${data.mediaUrl}`
-      );
       if (existingRedeem) {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
+        const infoUpdate: Record<string, any> = { ...info };
+
+        if (data.mediaUrl) {
+          this.logger.log(
+            `Updating mediaUrl for redeem record ${existingRedeem.uuid} to ${data.mediaUrl}`
+          );
+          infoUpdate.mediaUrl = data.mediaUrl;
+          infoUpdate.fileName = data.fileName;
+        }
+
+        if (data.skipOtpVerification) {
+          infoUpdate.otpSkip = true;
+          infoUpdate.otpSkipReason = data.otpSkipReason;
+        }
+
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: {
-            info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName },
-          },
+          data: { info: infoUpdate },
         });
       }
     }
@@ -1069,12 +1084,23 @@ export class StellarChainService implements IChainService {
         message: 'OTP record not found',
         code: 'OTP_RECORD_NOT_FOUND',
       });
-    if (record.isVerified) throw new RpcException({ message: 'OTP already verified', code: 'OTP_ALREADY_VERIFIED' });
+    if (record.isVerified)
+      throw new RpcException({
+        message: 'OTP already verified',
+        code: 'OTP_ALREADY_VERIFIED',
+      });
     if (record.expiresAt < new Date())
-      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
+      throw new RpcException({
+        message: 'OTP has expired',
+        code: 'OTP_EXPIRED',
+      });
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
-    if (!isValid) throw new RpcException({ message: 'Invalid OTP or amount mismatch', code: 'INVALID_OTP_OR_AMOUNT_MISMATCH' });
+    if (!isValid)
+      throw new RpcException({
+        message: 'Invalid OTP or amount mismatch',
+        code: 'INVALID_OTP_OR_AMOUNT_MISMATCH',
+      });
 
     await this.prisma.otp.update({
       where: { phoneNumber },
