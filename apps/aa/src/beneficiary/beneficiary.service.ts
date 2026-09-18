@@ -519,19 +519,16 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
+    // Existence check only — the actual data returned comes from the microservice call below,
+    // not from this row. Previously this fetched the full group with every beneficiary's full
+    // record joined in (include: beneficiaries.beneficiary) and then discarded it entirely, on
+    // every call — including once per row in the getAllTokenReservations listing loop.
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
         deletedAt: null,
       },
-      include: {
-        tokensReserved: true,
-        beneficiaries: {
-          include: {
-            beneficiary: true,
-          },
-        },
-      },
+      select: { uuid: true },
     });
 
     if (!benfGroup)
