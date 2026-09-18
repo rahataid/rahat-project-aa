@@ -53,4 +53,10 @@ export class AppController {
   setupProjectSettings(payload: any) {
     return this.appService.setupProjectSettings(payload);
   }
+
+  // Returns the AA service version.
+  @MessagePattern({ cmd: JOBS.VERSION.GET })
+  getVersion() {
+    return this.appService.getVersion();
+  }
 }
