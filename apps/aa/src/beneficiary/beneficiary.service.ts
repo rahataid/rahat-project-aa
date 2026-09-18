@@ -44,6 +44,7 @@ interface GroupBeneficiaryExcelRow {
   name: string;
   phone: string;
   gender: string;
+  government_id_number: string;
   address: string;
   otp: string;
 }
@@ -83,6 +84,7 @@ export class BeneficiaryService {
       include: {
         beneficiary: {
           select: {
+            uuid: true,
             walletAddress: true,
             phone: true,
             gender: true,
@@ -92,14 +94,17 @@ export class BeneficiaryService {
       },
     });
 
-    const walletAddresses = links
+    const wallets = links
       .map((l) => l.beneficiary?.walletAddress)
       .filter((address): address is string => !!address);
 
-    const otps = await this.prisma.otp.findMany({
-      where: { walletAddress: { in: walletAddresses } },
-      select: { walletAddress: true, otp: true },
-    });
+    const [otps, locationMap] = await Promise.all([
+      this.prisma.otp.findMany({
+        where: { walletAddress: { in: wallets } },
+        select: { walletAddress: true, otp: true },
+      }),
+      this.getLocationMapForGroup(groupId),
+    ]);
 
     const otpMap = Object.fromEntries(
       otps.map((o) => [o.walletAddress, o.otp ?? ''])
@@ -109,23 +114,70 @@ export class BeneficiaryService {
       if (!ben) return [];
 
       const extras = (ben.extras as Record<string, unknown>) ?? {};
+
+      const location =
+        locationMap[ben.uuid ?? ''] ??
+        locationMap[ben.walletAddress ?? ''] ??
+        '';
+
       return [
         {
           name: String(extras.name ?? ''),
           phone: ben.phone ?? '',
           gender: ben.gender ?? 'UNKNOWN',
-          address: [
-            extras.district,
-            extras.municipality,
-            extras.ward ? `Ward ${extras.ward}` : null,
-            extras.tole_name,
-          ]
-            .filter(Boolean)
-            .join(', '),
+          government_id_number: String(extras.govtIDNumber ?? ''),
+          address:
+            location.trim() ||
+            [
+              extras.district,
+              extras.municipality,
+              extras.ward ? `Ward ${extras.ward}` : null,
+              extras.tole_name,
+            ]
+              .filter(Boolean)
+              .join(', '),
           otp: otpMap[ben.walletAddress ?? ''] ?? '',
         },
       ];
     });
+  }
+
+  private async getLocationMapForGroup(
+    groupId: string
+  ): Promise<Record<string, string>> {
+    try {
+      const data = await lastValueFrom(
+        this.client.send(
+          { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
+          groupId
+        )
+      );
+
+      const beneficiaries = data?.groupedBeneficiaries ?? [];
+
+      return Object.fromEntries(
+        beneficiaries.flatMap((item) => {
+          const { uuid, walletAddress, location } = item.projectData ?? {};
+
+          if (typeof location !== 'string' || !location.trim()) {
+            return [];
+          }
+
+          return [
+            [uuid, location.trim()],
+            [walletAddress, location.trim()],
+          ].filter(([key]) => !!key);
+        })
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Core locations unavailable for ${groupId}, using extras address. ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+
+      return {};
+    }
   }
 
   async getAllBenfs() {
