@@ -98,13 +98,10 @@ export class BeneficiaryService {
       .map((l) => l.beneficiary?.walletAddress)
       .filter((address): address is string => !!address);
 
-    const [otps, locationMap] = await Promise.all([
-      this.prisma.otp.findMany({
-        where: { walletAddress: { in: wallets } },
-        select: { walletAddress: true, otp: true },
-      }),
-      this.getLocationMapForGroup(groupId),
-    ]);
+    const otps = await this.prisma.otp.findMany({
+      where: { walletAddress: { in: wallets } },
+      select: { walletAddress: true, otp: true },
+    });
 
     const otpMap = Object.fromEntries(
       otps.map((o) => [o.walletAddress, o.otp ?? ''])
@@ -115,10 +112,8 @@ export class BeneficiaryService {
 
       const extras = (ben.extras as Record<string, unknown>) ?? {};
 
-      const location =
-        locationMap[ben.uuid ?? ''] ??
-        locationMap[ben.walletAddress ?? ''] ??
-        '';
+      const syncedLocation =
+        typeof extras.location === 'string' ? extras.location.trim() : '';
       return [
         {
           name: String(
@@ -130,7 +125,7 @@ export class BeneficiaryService {
           gender: ben.gender ?? 'UNKNOWN',
           government_id_number: String(extras.govtIDNumber ?? ''),
           address:
-            location.trim() ||
+            syncedLocation ||
             [
               extras.district,
               extras.municipality,
@@ -143,47 +138,6 @@ export class BeneficiaryService {
         },
       ];
     });
-  }
-
-  private async getLocationMapForGroup(
-    groupId: string
-  ): Promise<Record<string, string>> {
-    try {
-      const data = await lastValueFrom(
-        this.client.send(
-          { cmd: 'rahat.jobs.beneficiary.get_one_group_by_project' },
-          groupId
-        )
-      );
-
-      const beneficiaries = data?.groupedBeneficiaries ?? [];
-
-      return Object.fromEntries(
-        beneficiaries.flatMap((item) => {
-          // Core getOneGroupByProject returns groupedBeneficiaries[].Beneficiary
-          const coreBen =
-            item.Beneficiary ?? item.beneficiary ?? item.projectData ?? item;
-          const { uuid, walletAddress, location } = coreBen ?? {};
-
-          if (typeof location !== 'string' || !location.trim()) {
-            return [];
-          }
-
-          return [
-            [uuid, location.trim()],
-            [walletAddress, location.trim()],
-          ].filter(([key]) => !!key);
-        })
-      );
-    } catch (err) {
-      this.logger.warn(
-        `Core locations unavailable for ${groupId}, using extras address. ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-
-      return {};
-    }
   }
 
   async getAllBenfs() {
