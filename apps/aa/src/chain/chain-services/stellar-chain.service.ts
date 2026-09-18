@@ -66,7 +66,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef,
     private readonly eventEmitter: EventEmitter2
-  ) { }
+  ) {}
 
   async onModuleInit() {
     await this.initializeInkindClient().catch((err) =>
@@ -133,7 +133,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
   async disburse(data: DisburseDto): Promise<any> {
     this.logger.log(
-      `Starting stellar SDP disbursement for ${data.dName} with groups: ${data.groups || 'all'
+      `Starting stellar SDP disbursement for ${data.dName} with groups: ${
+        data.groups || 'all'
       }`
     );
 
@@ -273,7 +274,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
     skipStatusUpdate = false
   ): Promise<void> {
     this.logger.debug(
-      `Queuing SDP disbursement job for group ${groupUuid}${numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
+      `Queuing SDP disbursement job for group ${groupUuid}${
+        numberOfTokens !== undefined ? ` with ${numberOfTokens} tokens` : ''
       }, dName: ${dName}`
     );
     await this.stellarSdpQueue.add(
@@ -353,11 +355,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const dateFilter =
       payload?.startDate || payload?.endDate
         ? {
-          createdAt: {
-            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-          },
-        }
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
         : {};
 
     const benfTokens = await this.prisma.beneficiaryGroupTokens.findMany({
@@ -382,11 +384,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const redeemDateFilter =
       payload?.startDate || payload?.endDate
         ? {
-          createdAt: {
-            ...(payload?.startDate && { gte: new Date(payload.startDate) }),
-            ...(payload?.endDate && { lte: new Date(payload.endDate) }),
-          },
-        }
+            createdAt: {
+              ...(payload?.startDate && { gte: new Date(payload.startDate) }),
+              ...(payload?.endDate && { lte: new Date(payload.endDate) }),
+            },
+          }
         : {};
 
     const tokenStatsResult = await this.getTokenStats(redeemDateFilter);
@@ -420,7 +422,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const averageDisbursementTime =
       disbursementsInfo.length > 0
         ? disbursementsInfo.reduce((acc, time) => acc + time, 0) /
-        disbursementsInfo.length
+          disbursementsInfo.length
         : 0;
 
     const activityActivationTime = await this.getActivityActivationTime();
@@ -539,10 +541,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
       if (!this.validateAddress(data.address)) {
         throw new RpcException({
-        message: `Invalid Stellar address: ${data.address}`,
-        code: 'INVALID_STELLAR_ADDRESS',
-        params: { address: data.address },
-      });
+          message: `Invalid Stellar address: ${data.address}`,
+          code: 'INVALID_STELLAR_ADDRESS',
+          params: { address: data.address },
+        });
       }
 
       const stellarSettings = await this.getFromSettings(
@@ -694,7 +696,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
 
     const amount = data.amount;
-    await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+
+    if (!data.skipOtpVerification) {
+      await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+    }
 
     const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
       address: string;
@@ -706,7 +711,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
         code: 'BENEFICIARY_SECRET_NOT_FOUND',
       });
 
-    if (data.mediaUrl) {
+    if (data.mediaUrl || data.skipOtpVerification) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
         where: {
           beneficiaryWalletAddress: keys.address,
@@ -717,16 +722,26 @@ export class StellarChainService implements IChainService, OnModuleInit {
         orderBy: { createdAt: 'desc' },
       });
 
-      this.logger.log(
-        `Updating mediaUrl for redeem record ${existingRedeem?.uuid} to ${data.mediaUrl}`
-      );
       if (existingRedeem) {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
+        const infoUpdate: Record<string, any> = { ...info };
+
+        if (data.mediaUrl) {
+          this.logger.log(
+            `Updating mediaUrl for redeem record ${existingRedeem.uuid} to ${data.mediaUrl}`
+          );
+          infoUpdate.mediaUrl = data.mediaUrl;
+          infoUpdate.fileName = data.fileName;
+        }
+
+        if (data.skipOtpVerification) {
+          infoUpdate.otpSkip = true;
+          infoUpdate.otpSkipReason = data.otpSkipReason;
+        }
+
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: {
-            info: { ...info, mediaUrl: data.mediaUrl, fileName: data.fileName },
-          },
+          data: { info: infoUpdate },
         });
       }
     }
@@ -958,16 +973,12 @@ export class StellarChainService implements IChainService, OnModuleInit {
     this.logger.log(
       `Queuing inkind redemption: vendor=${data.vendorAddress}, beneficiary=${data.beneficiaryAddress}, amount=${data.amount}`
     );
-    return this.stellarInkindQueue.add(
-      JOBS.STELLAR.REDEEM_INKIND,
-      data,
-      {
-        attempts: 3,
-        removeOnComplete: true,
-        removeOnFail: false,
-        backoff: { type: 'exponential', delay: 5000 },
-      }
-    );
+    return this.stellarInkindQueue.add(JOBS.STELLAR.REDEEM_INKIND, data, {
+      attempts: 3,
+      removeOnComplete: true,
+      removeOnFail: false,
+      backoff: { type: 'exponential', delay: 5000 },
+    });
   }
 
   /**
@@ -978,22 +989,27 @@ export class StellarChainService implements IChainService, OnModuleInit {
     data: RedeemInkindDto,
     isLastAttempt = true
   ): Promise<void> {
-    const { beneficiaryAddress, inkindId: inkinds, vendorAddress, amount } =
-      data;
+    const {
+      beneficiaryAddress,
+      inkindId: inkinds,
+      vendorAddress,
+      amount,
+    } = data;
 
     if (!amount || amount <= 0) {
-      throw new RpcException(
-        `Invalid inkind redemption amount: ${amount}`
-      );
+      throw new RpcException(`Invalid inkind redemption amount: ${amount}`);
     }
 
     try {
       const client = await this.getInkindClient();
       const settings = await this.getFromSettings('STELLAR_INKIND_SETTINGS');
-      const distributionSecret = (settings as { distribution_wallet_secret_key?: string })
-        ?.distribution_wallet_secret_key;
+      const distributionSecret = (
+        settings as { distribution_wallet_secret_key?: string }
+      )?.distribution_wallet_secret_key;
       if (!distributionSecret) {
-        throw new Error('STELLAR_INKIND_SETTINGS missing distribution_wallet_secret_key');
+        throw new Error(
+          'STELLAR_INKIND_SETTINGS missing distribution_wallet_secret_key'
+        );
       }
 
       const result = await client.sendPayment(
@@ -1030,9 +1046,13 @@ export class StellarChainService implements IChainService, OnModuleInit {
           `Inkind redemption attempt failed, will retry beneficiary=${beneficiaryAddress} vendor=${vendorAddress}: ${err.message}`
         );
       }
-      throw err instanceof RpcException ? err : new RpcException({message: `Error redeeming in-kind: ${err.message}`,
-        code: 'ERROR_REDEEMING_INKIND',
-        params: { message: err.message },});
+      throw err instanceof RpcException
+        ? err
+        : new RpcException({
+            message: `Error redeeming in-kind: ${err.message}`,
+            code: 'ERROR_REDEEMING_INKIND',
+            params: { message: err.message },
+          });
     }
   }
 
@@ -1175,12 +1195,23 @@ export class StellarChainService implements IChainService, OnModuleInit {
         message: 'OTP record not found',
         code: 'OTP_RECORD_NOT_FOUND',
       });
-    if (record.isVerified) throw new RpcException({ message: 'OTP already verified', code: 'OTP_ALREADY_VERIFIED' });
+    if (record.isVerified)
+      throw new RpcException({
+        message: 'OTP already verified',
+        code: 'OTP_ALREADY_VERIFIED',
+      });
     if (record.expiresAt < new Date())
-      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
+      throw new RpcException({
+        message: 'OTP has expired',
+        code: 'OTP_EXPIRED',
+      });
 
     const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
-    if (!isValid) throw new RpcException({ message: 'Invalid OTP or amount mismatch', code: 'INVALID_OTP_OR_AMOUNT_MISMATCH' });
+    if (!isValid)
+      throw new RpcException({
+        message: 'Invalid OTP or amount mismatch',
+        code: 'INVALID_OTP_OR_AMOUNT_MISMATCH',
+      });
 
     await this.prisma.otp.update({
       where: { phoneNumber },
