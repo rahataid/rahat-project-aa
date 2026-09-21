@@ -100,6 +100,7 @@ export const JOBS = {
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
       'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
     RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
+    GET_PAYOUT_MODE: 'aa.jobs.beneficiary.getPayoutMode',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
