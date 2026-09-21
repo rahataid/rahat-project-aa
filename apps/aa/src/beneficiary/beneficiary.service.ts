@@ -44,6 +44,7 @@ interface GroupBeneficiaryExcelRow {
   name: string;
   phone: string;
   gender: string;
+  government_id_number: string;
   address: string;
   otp: string;
 }
@@ -83,6 +84,7 @@ export class BeneficiaryService {
       include: {
         beneficiary: {
           select: {
+            uuid: true,
             walletAddress: true,
             phone: true,
             gender: true,
@@ -92,12 +94,12 @@ export class BeneficiaryService {
       },
     });
 
-    const walletAddresses = links
+    const wallets = links
       .map((l) => l.beneficiary?.walletAddress)
       .filter((address): address is string => !!address);
 
     const otps = await this.prisma.otp.findMany({
-      where: { walletAddress: { in: walletAddresses } },
+      where: { walletAddress: { in: wallets } },
       select: { walletAddress: true, otp: true },
     });
 
@@ -109,19 +111,29 @@ export class BeneficiaryService {
       if (!ben) return [];
 
       const extras = (ben.extras as Record<string, unknown>) ?? {};
+
+      const syncedLocation =
+        typeof extras.location === 'string' ? extras.location.trim() : '';
       return [
         {
-          name: String(extras.name ?? ''),
+          name: String(
+            extras.name ||
+              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
+              ''
+          ),
           phone: ben.phone ?? '',
           gender: ben.gender ?? 'UNKNOWN',
-          address: [
-            extras.district,
-            extras.municipality,
-            extras.ward ? `Ward ${extras.ward}` : null,
-            extras.tole_name,
-          ]
-            .filter(Boolean)
-            .join(', '),
+          government_id_number: String(extras.govtIDNumber ?? ''),
+          address:
+            syncedLocation ||
+            [
+              extras.district,
+              extras.municipality,
+              extras.ward ? `Ward ${extras.ward}` : null,
+              extras.tole_name,
+            ]
+              .filter(Boolean)
+              .join(', '),
           otp: otpMap[ben.walletAddress ?? ''] ?? '',
         },
       ];
