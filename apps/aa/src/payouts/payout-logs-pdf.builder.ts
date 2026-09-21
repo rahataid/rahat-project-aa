@@ -168,10 +168,14 @@ function buildRowCells(row: DownloadPayoutLogsPdfType, index: number): CellLine[
   const nonEmpty = (lines: CellLine[]) => lines.filter((l) => l.text && l.text !== '-');
   const orDash = (lines: CellLine[]) => (lines.length > 0 ? lines : [{ text: '-' }]);
 
-  const location = nonEmpty([
-    ...(row.district ? [{ text: row.district }] : []),
-    ...(row.tole ? [{ text: row.tole, sub: true }] : []),
-  ]);
+  // Location (Address): core top-level location first, extras
+  // district/tole as fallback.
+  const location = row.coreLocation
+    ? [{ text: row.coreLocation }]
+    : nonEmpty([
+        ...(row.district ? [{ text: row.district }] : []),
+        ...(row.tole ? [{ text: row.tole, sub: true }] : []),
+      ]);
   const municipalityText =
     row.municipality && row.ward
       ? `${row.municipality} - ${row.ward}`

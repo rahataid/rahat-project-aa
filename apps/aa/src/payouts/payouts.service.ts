@@ -2473,9 +2473,47 @@ export class PayoutsService {
         });
       }
 
+      // Same core fallback as the PDF rows: names from PII, location and
+      // profile fields from core extras / top-level core location when the
+      // AA extras keys are absent. Never fails the export.
+      const coreByWallet = await this.getCoreBeneficiaryByWallets([
+        ...new Set(
+          redeemLogs.map((r) => r.beneficiaryWalletAddress).filter(Boolean)
+        ),
+      ]);
+
       const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
+        const core = coreByWallet.get(redeemLog.beneficiaryWalletAddress);
+        const coreExtras = parseJsonField((core as any)?.coreExtras);
+
+        // Single beneficiary name: merged AA first+last, then PII full
+        // name, then AA extras name fallback.
+        const extrasFullName =
+          `${extras?.firstName || ''} ${extras?.lastName || ''}`.trim();
+        const extrasName =
+          typeof extras?.name === 'string' ? extras.name.trim() : '';
+        const piiName =
+          typeof core?.name === 'string' ? core.name.trim() : '';
+        const beneficiaryName =
+          extrasFullName || piiName || extrasName || '';
+
+        const municipality =
+          extras?.municipality || coreExtras?.municipality || '';
+        const district = extras?.district || coreExtras?.district || '';
+        const ward = extras?.ward || coreExtras?.ward || '';
+        const tole =
+          extras?.tole_name ||
+          extras?.tole ||
+          coreExtras?.tole_name ||
+          coreExtras?.tole ||
+          '';
+        const locationValue = district || core?.coreLocation || '';
+        const governmentIdType =
+          extras?.governmentIdType || coreExtras?.governmentIdType || '';
+        const governmentIdNumber =
+          extras?.govtIDNumber || coreExtras?.govtIDNumber || '';
 
         const transaction = info?.cipsResponseData?.transaction;
         const offrampRequest = info?.cipsResponseData?.offrampRequest;
@@ -2510,8 +2548,7 @@ export class PayoutsService {
 
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
-          'Beneficiary First Name': extras?.firstName || '',
-          'Beneficiary Last Name': extras?.lastName || '',
+          'Beneficiary Name': beneficiaryName,
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
@@ -2521,28 +2558,28 @@ export class PayoutsService {
           'Actual Budget': actualBudget,
           'Amount Disbursed': amountDisbursed,
 
-          ...(extras?.municipality && {
-            Municipality: extras.municipality,
+          ...(municipality && {
+            Municipality: municipality,
           }),
 
-          ...(extras?.district && {
-            Location: extras.district,
+          ...(locationValue && {
+            Location: locationValue,
           }),
 
-          ...(extras?.ward && {
-            Ward: extras.ward,
+          ...(ward && {
+            Ward: ward,
           }),
 
-          ...(extras?.tole_name && {
-            Tole: extras.tole_name,
+          ...(tole && {
+            Tole: tole,
           }),
 
-          ...(extras?.governmentIdType && {
-            'Government ID Type': extras.governmentIdType,
+          ...(governmentIdType && {
+            'Government ID Type': governmentIdType,
           }),
 
-          ...(extras?.govtIDNumber && {
-            'Government ID Number': extras.govtIDNumber,
+          ...(governmentIdNumber && {
+            'Government ID Number': governmentIdNumber,
           }),
         };
 
@@ -2612,16 +2649,21 @@ export class PayoutsService {
   }
 
   /**
-   * Batch-fetch core beneficiary data (PII name/phone plus core extras)
-   * keyed by wallet address. Never throws — returns an empty map when
-   * unreachable so callers degrade to AA-only data.
+   * Batch-fetch core beneficiary data (PII name/phone, core extras and the
+   * top-level core location) keyed by wallet address. Never throws —
+   * returns an empty map when unreachable so callers degrade to AA-only data.
    */
   private async getCoreBeneficiaryByWallets(
     wallets: string[]
-  ): Promise<Map<string, { name?: string; phone?: string; coreExtras?: any }>> {
+  ): Promise<
+    Map<
+      string,
+      { name?: string; phone?: string; coreExtras?: any; coreLocation?: string }
+    >
+  > {
     const map = new Map<
       string,
-      { name?: string; phone?: string; coreExtras?: any }
+      { name?: string; phone?: string; coreExtras?: any; coreLocation?: string }
     >();
     if (wallets.length === 0) return map;
     try {
@@ -2635,6 +2677,10 @@ export class PayoutsService {
           map.set(ben.walletAddress, {
             ...(ben.piiData || {}),
             coreExtras: ben?.extras,
+            coreLocation:
+              typeof ben?.location === 'string' && ben.location.trim()
+                ? ben.location.trim()
+                : undefined,
           });
         }
       }
@@ -2842,6 +2888,7 @@ export class PayoutsService {
           tole: extras?.tole || coreExtras?.tole,
 
           governmentIdNumber: extras?.govtIDNumber || coreExtras?.govtIDNumber,
+          coreLocation: pii?.coreLocation,
           infoNote,
         };
       });

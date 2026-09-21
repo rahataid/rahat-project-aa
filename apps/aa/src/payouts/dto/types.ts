@@ -110,6 +110,7 @@ export type PayoutStats = {
 
 export type DownloadPayoutLogsType = {
   'Beneficiary Wallet Address': string;
+  'Beneficiary Name': string;
   'Phone number': string;
   'Transaction Wallet ID': string;
   'Transaction Hash': string;
@@ -139,6 +140,10 @@ export type DownloadPayoutLogsPdfType = {
   tole?: string;
   governmentIdType?: string;
   governmentIdNumber?: string;
+  // Top-level core Beneficiary.location (free-text address shown in the UI).
+  // Last-resort fallback for the Location column when no district/tole
+  // exists in either extras.
+  coreLocation?: string;
   // Human-readable note from BeneficiaryRedeem.info when there is no photo
   // (e.g. OTP skip reason). Shown in the photo cell instead of blank.
   infoNote?: string;
