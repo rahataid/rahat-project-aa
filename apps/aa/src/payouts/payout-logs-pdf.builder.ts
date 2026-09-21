@@ -5,9 +5,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DownloadPayoutLogsPdfType } from './dto/types';
 
-// Report typeface. Mukta covers Latin + Devanagari; pdfkit's built-in
-// Helvetica only covers Latin, which renders Nepali names as mojibake.
-// Falls back to Helvetica when the font files are unavailable.
+type PdfDoc = typeof PDFDocument;
+
+export interface PayoutLogsPdfFile {
+  filename: string;
+  mimeType: string;
+  base64: string;
+}
+
+// --- Report fonts (Mukta for Latin + Devanagari, Helvetica fallback) ---
 let REPORT_FONT = 'Helvetica';
 let REPORT_FONT_BOLD = 'Helvetica-Bold';
 
@@ -17,38 +23,18 @@ function resolveFontPaths(): { regular: string; bold: string } | null {
   const candidates = (file: string) => [
     path.join(__dirname, 'assets', 'fonts', file),
     path.join(__dirname, '..', 'assets', 'fonts', file),
-    path.join(
-      process.cwd(),
-      'dist',
-      'apps',
-      'aa',
-      'assets',
-      'fonts',
-      file
-    ),
-    path.join(
-      process.cwd(),
-      'apps',
-      'aa',
-      'src',
-      'assets',
-      'fonts',
-      file
-    ),
+    path.join(process.cwd(), 'dist', 'apps', 'aa', 'assets', 'fonts', file),
+    path.join(process.cwd(), 'apps', 'aa', 'src', 'assets', 'fonts', file),
   ];
-  const pick = (file: string): string | null => {
-    for (const p of candidates(file)) {
-      if (fs.existsSync(p)) return p;
-    }
-    return null;
-  };
+  const pick = (file: string): string | null =>
+    candidates(file).find((p) => fs.existsSync(p)) ?? null;
   const regular = pick('Mukta-Regular.ttf');
   const bold = pick('Mukta-Bold.ttf');
   resolvedFontPaths = regular && bold ? { regular, bold } : null;
   return resolvedFontPaths;
 }
 
-function registerReportFonts(doc: typeof PDFDocument) {
+function registerReportFonts(doc: PdfDoc) {
   const paths = resolveFontPaths();
   if (!paths) return;
   try {
@@ -62,14 +48,7 @@ function registerReportFonts(doc: typeof PDFDocument) {
   }
 }
 
-export interface PayoutLogsPdfFile {
-  filename: string;
-  mimeType: string;
-  base64: string;
-}
-
-// Landscape A4 in points (NOTE: pass size:'A4' + layout to pdfkit;
-// a numeric [w,h] array does not reliably honor layout).
+// --- Layout constants (landscape A4, points) ---
 const MARGIN = 32;
 const HEADER_BG: [number, number, number] = [47, 127, 193];
 const GRID_COLOR = '#B9C6D2';
@@ -92,7 +71,6 @@ interface PdfColumn {
   width: number;
 }
 
-// Slim report table: only the requested fields plus photo evidence.
 const COLUMNS: PdfColumn[] = [
   { key: 'sn', label: 'S.N.', width: 28 },
   { key: 'name', label: 'Beneficiary Name', width: 120 },
@@ -104,22 +82,45 @@ const COLUMNS: PdfColumn[] = [
   { key: 'photo', label: 'Photo Evidence', width: 140 },
 ];
 
+const PHOTO_COL = COLUMNS.length - 1;
+const TABLE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
+// Precomputed left edge of each column.
+const COLUMN_X: number[] = COLUMNS.reduce<number[]>(
+  (xs, c) => [...xs, (xs.at(-1) ?? MARGIN) + (xs.length ? COLUMNS[xs.length - 1].width : 0)],
+  []
+);
+
 type CellLine = { text: string; sub?: boolean };
 
-function beneficiaryName(row: DownloadPayoutLogsPdfType): string {
-  const name =
-    row.beneficiaryName ||
-    [row['Beneficiary First Name'], row['Beneficiary Last Name']]
-      .filter(Boolean)
-      .join(' ');
-  return name || '-';
+// --- Small pdfkit helpers ---
+function setStyle(doc: PdfDoc, font: string, size: number, color: string) {
+  doc.font(font).fontSize(size).fillColor(color);
 }
 
-/**
- * Fetch photo evidence server-side. Any failure (network, timeout,
- * non-image content, oversized file) resolves to null so PDF generation
- * never fails when photo evidence is missing.
- */
+function blockHeight(doc: PdfDoc, lines: CellLine[], width: number): number {
+  let h = 0;
+  for (const line of lines) h += doc.heightOfString(line.text || ' ', { width });
+  return h;
+}
+
+/** Draw stacked lines top-down, return the y below the last line. */
+function drawLines(
+  doc: PdfDoc,
+  lines: CellLine[],
+  x: number,
+  y: number,
+  width: number,
+  align: 'left' | 'center' = 'left'
+): number {
+  let ly = y;
+  for (const line of lines) {
+    doc.text(line.text, x, ly, { width, align });
+    ly += doc.heightOfString(line.text || ' ', { width });
+  }
+  return ly;
+}
+
+// --- Photo fetching (never fails the PDF) ---
 async function fetchPhoto(url: string): Promise<Buffer | null> {
   try {
     const res = await axios.get(url, {
@@ -128,11 +129,10 @@ async function fetchPhoto(url: string): Promise<Buffer | null> {
       maxContentLength: PHOTO_MAX_BYTES,
       validateStatus: (status) => status >= 200 && status < 300,
     });
-    const contentType = String(res.headers?.['content-type'] || '');
-    if (!contentType.startsWith('image/')) return null;
+    if (!String(res.headers?.['content-type'] || '').startsWith('image/'))
+      return null;
     const buf = Buffer.from(res.data);
-    if (buf.length === 0 || buf.length > PHOTO_MAX_BYTES) return null;
-    return buf;
+    return buf.length > 0 && buf.length <= PHOTO_MAX_BYTES ? buf : null;
   } catch {
     return null;
   }
@@ -143,70 +143,39 @@ async function fetchAllPhotos(
 ): Promise<Map<string, Buffer>> {
   const urls = [...new Set(rows.map((r) => r.photoUrl).filter(Boolean))];
   const cache = new Map<string, Buffer>();
-
   for (let i = 0; i < urls.length; i += PHOTO_FETCH_CONCURRENCY) {
     const batch = urls.slice(i, i + PHOTO_FETCH_CONCURRENCY);
     const results = await Promise.all(
-      batch.map(async (url) => ({
-        url: url as string,
-        buf: await fetchPhoto(url as string),
-      }))
+      batch.map(async (url) => ({ url: url as string, buf: await fetchPhoto(url as string) }))
     );
-    for (const { url, buf } of results) {
-      if (buf) cache.set(url, buf);
-    }
+    for (const { url, buf } of results) if (buf) cache.set(url, buf);
   }
-
   return cache;
 }
 
-function columnX(index: number): number {
-  let x = MARGIN;
-  for (let i = 0; i < index; i++) x += COLUMNS[i].width;
-  return x;
+// --- Table content ---
+function beneficiaryName(row: DownloadPayoutLogsPdfType): string {
+  const name =
+    row.beneficiaryName ||
+    [row['Beneficiary First Name'], row['Beneficiary Last Name']]
+      .filter(Boolean)
+      .join(' ');
+  return name || '-';
 }
 
-function tableWidth(): number {
-  return COLUMNS.reduce((sum, c) => sum + c.width, 0);
-}
+/** Printable lines per column. Photo cell holds the info note (OTP skip reason). */
+function buildRowCells(row: DownloadPayoutLogsPdfType, index: number): CellLine[][] {
+  const nonEmpty = (lines: CellLine[]) => lines.filter((l) => l.text && l.text !== '-');
+  const orDash = (lines: CellLine[]) => (lines.length > 0 ? lines : [{ text: '-' }]);
 
-function drawTableHead(doc: typeof PDFDocument, y: number) {
-  doc.save();
-  doc.rect(MARGIN, y, tableWidth(), TABLE_HEAD_HEIGHT).fill(HEADER_BG);
-  doc.restore();
-  doc.font(REPORT_FONT_BOLD).fontSize(7.5).fillColor('#FFFFFF');
-  COLUMNS.forEach((col, i) => {
-    doc.text(col.label, columnX(i) + 3, y + 7, {
-      width: col.width - 6,
-      align: i === 0 ? 'center' : 'left',
-    });
-  });
-}
-
-/** Build the printable lines for every column of one row. */
-function buildRowCells(
-  row: DownloadPayoutLogsPdfType,
-  index: number
-): CellLine[][] {
-  const nonEmpty = (lines: CellLine[]): CellLine[] =>
-    lines.filter((l) => l.text && l.text !== '-');
-  const orDash = (lines: CellLine[]): CellLine[] =>
-    lines.length > 0 ? lines : [{ text: '-' }];
-
-  // Location (address): district + tole combined.
   const location = nonEmpty([
     ...(row.district ? [{ text: row.district }] : []),
     ...(row.tole ? [{ text: row.tole, sub: true }] : []),
   ]);
-
-  // Municipality with ward joined on one line (e.g. "Tarakeshor-6").
-  // Falls back gracefully when either part is missing.
   const municipalityText =
     row.municipality && row.ward
       ? `${row.municipality} - ${row.ward}`
       : row.municipality || (row.ward ? `Ward ${row.ward}` : '');
-  const municipality = municipalityText ? [{ text: municipalityText }] : [];
-
   const governmentId = nonEmpty([
     ...(row.governmentIdType ? [{ text: row.governmentIdType }] : []),
     ...(row.governmentIdNumber ? [{ text: row.governmentIdNumber }] : []),
@@ -217,118 +186,89 @@ function buildRowCells(
     [{ text: beneficiaryName(row) }],
     [{ text: row['Phone number'] || row.beneficiaryPhone || '-' }],
     [{ text: String(row['Amount Disbursed'] ?? '-') }],
-    orDash(municipality),
+    orDash(municipalityText ? [{ text: municipalityText }] : []),
     orDash(governmentId),
     orDash(location),
-    // Photo-column note (e.g. OTP skip reason). Shown with or without a
-    // photo: photo-only, note-only, or stacked (thumbnail on top, note
-    // below). Measured like any other cell (see measureRowHeight).
+    // Note-only, photo-only, or stacked (thumbnail on top, note below).
     row.infoNote ? [{ text: row.infoNote, sub: true }] : [],
   ];
 }
 
-function measureRowHeight(
-  doc: typeof PDFDocument,
-  cells: CellLine[][],
-  hasPhoto: boolean
-): number {
-  const photoColIndex = COLUMNS.length - 1;
-  if (hasPhoto) {
-    // Text columns (excluding the photo cell) — measured like drawRow.
-    doc.font(REPORT_FONT).fontSize(7);
-    let maxOther = 0;
-    cells.forEach((lines, i) => {
-      if (i === photoColIndex) return;
-      const w = COLUMNS[i].width - 6;
-      let h = 0;
-      for (const line of lines) {
-        h += doc.heightOfString(line.text || ' ', { width: w });
-      }
-      if (h > maxOther) maxOther = h;
-    });
-    // Photo cell stacks thumbnail + note (drawRow: imgY = y + 3, note at
-    // imgY + PHOTO_SIZE + 2, same 6.5pt font/width as drawn). The row must
-    // fit both, otherwise the note is cropped at the row border.
-    doc.font(REPORT_FONT).fontSize(6.5);
-    const photoW = COLUMNS[photoColIndex].width - 6;
-    let noteH = 0;
-    for (const line of cells[photoColIndex]) {
-      noteH += doc.heightOfString(line.text || ' ', { width: photoW });
-    }
-    const photoNeeded =
-      3 + PHOTO_SIZE + 4 + (noteH > 0 ? 2 + noteH : 0);
-    return Math.max(
-      PHOTO_MIN_ROW_HEIGHT,
-      maxOther + ROW_PADDING,
-      photoNeeded
-    );
-  }
-  doc.font(REPORT_FONT).fontSize(7);
-  let max = 0;
-  cells.forEach((lines, i) => {
-    const w = COLUMNS[i].width - 6;
-    let h = 0;
-    for (const line of lines) {
-      h += doc.heightOfString(line.text || ' ', { width: w });
-    }
-    if (h > max) max = h;
-  });
-  const floor = TEXT_MIN_ROW_HEIGHT;
-  return Math.max(floor, max + ROW_PADDING);
+function noteHeight(doc: PdfDoc, note: CellLine[]): number {
+  doc.font(REPORT_FONT).fontSize(6.5);
+  return blockHeight(doc, note, COLUMNS[PHOTO_COL].width - 6);
 }
 
-function drawRow(
-  doc: typeof PDFDocument,
+function measureRowHeight(doc: PdfDoc, cells: CellLine[][], hasPhoto: boolean): number {
+  doc.font(REPORT_FONT).fontSize(7);
+  if (hasPhoto) {
+    let maxOther = 0;
+    cells.forEach((lines, i) => {
+      if (i === PHOTO_COL) return;
+      const h = blockHeight(doc, lines, COLUMNS[i].width - 6);
+      if (h > maxOther) maxOther = h;
+    });
+    // Photo cell stacks thumbnail + note (imgY = y + 3, note at imgY + size + 2).
+    const h = noteHeight(doc, cells[PHOTO_COL]);
+    const photoNeeded = 3 + PHOTO_SIZE + 4 + (h > 0 ? 2 + h : 0);
+    return Math.max(PHOTO_MIN_ROW_HEIGHT, maxOther + ROW_PADDING, photoNeeded);
+  }
+  let max = 0;
+  cells.forEach((lines, i) => {
+    const h = blockHeight(doc, lines, COLUMNS[i].width - 6);
+    if (h > max) max = h;
+  });
+  return Math.max(TEXT_MIN_ROW_HEIGHT, max + ROW_PADDING);
+}
+
+// --- Table drawing ---
+function drawTableHead(doc: PdfDoc, y: number) {
+  doc.save();
+  doc.rect(MARGIN, y, TABLE_WIDTH, TABLE_HEAD_HEIGHT).fill(HEADER_BG);
+  doc.restore();
+  setStyle(doc, REPORT_FONT_BOLD, 7.5, '#FFFFFF');
+  COLUMNS.forEach((col, i) => {
+    doc.text(col.label, COLUMN_X[i] + 3, y + 7, {
+      width: col.width - 6,
+      align: i === 0 ? 'center' : 'left',
+    });
+  });
+}
+
+function drawTextCells(doc: PdfDoc, cells: CellLine[][], y: number) {
+  cells.forEach((lines, i) => {
+    if (i === PHOTO_COL) return;
+    const w = COLUMNS[i].width - 6;
+    const x = COLUMN_X[i] + 3;
+    let ly = y + 4;
+    for (const line of lines) {
+      if (line.sub) setStyle(doc, REPORT_FONT, 6.5, '#555555');
+      else setStyle(doc, REPORT_FONT, 7, '#111111');
+      drawLines(doc, [line], x, ly, w, i === 0 ? 'center' : 'left');
+      ly += doc.heightOfString(line.text || ' ', { width: w });
+    }
+  });
+}
+
+function drawPhotoCell(
+  doc: PdfDoc,
   row: DownloadPayoutLogsPdfType,
-  cells: CellLine[][],
+  note: CellLine[],
   photo: Buffer | undefined,
   y: number,
   rowHeight: number
 ) {
-  const photoColIndex = COLUMNS.length - 1;
-
-  doc.font(REPORT_FONT).fontSize(7).fillColor('#111111');
-  cells.forEach((lines, i) => {
-    if (i === photoColIndex) return;
-    let ly = y + 4;
-    const w = COLUMNS[i].width - 6;
-    const x = columnX(i) + 3;
-    for (const line of lines) {
-      if (line.sub) {
-        doc.font(REPORT_FONT).fontSize(6.5).fillColor('#555555');
-      } else {
-        doc.font(REPORT_FONT).fontSize(7).fillColor('#111111');
-      }
-      if (i === 0) {
-        doc.text(line.text, x, ly, { width: w, align: 'center' });
-      } else {
-        doc.text(line.text, x, ly, { width: w });
-      }
-      ly += doc.heightOfString(line.text || ' ', { width: w });
-    }
-  });
-
-  // Photo evidence cell. Photo and info note are independent and can
-  // coexist: thumbnail on top (clickable link to the full-size photo),
-  // note text below it (e.g. OTP skip reason). Neither, either, or both —
-  // the cell never fails generation.
-  const photoX = columnX(photoColIndex);
-  const photoW = COLUMNS[photoColIndex].width;
+  const photoX = COLUMN_X[PHOTO_COL];
+  const photoW = COLUMNS[PHOTO_COL].width;
   const imgX = photoX + (photoW - PHOTO_SIZE) / 2;
   const imgY = y + 3;
-  const drawNoteLines = (startY: number) => {
-    const noteLines = cells[photoColIndex];
-    if (noteLines.length === 0) return;
-    doc.font(REPORT_FONT).fontSize(6.5).fillColor('#555555');
-    let ly = startY;
-    for (const line of noteLines) {
-      doc.text(line.text, photoX + 3, ly, {
-        width: photoW - 6,
-        align: 'center',
-      });
-      ly += doc.heightOfString(line.text || ' ', { width: photoW - 6 });
-    }
+
+  const drawNote = (startY: number) => {
+    if (note.length === 0) return;
+    setStyle(doc, REPORT_FONT, 6.5, '#555555');
+    drawLines(doc, note, photoX + 3, startY, photoW - 6, 'center');
   };
+
   if (photo) {
     try {
       doc.image(photo, imgX, imgY, {
@@ -336,58 +276,57 @@ function drawRow(
         align: 'center',
         valign: 'center',
       });
-      drawNoteLines(imgY + PHOTO_SIZE + 2);
+      drawNote(imgY + PHOTO_SIZE + 2);
     } catch {
-      // Corrupt image data: fall back to the note, never fail.
-      drawNoteLines(imgY);
+      drawNote(imgY); // corrupt image: note only, never fail
     }
   } else {
-    drawNoteLines(y + 4);
+    drawNote(y + 4);
   }
-  if (row.photoUrl) {
-    doc.link(photoX, y, photoW, rowHeight, row.photoUrl);
-  }
+  if (row.photoUrl) doc.link(photoX, y, photoW, rowHeight, row.photoUrl);
+}
 
-  // Row separator
+function drawRow(
+  doc: PdfDoc,
+  row: DownloadPayoutLogsPdfType,
+  cells: CellLine[][],
+  photo: Buffer | undefined,
+  y: number,
+  rowHeight: number
+) {
+  setStyle(doc, REPORT_FONT, 7, '#111111');
+  drawTextCells(doc, cells, y);
+  drawPhotoCell(doc, row, cells[PHOTO_COL], photo, y, rowHeight);
   doc
     .moveTo(MARGIN, y + rowHeight)
-    .lineTo(MARGIN + tableWidth(), y + rowHeight)
+    .lineTo(MARGIN + TABLE_WIDTH, y + rowHeight)
     .strokeColor(GRID_COLOR)
     .lineWidth(0.5)
     .stroke();
 }
 
-function drawTableFrame(doc: typeof PDFDocument, top: number, bottom: number) {
+function drawTableFrame(doc: PdfDoc, top: number, bottom: number) {
   doc.save();
-  doc
-    .rect(MARGIN, top, tableWidth(), bottom - top)
-    .strokeColor(GRID_COLOR)
-    .lineWidth(0.75)
-    .stroke();
+  doc.rect(MARGIN, top, TABLE_WIDTH, bottom - top).strokeColor(GRID_COLOR).lineWidth(0.75).stroke();
   for (let i = 1; i < COLUMNS.length; i++) {
-    const x = columnX(i);
-    doc
-      .moveTo(x, top)
-      .lineTo(x, bottom)
-      .strokeColor(GRID_COLOR)
-      .lineWidth(0.5)
-      .stroke();
+    doc.moveTo(COLUMN_X[i], top).lineTo(COLUMN_X[i], bottom).strokeColor(GRID_COLOR).lineWidth(0.5).stroke();
   }
   doc.restore();
 }
 
+function drawZebra(doc: PdfDoc, y: number, rowHeight: number) {
+  doc.save();
+  doc.rect(MARGIN, y, TABLE_WIDTH, rowHeight).fill(ZEBRA_COLOR);
+  doc.restore();
+}
+
 /**
- * Build the CVA payout logs PDF server-side: table only, no header —
- * S.N., Name, Phone, Amount Disbursed, Municipality, Gov ID, Location,
- * Photo Evidence, one row per payout log. Rows with photos keep a tall row
- * for the thumbnail; text-only rows shrink to their content. The photo cell
- * shows the thumbnail (clickable link to the full-size photo) with the info
- * note (e.g. OTP skip reason) below it when present — photo and note are
- * independent, so neither, either, or both render — never failing.
+ * CVA payout logs PDF: S.N., Name, Phone, Amount, Municipality, Gov ID,
+ * Location, Photo Evidence — one row per payout log. Photo and info note
+ * (e.g. OTP skip reason) stack in the last cell; neither, either, or both
+ * render without failing.
  */
-export async function buildPayoutLogsPdf(
-  rows: DownloadPayoutLogsPdfType[]
-): Promise<Buffer> {
+export async function buildPayoutLogsPdf(rows: DownloadPayoutLogsPdfType[]): Promise<Buffer> {
   const photos = await fetchAllPhotos(rows);
 
   return new Promise((resolve, reject) => {
@@ -411,7 +350,7 @@ export async function buildPayoutLogsPdf(
       let y = MARGIN;
 
       if (rows.length === 0) {
-        doc.font(REPORT_FONT).fontSize(10).fillColor('#555555');
+        setStyle(doc, REPORT_FONT, 10, '#555555');
         doc.text('No payout logs found for the applied filters.', MARGIN, y);
       }
 
@@ -426,10 +365,7 @@ export async function buildPayoutLogsPdf(
         const cells = buildRowCells(row, idx);
         const photo = row.photoUrl ? photos.get(row.photoUrl) : undefined;
         const rowHeight = measureRowHeight(doc, cells, !!photo);
-        if (
-          tableTop === 0 ||
-          y + rowHeight > pageHeight - MARGIN - FOOTER_RESERVE
-        ) {
+        if (tableTop === 0 || y + rowHeight > pageHeight - MARGIN - FOOTER_RESERVE) {
           if (tableTop !== 0) {
             drawTableFrame(doc, tableTop - TABLE_HEAD_HEIGHT, y);
             doc.addPage();
@@ -437,26 +373,19 @@ export async function buildPayoutLogsPdf(
           }
           openTable();
         }
-        if (idx % 2 === 1) {
-          doc.save();
-          doc.rect(MARGIN, y, tableWidth(), rowHeight).fill(ZEBRA_COLOR);
-          doc.restore();
-        }
+        if (idx % 2 === 1) drawZebra(doc, y, rowHeight);
         drawRow(doc, row, cells, photo, y, rowHeight);
         y += rowHeight;
       });
 
-      if (tableTop !== 0) {
-        drawTableFrame(doc, tableTop - TABLE_HEAD_HEIGHT, y);
-      }
+      if (tableTop !== 0) drawTableFrame(doc, tableTop - TABLE_HEAD_HEIGHT, y);
 
-      // Footer page numbers
       const range = doc.bufferedPageRange();
       for (let i = 0; i < range.count; i++) {
         doc.switchToPage(i);
-        doc.font(REPORT_FONT).fontSize(7).fillColor('#888888');
+        setStyle(doc, REPORT_FONT, 7, '#888888');
         doc.text(`Page ${i + 1} of ${range.count}`, MARGIN, pageHeight - 18, {
-          width: tableWidth(),
+          width: TABLE_WIDTH,
           align: 'right',
         });
       }
@@ -468,10 +397,7 @@ export async function buildPayoutLogsPdf(
   });
 }
 
-export function toPayoutLogsPdfFile(
-  buffer: Buffer,
-  payoutUUID: string
-): PayoutLogsPdfFile {
+export function toPayoutLogsPdfFile(buffer: Buffer, payoutUUID: string): PayoutLogsPdfFile {
   return {
     filename: `payout-logs-${payoutUUID}.pdf`,
     mimeType: 'application/pdf',
