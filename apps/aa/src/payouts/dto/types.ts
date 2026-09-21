@@ -124,6 +124,26 @@ export type DownloadPayoutLogsType = {
   'Bank Name'?: string;
 };
 
+export type DownloadPayoutLogsPdfType = {
+  uuid: string;
+  'Beneficiary First Name': string;
+  'Beneficiary Last Name': string;
+  'Phone number': string;
+  'Amount Disbursed': number;
+  photoUrl: string | null;
+  beneficiaryName: string;
+  beneficiaryPhone: string;
+  municipality?: string;
+  district?: string;
+  ward?: string;
+  tole?: string;
+  governmentIdType?: string;
+  governmentIdNumber?: string;
+  // Human-readable note from BeneficiaryRedeem.info when there is no photo
+  // (e.g. OTP skip reason). Shown in the photo cell instead of blank.
+  infoNote?: string;
+};
+
 // Manual Payout Verification Types
 export type ManualPayoutMatchBy = 'bankAccount' | 'phoneNumber';
 

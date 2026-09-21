@@ -6,6 +6,7 @@ import { OfframpService } from './offramp.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
+import { ExportPayoutLogsPdfFileDto } from './dto/export-payout-logs-pdf-file.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
 import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
 import { ACTIONS, SUBJECTS } from '../common/ability.constants';
@@ -116,6 +117,14 @@ export class PayoutsController {
   })
   downloadPayoutLogs(@Payload() payload: { payoutUUID: string }) {
     return this.payoutsService.downloadPayoutLogs(payload.payoutUUID);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.EXPORT_PAYOUT_LOGS_PDF_FILE,
+    uuid: process.env.PROJECT_ID,
+  })
+  exportPayoutLogsPdfFile(@Payload() payload: ExportPayoutLogsPdfFileDto) {
+    return this.payoutsService.exportPayoutLogsPdfFile(payload);
   }
 
   @MessagePattern({
