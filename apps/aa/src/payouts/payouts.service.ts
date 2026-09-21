@@ -58,7 +58,7 @@ import {
 import { parseJsonField } from '../utils/parseJsonFields';
 import { format } from 'date-fns';
 import { AppService } from '../app/app.service';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, timeout } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
@@ -2612,6 +2612,43 @@ export class PayoutsService {
   }
 
   /**
+   * Batch-fetch core beneficiary data (PII name/phone plus core extras)
+   * keyed by wallet address. Never throws — returns an empty map when
+   * unreachable so callers degrade to AA-only data.
+   */
+  private async getCoreBeneficiaryByWallets(
+    wallets: string[]
+  ): Promise<Map<string, { name?: string; phone?: string; coreExtras?: any }>> {
+    const map = new Map<
+      string,
+      { name?: string; phone?: string; coreExtras?: any }
+    >();
+    if (wallets.length === 0) return map;
+    try {
+      const response = await lastValueFrom(
+        this.client
+          .send({ cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' }, wallets)
+          .pipe(timeout(30000))
+      );
+      for (const ben of response || []) {
+        if (ben?.walletAddress) {
+          map.set(ben.walletAddress, {
+            ...(ben.piiData || {}),
+            coreExtras: ben?.extras,
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Core beneficiary lookup failed, continuing with AA data only: ${
+          error?.message || error
+        }`
+      );
+    }
+    return map;
+  }
+
+  /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
    * note. Returns undefined when there is nothing meaningful to show.
    * Never throws.
@@ -2743,6 +2780,15 @@ export class PayoutsService {
         });
       }
 
+      // PII fallback: names/phones missing from extras are resolved from the
+      // core beneficiary PII (linked by wallet address) in a single batched
+      // call. A PII outage degrades to extras-only, never fails the export.
+      const wallets = [
+        ...new Set(
+          redeemLogs.map((r) => r.beneficiaryWalletAddress).filter(Boolean)
+        ),
+      ];
+      const piiByWallet = await this.getCoreBeneficiaryByWallets(wallets);
       return redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
@@ -2759,10 +2805,15 @@ export class PayoutsService {
         const lastName = extras?.lastName || '';
         const fallbackName =
           typeof extras?.name === 'string' ? extras.name : '';
+        const pii = piiByWallet.get(redeemLog.beneficiaryWalletAddress);
         const beneficiaryName =
-          `${firstName} ${lastName}`.trim() || fallbackName || '';
+          `${firstName} ${lastName}`.trim() || fallbackName || pii?.name || '';
         const beneficiaryPhone =
-          extras?.phone || redeemLog.Beneficiary?.phone || '';
+          extras?.phone || redeemLog.Beneficiary?.phone || pii?.phone || '';
+
+        // Location/profile fields: AA extras first, core extras as fallback.
+        // Ward key varies by import source (ward / ward_no / wardNo).
+        const coreExtras = parseJsonField((pii as any)?.coreExtras);
 
         // Photo evidence lives in BeneficiaryRedeem.info.mediaUrl (see vendor CVA flow).
         // Missing photo must not fail generation.
@@ -2785,12 +2836,12 @@ export class PayoutsService {
           photoUrl,
           beneficiaryName,
           beneficiaryPhone,
-          municipality: extras?.municipality,
-          district: extras?.district,
-          ward: extras?.ward,
-          tole: extras?.tole_name,
-          governmentIdType: extras?.governmentIdType,
-          governmentIdNumber: extras?.govtIDNumber,
+          municipality: extras?.municipality || coreExtras?.municipality,
+          district: extras?.district || coreExtras?.district,
+          ward: extras?.ward || coreExtras?.ward,
+          tole: extras?.tole || coreExtras?.tole,
+
+          governmentIdNumber: extras?.govtIDNumber || coreExtras?.govtIDNumber,
           infoNote,
         };
       });
