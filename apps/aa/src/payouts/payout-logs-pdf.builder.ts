@@ -75,8 +75,8 @@ const HEADER_BG: [number, number, number] = [47, 127, 193];
 const GRID_COLOR = '#B9C6D2';
 const ZEBRA_COLOR = '#F2F7FC';
 
-const PHOTO_SIZE = 68;
-const PHOTO_MIN_ROW_HEIGHT = 75;
+const PHOTO_SIZE = 84;
+const PHOTO_MIN_ROW_HEIGHT = 96;
 const TEXT_MIN_ROW_HEIGHT = 26;
 const TABLE_HEAD_HEIGHT = 22;
 const FOOTER_RESERVE = 24;
@@ -100,8 +100,8 @@ const COLUMNS: PdfColumn[] = [
   { key: 'amount', label: 'Amount Disbursed', width: 92 },
   { key: 'municipality', label: 'Municipality', width: 102 },
   { key: 'governmentId', label: 'Government ID', width: 102 },
-  { key: 'location', label: 'Location (Address)', width: 122 },
-  { key: 'photo', label: 'Photo Evidence', width: 118 },
+  { key: 'location', label: 'Location (Address)', width: 100 },
+  { key: 'photo', label: 'Photo Evidence', width: 140 },
 ];
 
 type CellLine = { text: string; sub?: boolean };
@@ -220,8 +220,9 @@ function buildRowCells(
     orDash(municipality),
     orDash(governmentId),
     orDash(location),
-    // Photo-column note (e.g. OTP skip reason) when there is no photo.
-    // Drawn as wrappable text and measured like any other cell.
+    // Photo-column note (e.g. OTP skip reason). Shown with or without a
+    // photo: photo-only, note-only, or stacked (thumbnail on top, note
+    // below). Measured like any other cell (see measureRowHeight).
     row.infoNote ? [{ text: row.infoNote, sub: true }] : [],
   ];
 }
@@ -231,6 +232,37 @@ function measureRowHeight(
   cells: CellLine[][],
   hasPhoto: boolean
 ): number {
+  const photoColIndex = COLUMNS.length - 1;
+  if (hasPhoto) {
+    // Text columns (excluding the photo cell) — measured like drawRow.
+    doc.font(REPORT_FONT).fontSize(7);
+    let maxOther = 0;
+    cells.forEach((lines, i) => {
+      if (i === photoColIndex) return;
+      const w = COLUMNS[i].width - 6;
+      let h = 0;
+      for (const line of lines) {
+        h += doc.heightOfString(line.text || ' ', { width: w });
+      }
+      if (h > maxOther) maxOther = h;
+    });
+    // Photo cell stacks thumbnail + note (drawRow: imgY = y + 3, note at
+    // imgY + PHOTO_SIZE + 2, same 6.5pt font/width as drawn). The row must
+    // fit both, otherwise the note is cropped at the row border.
+    doc.font(REPORT_FONT).fontSize(6.5);
+    const photoW = COLUMNS[photoColIndex].width - 6;
+    let noteH = 0;
+    for (const line of cells[photoColIndex]) {
+      noteH += doc.heightOfString(line.text || ' ', { width: photoW });
+    }
+    const photoNeeded =
+      3 + PHOTO_SIZE + 4 + (noteH > 0 ? 2 + noteH : 0);
+    return Math.max(
+      PHOTO_MIN_ROW_HEIGHT,
+      maxOther + ROW_PADDING,
+      photoNeeded
+    );
+  }
   doc.font(REPORT_FONT).fontSize(7);
   let max = 0;
   cells.forEach((lines, i) => {
@@ -241,7 +273,7 @@ function measureRowHeight(
     }
     if (h > max) max = h;
   });
-  const floor = hasPhoto ? PHOTO_MIN_ROW_HEIGHT : TEXT_MIN_ROW_HEIGHT;
+  const floor = TEXT_MIN_ROW_HEIGHT;
   return Math.max(floor, max + ROW_PADDING);
 }
 
@@ -276,13 +308,27 @@ function drawRow(
     }
   });
 
-  // Photo evidence cell: thumbnail when present; otherwise the info note
-  // (e.g. OTP skip reason) when available; otherwise blank. The cell links
-  // to the full-size photo URL (clickable) whenever one exists.
+  // Photo evidence cell. Photo and info note are independent and can
+  // coexist: thumbnail on top (clickable link to the full-size photo),
+  // note text below it (e.g. OTP skip reason). Neither, either, or both —
+  // the cell never fails generation.
   const photoX = columnX(photoColIndex);
   const photoW = COLUMNS[photoColIndex].width;
   const imgX = photoX + (photoW - PHOTO_SIZE) / 2;
   const imgY = y + 3;
+  const drawNoteLines = (startY: number) => {
+    const noteLines = cells[photoColIndex];
+    if (noteLines.length === 0) return;
+    doc.font(REPORT_FONT).fontSize(6.5).fillColor('#555555');
+    let ly = startY;
+    for (const line of noteLines) {
+      doc.text(line.text, photoX + 3, ly, {
+        width: photoW - 6,
+        align: 'center',
+      });
+      ly += doc.heightOfString(line.text || ' ', { width: photoW - 6 });
+    }
+  };
   if (photo) {
     try {
       doc.image(photo, imgX, imgY, {
@@ -290,22 +336,13 @@ function drawRow(
         align: 'center',
         valign: 'center',
       });
+      drawNoteLines(imgY + PHOTO_SIZE + 2);
     } catch {
-      // Corrupt image data: leave blank, never fail.
+      // Corrupt image data: fall back to the note, never fail.
+      drawNoteLines(imgY);
     }
   } else {
-    const noteLines = cells[photoColIndex];
-    if (noteLines.length > 0) {
-      doc.font(REPORT_FONT).fontSize(6.5).fillColor('#555555');
-      let ly = y + 4;
-      for (const line of noteLines) {
-        doc.text(line.text, photoX + 3, ly, {
-          width: photoW - 6,
-          align: 'center',
-        });
-        ly += doc.heightOfString(line.text || ' ', { width: photoW - 6 });
-      }
-    }
+    drawNoteLines(y + 4);
   }
   if (row.photoUrl) {
     doc.link(photoX, y, photoW, rowHeight, row.photoUrl);
@@ -344,9 +381,9 @@ function drawTableFrame(doc: typeof PDFDocument, top: number, bottom: number) {
  * S.N., Name, Phone, Amount Disbursed, Municipality, Gov ID, Location,
  * Photo Evidence, one row per payout log. Rows with photos keep a tall row
  * for the thumbnail; text-only rows shrink to their content. The photo cell
- * shows the thumbnail (clickable link to the full-size photo), the info
- * note (e.g. OTP skip reason) when there is no photo but other info exists,
- * or blank otherwise — never failing.
+ * shows the thumbnail (clickable link to the full-size photo) with the info
+ * note (e.g. OTP skip reason) below it when present — photo and note are
+ * independent, so neither, either, or both render — never failing.
  */
 export async function buildPayoutLogsPdf(
   rows: DownloadPayoutLogsPdfType[]

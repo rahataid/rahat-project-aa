@@ -2773,7 +2773,8 @@ export class PayoutsService {
 
         // When there is no photo, surface other meaningful info keys as a
         // short note so the photo cell isn't blank without explanation.
-        const infoNote = photoUrl ? undefined : this.buildPayoutInfoNote(info);
+        // Built whenever info exists — photo and note can coexist.
+        const infoNote = this.buildPayoutInfoNote(info);
 
         return {
           uuid: redeemLog.uuid,
