@@ -2484,7 +2484,7 @@ export class PayoutsService {
         const beneficiaryName = extrasFullName || extrasName || '';
 
         const municipality = extras?.municipality || '';
-        const district = extras?.district || '';
+        const district = extras?.district || extras?.location || '';
         const ward = extras?.ward || '';
         const tole = extras?.tole || '';
         const governmentIdType = extras?.governmentIdType || '';
@@ -2760,7 +2760,7 @@ export class PayoutsService {
           beneficiaryName,
           beneficiaryPhone,
           municipality: extras?.municipality,
-          district: extras?.district,
+          district: extras?.district || extras?.location,
           ward: extras?.ward,
           tole: extras?.tole,
           governmentIdNumber: extras?.govtIDNumber,
