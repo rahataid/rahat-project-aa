@@ -86,7 +86,10 @@ const PHOTO_COL = COLUMNS.length - 1;
 const TABLE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
 // Precomputed left edge of each column.
 const COLUMN_X: number[] = COLUMNS.reduce<number[]>(
-  (xs, c) => [...xs, (xs.at(-1) ?? MARGIN) + (xs.length ? COLUMNS[xs.length - 1].width : 0)],
+  (xs, c) => [
+    ...xs,
+    (xs.at(-1) ?? MARGIN) + (xs.length ? COLUMNS[xs.length - 1].width : 0),
+  ],
   []
 );
 
@@ -99,7 +102,8 @@ function setStyle(doc: PdfDoc, font: string, size: number, color: string) {
 
 function blockHeight(doc: PdfDoc, lines: CellLine[], width: number): number {
   let h = 0;
-  for (const line of lines) h += doc.heightOfString(line.text || ' ', { width });
+  for (const line of lines)
+    h += doc.heightOfString(line.text || ' ', { width });
   return h;
 }
 
@@ -146,7 +150,10 @@ async function fetchAllPhotos(
   for (let i = 0; i < urls.length; i += PHOTO_FETCH_CONCURRENCY) {
     const batch = urls.slice(i, i + PHOTO_FETCH_CONCURRENCY);
     const results = await Promise.all(
-      batch.map(async (url) => ({ url: url as string, buf: await fetchPhoto(url as string) }))
+      batch.map(async (url) => ({
+        url: url as string,
+        buf: await fetchPhoto(url as string),
+      }))
     );
     for (const { url, buf } of results) if (buf) cache.set(url, buf);
   }
@@ -164,24 +171,25 @@ function beneficiaryName(row: DownloadPayoutLogsPdfType): string {
 }
 
 /** Printable lines per column. Photo cell holds the info note (OTP skip reason). */
-function buildRowCells(row: DownloadPayoutLogsPdfType, index: number): CellLine[][] {
-  const nonEmpty = (lines: CellLine[]) => lines.filter((l) => l.text && l.text !== '-');
-  const orDash = (lines: CellLine[]) => (lines.length > 0 ? lines : [{ text: '-' }]);
+function buildRowCells(
+  row: DownloadPayoutLogsPdfType,
+  index: number
+): CellLine[][] {
+  const nonEmpty = (lines: CellLine[]) =>
+    lines.filter((l) => l.text && l.text !== '-');
+  const orDash = (lines: CellLine[]) =>
+    lines.length > 0 ? lines : [{ text: '-' }];
 
-  // Location (Address): core top-level location first, extras
-  // district/tole as fallback.
-  const location = row.coreLocation
-    ? [{ text: row.coreLocation }]
-    : nonEmpty([
-        ...(row.district ? [{ text: row.district }] : []),
-        ...(row.tole ? [{ text: row.tole, sub: true }] : []),
-      ]);
+  // Location (Address): AA extras district + tole.
+  const location = nonEmpty([
+    ...(row.district ? [{ text: row.district }] : []),
+    ...(row.tole ? [{ text: row.tole, sub: true }] : []),
+  ]);
   const municipalityText =
     row.municipality && row.ward
       ? `${row.municipality} - ${row.ward}`
       : row.municipality || (row.ward ? `Ward ${row.ward}` : '');
   const governmentId = nonEmpty([
-    ...(row.governmentIdType ? [{ text: row.governmentIdType }] : []),
     ...(row.governmentIdNumber ? [{ text: row.governmentIdNumber }] : []),
   ]);
 
@@ -203,7 +211,11 @@ function noteHeight(doc: PdfDoc, note: CellLine[]): number {
   return blockHeight(doc, note, COLUMNS[PHOTO_COL].width - 6);
 }
 
-function measureRowHeight(doc: PdfDoc, cells: CellLine[][], hasPhoto: boolean): number {
+function measureRowHeight(
+  doc: PdfDoc,
+  cells: CellLine[][],
+  hasPhoto: boolean
+): number {
   doc.font(REPORT_FONT).fontSize(7);
   if (hasPhoto) {
     let maxOther = 0;
@@ -311,9 +323,18 @@ function drawRow(
 
 function drawTableFrame(doc: PdfDoc, top: number, bottom: number) {
   doc.save();
-  doc.rect(MARGIN, top, TABLE_WIDTH, bottom - top).strokeColor(GRID_COLOR).lineWidth(0.75).stroke();
+  doc
+    .rect(MARGIN, top, TABLE_WIDTH, bottom - top)
+    .strokeColor(GRID_COLOR)
+    .lineWidth(0.75)
+    .stroke();
   for (let i = 1; i < COLUMNS.length; i++) {
-    doc.moveTo(COLUMN_X[i], top).lineTo(COLUMN_X[i], bottom).strokeColor(GRID_COLOR).lineWidth(0.5).stroke();
+    doc
+      .moveTo(COLUMN_X[i], top)
+      .lineTo(COLUMN_X[i], bottom)
+      .strokeColor(GRID_COLOR)
+      .lineWidth(0.5)
+      .stroke();
   }
   doc.restore();
 }
@@ -330,7 +351,9 @@ function drawZebra(doc: PdfDoc, y: number, rowHeight: number) {
  * (e.g. OTP skip reason) stack in the last cell; neither, either, or both
  * render without failing.
  */
-export async function buildPayoutLogsPdf(rows: DownloadPayoutLogsPdfType[]): Promise<Buffer> {
+export async function buildPayoutLogsPdf(
+  rows: DownloadPayoutLogsPdfType[]
+): Promise<Buffer> {
   const photos = await fetchAllPhotos(rows);
 
   return new Promise((resolve, reject) => {
@@ -369,7 +392,10 @@ export async function buildPayoutLogsPdf(rows: DownloadPayoutLogsPdfType[]): Pro
         const cells = buildRowCells(row, idx);
         const photo = row.photoUrl ? photos.get(row.photoUrl) : undefined;
         const rowHeight = measureRowHeight(doc, cells, !!photo);
-        if (tableTop === 0 || y + rowHeight > pageHeight - MARGIN - FOOTER_RESERVE) {
+        if (
+          tableTop === 0 ||
+          y + rowHeight > pageHeight - MARGIN - FOOTER_RESERVE
+        ) {
           if (tableTop !== 0) {
             drawTableFrame(doc, tableTop - TABLE_HEAD_HEIGHT, y);
             doc.addPage();
@@ -401,7 +427,10 @@ export async function buildPayoutLogsPdf(rows: DownloadPayoutLogsPdfType[]): Pro
   });
 }
 
-export function toPayoutLogsPdfFile(buffer: Buffer, payoutUUID: string): PayoutLogsPdfFile {
+export function toPayoutLogsPdfFile(
+  buffer: Buffer,
+  payoutUUID: string
+): PayoutLogsPdfFile {
   return {
     filename: `payout-logs-${payoutUUID}.pdf`,
     mimeType: 'application/pdf',

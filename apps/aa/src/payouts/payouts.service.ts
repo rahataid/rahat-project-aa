@@ -58,7 +58,7 @@ import {
 import { parseJsonField } from '../utils/parseJsonFields';
 import { format } from 'date-fns';
 import { AppService } from '../app/app.service';
-import { lastValueFrom, timeout } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
@@ -2473,47 +2473,22 @@ export class PayoutsService {
         });
       }
 
-      // Same core fallback as the PDF rows: names from PII, location and
-      // profile fields from core extras / top-level core location when the
-      // AA extras keys are absent. Never fails the export.
-      const coreByWallet = await this.getCoreBeneficiaryByWallets([
-        ...new Set(
-          redeemLogs.map((r) => r.beneficiaryWalletAddress).filter(Boolean)
-        ),
-      ]);
-
       const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
-        const core = coreByWallet.get(redeemLog.beneficiaryWalletAddress);
-        const coreExtras = parseJsonField((core as any)?.coreExtras);
-
-        // Single beneficiary name: merged AA first+last, then PII full
-        // name, then AA extras name fallback.
-        const extrasFullName =
-          `${extras?.firstName || ''} ${extras?.lastName || ''}`.trim();
+        const extrasFullName = `${extras?.firstName || ''} ${
+          extras?.lastName || ''
+        }`.trim();
         const extrasName =
           typeof extras?.name === 'string' ? extras.name.trim() : '';
-        const piiName =
-          typeof core?.name === 'string' ? core.name.trim() : '';
-        const beneficiaryName =
-          extrasFullName || piiName || extrasName || '';
+        const beneficiaryName = extrasFullName || extrasName || '';
 
-        const municipality =
-          extras?.municipality || coreExtras?.municipality || '';
-        const district = extras?.district || coreExtras?.district || '';
-        const ward = extras?.ward || coreExtras?.ward || '';
-        const tole =
-          extras?.tole_name ||
-          extras?.tole ||
-          coreExtras?.tole_name ||
-          coreExtras?.tole ||
-          '';
-        const locationValue = district || core?.coreLocation || '';
-        const governmentIdType =
-          extras?.governmentIdType || coreExtras?.governmentIdType || '';
-        const governmentIdNumber =
-          extras?.govtIDNumber || coreExtras?.govtIDNumber || '';
+        const municipality = extras?.municipality || '';
+        const district = extras?.district || '';
+        const ward = extras?.ward || '';
+        const tole = extras?.tole || '';
+        const governmentIdType = extras?.governmentIdType || '';
+        const governmentIdNumber = extras?.govtIDNumber || '';
 
         const transaction = info?.cipsResponseData?.transaction;
         const offrampRequest = info?.cipsResponseData?.offrampRequest;
@@ -2562,8 +2537,8 @@ export class PayoutsService {
             Municipality: municipality,
           }),
 
-          ...(locationValue && {
-            Location: locationValue,
+          ...(district && {
+            Location: district,
           }),
 
           ...(ward && {
@@ -2649,52 +2624,6 @@ export class PayoutsService {
   }
 
   /**
-   * Batch-fetch core beneficiary data (PII name/phone, core extras and the
-   * top-level core location) keyed by wallet address. Never throws —
-   * returns an empty map when unreachable so callers degrade to AA-only data.
-   */
-  private async getCoreBeneficiaryByWallets(
-    wallets: string[]
-  ): Promise<
-    Map<
-      string,
-      { name?: string; phone?: string; coreExtras?: any; coreLocation?: string }
-    >
-  > {
-    const map = new Map<
-      string,
-      { name?: string; phone?: string; coreExtras?: any; coreLocation?: string }
-    >();
-    if (wallets.length === 0) return map;
-    try {
-      const response = await lastValueFrom(
-        this.client
-          .send({ cmd: 'rahat.jobs.beneficiary.get_bulk_by_wallet' }, wallets)
-          .pipe(timeout(30000))
-      );
-      for (const ben of response || []) {
-        if (ben?.walletAddress) {
-          map.set(ben.walletAddress, {
-            ...(ben.piiData || {}),
-            coreExtras: ben?.extras,
-            coreLocation:
-              typeof ben?.location === 'string' && ben.location.trim()
-                ? ben.location.trim()
-                : undefined,
-          });
-        }
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Core beneficiary lookup failed, continuing with AA data only: ${
-          error?.message || error
-        }`
-      );
-    }
-    return map;
-  }
-
-  /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
    * note. Returns undefined when there is nothing meaningful to show.
    * Never throws.
@@ -2737,7 +2666,6 @@ export class PayoutsService {
    * amount, municipality/ward, gov ID, location, photo evidence + info note),
    * honoring applied list filters. Never fails when photo evidence is
    * missing (photoUrl: null).
-   * Internal only — the single public endpoint is exportPayoutLogsPdfFile.
    */
   private async getPayoutLogsPdfRows(
     payload: ExportPayoutLogsPdfFileDto
@@ -2769,108 +2697,57 @@ export class PayoutsService {
           params: { uuid: payoutUUID },
         });
       }
-
-      let redeemLogs: any[];
-
-      if (payout.type === 'FSP') {
-        redeemLogs = await this.getFilteredFspRedeems({
-          payoutUUID,
-          transactionType,
-          transactionStatus,
-          search,
-        });
-      } else {
-        redeemLogs = await this.prisma.beneficiaryRedeem.findMany({
-          where: {
-            payoutId: payoutUUID,
-            ...(transactionType && { transactionType }),
-            ...(transactionStatus && { status: transactionStatus }),
-            ...(search && {
-              OR: [
-                {
-                  beneficiaryWalletAddress: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
+      const redeemLogs = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          payoutId: payoutUUID,
+          ...(transactionType && { transactionType }),
+          ...(transactionStatus && { status: transactionStatus }),
+          ...(search && {
+            OR: [
+              {
+                beneficiaryWalletAddress: {
+                  contains: search,
+                  mode: 'insensitive',
                 },
-                { txHash: { contains: search, mode: 'insensitive' } },
-                {
-                  Beneficiary: {
-                    phone: { contains: search, mode: 'insensitive' },
-                  },
+              },
+              { txHash: { contains: search, mode: 'insensitive' } },
+              {
+                Beneficiary: {
+                  phone: { contains: search, mode: 'insensitive' },
                 },
-              ],
-            }),
-          },
-          include: {
-            Beneficiary: true,
-          },
-          ...(sort && {
-            orderBy: { [sort]: order || 'asc' },
+              },
+            ],
           }),
-        });
-      }
+        },
+        include: {
+          Beneficiary: true,
+        },
+        ...(sort && {
+          orderBy: { [sort]: order || 'asc' },
+        }),
+      });
 
-      // Apply sort for FSP (filtered in memory)
-      if (payout.type === 'FSP' && sort && redeemLogs.length > 1) {
-        const dir = order === 'desc' ? -1 : 1;
-        redeemLogs = [...redeemLogs].sort((a, b) => {
-          const av = a?.[sort];
-          const bv = b?.[sort];
-          if (av == null && bv == null) return 0;
-          if (av == null) return 1 * dir;
-          if (bv == null) return -1 * dir;
-          if (av > bv) return 1 * dir;
-          if (av < bv) return -1 * dir;
-          return 0;
-        });
-      }
-
-      // PII fallback: names/phones missing from extras are resolved from the
-      // core beneficiary PII (linked by wallet address) in a single batched
-      // call. A PII outage degrades to extras-only, never fails the export.
-      const wallets = [
-        ...new Set(
-          redeemLogs.map((r) => r.beneficiaryWalletAddress).filter(Boolean)
-        ),
-      ];
-      const piiByWallet = await this.getCoreBeneficiaryByWallets(wallets);
       return redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
 
-        const amountDisbursed = [
-          'COMPLETED',
-          'FIAT_TRANSACTION_COMPLETED',
-          'TOKEN_TRANSACTION_COMPLETED',
-        ].includes(redeemLog.status)
-          ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
-          : 0;
+        const amountDisbursed =
+          redeemLog.status === 'COMPLETED'
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
+            : 0;
 
         const firstName = extras?.firstName || '';
         const lastName = extras?.lastName || '';
         const fallbackName =
           typeof extras?.name === 'string' ? extras.name : '';
-        const pii = piiByWallet.get(redeemLog.beneficiaryWalletAddress);
         const beneficiaryName =
-          `${firstName} ${lastName}`.trim() || fallbackName || pii?.name || '';
+          `${firstName} ${lastName}`.trim() || fallbackName || '';
         const beneficiaryPhone =
-          extras?.phone || redeemLog.Beneficiary?.phone || pii?.phone || '';
-
-        // Location/profile fields: AA extras first, core extras as fallback.
-        // Ward key varies by import source (ward / ward_no / wardNo).
-        const coreExtras = parseJsonField((pii as any)?.coreExtras);
-
-        // Photo evidence lives in BeneficiaryRedeem.info.mediaUrl (see vendor CVA flow).
-        // Missing photo must not fail generation.
+          extras?.phone || redeemLog.Beneficiary?.phone || '';
         const photoUrl =
           typeof info?.mediaUrl === 'string' && info.mediaUrl.trim()
             ? info.mediaUrl
             : null;
-
-        // When there is no photo, surface other meaningful info keys as a
-        // short note so the photo cell isn't blank without explanation.
-        // Built whenever info exists — photo and note can coexist.
         const infoNote = this.buildPayoutInfoNote(info);
 
         return {
@@ -2882,13 +2759,11 @@ export class PayoutsService {
           photoUrl,
           beneficiaryName,
           beneficiaryPhone,
-          municipality: extras?.municipality || coreExtras?.municipality,
-          district: extras?.district || coreExtras?.district,
-          ward: extras?.ward || coreExtras?.ward,
-          tole: extras?.tole || coreExtras?.tole,
-
-          governmentIdNumber: extras?.govtIDNumber || coreExtras?.govtIDNumber,
-          coreLocation: pii?.coreLocation,
+          municipality: extras?.municipality,
+          district: extras?.district,
+          ward: extras?.ward,
+          tole: extras?.tole,
+          governmentIdNumber: extras?.govtIDNumber,
           infoNote,
         };
       });
