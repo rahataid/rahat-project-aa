@@ -1048,9 +1048,23 @@ export class BeneficiaryService {
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
 
+    // FE only ever reads group.name and a beneficiary count (never individual
+    // records), so fetch that directly from the local mirror table instead of
+    // round-tripping to core for the full group + all beneficiaries per row.
+    const groupIds = [...new Set(data.map((d) => d['groupId'] as string))];
+    const groups = await this.prisma.beneficiaryGroups.findMany({
+      where: { uuid: { in: groupIds } },
+      select: {
+        uuid: true,
+        name: true,
+        _count: { select: { beneficiaries: true } },
+      },
+    });
+    const groupByUuid = new Map(groups.map((g) => [g.uuid, g]));
+
     const enriched = await Promise.all(
       data.map(async (d) => {
-        const group = await this.getOneGroup(d['groupId'] as UUID);
+        const g = groupByUuid.get(d['groupId'] as string);
         const synced = shouldSyncFromSdp
           ? await this.syncDisbursementStatusFromSdp(d)
           : null;
@@ -1058,7 +1072,16 @@ export class BeneficiaryService {
         return {
           ...d,
           ...synced,
-          group,
+          group: g
+            ? {
+                uuid: g.uuid,
+                name: g.name,
+                // Shim: FE only reads groupedBeneficiaries.length, never the
+                // records themselves. Keep that shape without shipping the
+                // full 10k-row array — avoids a coordinated FE deploy.
+                groupedBeneficiaries: { length: g._count.beneficiaries },
+              }
+            : null,
         };
       })
     );
