@@ -127,12 +127,8 @@ export class EvmChainService implements IChainService, OnModuleInit {
     groupUuid: string
   ): Promise<any> {
     try {
-      // Get chain configuration (RPC URL, contract addresses, etc.)
-      // This fetches RPC URL, contract addresses, and other chain-specific settings
       const chainConfig = await this.getChainConfig();
 
-      // Handle edge case: no beneficiaries to process
-      // Prevents unnecessary processing when there's nothing to disburse
       if (beneficiaries.length === 0) {
         this.logger.warn(`disburseBatch called with empty beneficiaries for group ${groupUuid}`);
         return {
@@ -142,14 +138,14 @@ export class EvmChainService implements IChainService, OnModuleInit {
         };
       }
 
-      // Define batch size - process 30 beneficiaries per transaction to avoid gas limits
-      // Why 30? Based on empirical testing - balances gas cost with transaction reliability
-      // Larger batches risk exceeding block gas limits; smaller batches increase overhead
+      // Batching starts here. BATCH_SIZE=30 keeps each on-chain transaction
+      // under the block gas limit regardless of group size — a 10k-beneficiary
+      // group becomes ~334 transactions of 30 each instead of one transaction
+      // that would never fit in a block.
       const BATCH_SIZE = 30;
 
-      // Check existing batch status for idempotency (re-disburse support)
-      // Only look for active (not yet disbursed) token reservations
-      // This allows us to resume interrupted disbursements or re-disburse to same group
+      // Re-disburse support: look up any batchStatus already recorded for this
+      // group so a previous run's CONFIRMED batches aren't redone below.
       const groupToken = await this.prisma.beneficiaryGroupTokens.findFirst({
         where: { groupId: groupUuid, isDisbursed: false },
         orderBy: { createdAt: 'desc' },
@@ -157,9 +153,10 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
       const existingBatchStatus = (groupToken?.info as any)?.batchStatus || [];
 
-      // Split beneficiaries and amounts into batches of BATCH_SIZE
-      // This prevents exceeding block gas limits with large transactions
-      // Each batch will be processed as a separate job to avoid gas limit issues
+      // Slice the full beneficiary/amount lists into fixed BATCH_SIZE chunks —
+      // this is the actual split. Chunk order maps 1:1 to batchIndex, which is
+      // how every later step (status tracking, retries, requeueing) finds its
+      // slice again without storing each batch's beneficiary list separately.
       const batches: Array<{ beneficiaries: string[]; amounts: string[] }> = [];
       for (let i = 0; i < beneficiaries.length; i += BATCH_SIZE) {
         batches.push({
@@ -168,18 +165,14 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
-      // Initialize batchStatus array in info field if not present
-      // For re-disburse: preserve CONFIRMED batches, reset others to PENDING
-      // This enables idempotent re-disburse - already confirmed batches are not reprocessed
+      // Seed one status entry per batch, PENDING by default. On re-disburse,
+      // a batch already CONFIRMED is carried over as-is (not reprocessed) —
+      // this is what makes calling disburseBatch again on the same group safe.
       const initialBatchStatus = batches.map((_, index) => {
         const existing = existingBatchStatus[index];
-        // If batch was already confirmed, keep it confirmed (idempotent re-disburse)
-        // Reset retryCount to 0 so failed batches can be retried
         if (existing?.status === 'CONFIRMED') {
           return { ...existing, retryCount: 0 };
         }
-        // Otherwise mark as pending for processing
-        // beneficiaryCount will be used later for progress tracking and log creation
         return {
           batchIndex: index,
           status: 'PENDING',
@@ -188,46 +181,46 @@ export class EvmChainService implements IChainService, OnModuleInit {
         };
       });
 
-      // Update group token with initial batch status in info JSON field
-      // This stores batch tracking info without requiring schema changes
-      // Using info JSON field avoids migration complexity and keeps all data together
+      // batchStatus lives in the existing `info` JSON column — no schema
+      // migration needed to add per-batch tracking.
       await this.prisma.beneficiaryGroupTokens.update({
         where: { uuid: groupToken!.uuid },
         data: {
-          status: 'STARTED', // Mark group as started (not yet disbursed)
-          isDisbursed: false, // Not yet fully disbursed
+          status: 'STARTED',
+          isDisbursed: false,
           info: {
-            ...(groupToken?.info && { ...JSON.parse(JSON.stringify(groupToken.info)) }), // Preserve existing info fields
-            batchStatus: initialBatchStatus, // Array of batch objects with status tracking
-            totalBatches: batches.length, // Total number of batches for reference
-            totalBeneficiaries: beneficiaries.length, // Total beneficiaries to disburse
-            disbursedBeneficiariesCount: initialBatchStatus.filter(b => b.status === 'CONFIRMED').reduce((sum, b) => sum + b.beneficiaryCount, 0), // Already confirmed count
-            lastUpdated: new Date().toISOString(), // Timestamp for tracking when disbursement started/resumed
+            ...(groupToken?.info && { ...JSON.parse(JSON.stringify(groupToken.info)) }),
+            batchStatus: initialBatchStatus,
+            totalBatches: batches.length,
+            totalBeneficiaries: beneficiaries.length,
+            disbursedBeneficiariesCount: initialBatchStatus.filter(b => b.status === 'CONFIRMED').reduce((sum, b) => sum + b.beneficiaryCount, 0),
+            lastUpdated: new Date().toISOString(),
           },
         },
       });
 
-      // Queue first batch job for processing
-      // Uses deterministic jobId for idempotency (prevents duplicate processing)
-      // Same groupUuid + batchIndex always produces same jobId
+      // Only batch 0 is queued here — batches 1..N are never queued up front.
+      // Each batch's ASSIGN_TOKENS job queues the next one itself right after
+      // broadcasting (see requeueNextBatch in evm-centralized.processor.ts),
+      // so only one batch is ever in flight per group at a time.
       const jobId = `${groupUuid}-batch-0`;
       await this.evmTxQueue.add(
         {
-          type: JOBS.EVM.ASSIGN_TOKENS, // Job type for EVM token assignment (write operation)
-          groupUuid, // Target group UUID
-          batchIndex: 0, // First batch (0-indexed)
-          totalBatches: batches.length, // Total batches for reference in processor
-          beneficiaries: batches[0].beneficiaries, // Beneficiary addresses for this batch
-          amounts: batches[0].amounts, // Token amounts for this batch
+          type: JOBS.EVM.ASSIGN_TOKENS,
+          groupUuid,
+          batchIndex: 0,
+          totalBatches: batches.length,
+          beneficiaries: batches[0].beneficiaries,
+          amounts: batches[0].amounts,
         },
         {
-          jobId, // Deterministic job ID prevents duplicates (same input = same jobId)
-          attempts: 3, // Retry failed jobs up to 3 times before giving up
-          delay: 2000, // Initial delay before first attempt (2 seconds) - allows for quick retries
-          removeOnComplete: true, // Clean up completed jobs to prevent queue buildup
+          jobId,
+          attempts: 3,
+          delay: 2000,
+          removeOnComplete: true,
           backoff: {
-            type: 'exponential', // Exponential backoff for retries (2s, 4s, 8s...)
-            delay: 1000, // Base delay of 1 second
+            type: 'exponential',
+            delay: 1000,
           },
         }
       );

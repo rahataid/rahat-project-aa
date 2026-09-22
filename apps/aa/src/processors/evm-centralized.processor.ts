@@ -212,6 +212,12 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     };
   }
 
+  /**
+   * Processes ONE batch (<=30 beneficiaries) of a group's on-chain token assignment.
+   * Called per batch instead of once per group so a 10k-beneficiary group never
+   * needs a single transaction big enough to hit the block gas limit, and so one
+   * bad batch can fail/retry independently without redoing the whole group.
+   */
   async handleAssignTokens(job: Job<{
     groupUuid: string;
     batchIndex: number;
@@ -227,11 +233,17 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         `Processing EVM assign tokens batch ${batchIndex + 1}/${totalBatches} for group ${groupUuid}`
       );
 
-      // Single fetch for this job — reused below for the idempotency guard and as the base for
-      // the SUBMITTED write, instead of each doing its own round trip.
+      // Why: batchStatus lives on the group's info JSON, read once here and passed
+      // as `preloaded` to every downstream call in this job (idempotency check below,
+      // the SUBMITTED write after broadcast, and requeueNextBatch). Avoids each of
+      // those doing its own DB round trip for the same row within a single job run.
       const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
       const preloaded = group ? { uuid: group.uuid, info: group.info } : undefined;
 
+      // What: idempotency guard. Bull can redeliver a job (retry, redeploy, crash
+      // recovery) — if this batch already has a txHash (SUBMITTED) or is already
+      // on-chain confirmed, re-running the send below would double-disburse tokens
+      // to the same beneficiaries. Bail out instead.
       const existingBatch = (group?.info as any)?.batchStatus?.[batchIndex];
       if (existingBatch?.status === 'SUBMITTED' || existingBatch?.status === 'CONFIRMED') {
         this.logger.log(
@@ -249,6 +261,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         this.signer
       );
 
+      // What: defensive guard against an empty batch (shouldn't normally happen —
+      // batches are sliced from a non-empty beneficiary list — but a stale/replayed
+      // job could carry one). Why: still advance the chain instead of stalling the
+      // whole group on a single dead batch.
       if (!beneficiaries || beneficiaries.length === 0) {
         this.logger.warn(`Batch ${batchIndex} has no beneficiaries, skipping`);
         if (batchIndex < totalBatches - 1) {
@@ -257,6 +273,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         return;
       }
 
+      // How: read the RAHAT token's on-chain decimals so beneficiary amounts
+      // (stored as plain numbers) can be converted to the contract's base unit.
       const contract = await this.getContractSettings();
       const formatedAbi = this.lowerCaseObjectKeys(contract.RAHATTOKEN.ABI);
       const rahatTokenContract = new ethers.Contract(
@@ -266,6 +284,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       );
       const decimal = await rahatTokenContract.decimals.staticCall();
 
+      // How: build the multicall payload for this batch only — [address, amount]
+      // pairs for the <=30 beneficiaries in this job, not the whole group. This is
+      // what keeps each transaction's gas cost bounded regardless of group size.
       const multicallTxnPayload = [];
       for (let i = 0; i < beneficiaries.length; i++) {
         const amount = amounts[i];
@@ -275,6 +296,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         }
       }
 
+      // What: every beneficiary in the batch had a falsy/missing amount — nothing
+      // to send. Why: skip the chain call and move on rather than submitting an
+      // empty transaction, but still chain into the next batch so the group finishes.
       if (multicallTxnPayload.length === 0) {
         this.logger.warn(`Batch ${batchIndex} has no valid amounts, skipping`);
         if (batchIndex < totalBatches - 1) {
@@ -283,6 +307,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         return;
       }
 
+      // How: one on-chain transaction carrying this batch's up-to-30 transfers via
+      // multicall, instead of one transaction per beneficiary.
       const tx = await this.multiSend(
         aaContract,
         'assignTokenToBeneficiary',
@@ -303,6 +329,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         submittedAt: new Date().toISOString(),
       }, preloaded);
 
+      // Why: confirmation isn't checked inline (waiting for block finality here would
+      // hold this queue worker for seconds/minutes per batch). Instead hand off to a
+      // separate delayed job on the query queue that polls for the receipt later —
+      // keeps this batch's job fast so the tx queue can move on to the next batch.
       this.evmQueryQueue.add(
         {
           type: JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
@@ -320,7 +350,11 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         }
       );
 
-      // Queue next batch immediately after submitting this one (don't wait for confirmation)
+      // How: fire the next batch's assign job right after broadcasting this one —
+      // don't wait for on-chain confirmation. Why: confirmation can take several
+      // seconds; queuing eagerly is what turns N batches into a pipeline instead of
+      // a strictly serial (submit -> wait -> confirm -> submit next) chain, cutting
+      // total disbursement wall-clock time for large groups.
       if (batchIndex < totalBatches - 1) {
         await this.requeueNextBatch(groupUuid, batchIndex + 1, totalBatches, dName, infoAfterSubmit);
       } else {
@@ -338,6 +372,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         error.stack
       );
 
+      // What: record the failure on this batch's entry (not the whole group) so
+      // sibling batches for the same group are unaffected and can keep progressing
+      // independently of this one's retry state.
       const infoAfterFail = await this.updateBatchStatus(groupUuid, batchIndex, {
         status: 'FAILED',
         error: errorDetails,
@@ -397,6 +434,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     }
   }
 
+  /**
+   * Queues the ASSIGN_TOKENS job for the next batch in a group's disbursement
+   * chain. Why a dedicated function instead of inlining at each call site: it's
+   * called from three places (handleAssignTokens on the empty-batch paths, on
+   * the success path, and recoverStuckDisbursements on boot) and all three need
+   * the same "resolve this group's next unsent batch and queue it" behavior —
+   * one place keeps the chaining logic (and the skip/re-slice rules below)
+   * consistent regardless of who triggers the next step.
+   */
   private async requeueNextBatch(
     groupUuid: string,
     nextBatchIndex: number,
@@ -404,6 +450,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     dName?: string,
     preloaded?: { uuid: string; info: any }
   ): Promise<void> {
+    // How: reuse the caller's already-fetched group row when given one (the hot
+    // path — called right after handleAssignTokens already loaded/updated it),
+    // otherwise fetch fresh. Avoids a redundant DB read per batch transition.
     const group = preloaded ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid));
     if (!group || !group.info) {
       this.logger.error(`Group ${groupUuid} not found for requeue`);
@@ -418,6 +467,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       return;
     }
 
+    // What: the target batch was already sent (SUBMITTED) or is done (CONFIRMED)
+    // — this happens on re-disburse / recovery paths where some batches already
+    // progressed. Why: don't resend it (would double-disburse); instead skip
+    // forward recursively to find the next batch that actually still needs work.
     // Skip batches already submitted or confirmed — they have their own status job
     if (nextBatch.status === 'CONFIRMED' || nextBatch.status === 'SUBMITTED') {
       if (nextBatchIndex < totalBatches - 1) {
@@ -426,6 +479,14 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       return;
     }
 
+    // Where the batching actually happens: the full beneficiary list for the
+    // group is resolved once (wallet + amount per beneficiary, already ordered
+    // consistently — see getBeneficiaryTokenBalance), then sliced into this
+    // batch's fixed-size window. batchIndex * 30 is what maps a batch number
+    // back to its slice of beneficiaries — the same math used when batches were
+    // first split in evm-chain.service.ts's disburseBatch, so re-slicing here
+    // (on retry/requeue/recovery) reproduces the exact same grouping without
+    // needing to persist each batch's beneficiary list separately.
     const resolved = await this.getBeneficiaryTokenBalance(groupUuid);
     if (!resolved || resolved.length === 0) {
       this.logger.error(`No beneficiaries found for group ${groupUuid}`);
@@ -436,6 +497,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     const endIndex = Math.min(startIndex + 30, resolved.length);
     const batchBeneficiaries = resolved.slice(startIndex, endIndex);
 
+    // How: deterministic jobId (groupUuid + batchIndex, no timestamp/random
+    // suffix) so Bull treats a duplicate requeue of the same batch as the same
+    // job — protects against this function being called twice for the same
+    // next batch (e.g. concurrent triggers) from creating two competing jobs.
     const jobId = `${groupUuid}-batch-${nextBatchIndex}`;
     await this.evmTxQueue.add(
       {
