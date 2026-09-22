@@ -154,7 +154,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const bens = await this.getBeneficiaryTokenBalance(groups);
 
       if (!bens || bens.length === 0) {
-        throw new RpcException('Beneficiary Token Balance not found');
+        throw new RpcException({
+          message: 'Beneficiary Token Balance not found',
+          code: 'STELLAR_ERR_TOKEN_BALANCE_NOT_FOUND',
+        });
       }
 
       const multicallTxnPayload = [];
@@ -1431,6 +1434,64 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       );
       throw new RpcException(
         `Failed to get RahatToken balance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Settle a vendor token redemption by pulling the already-approved allowance
+   * from the vendor's wallet into the deployer wallet. The allowance is expected
+   * to have been granted to the deployer wallet address ahead of time (via the
+   * trusted forwarder), so this only needs to be signed by the deployer key.
+   * @param vendorWalletAddress - The vendor wallet address that approved the allowance
+   * @param amount - The token amount to pull, in whole token units (not wei)
+   * @returns Promise<{ txHash: string }> - The settlement transaction hash
+   */
+  async settleVendorTokenRedemption(
+    vendorWalletAddress: string,
+    amount: number
+  ): Promise<{ txHash: string }> {
+    try {
+      await this.ensureInitialized();
+
+      const rahatTokenContract = await this.createContractInstanceSign(
+        'RAHATTOKEN'
+      );
+
+      // RahatToken extends ERC2771Context and correctly overrides _msgSender(),
+      // so a vendor's approve() relayed gasless through the trusted
+      // ERC2771Forwarder is still recorded with the vendor as owner. The
+      // allowance to pull from is allowance[vendor][deployer].
+      const decimal = await rahatTokenContract.decimals.staticCall();
+      const transferAmount = ethers.parseUnits(amount.toString(), decimal);
+      const deployerAddress = await this.signer.getAddress();
+
+      this.logger.log(
+        `Settling vendor token redemption: pulling ${amount} tokens from vendor ${vendorWalletAddress} to deployer ${deployerAddress}`,
+        EVMCentralizedProcessor.name
+      );
+
+      const tx = await rahatTokenContract.transferFrom(
+        vendorWalletAddress,
+        deployerAddress,
+        transferAmount
+      );
+      const receipt = await tx.wait();
+
+      this.logger.log(
+        `Vendor token redemption settled. Transaction: ${receipt.hash}`,
+        EVMCentralizedProcessor.name
+      );
+
+      return { txHash: receipt.hash };
+    } catch (error) {
+      this.logger.error(
+        `Error settling vendor token redemption for ${vendorWalletAddress}: ${error.message}`,
+        error.stack,
+        EVMCentralizedProcessor.name
+      );
+      throw new RpcException(
+        `Failed to settle vendor token redemption: ${error.message}`
       );
     }
   }

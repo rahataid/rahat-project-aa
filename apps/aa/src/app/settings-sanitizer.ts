@@ -12,6 +12,9 @@ export const SENSITIVE_SETTINGS_FIELDS: Record<string, string[]> = {
   // names that different versions of the settings payload may use.
   STELLAR_SPONSOR_SETTINGS: ['sponsorSecret'],
 
+  // Stellar inkind distribution wallet — strip private signing key.
+  STELLAR_INKIND_SETTINGS: ['distribution_wallet_secret_key'],
+
   // EVM / general chain settings — strip operator private key if present.
   CHAIN_SETTINGS: ['privateKey'],
 };

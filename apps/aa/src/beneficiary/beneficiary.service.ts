@@ -40,6 +40,15 @@ interface PaginateResult<T> {
   meta: any;
 }
 
+interface GroupBeneficiaryExcelRow {
+  name: string;
+  phone: string;
+  gender: string;
+  government_id_number: string;
+  address: string;
+  otp: string;
+}
+
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
@@ -65,6 +74,70 @@ export class BeneficiaryService {
 
   getQrPdf(groupId: string) {
     return this.qrPdfService.getJobStatus(groupId);
+  }
+
+  async exportGroupBeneficiariesExcel(
+    groupId: string
+  ): Promise<GroupBeneficiaryExcelRow[]> {
+    const links = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId },
+      include: {
+        beneficiary: {
+          select: {
+            uuid: true,
+            walletAddress: true,
+            phone: true,
+            gender: true,
+            extras: true,
+          },
+        },
+      },
+    });
+
+    const wallets = links
+      .map((l) => l.beneficiary?.walletAddress)
+      .filter((address): address is string => !!address);
+
+    const otps = await this.prisma.otp.findMany({
+      where: { walletAddress: { in: wallets } },
+      select: { walletAddress: true, otp: true },
+    });
+
+    const otpMap = Object.fromEntries(
+      otps.map((o) => [o.walletAddress, o.otp ?? ''])
+    );
+
+    return links.flatMap(({ beneficiary: ben }) => {
+      if (!ben) return [];
+
+      const extras = (ben.extras as Record<string, unknown>) ?? {};
+
+      const syncedLocation =
+        typeof extras.location === 'string' ? extras.location.trim() : '';
+      return [
+        {
+          name: String(
+            extras.name ||
+              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
+              ''
+          ),
+          phone: ben.phone ?? '',
+          gender: ben.gender ?? 'UNKNOWN',
+          government_id_number: String(extras.govtIDNumber ?? ''),
+          address:
+            syncedLocation ||
+            [
+              extras.district,
+              extras.municipality,
+              extras.ward ? `Ward ${extras.ward}` : null,
+              extras.tole_name,
+            ]
+              .filter(Boolean)
+              .join(', '),
+          otp: otpMap[ben.walletAddress ?? ''] ?? '',
+        },
+      ];
+    });
   }
 
   async getAllBenfs() {
@@ -317,9 +390,11 @@ export class BeneficiaryService {
       this.logger.error(
         `Error fetching beneficiary groups by uuids: ${errMsg}`
       );
-      throw new RpcException(
-        `Error while fetching beneficiary groups by uuids. ${errMsg}`
-      );
+      throw new RpcException({
+        message: `Error while fetching beneficiary groups by uuids. ${errMsg}`,
+        code: 'FAILED_TO_FETCH_BENEFICIARY_GROUPS_BY_UUIDS',
+        params: { message: errMsg },
+      });
     }
   }
 
@@ -471,7 +546,11 @@ export class BeneficiaryService {
       },
     });
 
-    if (!benfGroup) throw new RpcException('Beneficiary group not found.');
+    if (!benfGroup)
+      throw new RpcException({
+        message: 'Beneficiary group not found.',
+        code: 'BENEFICIARY_GROUP_NOT_FOUND',
+      });
 
     const data = await lastValueFrom(
       this.client.send(
@@ -782,6 +861,7 @@ export class BeneficiaryService {
         status: 'error',
         message:
           'Tokens have already been assigned to the following beneficiaries wallet addresses',
+        code: 'TOKENS_ALREADY_ASSIGNED',
         tokenAssignedBenfWallet,
         foundAssignedBenf,
         groupName: group.name,
@@ -821,7 +901,10 @@ export class BeneficiaryService {
       this.logger.warn(
         `Token already reserved for group: ${beneficiaryGroupId}`
       );
-      throw new RpcException('Token already reserved.');
+      throw new RpcException({
+        message: 'Token already reserved.',
+        code: 'TOKEN_ALREADY_RESERVED',
+      });
     }
 
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
@@ -832,7 +915,10 @@ export class BeneficiaryService {
 
     if (!benfGroup) {
       this.logger.warn(`Beneficiary group not found: ${beneficiaryGroupId}`);
-      throw new RpcException('Beneficiary group not found.');
+      throw new RpcException({
+        message: 'Beneficiary group not found.',
+        code: 'BENEFICIARY_GROUP_NOT_FOUND',
+      });
     }
 
     const allowedPurposes: (GroupPurpose | null)[] = [
@@ -845,9 +931,11 @@ export class BeneficiaryService {
       this.logger.warn(
         `Invalid group purpose ${benfGroup.groupPurpose} for group: ${beneficiaryGroupId}`
       );
-      throw new RpcException(
-        `Invalid group purpose ${benfGroup.groupPurpose}. Allowed purposes: BANK_TRANSFER, MOBILE_MONEY, GENERAL.`
-      );
+      throw new RpcException({
+        message: `Invalid group purpose ${benfGroup.groupPurpose}. Allowed purposes: BANK_TRANSFER, MOBILE_MONEY, GENERAL.`,
+        code: 'INVALID_GROUP_PURPOSE_WITH_GENERAL',
+        params: { purpose: benfGroup.groupPurpose },
+      });
     }
 
     if (benfGroup.groupPurpose === GroupPurpose.GENERAL) {
@@ -858,11 +946,13 @@ export class BeneficiaryService {
         this.logger.warn(
           `Group purpose GENERAL not allowed for group: ${beneficiaryGroupId} with payout type: ${params?.type}, isPayoutIntegrated: ${isPayoutIntegrated}`
         );
-        throw new RpcException(
-          `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${
+        throw new RpcException({
+          message: `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${
             params?.type ?? 'none'
-          }, `
-        );
+          }, `,
+          code: 'GROUP_PURPOSE_GENERAL_ONLY_FOR_VENDOR_PAYOUTS',
+          params: { payoutType: params?.type ?? 'none' },
+        });
       }
     }
 
@@ -1081,7 +1171,10 @@ export class BeneficiaryService {
 
     const sdpSettings = await this.settingsService.getPublic('SDP_SETTINGS');
     if (!sdpSettings?.value) {
-      throw new Error('SDP_SETTINGS not found in settings table');
+      throw new RpcException({
+        message: 'SDP_SETTINGS not found in settings table',
+        code: 'SDP_SETTINGS_NOT_FOUND',
+      });
     }
 
     const config = sdpSettings.value as Record<string, string>;
@@ -1177,7 +1270,10 @@ export class BeneficiaryService {
       });
 
       if (!activeToken)
-        throw new RpcException('No active token found for group.');
+        throw new RpcException({
+          message: 'No active token found for group.',
+          code: 'NO_ACTIVE_TOKEN_FOUND_FOR_GROUP',
+        });
 
       const benfGroupToken = await this.prisma.beneficiaryGroupTokens.update({
         where: { uuid: activeToken.uuid },
@@ -1472,7 +1568,10 @@ export class BeneficiaryService {
     );
 
     if (!beneficiaryUUID) {
-      throw new RpcException('Beneficiary UUID is required');
+      throw new RpcException({
+        message: 'Beneficiary UUID is required',
+        code: 'BENEFICIARY_UUID_REQUIRED',
+      });
     }
 
     // First get the beneficiary to get their wallet address
@@ -1483,7 +1582,10 @@ export class BeneficiaryService {
 
     if (!beneficiary) {
       this.logger.warn(`Beneficiary not found: ${beneficiaryUUID}`);
-      throw new RpcException('Beneficiary not found');
+      throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'BENEFICIARY_NOT_FOUND',
+      });
     }
 
     try {
@@ -1560,7 +1662,10 @@ export class BeneficiaryService {
     );
 
     if (!beneficiaryUUID) {
-      throw new RpcException('Beneficiary UUID is required');
+      throw new RpcException({
+        message: 'Beneficiary UUID is required',
+        code: 'BENEFICIARY_UUID_REQUIRED',
+      });
     }
 
     // First get the beneficiary to get their wallet address
@@ -1571,7 +1676,10 @@ export class BeneficiaryService {
 
     if (!beneficiary) {
       this.logger.warn(`Beneficiary not found: ${beneficiaryUUID}`);
-      throw new RpcException('Beneficiary not found');
+      throw new RpcException({
+        message: 'Beneficiary not found',
+        code: 'BENEFICIARY_NOT_FOUND',
+      });
     }
 
     try {
@@ -1693,9 +1801,12 @@ export class BeneficiaryService {
       return;
     } catch (error) {
       this.logger.error(`Error updating beneficiary tokens: ${error}`);
-      throw new RpcException(
-        `Failed to update beneficiary tokens for group ${groupUuid}: ${error.message}`
-      );
+      const errMsg = error instanceof Error ? error.message : String(error);
+      throw new RpcException({
+        message: `Failed to update beneficiary tokens for group ${groupUuid}: ${errMsg}`,
+        code: 'FAILED_TO_UPDATE_BENEFICIARY_TOKENS',
+        params: { groupUuid, message: errMsg },
+      });
     }
   }
 
@@ -1786,7 +1897,10 @@ export class BeneficiaryService {
           ? (error as any).response?.data || error.message
           : String(error);
       this.logger.error(`Error fetching balances: ${errData}`);
-      throw new Error('Failed to fetch balances');
+      throw new RpcException({
+        message: 'Failed to fetch balances',
+        code: 'FAILED_TO_FETCH_BALANCES',
+      });
     }
   }
 
@@ -1834,7 +1948,11 @@ export class BeneficiaryService {
     };
 
     const handler = actionHandlers[action];
-    if (!handler) throw new Error('Invalid action');
+    if (!handler)
+      throw new RpcException({
+        message: 'Invalid action',
+        code: 'INVALID_DB_TRANSACTION_ACTION',
+      });
 
     try {
       const message = await handler();
@@ -1845,7 +1963,11 @@ export class BeneficiaryService {
       this.logger.error(
         `Database transaction failed [${action}] txId=${aaDbTxId}: ${errMsg}`
       );
-      throw new Error(`Database transaction failed: ${errMsg}`);
+      throw new RpcException({
+        message: `Database transaction failed: ${errMsg}`,
+        code: 'DATABASE_TRANSACTION_FAILED',
+        params: { message: errMsg },
+      });
     }
   }
 
@@ -1866,7 +1988,12 @@ export class BeneficiaryService {
     const group = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: groupUuid },
     });
-    if (!group) throw new Error(`Beneficiary group not found: ${groupUuid}`);
+    if (!group)
+      throw new RpcException({
+        message: `Beneficiary group not found: ${groupUuid}`,
+        code: 'BENEFICIARY_GROUP_NOT_FOUND_SYNC',
+        params: { groupUuid },
+      });
 
     const BCRYPT_ROUNDS = 8;
     const isDev = process.env.NODE_ENV !== 'production';
@@ -1948,5 +2075,36 @@ export class BeneficiaryService {
     // }
 
     return { message: 'Sync process completed successfully' };
+  }
+
+  async getBeneficiaryPayoutMode(payload: { benId: string }) {
+    const { benId } = payload;
+    const payoutDetails = await this.prisma.beneficiary.findUnique({
+      where: { uuid: benId },
+      include: {
+        BeneficiaryToGroup: {
+          include: {
+            group: {
+              include: {
+                tokensReserved: {
+                  where: { payoutId: { not: null } },
+                  include: {
+                    payout: { select: { mode: true } },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const payoutMode =
+      payoutDetails?.BeneficiaryToGroup?.find(
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+      )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
+
+    return { benId, payoutMode };
   }
 }

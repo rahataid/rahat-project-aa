@@ -16,6 +16,8 @@ import {
 } from './dto/vendorTokenRedemption.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { ChainServiceRegistry } from '../chain/registries/chain-service.registry';
+import { EvmChainService } from '../chain/chain-services/evm-chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
@@ -28,7 +30,9 @@ export class VendorTokenRedemptionService {
     @InjectQueue(BQUEUE.VENDOR)
     private readonly vendorQueue: Queue,
     private readonly eventEmitter: EventEmitter2,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private readonly chainServiceRegistry: ChainServiceRegistry,
+    private readonly evmChainService: EvmChainService
   ) {}
 
   async create(dto: CreateVendorTokenRedemptionDto) {
@@ -41,7 +45,11 @@ export class VendorTokenRedemptionService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${dto.vendorUuid} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${dto.vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: dto.vendorUuid },
+        });
       }
 
       // Check if a redemption request already exists with the same transaction hash
@@ -107,6 +115,7 @@ export class VendorTokenRedemptionService {
       return redemption;
     } catch (error) {
       this.logger.error(`Error creating token redemption: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -121,14 +130,17 @@ export class VendorTokenRedemptionService {
       });
 
       if (!redemption) {
-        throw new RpcException(
-          `Token redemption with UUID ${dto.uuid} not found`
-        );
+        throw new RpcException({
+          message: `Token redemption with UUID ${dto.uuid} not found`,
+          code: 'TOKEN_REDEMPTION_NOT_FOUND',
+          params: { uuid: dto.uuid },
+        });
       }
 
       return redemption;
     } catch (error) {
       this.logger.error(`Error finding token redemption: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -138,12 +150,17 @@ export class VendorTokenRedemptionService {
     try {
       const redemption = await this.prisma.vendorTokenRedemption.findUnique({
         where: { uuid: dto.uuid },
+        include: {
+          vendor: true,
+        },
       });
 
       if (!redemption) {
-        throw new RpcException(
-          `Token redemption with UUID ${dto.uuid} not found`
-        );
+        throw new RpcException({
+          message: `Token redemption with UUID ${dto.uuid} not found`,
+          code: 'TOKEN_REDEMPTION_NOT_FOUND',
+          params: { uuid: dto.uuid },
+        });
       }
 
       // Only allow status updates from REQUESTED or STELLAR_VERIFIED to APPROVED or REJECTED
@@ -151,9 +168,11 @@ export class VendorTokenRedemptionService {
         redemption.redemptionStatus !== TokenRedemptionStatus.REQUESTED &&
         redemption.redemptionStatus !== TokenRedemptionStatus.STELLAR_VERIFIED
       ) {
-        throw new RpcException(
-          `Token redemption ${dto.uuid} is not in REQUESTED or STELLAR_VERIFIED status`
-        );
+        throw new RpcException({
+          message: `Token redemption ${dto.uuid} is not in REQUESTED or STELLAR_VERIFIED status`,
+          code: 'TOKEN_REDEMPTION_INVALID_STATUS_FOR_UPDATE',
+          params: { uuid: dto.uuid },
+        });
       }
 
       if (
@@ -164,21 +183,47 @@ export class VendorTokenRedemptionService {
           TokenRedemptionStatus.STELLAR_FAILED,
         ].includes(dto.redemptionStatus)
       ) {
-        throw new RpcException(
-          `Invalid status update. Only APPROVED, REJECTED, STELLAR_VERIFIED, or STELLAR_FAILED status is allowed`
-        );
+        throw new RpcException({
+          message: `Invalid status update. Only APPROVED, REJECTED, STELLAR_VERIFIED, or STELLAR_FAILED status is allowed`,
+          code: 'TOKEN_REDEMPTION_INVALID_TARGET_STATUS',
+        });
       }
 
       let updatedRedemption;
       // Update the redemption status
       if (dto.redemptionStatus === 'APPROVED') {
+        const chainType = await this.chainServiceRegistry.detectChainFromSettings();
+
+        let txHash = dto.transactionHash;
+
+        // Stellar sends the settlement transaction hash directly in the dto.
+        // EVM has no on-chain settlement yet at this point, so the deployer
+        // wallet must pull the already-approved allowance from the vendor.
+        if (chainType === 'evm') {
+          if (!redemption.vendor?.walletAddress) {
+            throw new RpcException(
+              `Vendor wallet address not found for redemption ${dto.uuid}`
+            );
+          }
+
+          this.logger.log(
+            `Token redemption ${dto.uuid} is PROCESSING: settling ${redemption.tokenAmount} tokens from vendor ${redemption.vendor.walletAddress} on EVM`
+          );
+
+          const result = await this.evmChainService.settleVendorTokenRedemption(
+            redemption.vendor.walletAddress,
+            redemption.tokenAmount
+          );
+          txHash = result.txHash;
+        }
+
         updatedRedemption = await this.prisma.vendorTokenRedemption.update({
           where: { uuid: dto.uuid },
           data: {
             redemptionStatus: 'APPROVED',
             approvedBy: dto.approvedBy,
             approvedAt: new Date(),
-            transactionHash: dto.transactionHash,
+            transactionHash: txHash,
           },
           include: {
             vendor: true,
@@ -215,6 +260,7 @@ export class VendorTokenRedemptionService {
       return updatedRedemption;
     } catch (error) {
       this.logger.error(`Error updating token redemption: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -270,6 +316,7 @@ export class VendorTokenRedemptionService {
       );
     } catch (error) {
       this.logger.error(`Error listing token redemptions: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -288,6 +335,7 @@ export class VendorTokenRedemptionService {
       return redemptions;
     } catch (error) {
       this.logger.error(`Error getting vendor redemptions: ${error.message}`);
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -302,7 +350,11 @@ export class VendorTokenRedemptionService {
       });
 
       if (!vendor) {
-        throw new RpcException(`Vendor with UUID ${dto.vendorUuid} not found`);
+        throw new RpcException({
+          message: `Vendor with UUID ${dto.vendorUuid} not found`,
+          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+          params: { uuid: dto.vendorUuid },
+        });
       }
 
       // Get total tokens approved (APPROVED + STELLAR_VERIFIED statuses)
@@ -344,6 +396,7 @@ export class VendorTokenRedemptionService {
       this.logger.error(
         `Error getting vendor token redemption stats: ${error.message}`
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }

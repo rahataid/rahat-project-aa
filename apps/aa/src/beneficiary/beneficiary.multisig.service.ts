@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import SafeApiKit from '@safe-global/api-kit';
 import Safe from '@safe-global/protocol-kit';
 import { PrismaService } from '@rumsan/prisma';
@@ -60,9 +61,11 @@ export class BeneficiaryMultisigService {
     });
 
     if (!chainSettings || !safeProposerPrivateKeySetting || !safeApiKey) {
-      throw new Error(
-        'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS or SAFE_API_KEY may be missing'
-      );
+      throw new RpcException({
+        message:
+          'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS or SAFE_API_KEY may be missing',
+        code: 'MULTISIG_SETTINGS_MISSING',
+      });
     }
 
     const CHAIN_ID = chainSettings.value['chainId'];
