@@ -1069,8 +1069,13 @@ export class BeneficiaryService {
           ? await this.syncDisbursementStatusFromSdp(d)
           : null;
 
+        // `info` carries batchStatus (up to ~334 entries per group, with
+        // error objects/gasUsed/retryCount/etc per batch) — FE doesn't read
+        // it in this list view, drop it from the response entirely.
+        const { info, ...rest } = d;
+
         return {
-          ...d,
+          ...rest,
           ...synced,
           group: g
             ? {
@@ -1202,11 +1207,33 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    if (!benfGroupToken)
+      throw new RpcException({
+        message: 'Token reservation not found.',
+        code: 'TOKEN_RESERVATION_NOT_FOUND',
+      });
+
+    // Same fix as getAllTokenReservations: skip the cross-service RPC (which
+    // returned the full group with every beneficiary joined in) and read
+    // name/count directly from the local mirror table instead.
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: benfGroupToken.groupId as string },
+      select: {
+        uuid: true,
+        name: true,
+        groupPurpose: true,
+        _count: { select: { beneficiaries: true } },
+      },
+    });
 
     return {
       ...benfGroupToken,
-      ...groupDetails,
+      ...(group && {
+        uuid: group.uuid,
+        name: group.name,
+        groupPurpose: group.groupPurpose,
+        groupedBeneficiaries: { length: group._count.beneficiaries },
+      }),
     };
   }
 
