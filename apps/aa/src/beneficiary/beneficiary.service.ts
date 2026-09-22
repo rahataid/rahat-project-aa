@@ -1040,10 +1040,6 @@ export class BeneficiaryService {
       `Fetched ${data.length} token reservations, enriching with group data`
     );
 
-    const formattedData: Array<
-      DataItem & { group: ReturnType<typeof this.getOneGroup> }
-    > = [];
-
     const disburseOnCreate = await this.settingsService
       .getPublic('DISBURSED_ON_CREATE')
       .catch(() => null);
@@ -1052,21 +1048,23 @@ export class BeneficiaryService {
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
 
-    for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID);
-      const synced = shouldSyncFromSdp
-        ? await this.syncDisbursementStatusFromSdp(d)
-        : null;
+    const enriched = await Promise.all(
+      data.map(async (d) => {
+        const group = await this.getOneGroup(d['groupId'] as UUID);
+        const synced = shouldSyncFromSdp
+          ? await this.syncDisbursementStatusFromSdp(d)
+          : null;
 
-      formattedData.push({
-        ...d,
-        ...synced,
-        group,
-      });
-    }
+        return {
+          ...d,
+          ...synced,
+          group,
+        };
+      })
+    );
 
     return {
-      data: formattedData,
+      data: enriched,
       meta,
     };
   }
