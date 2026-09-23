@@ -68,8 +68,8 @@ export class BeneficiaryService {
     this.rsprisma = prisma.rsclient;
   }
 
-  initiateQrPdf(groupId: string) {
-    return this.qrPdfService.initiateQrPdf(groupId);
+  initiateQrPdf(groupId: string, includeOtp = true) {
+    return this.qrPdfService.initiateQrPdf(groupId, includeOtp);
   }
 
   getQrPdf(groupId: string) {
