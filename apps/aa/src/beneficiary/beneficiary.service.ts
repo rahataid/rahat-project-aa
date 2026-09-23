@@ -40,6 +40,15 @@ interface PaginateResult<T> {
   meta: any;
 }
 
+interface GroupBeneficiaryExcelRow {
+  name: string;
+  phone: string;
+  gender: string;
+  government_id_number: string;
+  address: string;
+  otp: string;
+}
+
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
@@ -65,6 +74,70 @@ export class BeneficiaryService {
 
   getQrPdf(groupId: string) {
     return this.qrPdfService.getJobStatus(groupId);
+  }
+
+  async exportGroupBeneficiariesExcel(
+    groupId: string
+  ): Promise<GroupBeneficiaryExcelRow[]> {
+    const links = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId },
+      include: {
+        beneficiary: {
+          select: {
+            uuid: true,
+            walletAddress: true,
+            phone: true,
+            gender: true,
+            extras: true,
+          },
+        },
+      },
+    });
+
+    const wallets = links
+      .map((l) => l.beneficiary?.walletAddress)
+      .filter((address): address is string => !!address);
+
+    const otps = await this.prisma.otp.findMany({
+      where: { walletAddress: { in: wallets } },
+      select: { walletAddress: true, otp: true },
+    });
+
+    const otpMap = Object.fromEntries(
+      otps.map((o) => [o.walletAddress, o.otp ?? ''])
+    );
+
+    return links.flatMap(({ beneficiary: ben }) => {
+      if (!ben) return [];
+
+      const extras = (ben.extras as Record<string, unknown>) ?? {};
+
+      const syncedLocation =
+        typeof extras.location === 'string' ? extras.location.trim() : '';
+      return [
+        {
+          name: String(
+            extras.name ||
+              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
+              ''
+          ),
+          phone: ben.phone ?? '',
+          gender: ben.gender ?? 'UNKNOWN',
+          government_id_number: String(extras.govtIDNumber ?? ''),
+          address:
+            syncedLocation ||
+            [
+              extras.district,
+              extras.municipality,
+              extras.ward ? `Ward ${extras.ward}` : null,
+              extras.tole_name,
+            ]
+              .filter(Boolean)
+              .join(', '),
+          otp: otpMap[ben.walletAddress ?? ''] ?? '',
+        },
+      ];
+    });
   }
 
   async getAllBenfs() {

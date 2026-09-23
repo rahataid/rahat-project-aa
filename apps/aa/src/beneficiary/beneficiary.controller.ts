@@ -303,6 +303,16 @@ export class BeneficiaryController {
   }
 
   @MessagePattern({
+    cmd: JOBS.BENEFICIARY.EXPORT_GROUP_EXCEL,
+    uuid: process.env.PROJECT_ID,
+  })
+  exportGroupBeneficiariesExcel(@Payload() payload: { groupId: string }) {
+    return this.beneficiaryService.exportGroupBeneficiariesExcel(
+      payload.groupId
+    );
+  }
+
+  @MessagePattern({
     cmd: JOBS.BENEFICIARY.CREATE_BENEFICIARY_WITH_DB_TRANSACTION,
     uuid: process.env.PROJECT_ID,
   })

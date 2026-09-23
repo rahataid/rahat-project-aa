@@ -92,6 +92,7 @@ export const JOBS = {
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
+    EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
     REVOKE_SPONSORSHIP_FOR_GROUP:
@@ -106,6 +107,7 @@ export const JOBS = {
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
@@ -170,6 +172,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
+    EXPORT_PAYOUT_LOGS_PDF_FILE: 'aa.jobs.payout.exportPayoutLogsPdfFile',
     VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
@@ -423,6 +426,7 @@ export const BQUEUE = {
   COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_SEND_ASSET: `STELLAR_SEND_ASSET_${process.env.PROJECT_ID}`,
+  STELLAR_INKIND_REDEEM: `STELLAR_INKIND_REDEEM_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
