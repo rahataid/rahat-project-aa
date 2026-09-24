@@ -27,7 +27,7 @@ interface AlertState {
 
 @Injectable()
 export class HealthService {
-  private readonly CACHE_KEY = 'health_status';
+  private readonly CACHE_KEY = 'project_health_status';
   private readonly CACHE_TTL = 60;
   private readonly _logger = new Logger(HealthService.name);
 
