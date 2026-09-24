@@ -46,6 +46,15 @@ interface PaginateResult<T> {
   meta: any;
 }
 
+interface GroupBeneficiaryExcelRow {
+  name: string;
+  phone: string;
+  gender: string;
+  government_id_number: string;
+  address: string;
+  otp: string;
+}
+
 @Injectable()
 export class BeneficiaryService {
   private rsprisma;
@@ -66,12 +75,76 @@ export class BeneficiaryService {
     this.rsprisma = prisma.rsclient;
   }
 
-  initiateQrPdf(groupId: string) {
-    return this.qrPdfService.initiateQrPdf(groupId);
+  initiateQrPdf(groupId: string, includeOtp = true) {
+    return this.qrPdfService.initiateQrPdf(groupId, includeOtp);
   }
 
   getQrPdf(groupId: string) {
     return this.qrPdfService.getJobStatus(groupId);
+  }
+
+  async exportGroupBeneficiariesExcel(
+    groupId: string
+  ): Promise<GroupBeneficiaryExcelRow[]> {
+    const links = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId },
+      include: {
+        beneficiary: {
+          select: {
+            uuid: true,
+            walletAddress: true,
+            phone: true,
+            gender: true,
+            extras: true,
+          },
+        },
+      },
+    });
+
+    const wallets = links
+      .map((l) => l.beneficiary?.walletAddress)
+      .filter((address): address is string => !!address);
+
+    const otps = await this.prisma.otp.findMany({
+      where: { walletAddress: { in: wallets } },
+      select: { walletAddress: true, otp: true },
+    });
+
+    const otpMap = Object.fromEntries(
+      otps.map((o) => [o.walletAddress, o.otp ?? ''])
+    );
+
+    return links.flatMap(({ beneficiary: ben }) => {
+      if (!ben) return [];
+
+      const extras = (ben.extras as Record<string, unknown>) ?? {};
+
+      const syncedLocation =
+        typeof extras.location === 'string' ? extras.location.trim() : '';
+      return [
+        {
+          name: String(
+            extras.name ||
+              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
+              ''
+          ),
+          phone: ben.phone ?? '',
+          gender: ben.gender ?? 'UNKNOWN',
+          government_id_number: String(extras.govtIDNumber ?? ''),
+          address:
+            syncedLocation ||
+            [
+              extras.district,
+              extras.municipality,
+              extras.ward ? `Ward ${extras.ward}` : null,
+              extras.tole_name,
+            ]
+              .filter(Boolean)
+              .join(', '),
+          otp: otpMap[ben.walletAddress ?? ''] ?? '',
+        },
+      ];
+    });
   }
 
   async getAllBenfs() {
@@ -2141,5 +2214,36 @@ export class BeneficiaryService {
     // }
 
     return { message: 'Sync process completed successfully' };
+  }
+
+  async getBeneficiaryPayoutMode(payload: { benId: string }) {
+    const { benId } = payload;
+    const payoutDetails = await this.prisma.beneficiary.findUnique({
+      where: { uuid: benId },
+      include: {
+        BeneficiaryToGroup: {
+          include: {
+            group: {
+              include: {
+                tokensReserved: {
+                  where: { payoutId: { not: null } },
+                  include: {
+                    payout: { select: { mode: true } },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const payoutMode =
+      payoutDetails?.BeneficiaryToGroup?.find(
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+      )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
+
+    return { benId, payoutMode };
   }
 }

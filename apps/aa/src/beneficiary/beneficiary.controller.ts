@@ -37,7 +37,6 @@ export class BeneficiaryController {
     return this.beneficiaryService.create(data);
   }
 
-
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {
     return this.beneficiaryService.findOne(payload);
@@ -72,7 +71,10 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   createMany(data) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT',JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT);
+    console.log(
+      'Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT',
+      JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT
+    );
     return this.beneficiaryService.createMany(data);
   }
 
@@ -89,17 +91,18 @@ export class BeneficiaryController {
     );
   }
 
-
   //NOTE: used in group-assignment to project in platform
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
   })
   createBulk(data: CreateBulkBeneficiaryDto) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT',JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT);
+    console.log(
+      'Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT',
+      JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT
+    );
     return this.beneficiaryService.createBulk(data);
   }
-
 
   // ***** groups start ********** //
   //NOTE: used in group-assignment to project in platform
@@ -108,7 +111,10 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async addGroupToProject(payload) {
-    console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
+    console.log(
+      `Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,
+      JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT
+    );
     return this.beneficiaryService.addGroupToProject(payload);
   }
 
@@ -254,6 +260,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.assignToken();
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_PAYOUT_MODE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryPayoutMode(payload: any) {
+    return this.beneficiaryService.getBeneficiaryPayoutMode(payload);
+  }
+
   // ***** multisig starts ********** //
   @MessagePattern({
     cmd: JOBS.MULTISIG.GET_SAFE_OWNER,
@@ -276,8 +290,13 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GENERATE_QR_PDF,
     uuid: process.env.PROJECT_ID,
   })
-  generateQrPdf(@Payload() payload: { groupId: string }) {
-    return this.beneficiaryService.initiateQrPdf(payload.groupId);
+  generateQrPdf(
+    @Payload() payload: { groupId: string; includeOtp?: boolean }
+  ) {
+    return this.beneficiaryService.initiateQrPdf(
+      payload.groupId,
+      payload.includeOtp
+    );
   }
 
   @MessagePattern({
@@ -286,6 +305,16 @@ export class BeneficiaryController {
   })
   getQrPdfJob(@Payload() payload: { groupId: string }) {
     return this.beneficiaryService.getQrPdf(payload.groupId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.EXPORT_GROUP_EXCEL,
+    uuid: process.env.PROJECT_ID,
+  })
+  exportGroupBeneficiariesExcel(@Payload() payload: { groupId: string }) {
+    return this.beneficiaryService.exportGroupBeneficiariesExcel(
+      payload.groupId
+    );
   }
 
   @MessagePattern({

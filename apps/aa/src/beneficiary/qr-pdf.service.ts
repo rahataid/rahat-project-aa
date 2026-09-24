@@ -48,7 +48,8 @@ export class QrPdfService implements OnModuleInit {
     });
   }
 
-  async initiateQrPdf(groupId: string) {
+  async initiateQrPdf(groupId: string, includeOtp = true) {
+    const withOtp = includeOtp !== false;
     const existing = await this.prisma.pdfGenerationJob.findFirst({
       where: { groupId, status: { in: ['pending', 'processing'] } },
       orderBy: { createdAt: 'desc' },
@@ -63,8 +64,14 @@ export class QrPdfService implements OnModuleInit {
       data: { groupId, status: 'pending' },
     });
 
-    await this.qrPdfQueue.add({ groupId, jobUuid: job.uuid });
-    this.logger.log(`QR PDF generation queued for group ${groupId}`);
+    await this.qrPdfQueue.add({
+      groupId,
+      jobUuid: job.uuid,
+      includeOtp: withOtp,
+    });
+    this.logger.log(
+      `QR PDF generation queued for group ${groupId} (includeOtp=${withOtp})`
+    );
 
     return { jobId: job.uuid, alreadyRunning: false };
   }
@@ -96,14 +103,15 @@ export class QrPdfService implements OnModuleInit {
     return job;
   }
 
-  async processQrPdf(groupId: string, jobUuid: string) {
+  async processQrPdf(groupId: string, jobUuid: string, includeOtp = true) {
+    const withOtp = includeOtp !== false;
     await this.prisma.pdfGenerationJob.update({
       where: { uuid: jobUuid },
       data: { status: 'processing' },
     });
 
     try {
-      const cards = await this.collectCards(groupId);
+      const cards = await this.collectCards(groupId, withOtp);
       this.logger.log(
         `Building PDF for ${cards.length} beneficiaries in group ${groupId}`
       );
@@ -141,8 +149,14 @@ export class QrPdfService implements OnModuleInit {
     }
   }
 
-  private async collectCards(groupId: string): Promise<QrCardData[]> {
-    this.logger.log(`Collecting beneficiaries for group ${groupId}`);
+  private async collectCards(
+    groupId: string,
+    includeOtp = true
+  ): Promise<QrCardData[]> {
+    const withOtp = includeOtp !== false;
+    this.logger.log(
+      `Collecting beneficiaries for group ${groupId} (includeOtp=${withOtp})`
+    );
     const cards: QrCardData[] = [];
     let skip = 0;
 
@@ -164,7 +178,9 @@ export class QrPdfService implements OnModuleInit {
         .map((r) => r.beneficiary?.walletAddress)
         .filter(Boolean) as string[];
 
-      const otpMap = await this.buildOtpMap(walletAddresses);
+      // when OTP is excluded, skip the OTP lookup entirely
+      // so no PIN is rendered into the PDF.
+      const otpMap = withOtp ? await this.buildOtpMap(walletAddresses) : {};
 
       for (const row of rows) {
         const ben = row.beneficiary;
@@ -172,7 +188,7 @@ export class QrPdfService implements OnModuleInit {
 
         const extras = (ben.extras as Record<string, unknown>) || {};
         const name = this.resolveName(extras);
-        const otp = otpMap[ben.walletAddress || ''] ?? '';
+        const otp = withOtp ? otpMap[ben.walletAddress || ''] ?? '' : '';
 
         const isRandom =
           extras.isRandomNumber === true || extras.isRandomNumber === 'true';

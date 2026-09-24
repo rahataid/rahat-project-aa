@@ -110,6 +110,7 @@ export type PayoutStats = {
 
 export type DownloadPayoutLogsType = {
   'Beneficiary Wallet Address': string;
+  'Beneficiary Name': string;
   'Phone number': string;
   'Transaction Wallet ID': string;
   'Transaction Hash': string;
@@ -122,6 +123,23 @@ export type DownloadPayoutLogsType = {
   'Bank a/c name'?: string;
   'Bank a/c number'?: string;
   'Bank Name'?: string;
+};
+
+export type DownloadPayoutLogsPdfType = {
+  uuid: string;
+  'Beneficiary First Name': string;
+  'Beneficiary Last Name': string;
+  'Phone number': string;
+  'Amount Disbursed': number;
+  photoUrl: string | null;
+  beneficiaryName: string;
+  beneficiaryPhone: string;
+  municipality?: string;
+  district?: string;
+  ward?: string;
+  tole?: string;
+  governmentIdNumber?: string;
+  infoNote?: string;
 };
 
 // Manual Payout Verification Types
