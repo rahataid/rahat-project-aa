@@ -187,12 +187,10 @@ export class HealthService {
 
       if (restored.length) {
         this._logger.log('health status up ');
-        const upServices = Object.entries(result.services)
-          .filter(([, status]) => status.status === 'up')
-          .map(([name]) => ({
-            name: SERVICE_LABELS[name] ?? name,
-            restored: restored.includes(name),
-          }));
+        const upServices = restored.map((name) => ({
+          name: SERVICE_LABELS[name] ?? name,
+          restored: true,
+        }));
         await this.sendHealthRestoredEmail(upServices, frontendUrl);
       }
 
