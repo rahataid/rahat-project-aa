@@ -20,6 +20,7 @@ export interface OfflineBeneficiaryDetail {
   otpHash: string;
   amount: number;
   status: string;
+  walletAddress?: string;
 }
 
 export class VerifyVendorOfflineOtpDto {
