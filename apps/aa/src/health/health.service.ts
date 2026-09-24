@@ -82,7 +82,8 @@ export class HealthService {
 
   async sendHealthAlertEmail(
     downServices: Array<{ name: string; message?: string }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): Promise<void> {
     try {
       this._logger.log('Health status alert email sending..');
@@ -103,7 +104,12 @@ export class HealthService {
         maxAttempts: 3,
         trigger: TriggerType.IMMEDIATE,
         message: {
-          content: this.buildHealthEmailHtml('down', downServices, frontendUrl),
+          content: this.buildHealthEmailHtml(
+            'down',
+            downServices,
+            frontendUrl,
+            projectName
+          ),
           meta: {
             subject: `[ALERT] ${downServices.length} service(s) down – Rahat Health Check`,
           },
@@ -119,7 +125,8 @@ export class HealthService {
 
   async sendHealthRestoredEmail(
     restoredServices: Array<{ name: string; restored: boolean }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): Promise<void> {
     try {
       const transportId = await this.commsService.getEmailTransportId();
@@ -139,7 +146,8 @@ export class HealthService {
           content: this.buildHealthEmailHtml(
             'up',
             restoredServices.map(({ name }) => ({ name })),
-            frontendUrl
+            frontendUrl,
+            projectName
           ),
           meta: {
             subject: `[NOTICE] All services restored – Rahat Health Check`,
@@ -163,6 +171,13 @@ export class HealthService {
 
       const newlyDown = downNow.filter((s) => !prev.down.includes(s));
       const restored = prev.down.filter((s) => !downNow.includes(s));
+      const settings = await this.prisma.setting.findUnique({
+        where: {
+          name: 'PROJECTINFO',
+        },
+      });
+      const settingValue = settings?.value as any;
+      const projectName = settingValue?.PROJECT_NAME;
       const [frontendSetting] = await lastValueFrom(
         this.coreClient.send({ cmd: 'appJobs.frontendUrl.get' }, {})
       );
@@ -180,7 +195,8 @@ export class HealthService {
               message: svc?.message,
             };
           }),
-          frontendUrl
+          frontendUrl,
+          projectName
         );
         prev.lastAlertAt = Date.now();
       }
@@ -191,7 +207,11 @@ export class HealthService {
           name: SERVICE_LABELS[name] ?? name,
           restored: true,
         }));
-        await this.sendHealthRestoredEmail(upServices, frontendUrl);
+        await this.sendHealthRestoredEmail(
+          upServices,
+          frontendUrl,
+          projectName
+        );
       }
 
       // Re-alert only when state is stable (no transition) and the same
@@ -262,7 +282,8 @@ export class HealthService {
   private buildHealthEmailHtml(
     type: 'down' | 'up',
     services: Array<{ name: string; message?: string; restored?: boolean }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): string {
     const isDown = type === 'down';
     const accent = isDown ? '#d9534f' : '#5cb85c';
@@ -296,6 +317,9 @@ export class HealthService {
     const extraHeader = isDown
       ? `<th style="text-align:left;padding:10px 12px;font-size:.85em">Message</th>`
       : '';
+    const projectDetails = projectName
+      ? `<p ProjectName: ${projectName}></p>`
+      : '';
 
     return `<!DOCTYPE html>
   <html>
@@ -326,6 +350,7 @@ export class HealthService {
       </div>
       <div class="foot">
       <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard</a>· ${new Date().toLocaleString()} </p>
+      ${projectDetails}
       </div>
       </div>
     </body>
