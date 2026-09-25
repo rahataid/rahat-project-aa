@@ -287,7 +287,9 @@ export class HealthService {
   ): string {
     const isDown = type === 'down';
     const accent = isDown ? '#d9534f' : '#5cb85c';
-    const heading = isDown ? '⚠ Service Health Alert' : '✓ Services Restored';
+    const heading = isDown
+      ? `⚠ Service Health Alert  ${projectName}??for ${projectName}`
+      : `✓ Services Restored ${projectName}??for ${projectName}`;
     const intro = isDown
       ? 'The following service(s) are currently unavailable:'
       : 'All services are now healthy:';
@@ -318,7 +320,7 @@ export class HealthService {
       ? `<th style="text-align:left;padding:10px 12px;font-size:.85em">Message</th>`
       : '';
     const projectDetails = projectName
-      ? `<p ProjectName: ${projectName}></p>`
+      ? `<p><strong>Project:</strong> ${projectName}</p>`
       : '';
 
     return `<!DOCTYPE html>
