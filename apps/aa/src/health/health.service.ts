@@ -288,8 +288,8 @@ export class HealthService {
     const isDown = type === 'down';
     const accent = isDown ? '#d9534f' : '#5cb85c';
     const heading = isDown
-      ? `⚠ Service Health Alert  ${projectName}??for ${projectName}`
-      : `✓ Services Restored ${projectName}??for ${projectName}`;
+      ? `⚠ Service Health Alert ${projectName}`
+      : `✓ Services Restored ${projectName}`;
     const intro = isDown
       ? 'The following service(s) are currently unavailable:'
       : 'All services are now healthy:';
