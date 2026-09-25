@@ -17,7 +17,7 @@ import { ClientProxy } from '@nestjs/microservices';
 // Stores the last-known set of down services + timestamp of last down-alert.
 // Diffed each run to detect newly-down (alert) and restored (notice) services.
 // Re-alerts every 24h while the same services remain down.
-const ALERT_STATE_KEY = 'project_health_alert_state';
+const ALERT_STATE_KEY = `${process.env.PROJECT_ID}:project_health_alert_state`;
 const RE_ALERT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface AlertState {
@@ -27,8 +27,8 @@ interface AlertState {
 
 @Injectable()
 export class HealthService {
-  private readonly CACHE_KEY = 'project_health_status';
-  private readonly CACHE_TTL = 60;
+  private readonly CACHE_KEY = `${process.env.PROJECT_ID}:project_health_status`;
+  private readonly CACHE_TTL = 300;
   private readonly _logger = new Logger(HealthService.name);
 
   constructor(
@@ -61,7 +61,7 @@ export class HealthService {
       this.triggerClient
     );
     await this.setCache(result);
-    // await this.handleAlertTransitions(result);
+    await this.handleAlertTransitions(result);
     return result;
   }
 
@@ -136,7 +136,6 @@ export class HealthService {
         .filter(Boolean);
 
       if (!recipients.length) return;
-
       await this.commsService.broadcast.create({
         transport: transportId,
         addresses: recipients,
@@ -232,7 +231,8 @@ export class HealthService {
               message: svc?.message,
             };
           }),
-          frontendUrl
+          frontendUrl,
+          projectName
         );
         prev.lastAlertAt = Date.now();
       }
