@@ -13,8 +13,10 @@ import {
 import { GctTreasuryService } from './gct-treasury.service';
 import { GctOfframpClient } from './gct-offramp.client';
 import { OtpService } from '../otp/otp.service';
+import { RedisService } from '../redis/redis.service';
 import { translateCipsMessage } from './group-cash-transfer.constants';
 import bcrypt from 'bcryptjs';
+import { GCT_CACHE_KEY_PREFIX, GCT_CACHE_TTL } from '../constants/redis-keys';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -28,7 +30,8 @@ export class GroupCashTransferService {
     prisma: PrismaService,
     private readonly treasuryService: GctTreasuryService,
     private readonly offrampClient: GctOfframpClient,
-    private readonly otpService: OtpService
+    private readonly otpService: OtpService,
+    private readonly redisService: RedisService
   ) {
     this.db = prisma;
   }
@@ -115,7 +118,8 @@ export class GroupCashTransferService {
 
       if (fundCount > 0) {
         throw new RpcException({
-          message: 'Cannot delete: fund has already been assigned to this group',
+          message:
+            'Cannot delete: fund has already been assigned to this group',
           code: 'CANNOT_DELETE_FUND_ALREADY_ASSIGNED',
         });
       }
@@ -506,7 +510,8 @@ export class GroupCashTransferService {
 
     const defaultOpt = await this.db.otp.findUnique({ where: { email } });
 
-    const isExistingValid = defaultOpt?.otp && defaultOpt.expiresAt > new Date();
+    const isExistingValid =
+      defaultOpt?.otp && defaultOpt.expiresAt > new Date();
 
     // if existing OTP is expired, purge it so we can issue a fresh one
     if (defaultOpt && !isExistingValid) {
@@ -658,6 +663,16 @@ export class GroupCashTransferService {
         },
       });
 
+      await this.redisService.set(
+        `${GCT_CACHE_KEY_PREFIX}${recordUuid}`,
+        {
+          status: 'TOKEN_TRANSFERRED',
+          totalAmount: record.amount,
+          lastUpdated: Date.now(),
+        },
+        GCT_CACHE_TTL
+      );
+
       this.logger.log(
         `Token transferred for record=${recordUuid}, txHash=${txHash}`
       );
@@ -751,6 +766,16 @@ export class GroupCashTransferService {
             disbursementInfo: { result },
           },
         });
+
+        await this.redisService.set(
+          `${GCT_CACHE_KEY_PREFIX}${recordUuid}`,
+          {
+            status: isRejected ? 'REJECTED' : 'COMPLETED',
+            totalAmount: record.amount,
+            lastUpdated: Date.now(),
+          },
+          GCT_CACHE_TTL
+        );
 
         if (isRejected) {
           this.logger.warn(
