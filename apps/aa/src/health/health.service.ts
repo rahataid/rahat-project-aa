@@ -54,7 +54,7 @@ export class HealthService {
   }
 
   async checkHealthStatus(): Promise<HealthStatus> {
-    this._logger.log('Check the health status of all  used services');
+    // this._logger.log('Check the health status of all  used services');
     const result = await updateHealthStatus(
       this.prisma,
       this.rahatQueue,
@@ -86,7 +86,6 @@ export class HealthService {
     projectName?: string
   ): Promise<void> {
     try {
-      this._logger.log('Health status alert email sending..');
       const transportId = await this.commsService.getEmailTransportId();
       const recipients = (process.env.HEALTH_ALERT_EMAILS ?? '')
         .split(',')
@@ -201,7 +200,6 @@ export class HealthService {
       }
 
       if (restored.length) {
-        this._logger.log('health status up ');
         const upServices = restored.map((name) => ({
           name: SERVICE_LABELS[name] ?? name,
           restored: true,
@@ -271,7 +269,9 @@ export class HealthService {
   }
 
   private async setCache(data: HealthStatus): Promise<void> {
-    this._logger.log('Caching the health status');
+    this._logger.log(
+      'Checking the health status of all  used services and caching the health status'
+    );
     await this.rahatQueue.client.setex(
       this.CACHE_KEY,
       this.CACHE_TTL,
