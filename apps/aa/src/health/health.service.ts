@@ -61,7 +61,7 @@ export class HealthService {
       this.triggerClient
     );
     await this.setCache(result);
-    await this.handleAlertTransitions(result);
+    // await this.handleAlertTransitions(result);
     return result;
   }
 
