@@ -1216,19 +1216,19 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
     }
 
-    if (record.isVerified) {
-      this.logger.log('OTP already verified');
-      throw new RpcException({
-        message: 'OTP already verified',
-        code: 'OTP_ALREADY_VERIFIED',
-      });
-    }
+    // if (record.isVerified) {
+    //   this.logger.log('OTP already verified');
+    //   throw new RpcException({
+    //     message: 'OTP already verified',
+    //     code: 'OTP_ALREADY_VERIFIED',
+    //   });
+    // }
 
-    const now = new Date();
-    if (record.expiresAt < now) {
-      this.logger.log('OTP has expired');
-      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
-    }
+    // const now = new Date();
+    // if (record.expiresAt < now) {
+    //   this.logger.log('OTP has expired');
+    //   throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
+    // }
 
     const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
 
