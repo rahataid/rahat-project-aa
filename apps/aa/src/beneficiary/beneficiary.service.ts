@@ -27,6 +27,8 @@ import { PayoutsService } from '../payouts/payouts.service';
 import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
+import { ModuleRef } from '@nestjs/core';
+import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -63,7 +65,8 @@ export class BeneficiaryService {
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
     private readonly qrPdfService: QrPdfService,
-    private readonly sseService: SseService
+    private readonly sseService: SseService,
+    private readonly moduleRef: ModuleRef
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -817,8 +820,11 @@ export class BeneficiaryService {
           break;
         }
 
-        if (payout.status === 'COMPLETED') {
-          // this cycle is fully done — benf is eligible for a new assignment
+        if (
+          payout.status === 'COMPLETED' ||
+          (payout.extras as any)?.skippedAt
+        ) {
+          // this cycle is done (or explicitly skipped) — benf is eligible for a new assignment
           continue;
         }
 
@@ -878,6 +884,138 @@ export class BeneficiaryService {
     };
   }
 
+  /**
+   * Closes the group's open payout(s) so the group can be reserved again:
+   * marks remaining beneficiaries' unfinished redeems FAILED and stamps
+   * payout.extras.skippedAt (honoured by checkIsTokenAlreadyAssigned) — DB only, so the
+   * new reservation + payout proceed immediately. Returning their tokens to the
+   * distribution wallet runs in the background queue; progress/failure is recorded on
+   * payout.extras.tokenReturn.
+   */
+  private async skipOldPayoutForRemaining(groupUuid: string, user?: any) {
+    if (!(await this.isStellarChain())) {
+      throw new RpcException({
+        message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
+        code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
+      });
+    }
+
+    const tokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: { groupId: groupUuid, isDisbursed: true, payoutId: { not: null } },
+      include: { payout: { include: { beneficiaryRedeem: true } } },
+    });
+    const openPayouts = tokens.flatMap((t) =>
+      t.payout &&
+      t.payout.status !== 'COMPLETED' &&
+      !(t.payout.extras as any)?.skippedAt
+        ? [{ payout: t.payout, numberOfTokens: t.numberOfTokens }]
+        : []
+    );
+
+    if (!openPayouts.length) {
+      this.logger.debug(`No open payout to skip for group: ${groupUuid}`);
+      return;
+    }
+
+    const group = await this.getOneGroup(groupUuid as UUID);
+    const wallets: string[] = (group.groupedBeneficiaries ?? [])
+      .map((d: any) => d?.Beneficiary?.walletAddress)
+      .filter(Boolean);
+
+    const chain = this.moduleRef.get(StellarChainService, { strict: false });
+    const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+    const skippedAt = new Date().toISOString();
+
+    for (const { payout, numberOfTokens } of openPayouts) {
+      const redeems = payout.beneficiaryRedeem;
+      // per-beneficiary amount of the old reservation; caps the return so tokens from the
+      // new reservation (possibly disbursed before the job runs) are never taken back
+      const amountPerWallet = wallets.length ? numberOfTokens / wallets.length : 0;
+      const paid = new Set(
+        redeems
+          .filter((r) => PAID.includes(r.status))
+          .map((r) => r.beneficiaryWalletAddress)
+      );
+      const remaining = wallets.filter((w) => !paid.has(w));
+
+      const skipInfo = { skipReason: 'skipOldPayoutForRemaining', skippedAt };
+      const remainingSet = new Set(remaining);
+      const hasRow = new Set(redeems.map((r) => r.beneficiaryWalletAddress));
+
+      await this.prisma.$transaction(async (tx) => {
+        for (const r of redeems) {
+          if (!remainingSet.has(r.beneficiaryWalletAddress)) continue;
+          if (PAID.includes(r.status) || r.status === 'FAILED') continue;
+          await tx.beneficiaryRedeem.update({
+            where: { uuid: r.uuid },
+            data: {
+              status: 'FAILED',
+              isCompleted: false,
+              info: { ...((r.info as object) ?? {}), ...skipInfo },
+            },
+          });
+        }
+
+        const missing = remaining.filter((w) => !hasRow.has(w));
+        if (missing.length) {
+          await tx.beneficiaryRedeem.createMany({
+            data: missing.map((w) => ({
+              beneficiaryWalletAddress: w,
+              amount: Math.round(amountPerWallet),
+              transactionType:
+                payout.type === 'VENDOR'
+                  ? ('VENDOR_REIMBURSEMENT' as const)
+                  : ('FIAT_TRANSFER' as const),
+              status: 'FAILED' as const,
+              isCompleted: false,
+              payoutId: payout.uuid,
+              info: skipInfo,
+            })),
+          });
+        }
+
+        await tx.payouts.update({
+          where: { uuid: payout.uuid },
+          data: {
+            extras: {
+              ...((payout.extras as object) ?? {}),
+              skippedAt,
+              skippedBy: user?.name,
+              tokenReturn: {
+                status: 'QUEUED',
+                returned: {},
+                updatedAt: skippedAt,
+              },
+            },
+          },
+        });
+      });
+
+      await this.payoutService.checkAndCompletePayout(payout.uuid);
+
+      try {
+        await chain.queueReturnTokens({
+          payoutUuid: payout.uuid,
+          wallets: remaining,
+          amountPerWallet,
+        });
+      } catch (err: any) {
+        // Redis down etc. — don't block the reservation; surface on the payout for ops.
+        this.logger.error(
+          `Failed to queue token return for payout ${payout.uuid}: ${err?.message}`
+        );
+        await chain.setTokenReturnState(payout.uuid, {
+          status: 'FAILED',
+          returned: {},
+          error: `enqueue failed: ${err?.message}`,
+        });
+      }
+      this.logger.log(
+        `Skipped old payout ${payout.uuid} for group ${groupUuid}: ${remaining.length} beneficiaries marked FAILED, token return queued`
+      );
+    }
+  }
+
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const {
       beneficiaryGroupId,
@@ -885,6 +1023,7 @@ export class BeneficiaryService {
       totalTokensReserved,
       user,
       isPayoutIntegrated,
+      skipOldPayoutForRemaining,
       params,
     } = payload;
 
@@ -954,6 +1093,12 @@ export class BeneficiaryService {
           params: { payoutType: params?.type ?? 'none' },
         });
       }
+    }
+
+    // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
+    // start disbursing immediately and the return would otherwise claw back new tokens.
+    if (skipOldPayoutForRemaining) {
+      await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
     }
 
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(

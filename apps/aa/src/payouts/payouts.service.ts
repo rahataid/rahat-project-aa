@@ -1233,6 +1233,7 @@ export class PayoutsService {
           extras: {
             ...(payoutDetails.extras as object),
             payoutTriggeredAt: new Date().toISOString(),
+            payoutTriggeredBy: user?.name,
           },
         },
       });
