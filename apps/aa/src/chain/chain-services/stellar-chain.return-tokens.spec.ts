@@ -1,4 +1,7 @@
+import { SdpClient } from '@rahataid/stellar-sdp';
 import { StellarChainService } from './stellar-chain.service';
+
+jest.mock('@rahataid/stellar-sdp', () => ({ SdpClient: jest.fn() }));
 
 describe('StellarChainService token return (chunked)', () => {
   const prisma: any = {
@@ -171,6 +174,55 @@ describe('StellarChainService.getBeneficiaryPayoutTypeByPhone', () => {
     ]);
     await expect(run(groupsOf('old'))).rejects.toMatchObject({
       error: { code: 'NO_ACTIVE_PAYOUT_FOUND_FOR_GROUP' },
+    });
+  });
+});
+
+describe('StellarChainService.getSdpDistributionAccount', () => {
+  const G = 'GBUNM66NFAKFKIVNVXPOU57PBCYJPDDTQ6UUC74SXKMEFC4O6TZTWBHS';
+  const orgGet = jest.fn();
+  const balancesGet = jest.fn();
+  let service: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (SdpClient as unknown as jest.Mock).mockImplementation(() => ({
+      organization: { get: orgGet },
+      balances: { get: balancesGet },
+    }));
+    service = new (StellarChainService as any)({}, {}, {}, {}, {}, {}, {}, {}, {});
+    service.getFromSettings = jest.fn().mockResolvedValue({
+      sdpUrl: 'https://sdp',
+      tenantName: 't',
+      apiKey: 'k',
+    });
+  });
+
+  it('reads distribution_account.address from /organization and never calls /balances', async () => {
+    orgGet.mockResolvedValue({
+      distribution_account: { address: G, type: 'DISTRIBUTION_ACCOUNT.STELLAR.ENV' },
+      distribution_account_public_key: 'ignored',
+    });
+
+    await expect(service.getSdpDistributionAccount()).resolves.toBe(G);
+    expect(balancesGet).not.toHaveBeenCalled();
+  });
+
+  it('falls back to distribution_account_public_key', async () => {
+    orgGet.mockResolvedValue({ distribution_account_public_key: G });
+
+    await expect(service.getSdpDistributionAccount()).resolves.toBe(G);
+  });
+
+  it('rejects a missing or malformed address instead of using it as a destination', async () => {
+    orgGet.mockResolvedValue({ distribution_account: { address: { nope: 1 } } });
+    await expect(service.getSdpDistributionAccount()).rejects.toMatchObject({
+      error: { code: 'SDP_DISTRIBUTION_ACCOUNT_NOT_FOUND' },
+    });
+
+    orgGet.mockResolvedValue({});
+    await expect(service.getSdpDistributionAccount()).rejects.toMatchObject({
+      error: { code: 'SDP_DISTRIBUTION_ACCOUNT_NOT_FOUND' },
     });
   });
 });

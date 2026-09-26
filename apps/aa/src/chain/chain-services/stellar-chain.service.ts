@@ -1320,18 +1320,20 @@ export class StellarChainService implements IChainService, OnModuleInit {
       apiKey: sdpSettings.apiKey,
     });
 
-    const balance = await sdp.balances.get();
-    let account = balance?.account;
+    // /balances is Circle-tenant only (HTTP 400 otherwise), so the address comes from /organization.
+    const org = (await sdp.organization.get()) as Record<string, any>;
+    const account: string | undefined =
+      org?.distribution_account?.address ?? org?.distribution_account_public_key;
     this.logger.log(
-      `[ReturnTokens] SDP distribution account from /balances: ${account ?? 'not present, falling back to /organization'}`
+      `[ReturnTokens] SDP distribution account from /organization: ${account ?? 'not present'} (type=${
+        org?.distribution_account?.type ?? 'unknown'
+      })`
     );
-    if (!account) {
-      const org = await sdp.organization.get();
-      account = org?.['distribution_account_public_key'] as string | undefined;
-    }
-    if (!account) {
+    if (!account || !this.validateAddress(account)) {
       throw new RpcException({
-        message: 'Could not resolve SDP distribution account from SDP API',
+        message: `Could not resolve a valid SDP distribution account from SDP API (got: ${
+          account ?? 'nothing'
+        })`,
         code: 'SDP_DISTRIBUTION_ACCOUNT_NOT_FOUND',
       });
     }
