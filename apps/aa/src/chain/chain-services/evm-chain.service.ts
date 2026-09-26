@@ -817,10 +817,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
-      console.log('keys', keys);
-      console.log('verifyOtpDto', verifyOtpDto);
-      console.log('amount', amount);
-
       // Check if beneficiary has tokens in the contract before proceeding with transfer
       const hasTokens = await this.evmProcessor.checkBeneficiaryHasTokens(
         keys.address
@@ -1153,7 +1149,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
           });
         }
       }
-      console.log(config);
       return config;
     } catch (error) {
       this.logger.error(
@@ -1550,7 +1545,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
           .map((token) => ({ group, token }))
       );
 
-      this.logger.log(
+      this.logger.debug(
         `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
           .map((c) => `${c.group.uuid}/${c.token.uuid}`)
           .join(', ')}]`

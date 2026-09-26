@@ -951,7 +951,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
   async queueReturnTokens(payload: ReturnTokensJobData): Promise<void> {
     const { payoutUuid, wallets, amountPerWallet } = payload;
     const chunks = chunkArray(wallets, RETURN_TOKENS_CHUNK_SIZE);
-    this.logger.log(
+    this.logger.debug(
       `[ReturnTokens] payout=${payoutUuid} QUEUE ${wallets.length} wallet(s) -> ${chunks.length} job(s) of <=${RETURN_TOKENS_CHUNK_SIZE}, cap=${amountPerWallet}/wallet`
     );
     if (!chunks.length) {
@@ -1030,7 +1030,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     );
     const pending = wallets.filter((w) => !done.has(w));
     const chunkStartedAt = Date.now();
-    this.logger.log(
+    this.logger.debug(
       `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} START ${pending.length} to return, ${done.size} already returned, lastAttempt=${isLastAttempt}`
     );
 
@@ -1115,7 +1115,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       failed.add(chunkIndex);
     }
     const finished = completed.size + failed.size >= totalChunks;
-    this.logger.log(
+    this.logger[finished ? 'log' : 'debug'](
       `[ReturnTokens] payout=${payoutUuid} PROGRESS ${completed.size}/${totalChunks} chunks done, ${failed.size} failed${
         finished ? ` -> ${failed.size ? 'FAILED' : 'COMPLETED'}` : ''
       }`
@@ -1196,7 +1196,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     }
 
     const client = new StellarClient(clientConfig);
-    this.logger.log(
+    this.logger.debug(
       `[ReturnTokens] TRANSFER mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} to=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
     );
 
@@ -1243,9 +1243,6 @@ export class StellarChainService implements IChainService, OnModuleInit {
           maxAmountPerWallet === undefined
             ? balance
             : Math.min(balance, maxAmountPerWallet);
-        this.logger.debug(
-          `[ReturnTokens] wallet=${walletAddress} balance=${balance} sending=${Math.max(sendable, 0)}`
-        );
         if (sendable > 0)
           toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
         else results.push({ walletAddress, amount: '0' });
@@ -1264,7 +1261,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
             amount: c.amount,
           }))
         );
-        this.logger.log(
+        this.logger.debug(
           `[ReturnTokens] batch OK ${chunk.length} wallet(s) -> ${destination}, txHash=${res.hash}, from=${chunk
             .map((c) => c.walletAddress)
             .join(',')}`
@@ -1293,7 +1290,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       }
     }
 
-    this.logger.log(
+    this.logger.debug(
       `[ReturnTokens] TRANSFER SUMMARY to ${destination}: ${
         results.filter((r) => r.txHash).length
       } sent, ${results.filter((r) => r.error).length} failed, ${
@@ -1324,7 +1321,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const org = (await sdp.organization.get()) as Record<string, any>;
     const account: string | undefined =
       org?.distribution_account?.address ?? org?.distribution_account_public_key;
-    this.logger.log(
+    this.logger.debug(
       `[ReturnTokens] SDP distribution account from /organization: ${account ?? 'not present'} (type=${
         org?.distribution_account?.type ?? 'unknown'
       })`
@@ -1710,7 +1707,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
         .map((token) => ({ group, token }))
     );
 
-    this.logger.log(
+    this.logger.debug(
       `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
         .map((c) => `${c.group.uuid}/${c.token.uuid}`)
         .join(', ')}]`

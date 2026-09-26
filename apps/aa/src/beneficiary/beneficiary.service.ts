@@ -817,9 +817,6 @@ export class BeneficiaryService {
 
         if (payout && (payout.extras as any)?.skippedAt) {
           // explicitly skipped (skipOldPayoutForRemaining) — never blocks, whatever its status
-          this.logger.debug(
-            `Ignoring skipped payout ${payout.uuid} (status ${payout.status}) for wallet ${benf.walletAddress}`
-          );
           continue;
         }
 

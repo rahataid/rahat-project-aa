@@ -40,7 +40,6 @@ export class SdpStellarProcessor {
     }
 
     const config = sdpSettings.value as Record<string, string>;
-    console.log('SDP Settings:', config);
     this.sdpClient = new SdpClient({
       sdpUrl: config.sdpUrl,
       tenantName: config.tenantName,
@@ -95,9 +94,7 @@ export class SdpStellarProcessor {
 
       const csvBuffer = this.stellarChainService.generateCsv(benData);
       const sdpClient = await this.getSdpClient();
-      console.log('SDP Client initialized:');
       const sdpSettings = await this.getSdpSettings();
-      console.log('SDP Settings retrieved:', sdpSettings);
 
       this.logger.log({
         name: dName,
@@ -199,7 +196,7 @@ export class SdpStellarProcessor {
     const { disbursementId, groupUuid, startedAt, poll = 0 } = job.data;
     const tag = `[SdpStatus] group=${groupUuid} disbursement=${disbursementId}`;
 
-    this.logger.log(`${tag} check #${poll + 1} (job ${job.id})`);
+    this.logger.debug(`${tag} check #${poll + 1} (job ${job.id})`);
 
     try {
       // Duplicate/stale jobs are expected (explicit disburse queues an immediate check on top of
@@ -230,7 +227,7 @@ export class SdpStellarProcessor {
       const disbursement = await sdpClient.disbursements.get(disbursementId);
       const status = disbursement.status?.toUpperCase();
 
-      this.logger.log(`${tag} SDP status: ${status}`);
+      this.logger.debug(`${tag} SDP status: ${status}`);
 
       const existingInfo = token.info
         ? JSON.parse(JSON.stringify(token.info))
