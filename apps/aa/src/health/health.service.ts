@@ -373,7 +373,7 @@ export class HealthService implements OnModuleInit {
       </table>
       </div>
       <div class="foot">
-      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard</a>· ${new Date().toLocaleString()} </p>
+      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard(${frontendUrl})</a>· ${new Date().toLocaleString()} </p>
       ${projectDetails}
       <span style="margin-left:12px">Server IP: <strong>${
         this.serverIp
