@@ -1,7 +1,10 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
+import {
+  ReturnTokensJobData,
+  StellarChainService,
+} from '../chain/chain-services/stellar-chain.service';
 import { BQUEUE, JOBS } from '../constants';
 
 interface SendAssetToVendorJobData {
@@ -28,5 +31,15 @@ export class StellarSendAssetProcessor {
       `Processing SEND_ASSET_TO_VENDOR for vendor ${job.data.vendorUuid}, amount ${job.data.amount} (attempt ${job.attemptsMade + 1}/${maxAttempts})`
     );
     return this.stellarChainService.processSendAssetToVendor(job.data, isLastAttempt);
+  }
+
+  @Process({ name: JOBS.STELLAR.RETURN_TOKENS, concurrency: 1 })
+  async handleReturnTokens(job: Job<ReturnTokensJobData>): Promise<void> {
+    const maxAttempts = job.opts.attempts ?? 1;
+    const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
+    this.logger.debug(
+      `[ReturnTokens] job ${job.id} picked up: payout ${job.data.payoutUuid} chunk ${(job.data.chunkIndex ?? 0) + 1}/${job.data.totalChunks ?? 1}, ${job.data.wallets.length} wallet(s) (attempt ${job.attemptsMade + 1}/${maxAttempts})`
+    );
+    return this.stellarChainService.processReturnTokens(job.data, isLastAttempt);
   }
 }

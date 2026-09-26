@@ -817,10 +817,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
-      console.log('keys', keys);
-      console.log('verifyOtpDto', verifyOtpDto);
-      console.log('amount', amount);
-
       // Check if beneficiary has tokens in the contract before proceeding with transfer
       const hasTokens = await this.evmProcessor.checkBeneficiaryHasTokens(
         keys.address
@@ -1153,7 +1149,6 @@ export class EvmChainService implements IChainService, OnModuleInit {
           });
         }
       }
-      console.log(config);
       return config;
     } catch (error) {
       this.logger.error(
@@ -1513,23 +1508,12 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
-      if (payoutEligibleGroups.length > 1) {
-        this.logger.warn(
-          `Multiple payout-eligible groups found for beneficiary. Using the first one: ${payoutEligibleGroups
-            .map((g) => g.beneficiaryGroupId)
-            .join(', ')}`
-        );
-        throw new RpcException({
-          message:
-            'Multiple payout-eligible groups found for beneficiary. Please contact support.',
-          code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
-        });
-      }
-
-      // Use the first payout-eligible group for the lookup
-      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
+      // A beneficiary can sit in several payout-eligible groups (e.g. an old group plus the one
+      // used for a re-assignment). Resolve by the group that has an active payout instead of
+      // rejecting outright.
+      const beneficiaryGroups = await this.prisma.beneficiaryGroups.findMany({
         where: {
-          uuid: payoutEligibleGroups[0].beneficiaryGroupId,
+          uuid: { in: payoutEligibleGroups.map((g) => g.beneficiaryGroupId) },
         },
         include: {
           tokensReserved: {
@@ -1540,24 +1524,53 @@ export class EvmChainService implements IChainService, OnModuleInit {
         },
       });
 
-      if (!beneficiaryGroups) {
+      if (!beneficiaryGroups.length) {
         this.logger.error(
-          `Beneficiary group not found for ID: ${payoutEligibleGroups[0].beneficiaryGroupId}`
+          `Beneficiary group not found for IDs: ${payoutEligibleGroups
+            .map((g) => g.beneficiaryGroupId)
+            .join(', ')}`
         );
         throw new RpcException({ message: 'Beneficiary group not found', code: 'PAYOUT_ERR_GROUP_NOT_FOUND' });
       }
 
-      // Recheck, isDisbursed was false which was opposite of the needed logic, so changed to true to find the active token
-      const activeToken = beneficiaryGroups.tokensReserved.find(
-        (t) => t.isDisbursed === true
+      // active = disbursed and its payout is neither completed nor explicitly skipped
+      const candidates = beneficiaryGroups.flatMap((group) =>
+        group.tokensReserved
+          .filter(
+            (t) =>
+              t.isDisbursed === true &&
+              t.payout?.status !== 'COMPLETED' &&
+              !(t.payout?.extras as any)?.skippedAt
+          )
+          .map((token) => ({ group, token }))
       );
 
-      if (!activeToken) {
+      this.logger.debug(
+        `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+          .map((c) => `${c.group.uuid}/${c.token.uuid}`)
+          .join(', ')}]`
+      );
+
+      if (!candidates.length) {
         this.logger.error('Tokens not reserved for the group');
         throw new RpcException({ message: 'Tokens not reserved for the group', code: 'PAYOUT_ERR_TOKENS_NOT_RESERVED' });
       }
 
-      return activeToken.payout;
+      // genuinely ambiguous only when active payouts exist in more than one group
+      if (new Set(candidates.map((c) => c.group.uuid)).size > 1) {
+        this.logger.warn(
+          `Active payouts found in multiple groups for beneficiary: ${[
+            ...new Set(candidates.map((c) => c.group.uuid)),
+          ].join(', ')}`
+        );
+        throw new RpcException({
+          message:
+            'Multiple payout-eligible groups found for beneficiary. Please contact support.',
+          code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
+        });
+      }
+
+      return candidates[0].token.payout;
     } catch (error) {
       throw new RpcException({
         message: `Failed to retrieve payout type: ${error.message}`,

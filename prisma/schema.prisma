@@ -65,6 +65,7 @@ enum PayoutTransactionStatus {
   FIAT_TRANSACTION_FAILED
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum GroupPurpose {

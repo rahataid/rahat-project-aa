@@ -29,10 +29,26 @@ import { lastValueFrom } from 'rxjs';
 import { getBalance } from 'libs/stellar/src/utils/account';
 import { StellarClient } from 'libs/stellar/src/client';
 import { StellarClientConfig } from 'libs/stellar/src/types';
+import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
+import { SdpClient } from '@rahataid/stellar-sdp';
+import { chunkArray } from '../../utils/utility';
 import bcrypt from 'bcryptjs';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
 import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
+
+// Wallets per RETURN_TOKENS job: 2 sponsored batches of MAX_TRANSFERS_PER_BATCH (12).
+// Keeps each job short and the Redis payload small no matter how large the group is.
+export const RETURN_TOKENS_CHUNK_SIZE = 24;
+
+export interface ReturnTokensJobData {
+  payoutUuid: string;
+  wallets: string[];
+  // old per-beneficiary amount; caps each return so new-reservation tokens stay put
+  amountPerWallet?: number;
+  chunkIndex?: number;
+  totalChunks?: number;
+}
 
 export interface BeneficiaryCsvData {
   phone: string;
@@ -927,6 +943,400 @@ export class StellarChainService implements IChainService, OnModuleInit {
     return results;
   }
 
+  /**
+   * Queues the background token return as one small job per RETURN_TOKENS_CHUNK_SIZE wallets
+   * (never one job for the whole group). Job ids are deterministic so re-queueing the same
+   * payout can't duplicate chunks that are still waiting.
+   */
+  async queueReturnTokens(payload: ReturnTokensJobData): Promise<void> {
+    const { payoutUuid, wallets, amountPerWallet } = payload;
+    const chunks = chunkArray(wallets, RETURN_TOKENS_CHUNK_SIZE);
+    this.logger.debug(
+      `[ReturnTokens] payout=${payoutUuid} QUEUE ${wallets.length} wallet(s) -> ${chunks.length} job(s) of <=${RETURN_TOKENS_CHUNK_SIZE}, cap=${amountPerWallet}/wallet`
+    );
+    if (!chunks.length) {
+      await this.setTokenReturnState(payoutUuid, {
+        status: 'COMPLETED',
+        totalWallets: 0,
+        totalChunks: 0,
+        completedChunks: [],
+        failedChunks: [],
+      });
+      return;
+    }
+
+    await this.setTokenReturnState(payoutUuid, {
+      status: 'QUEUED',
+      totalWallets: wallets.length,
+      totalChunks: chunks.length,
+      completedChunks: [],
+      failedChunks: [],
+    });
+    const queuedAt = Date.now();
+    await this.stellarSendAssetQueue.addBulk(
+      chunks.map((chunk, chunkIndex) => ({
+        name: JOBS.STELLAR.RETURN_TOKENS,
+        data: {
+          payoutUuid,
+          wallets: chunk,
+          amountPerWallet,
+          chunkIndex,
+          totalChunks: chunks.length,
+        } as ReturnTokensJobData,
+        opts: {
+          jobId: `return-tokens-${payoutUuid}-${chunkIndex}`,
+          attempts: 3,
+          removeOnComplete: true,
+          removeOnFail: false,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      }))
+    );
+    this.logger.log(
+      `[ReturnTokens] payout=${payoutUuid} QUEUED ${chunks.length} job(s) in ${Date.now() - queuedAt}ms (queue STELLAR_SEND_ASSET, concurrency 1, 3 attempts each)`
+    );
+  }
+
+  /**
+   * Job handler for one chunk. Per-wallet progress lives on the payout's redeem rows
+   * (info.tokenReturn.txHash), so a retried/stalled chunk never resends a wallet that was
+   * already returned (which, with a new reservation disbursed meanwhile, would otherwise
+   * claw back the new tokens). Chunk-level progress is aggregated on payout.extras.tokenReturn.
+   */
+  async processReturnTokens(
+    payload: ReturnTokensJobData,
+    isLastAttempt = true
+  ): Promise<void> {
+    const { payoutUuid, wallets, amountPerWallet, chunkIndex = 0 } = payload;
+    const totalChunks = payload.totalChunks ?? 1;
+
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      select: { uuid: true },
+    });
+    if (!payout) {
+      this.logger.warn(`returnTokens: payout ${payoutUuid} not found, skipping`);
+      return;
+    }
+
+    const rows = await this.prisma.beneficiaryRedeem.findMany({
+      where: { payoutId: payoutUuid, beneficiaryWalletAddress: { in: wallets } },
+      select: { uuid: true, beneficiaryWalletAddress: true, info: true },
+    });
+    const done = new Set(
+      rows
+        .filter((r) => (r.info as any)?.tokenReturn?.txHash)
+        .map((r) => r.beneficiaryWalletAddress)
+    );
+    const pending = wallets.filter((w) => !done.has(w));
+    const chunkStartedAt = Date.now();
+    this.logger.debug(
+      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} START ${pending.length} to return, ${done.size} already returned, lastAttempt=${isLastAttempt}`
+    );
+
+    let error: string | undefined;
+    try {
+      const results = await this.returnTokensToDistributionWallet(
+        pending,
+        amountPerWallet
+      );
+      const at = new Date().toISOString();
+      await Promise.all(
+        results
+          .filter((r) => !r.error)
+          .flatMap((r) =>
+            rows
+              .filter((row) => row.beneficiaryWalletAddress === r.walletAddress)
+              .map((row) =>
+                this.prisma.beneficiaryRedeem.update({
+                  where: { uuid: row.uuid },
+                  data: {
+                    info: {
+                      ...((row.info as object) ?? {}),
+                      tokenReturn: {
+                        txHash: r.txHash ?? 'NO_BALANCE',
+                        amount: r.amount,
+                        at,
+                      },
+                    },
+                  },
+                })
+              )
+          )
+      );
+      const failed = results.filter((r) => r.error);
+      if (failed.length) {
+        error = `${failed.length} wallet(s) failed: ${failed[0].error}`;
+      }
+    } catch (err: any) {
+      error = err?.message ?? String(err);
+    }
+
+    await this.updateTokenReturnProgress(
+      payoutUuid,
+      chunkIndex,
+      totalChunks,
+      error ? (isLastAttempt ? 'failed' : 'retry') : 'completed',
+      error
+    );
+
+    if (error) {
+      this.logger.error(
+        `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} ${
+          isLastAttempt ? 'FAILED (no more retries)' : 'attempt failed, will retry'
+        } after ${Date.now() - chunkStartedAt}ms: ${error}`
+      );
+      throw new Error(error);
+    }
+    this.logger.log(
+      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} COMPLETED in ${Date.now() - chunkStartedAt}ms`
+    );
+  }
+
+  /** Aggregates chunk outcomes into payout.extras.tokenReturn (chunk indexes only, so it stays small). */
+  private async updateTokenReturnProgress(
+    payoutUuid: string,
+    chunkIndex: number,
+    totalChunks: number,
+    outcome: 'completed' | 'failed' | 'retry',
+    error?: string
+  ): Promise<void> {
+    const fresh = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      select: { extras: true },
+    });
+    const prev = ((fresh?.extras as any)?.tokenReturn ?? {}) as Record<string, any>;
+    const completed = new Set<number>(prev.completedChunks ?? []);
+    const failed = new Set<number>(prev.failedChunks ?? []);
+    if (outcome === 'completed') {
+      completed.add(chunkIndex);
+      failed.delete(chunkIndex);
+    } else if (outcome === 'failed') {
+      failed.add(chunkIndex);
+    }
+    const finished = completed.size + failed.size >= totalChunks;
+    this.logger[finished ? 'log' : 'debug'](
+      `[ReturnTokens] payout=${payoutUuid} PROGRESS ${completed.size}/${totalChunks} chunks done, ${failed.size} failed${
+        finished ? ` -> ${failed.size ? 'FAILED' : 'COMPLETED'}` : ''
+      }`
+    );
+    await this.setTokenReturnState(payoutUuid, {
+      ...prev,
+      status: finished ? (failed.size ? 'FAILED' : 'COMPLETED') : 'PROCESSING',
+      totalChunks,
+      completedChunks: [...completed].sort((x, y) => x - y),
+      failedChunks: [...failed].sort((x, y) => x - y),
+      error: outcome === 'completed' ? prev.error : error ?? prev.error,
+    });
+  }
+
+  /** Merges tokenReturn into a freshly-read extras so concurrent extras writes aren't clobbered. */
+  async setTokenReturnState(
+    payoutUuid: string,
+    state: Record<string, unknown>
+  ): Promise<void> {
+    const fresh = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      select: { extras: true },
+    });
+    await this.prisma.payouts.update({
+      where: { uuid: payoutUuid },
+      data: {
+        extras: {
+          ...((fresh?.extras as object) ?? {}),
+          tokenReturn: { ...state, updatedAt: new Date().toISOString() },
+        } as any,
+      },
+    });
+  }
+
+  /**
+   * Sends each wallet's token balance back to the distribution wallet, capped at
+   * `maxAmountPerWallet` when given (so tokens from a newer reservation are never taken).
+   * DIRECT mode: the local distribution wallet is both destination and fee payer.
+   * SDP mode: destination is the SDP distribution account (from the SDP API); we hold
+   * no secret for it, so the sponsor wallet pays the fee. Beneficiaries never pay.
+   * Zero-balance wallets are reported with amount '0' and no txHash.
+   */
+  async returnTokensToDistributionWallet(
+    walletAddresses: string[],
+    maxAmountPerWallet?: number
+  ): Promise<
+    { walletAddress: string; amount: string; txHash?: string; error?: string }[]
+  > {
+    if (!walletAddresses.length) return [];
+
+    const disbursementSettings = await this.getDisbursementSettings();
+    const sponsorSettings = (await this.getFromSettings(
+      'STELLAR_SPONSOR_SETTINGS'
+    )) as unknown as StellarClientConfig;
+    if (!sponsorSettings) {
+      throw new RpcException({
+        message: 'STELLAR_SPONSOR_SETTINGS not configured',
+        code: 'STELLAR_SPONSOR_SETTINGS_NOT_FOUND',
+      });
+    }
+
+    let destination: string;
+    let clientConfig: StellarClientConfig = sponsorSettings;
+    if (disbursementSettings.STELLAR_DISBURSMENT_MODE === 'DIRECT') {
+      const secret = disbursementSettings.STELLAR_DISTRUBUTION_WALLET_SECRET;
+      if (!secret) {
+        throw new RpcException({
+          message:
+            'STELLAR_DISTRUBUTION_WALLET_SECRET not set in STELLAR_DISBURSEMENT_SETTINGS',
+          code: 'STELLAR_DISTRIBUTION_WALLET_SECRET_NOT_SET',
+        });
+      }
+      destination = Keypair.fromSecret(secret).publicKey();
+      // distribution wallet as tx source => it pays the fee
+      clientConfig = { ...sponsorSettings, sponsorSecret: secret };
+    } else {
+      destination = await this.getSdpDistributionAccount();
+    }
+
+    const client = new StellarClient(clientConfig);
+    this.logger.debug(
+      `[ReturnTokens] TRANSFER mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} to=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
+    );
+
+    const secrets: { address: string; privateKey: string }[] =
+      await lastValueFrom(
+        this.client.send(
+          { cmd: JOBS.WALLET.GET_BULK_SECRET_BY_WALLET },
+          { walletAddresses, chain: 'stellar' }
+        )
+      );
+    const secretByWallet = new Map(
+      secrets.map((s) => [s.address, s.privateKey])
+    );
+
+    const results: {
+      walletAddress: string;
+      amount: string;
+      txHash?: string;
+      error?: string;
+    }[] = [];
+    const toSend: { walletAddress: string; secret: string; amount: string }[] =
+      [];
+
+    await Promise.all(
+      walletAddresses.map(async (walletAddress) => {
+      try {
+        const secret = secretByWallet.get(walletAddress);
+        if (!secret) throw new Error(`No secret found for wallet ${walletAddress}`);
+        // the payment is sourced from the secret's account, not from walletAddress: make sure
+        // they match and that we never send from the destination itself
+        const sourcePublicKey = Keypair.fromSecret(secret).publicKey();
+        if (sourcePublicKey !== walletAddress) {
+          throw new Error(
+            `Secret for wallet ${walletAddress} belongs to ${sourcePublicKey}; refusing to send`
+          );
+        }
+        if (sourcePublicKey === destination) {
+          throw new Error(
+            `Wallet ${walletAddress} is the destination account; refusing to send`
+          );
+        }
+        const balance = parseFloat(await client.getBalance(walletAddress));
+        const sendable =
+          maxAmountPerWallet === undefined
+            ? balance
+            : Math.min(balance, maxAmountPerWallet);
+        if (sendable > 0)
+          toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
+        else results.push({ walletAddress, amount: '0' });
+      } catch (err: any) {
+        results.push({ walletAddress, amount: '0', error: err?.message });
+      }
+      })
+    );
+
+    for (const chunk of chunkArray(toSend, MAX_TRANSFERS_PER_BATCH)) {
+      try {
+        const res = await client.sendFromSponsoredBatch(
+          chunk.map((c) => ({
+            secret: c.secret,
+            destination,
+            amount: c.amount,
+          }))
+        );
+        this.logger.debug(
+          `[ReturnTokens] batch OK ${chunk.length} wallet(s) -> ${destination}, txHash=${res.hash}, from=${chunk
+            .map((c) => c.walletAddress)
+            .join(',')}`
+        );
+        chunk.forEach((c) =>
+          results.push({
+            walletAddress: c.walletAddress,
+            amount: c.amount,
+            txHash: res.hash,
+          })
+        );
+      } catch (err: any) {
+        this.logger.error(
+          `[ReturnTokens] batch FAILED ${chunk.length} wallet(s) (${chunk
+            .map((c) => c.walletAddress)
+            .join(',')}): ${err?.message}`,
+          err?.stack
+        );
+        chunk.forEach((c) =>
+          results.push({
+            walletAddress: c.walletAddress,
+            amount: c.amount,
+            error: err?.message,
+          })
+        );
+      }
+    }
+
+    this.logger.debug(
+      `[ReturnTokens] TRANSFER SUMMARY to ${destination}: ${
+        results.filter((r) => r.txHash).length
+      } sent, ${results.filter((r) => r.error).length} failed, ${
+        results.filter((r) => !r.txHash && !r.error).length
+      } empty`
+    );
+    return results;
+  }
+
+  private async getSdpDistributionAccount(): Promise<string> {
+    const sdpSettings = (await this.getFromSettings('SDP_SETTINGS')) as Record<
+      string,
+      string
+    > | null;
+    if (!sdpSettings) {
+      throw new RpcException({
+        message: 'SDP_SETTINGS not found in settings table',
+        code: 'SDP_SETTINGS_NOT_FOUND',
+      });
+    }
+    const sdp = new SdpClient({
+      sdpUrl: sdpSettings.sdpUrl,
+      tenantName: sdpSettings.tenantName,
+      apiKey: sdpSettings.apiKey,
+    });
+
+    // /balances is Circle-tenant only (HTTP 400 otherwise), so the address comes from /organization.
+    const org = (await sdp.organization.get()) as Record<string, any>;
+    const account: string | undefined =
+      org?.distribution_account?.address ?? org?.distribution_account_public_key;
+    this.logger.debug(
+      `[ReturnTokens] SDP distribution account from /organization: ${account ?? 'not present'} (type=${
+        org?.distribution_account?.type ?? 'unknown'
+      })`
+    );
+    if (!account || !this.validateAddress(account)) {
+      throw new RpcException({
+        message: `Could not resolve a valid SDP distribution account from SDP API (got: ${
+          account ?? 'nothing'
+        })`,
+        code: 'SDP_DISTRIBUTION_ACCOUNT_NOT_FOUND',
+      });
+    }
+    return account;
+  }
+
   async fundAccount(_data: FundAccountDto): Promise<any> {
     throw new RpcException({
       message: 'Not supported on Stellar SDP chain',
@@ -1269,40 +1679,41 @@ export class StellarChainService implements IChainService, OnModuleInit {
         message: 'No payout-eligible group found for beneficiary',
         code: 'PAYOUT_ERR_NO_ELIGIBLE_GROUP',
       });
-    if (payoutEligibleGroups.length > 1)
-      throw new RpcException({
-        message: 'Multiple payout-eligible groups found for beneficiary',
-        code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
-      });
 
-    const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
-      where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
+    // A beneficiary can sit in several payout-eligible groups (e.g. an old group plus the one
+    // used for a re-assignment). Resolve by the group that has an active payout instead of
+    // rejecting outright.
+    const beneficiaryGroups = await this.prisma.beneficiaryGroups.findMany({
+      where: {
+        uuid: { in: payoutEligibleGroups.map((g: any) => g.beneficiaryGroupId) },
+      },
       include: { tokensReserved: { include: { payout: true } } },
     });
 
-    if (!beneficiaryGroups)
+    if (!beneficiaryGroups.length)
       throw new RpcException({
         message: 'Beneficiary group not found',
         code: 'PAYOUT_ERR_GROUP_NOT_FOUND',
       });
 
-    this.logger.log(
-      `Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`
-    );
-    this.logger.log(
-      `Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`
-    );
-    if (!beneficiaryGroups.tokensReserved)
-      throw new RpcException({
-        message: 'Tokens not reserved for the group',
-        code: 'PAYOUT_ERR_TOKENS_NOT_RESERVED',
-      });
-
-    const activeToken = beneficiaryGroups.tokensReserved.find(
-      (t) => t.isDisbursed === true && t.payout?.status !== 'COMPLETED'
+    const candidates = beneficiaryGroups.flatMap((group) =>
+      group.tokensReserved
+        .filter(
+          (t) =>
+            t.isDisbursed === true &&
+            t.payout?.status !== 'COMPLETED' &&
+            !(t.payout?.extras as any)?.skippedAt
+        )
+        .map((token) => ({ group, token }))
     );
 
-    if (!activeToken) {
+    this.logger.debug(
+      `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+        .map((c) => `${c.group.uuid}/${c.token.uuid}`)
+        .join(', ')}]`
+    );
+
+    if (!candidates.length) {
       this.logger.error('No active payout found for the group');
       throw new RpcException({
         message: 'No active payout found for the group',
@@ -1310,7 +1721,14 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
     }
 
-    return activeToken.payout;
+    // genuinely ambiguous only when active payouts exist in more than one group
+    if (new Set(candidates.map((c) => c.group.uuid)).size > 1)
+      throw new RpcException({
+        message: 'Multiple payout-eligible groups found for beneficiary',
+        code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
+      });
+
+    return candidates[0].token.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {

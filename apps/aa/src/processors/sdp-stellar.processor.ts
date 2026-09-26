@@ -10,8 +10,12 @@ import { BeneficiaryService } from '../beneficiary/beneficiary.service';
 import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
 import { BQUEUE, EVENTS, JOBS } from '../constants';
 
-const STATUS_CHECK_DELAY_MS = 3 * 60 * 1000; // 3 minutes
+// SDP usually completes within seconds, so poll early and back off (15s, 30s, 60s, 2m, then 3m).
+const FIRST_STATUS_CHECK_DELAY_MS = 15 * 1000;
+const STATUS_CHECK_DELAY_MS = 3 * 60 * 1000; // max gap between checks
 const STATUS_CHECK_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+const nextCheckDelay = (poll: number) =>
+  Math.min(FIRST_STATUS_CHECK_DELAY_MS * 2 ** poll, STATUS_CHECK_DELAY_MS);
 
 @Processor(BQUEUE.STELLAR_SDP)
 @Injectable()
@@ -36,7 +40,6 @@ export class SdpStellarProcessor {
     }
 
     const config = sdpSettings.value as Record<string, string>;
-    console.log('SDP Settings:', config);
     this.sdpClient = new SdpClient({
       sdpUrl: config.sdpUrl,
       tenantName: config.tenantName,
@@ -91,9 +94,7 @@ export class SdpStellarProcessor {
 
       const csvBuffer = this.stellarChainService.generateCsv(benData);
       const sdpClient = await this.getSdpClient();
-      console.log('SDP Client initialized:');
       const sdpSettings = await this.getSdpSettings();
-      console.log('SDP Settings retrieved:', sdpSettings);
 
       this.logger.log({
         name: dName,
@@ -151,9 +152,10 @@ export class SdpStellarProcessor {
           disbursementId: disbursement.id,
           groupUuid,
           startedAt: Date.now(),
+          poll: 0,
         },
         {
-          delay: STATUS_CHECK_DELAY_MS,
+          delay: nextCheckDelay(0),
           attempts: 3,
           removeOnComplete: true,
           backoff: { type: 'exponential', delay: 5000 },
@@ -188,29 +190,61 @@ export class SdpStellarProcessor {
       disbursementId: string;
       groupUuid: string;
       startedAt: number;
+      poll?: number;
     }>
   ): Promise<void> {
-    const { disbursementId, groupUuid, startedAt } = job.data;
+    const { disbursementId, groupUuid, startedAt, poll = 0 } = job.data;
+    const tag = `[SdpStatus] group=${groupUuid} disbursement=${disbursementId}`;
 
-    this.logger.log(
-      `Checking SDP disbursement status: ${disbursementId} for group ${groupUuid}`
-    );
+    this.logger.debug(`${tag} check #${poll + 1} (job ${job.id})`);
 
     try {
+      // Duplicate/stale jobs are expected (explicit disburse queues an immediate check on top of
+      // the delayed one, and an old cycle's job can outlive it). They must be no-ops, not errors:
+      // updateGroupToken only finds an undisbursed token and would throw and burn all retries.
+      const token = await this.beneficiaryService.getOneTokenReservationByGroupId(
+        groupUuid
+      );
+      const tokenDisbursementId = (token?.info as any)?.disbursement?.id;
+      if (!token) {
+        this.logger.warn(`${tag} no token reservation found, dropping check`);
+        return;
+      }
+      if (tokenDisbursementId !== disbursementId) {
+        this.logger.warn(
+          `${tag} stale check: latest token ${token.uuid} tracks disbursement ${tokenDisbursementId}, dropping`
+        );
+        return;
+      }
+      if (token.isDisbursed) {
+        this.logger.log(
+          `${tag} token ${token.uuid} already DISBURSED (duplicate check), nothing to do`
+        );
+        return;
+      }
+
       const sdpClient = await this.getSdpClient();
       const disbursement = await sdpClient.disbursements.get(disbursementId);
       const status = disbursement.status?.toUpperCase();
 
-      this.logger.log(`SDP disbursement ${disbursementId} status: ${status}`);
+      this.logger.debug(`${tag} SDP status: ${status}`);
+
+      const existingInfo = token.info
+        ? JSON.parse(JSON.stringify(token.info))
+        : {};
+      const realStartedAt = existingInfo.disbursementStartedAt
+        ? new Date(existingInfo.disbursementStartedAt).getTime()
+        : startedAt;
 
       if (status === 'COMPLETED') {
-        const disbursementTimeTaken = Date.now() - startedAt;
+        const disbursementTimeTaken = Date.now() - realStartedAt;
 
         await this.beneficiaryService.updateGroupToken({
           groupUuid,
           status: 'DISBURSED',
           isDisbursed: true,
           info: {
+            ...existingInfo,
             disbursement,
             disbursementTimeTaken,
             completedAt: new Date().toISOString(),
@@ -219,7 +253,9 @@ export class SdpStellarProcessor {
 
         this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
 
-        this.logger.log(`SDP disbursement completed for group ${groupUuid}`);
+        this.logger.log(
+          `${tag} COMPLETED -> token ${token.uuid} DISBURSED after ${disbursementTimeTaken}ms`
+        );
         return;
       }
 
@@ -229,28 +265,28 @@ export class SdpStellarProcessor {
           status: 'FAILED',
           isDisbursed: false,
           info: {
+            ...existingInfo,
             disbursement,
             error: `SDP disbursement ${status}`,
             failedAt: new Date().toISOString(),
           },
         });
 
-        this.logger.error(`SDP disbursement ${status} for group ${groupUuid}`);
+        this.logger.error(`${tag} ${status} -> token ${token.uuid} FAILED`);
         return;
       }
 
       // Still in progress — re-queue if within timeout
       const elapsed = Date.now() - startedAt;
       if (elapsed > STATUS_CHECK_TIMEOUT_MS) {
-        this.logger.error(
-          `SDP disbursement ${disbursementId} timed out after 24h for group ${groupUuid}`
-        );
+        this.logger.error(`${tag} timed out after 24h -> token ${token.uuid} FAILED`);
 
         await this.beneficiaryService.updateGroupToken({
           groupUuid,
           status: 'FAILED',
           isDisbursed: false,
           info: {
+            ...existingInfo,
             disbursement,
             error: 'Disbursement timed out after 24 hours',
             failedAt: new Date().toISOString(),
@@ -259,17 +295,18 @@ export class SdpStellarProcessor {
         return;
       }
 
+      const delay = nextCheckDelay(poll + 1);
       this.logger.log(
-        `SDP disbursement ${disbursementId} still in progress, re-checking in ${
-          STATUS_CHECK_DELAY_MS / 1000
-        }s`
+        `${tag} still ${status}, re-checking in ${delay / 1000}s (elapsed ${Math.round(
+          elapsed / 1000
+        )}s)`
       );
 
       await this.stellarSdpQueue.add(
         JOBS.STELLAR_SDP.DISBURSEMENT_STATUS_UPDATE,
-        { disbursementId, groupUuid, startedAt },
+        { disbursementId, groupUuid, startedAt, poll: poll + 1 },
         {
-          delay: STATUS_CHECK_DELAY_MS,
+          delay,
           attempts: 3,
           removeOnComplete: true,
           backoff: { type: 'exponential', delay: 5000 },
@@ -277,7 +314,7 @@ export class SdpStellarProcessor {
       );
     } catch (error) {
       this.logger.error(
-        `Error checking SDP disbursement status for ${disbursementId}: ${error.message}`,
+        `${tag} error checking status: ${error.message}`,
         error.stack
       );
       throw error;

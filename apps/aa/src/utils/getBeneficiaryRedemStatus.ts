@@ -38,6 +38,8 @@ export function calculatePayoutStatus(
     'FAILED',
     'FIAT_TRANSACTION_FAILED',
     'TOKEN_TRANSACTION_FAILED',
+    // redeem cancelled by a skipped payout (double fund assignment); the payout still renders as failed
+    'CANCELLED',
   ];
   const COMPLETED_STATUSES = REDEEM_COMPLETED_STATUSES;
   const PENDING_STATUSES = [
