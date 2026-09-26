@@ -815,16 +815,21 @@ export class BeneficiaryService {
 
         const payout = token.payout;
 
+        if (payout && (payout.extras as any)?.skippedAt) {
+          // explicitly skipped (skipOldPayoutForRemaining) — never blocks, whatever its status
+          this.logger.debug(
+            `Ignoring skipped payout ${payout.uuid} (status ${payout.status}) for wallet ${benf.walletAddress}`
+          );
+          continue;
+        }
+
         if (!payout || payout.status === 'NOT_STARTED') {
           tokenAssignedBenfWallet.push(benf.walletAddress);
           break;
         }
 
-        if (
-          payout.status === 'COMPLETED' ||
-          (payout.extras as any)?.skippedAt
-        ) {
-          // this cycle is done (or explicitly skipped) — benf is eligible for a new assignment
+        if (payout.status === 'COMPLETED') {
+          // this cycle is fully done — benf is eligible for a new assignment
           continue;
         }
 
@@ -886,7 +891,7 @@ export class BeneficiaryService {
 
   /**
    * Closes the group's open payout(s) so the group can be reserved again:
-   * marks remaining beneficiaries' unfinished redeems FAILED and stamps
+   * marks remaining beneficiaries' unfinished redeems CANCELLED and stamps
    * payout.extras.skippedAt (honoured by checkIsTokenAlreadyAssigned) — DB only, so the
    * new reservation + payout proceed immediately. Returning their tokens to the
    * distribution wallet runs in the background queue; progress/failure is recorded on
@@ -913,9 +918,16 @@ export class BeneficiaryService {
     );
 
     if (!openPayouts.length) {
-      this.logger.debug(`No open payout to skip for group: ${groupUuid}`);
+      this.logger.log(
+        `No open payout to skip for group ${groupUuid} (${tokens.length} disbursed token(s) checked)`
+      );
       return;
     }
+    this.logger.log(
+      `Skipping ${openPayouts.length} open payout(s) for group ${groupUuid}: ${openPayouts
+        .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
+        .join(', ')}`
+    );
 
     const group = await this.getOneGroup(groupUuid as UUID);
     const wallets: string[] = (group.groupedBeneficiaries ?? [])
@@ -937,19 +949,25 @@ export class BeneficiaryService {
           .map((r) => r.beneficiaryWalletAddress)
       );
       const remaining = wallets.filter((w) => !paid.has(w));
+      this.logger.log(
+        `Payout ${payout.uuid}: ${wallets.length} beneficiaries, ${paid.size} already paid, ${remaining.length} remaining; ${numberOfTokens} tokens => ${amountPerWallet} per wallet cap`
+      );
 
       const skipInfo = { skipReason: 'skipOldPayoutForRemaining', skippedAt };
       const remainingSet = new Set(remaining);
       const hasRow = new Set(redeems.map((r) => r.beneficiaryWalletAddress));
 
+      let cancelled = 0;
+      let created = 0;
       await this.prisma.$transaction(async (tx) => {
         for (const r of redeems) {
           if (!remainingSet.has(r.beneficiaryWalletAddress)) continue;
-          if (PAID.includes(r.status) || r.status === 'FAILED') continue;
+          if (PAID.includes(r.status) || r.status === 'CANCELLED') continue;
+          cancelled++;
           await tx.beneficiaryRedeem.update({
             where: { uuid: r.uuid },
             data: {
-              status: 'FAILED',
+              status: 'CANCELLED',
               isCompleted: false,
               info: { ...((r.info as object) ?? {}), ...skipInfo },
             },
@@ -958,6 +976,7 @@ export class BeneficiaryService {
 
         const missing = remaining.filter((w) => !hasRow.has(w));
         if (missing.length) {
+          created = missing.length;
           await tx.beneficiaryRedeem.createMany({
             data: missing.map((w) => ({
               beneficiaryWalletAddress: w,
@@ -966,7 +985,7 @@ export class BeneficiaryService {
                 payout.type === 'VENDOR'
                   ? ('VENDOR_REIMBURSEMENT' as const)
                   : ('FIAT_TRANSFER' as const),
-              status: 'FAILED' as const,
+              status: 'CANCELLED' as const,
               isCompleted: false,
               payoutId: payout.uuid,
               info: skipInfo,
@@ -991,6 +1010,9 @@ export class BeneficiaryService {
         });
       });
 
+      this.logger.log(
+        `Payout ${payout.uuid}: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+      );
       await this.payoutService.checkAndCompletePayout(payout.uuid);
 
       try {
@@ -1011,7 +1033,7 @@ export class BeneficiaryService {
         });
       }
       this.logger.log(
-        `Skipped old payout ${payout.uuid} for group ${groupUuid}: ${remaining.length} beneficiaries marked FAILED, token return queued`
+        `Skipped old payout ${payout.uuid} for group ${groupUuid}: ${remaining.length} beneficiaries marked CANCELLED, token return queued`
       );
     }
   }
@@ -1098,7 +1120,13 @@ export class BeneficiaryService {
     // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
     // start disbursing immediately and the return would otherwise claw back new tokens.
     if (skipOldPayoutForRemaining) {
+      this.logger.log(
+        `skipOldPayoutForRemaining requested for group ${beneficiaryGroupId} by ${user?.name}`
+      );
       await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
+      this.logger.log(
+        `skipOldPayoutForRemaining finished for group ${beneficiaryGroupId}, continuing with new reservation`
+      );
     }
 
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(

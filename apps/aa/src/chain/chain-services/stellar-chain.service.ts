@@ -939,6 +939,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
   /** Queues the background token return (runs on the STELLAR_SEND_ASSET queue). */
   async queueReturnTokens(payload: ReturnTokensJobData): Promise<void> {
+    this.logger.log(
+      `Queueing RETURN_TOKENS payout=${payload.payoutUuid} wallets=${payload.wallets.length} cap=${payload.amountPerWallet}`
+    );
     await this.stellarSendAssetQueue.add(
       JOBS.STELLAR.RETURN_TOKENS,
       payload,
@@ -973,6 +976,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
       ...((payout.extras as any)?.tokenReturn?.returned ?? {}),
     };
     const pending = wallets.filter((w) => !returned[w]);
+    this.logger.log(
+      `returnTokens payout=${payoutUuid}: ${pending.length} pending, ${
+        wallets.length - pending.length
+      } already returned, lastAttempt=${isLastAttempt}`
+    );
     let error: string | undefined;
     let failedWallets: string[] = [];
 
@@ -1080,6 +1088,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
     }
 
     const client = new StellarClient(clientConfig);
+    this.logger.log(
+      `returnTokens mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} destination=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
+    );
 
     const secrets: { address: string; privateKey: string }[] =
       await lastValueFrom(
@@ -1105,11 +1116,27 @@ export class StellarChainService implements IChainService, OnModuleInit {
       try {
         const secret = secretByWallet.get(walletAddress);
         if (!secret) throw new Error(`No secret found for wallet ${walletAddress}`);
+        // the payment is sourced from the secret's account, not from walletAddress: make sure
+        // they match and that we never send from the destination itself
+        const sourcePublicKey = Keypair.fromSecret(secret).publicKey();
+        if (sourcePublicKey !== walletAddress) {
+          throw new Error(
+            `Secret for wallet ${walletAddress} belongs to ${sourcePublicKey}; refusing to send`
+          );
+        }
+        if (sourcePublicKey === destination) {
+          throw new Error(
+            `Wallet ${walletAddress} is the destination account; refusing to send`
+          );
+        }
         const balance = parseFloat(await client.getBalance(walletAddress));
         const sendable =
           maxAmountPerWallet === undefined
             ? balance
             : Math.min(balance, maxAmountPerWallet);
+        this.logger.debug(
+          `returnTokens ${walletAddress}: balance=${balance} sending=${Math.max(sendable, 0)}`
+        );
         if (sendable > 0)
           toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
         else results.push({ walletAddress, amount: '0' });
@@ -1127,6 +1154,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
             amount: c.amount,
           }))
         );
+        this.logger.log(
+          `returnTokens batch of ${chunk.length} sent to ${destination}, txHash=${res.hash}, from=${chunk
+            .map((c) => c.walletAddress)
+            .join(',')}`
+        );
         chunk.forEach((c) =>
           results.push({
             walletAddress: c.walletAddress,
@@ -1135,6 +1167,12 @@ export class StellarChainService implements IChainService, OnModuleInit {
           })
         );
       } catch (err: any) {
+        this.logger.error(
+          `returnTokens batch of ${chunk.length} failed (${chunk
+            .map((c) => c.walletAddress)
+            .join(',')}): ${err?.message}`,
+          err?.stack
+        );
         chunk.forEach((c) =>
           results.push({
             walletAddress: c.walletAddress,
@@ -1174,6 +1212,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     const balance = await sdp.balances.get();
     let account = balance?.account;
+    this.logger.log(
+      `SDP distribution account from /balances: ${account ?? 'not present, falling back to /organization'}`
+    );
     if (!account) {
       const org = await sdp.organization.get();
       account = org?.['distribution_account_public_key'] as string | undefined;
@@ -1529,43 +1570,41 @@ export class StellarChainService implements IChainService, OnModuleInit {
         message: 'No payout-eligible group found for beneficiary',
         code: 'PAYOUT_ERR_NO_ELIGIBLE_GROUP',
       });
-    if (payoutEligibleGroups.length > 1)
-      throw new RpcException({
-        message: 'Multiple payout-eligible groups found for beneficiary',
-        code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
-      });
 
-    const beneficiaryGroups = await this.prisma.beneficiaryGroups.findUnique({
-      where: { uuid: payoutEligibleGroups[0].beneficiaryGroupId },
+    // A beneficiary can sit in several payout-eligible groups (e.g. an old group plus the one
+    // used for a re-assignment). Resolve by the group that has an active payout instead of
+    // rejecting outright.
+    const beneficiaryGroups = await this.prisma.beneficiaryGroups.findMany({
+      where: {
+        uuid: { in: payoutEligibleGroups.map((g: any) => g.beneficiaryGroupId) },
+      },
       include: { tokensReserved: { include: { payout: true } } },
     });
 
-    if (!beneficiaryGroups)
+    if (!beneficiaryGroups.length)
       throw new RpcException({
         message: 'Beneficiary group not found',
         code: 'PAYOUT_ERR_GROUP_NOT_FOUND',
       });
 
-    this.logger.log(
-      `Found beneficiary group ${beneficiaryGroups.uuid} for phone ${phone}`
-    );
-    this.logger.log(
-      `Beneficiary group details: ${JSON.stringify(beneficiaryGroups)}`
-    );
-    if (!beneficiaryGroups.tokensReserved)
-      throw new RpcException({
-        message: 'Tokens not reserved for the group',
-        code: 'PAYOUT_ERR_TOKENS_NOT_RESERVED',
-      });
-
-    const activeToken = beneficiaryGroups.tokensReserved.find(
-      (t) =>
-        t.isDisbursed === true &&
-        t.payout?.status !== 'COMPLETED' &&
-        !(t.payout?.extras as any)?.skippedAt
+    const candidates = beneficiaryGroups.flatMap((group) =>
+      group.tokensReserved
+        .filter(
+          (t) =>
+            t.isDisbursed === true &&
+            t.payout?.status !== 'COMPLETED' &&
+            !(t.payout?.extras as any)?.skippedAt
+        )
+        .map((token) => ({ group, token }))
     );
 
-    if (!activeToken) {
+    this.logger.log(
+      `sendOtp phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+        .map((c) => `${c.group.uuid}/${c.token.uuid}`)
+        .join(', ')}]`
+    );
+
+    if (!candidates.length) {
       this.logger.error('No active payout found for the group');
       throw new RpcException({
         message: 'No active payout found for the group',
@@ -1573,7 +1612,14 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
     }
 
-    return activeToken.payout;
+    // genuinely ambiguous only when active payouts exist in more than one group
+    if (new Set(candidates.map((c) => c.group.uuid)).size > 1)
+      throw new RpcException({
+        message: 'Multiple payout-eligible groups found for beneficiary',
+        code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND',
+      });
+
+    return candidates[0].token.payout;
   }
 
   private async sendOtpByPhone(data: SendOtpDto, payoutId: string) {

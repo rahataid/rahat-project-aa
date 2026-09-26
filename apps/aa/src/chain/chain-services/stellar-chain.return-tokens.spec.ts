@@ -71,3 +71,66 @@ describe('StellarChainService.processReturnTokens', () => {
     expect(savedState()).toMatchObject({ status: 'FAILED', error: 'no secret' });
   });
 });
+
+describe('StellarChainService.getBeneficiaryPayoutTypeByPhone', () => {
+  const findMany = jest.fn();
+  const send = jest.fn();
+  let service: any;
+
+  const groupsOf = (...ids: string[]) => ({
+    groupedBeneficiaries: ids.map((id) => ({
+      beneficiaryGroupId: id,
+      groupPurpose: 'GENERAL',
+    })),
+  });
+  const token = (uuid: string, status: string, extras: any = null, isDisbursed = true) => ({
+    uuid,
+    isDisbursed,
+    payout: { uuid: `payout-${uuid}`, status, extras },
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new (StellarChainService as any)(
+      {}, {}, {}, {},
+      { beneficiaryGroups: { findMany } },
+      {},
+      { send },
+      {},
+      {}
+    );
+  });
+
+  const run = (benf: any) => {
+    send.mockReturnValue({ subscribe: (o: any) => { o.next(benf); o.complete(); } });
+    return service.getBeneficiaryPayoutTypeByPhone('+977');
+  };
+
+  it('picks the group with the active payout when in several groups', async () => {
+    findMany.mockResolvedValue([
+      { uuid: 'old', tokensReserved: [token('t1', 'FAILED', { skippedAt: 'x' })] },
+      { uuid: 'new', tokensReserved: [token('t2', 'PENDING')] },
+    ]);
+    const payout = await run(groupsOf('old', 'new'));
+    expect(payout.uuid).toBe('payout-t2');
+  });
+
+  it('still rejects when active payouts exist in more than one group', async () => {
+    findMany.mockResolvedValue([
+      { uuid: 'a', tokensReserved: [token('t1', 'PENDING')] },
+      { uuid: 'b', tokensReserved: [token('t2', 'PENDING')] },
+    ]);
+    await expect(run(groupsOf('a', 'b'))).rejects.toMatchObject({
+      error: { code: 'MULTIPLE_PAYOUT_ELIGIBLE_GROUPS_FOUND' },
+    });
+  });
+
+  it('rejects with no active payout when the only token is skipped', async () => {
+    findMany.mockResolvedValue([
+      { uuid: 'old', tokensReserved: [token('t1', 'FAILED', { skippedAt: 'x' })] },
+    ]);
+    await expect(run(groupsOf('old'))).rejects.toMatchObject({
+      error: { code: 'NO_ACTIVE_PAYOUT_FOUND_FOR_GROUP' },
+    });
+  });
+});

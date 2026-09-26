@@ -69,7 +69,7 @@ describe('BeneficiaryService skipOldPayoutForRemaining', () => {
     });
   });
 
-  it('returns tokens for remaining only, then fails redeems and marks payout', async () => {
+  it('returns tokens for remaining only, then cancels redeems and marks payout', async () => {
     prisma.beneficiaryGroupTokens.findMany.mockResolvedValue([
       { numberOfTokens: 30, payout: openPayout() },
     ]);
@@ -85,12 +85,12 @@ describe('BeneficiaryService skipOldPayoutForRemaining', () => {
     expect(tx.beneficiaryRedeem.update).toHaveBeenCalledTimes(1); // W2 only, W1 is paid
     expect(tx.beneficiaryRedeem.update.mock.calls[0][0]).toMatchObject({
       where: { uuid: 'r2' },
-      data: { status: 'FAILED', isCompleted: false },
+      data: { status: 'CANCELLED', isCompleted: false },
     });
     expect(tx.beneficiaryRedeem.createMany.mock.calls[0][0].data).toEqual([
       expect.objectContaining({
         beneficiaryWalletAddress: 'W3',
-        status: 'FAILED',
+        status: 'CANCELLED',
         transactionType: 'VENDOR_REIMBURSEMENT',
         payoutId: 'payout-1',
       }),
