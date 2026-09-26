@@ -1793,9 +1793,24 @@ export class PayoutsService {
       benfRedeemRequest.Beneficiary.phone ||
       (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
+    // Older BeneficiaryRedeem records may predate persisting `offrampType` into
+    // `info`, so fall back to the payout's own paymentProviderType extra.
+    const payoutExtras = benfRedeemRequest.payout?.extras as {
+      paymentProviderType?: string;
+    } | null;
+    const offrampType = info.offrampType || payoutExtras?.paymentProviderType;
+
+    if (!offrampType) {
+      throw new RpcException({
+        message: `Offramp type not found for beneficiary redeem request with UUID '${beneficiaryRedeemUuid}'`,
+        code: 'PAYOUT_ERR_REDEEM_OFFRAMP_TYPE_MISSING',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
+    }
+
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
-      offrampType: info.offrampType,
+      offrampType,
       beneficiaryBankDetails: {
         accountName: benfExtras.bank_ac_name,
         accountNumber: benfExtras.bank_ac_number,
