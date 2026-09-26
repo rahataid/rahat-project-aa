@@ -38,7 +38,7 @@ export class StellarSendAssetProcessor {
     const maxAttempts = job.opts.attempts ?? 1;
     const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
     this.logger.log(
-      `Processing RETURN_TOKENS for payout ${job.data.payoutUuid}, ${job.data.wallets.length} wallet(s) (attempt ${job.attemptsMade + 1}/${maxAttempts})`
+      `[ReturnTokens] job ${job.id} picked up: payout ${job.data.payoutUuid} chunk ${(job.data.chunkIndex ?? 0) + 1}/${job.data.totalChunks ?? 1}, ${job.data.wallets.length} wallet(s) (attempt ${job.attemptsMade + 1}/${maxAttempts})`
     );
     return this.stellarChainService.processReturnTokens(job.data, isLastAttempt);
   }

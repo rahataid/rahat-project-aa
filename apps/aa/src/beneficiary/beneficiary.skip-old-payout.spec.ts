@@ -6,7 +6,7 @@ describe('BeneficiaryService skipOldPayoutForRemaining', () => {
 
   const tx = {
     beneficiaryRedeem: {
-      update: jest.fn<any, any[]>(async () => order.push('tx.redeem.update')),
+      updateMany: jest.fn<any, any[]>(async () => order.push('tx.redeem.updateMany')),
       createMany: jest.fn<any, any[]>(async () =>
         order.push('tx.redeem.createMany')
       ),
@@ -82,9 +82,10 @@ describe('BeneficiaryService skipOldPayoutForRemaining', () => {
       wallets: ['W2', 'W3'],
       amountPerWallet: 10,
     });
-    expect(tx.beneficiaryRedeem.update).toHaveBeenCalledTimes(1); // W2 only, W1 is paid
-    expect(tx.beneficiaryRedeem.update.mock.calls[0][0]).toMatchObject({
-      where: { uuid: 'r2' },
+    // one bulk update (W2 only, W1 is paid) — never one statement per beneficiary
+    expect(tx.beneficiaryRedeem.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.beneficiaryRedeem.updateMany.mock.calls[0][0]).toMatchObject({
+      where: { uuid: { in: ['r2'] } },
       data: { status: 'CANCELLED', isCompleted: false },
     });
     expect(tx.beneficiaryRedeem.createMany.mock.calls[0][0].data).toEqual([
@@ -103,6 +104,37 @@ describe('BeneficiaryService skipOldPayoutForRemaining', () => {
     expect(payoutService.checkAndCompletePayout).toHaveBeenCalledWith('payout-1');
     // DB marking is committed before the job is queued
     expect(order[order.length - 1]).toBe('chain.queue');
+  });
+
+  it('uses bulk statements for 1000 beneficiaries (no per-row transaction loop)', async () => {
+    const wallets = Array.from({ length: 1000 }, (_, i) => `W${i}`);
+    (service.getOneGroup as jest.Mock).mockResolvedValue({
+      name: 'G',
+      groupedBeneficiaries: wallets.map((w) => ({ Beneficiary: { walletAddress: w } })),
+    });
+    prisma.beneficiaryGroupTokens.findMany.mockResolvedValue([
+      {
+        numberOfTokens: 1000,
+        payout: {
+          ...openPayout(),
+          beneficiaryRedeem: wallets.slice(0, 500).map((w) => ({
+            uuid: `r-${w}`,
+            beneficiaryWalletAddress: w,
+            status: 'PENDING',
+            info: null,
+          })),
+        },
+      },
+    ]);
+
+    await service.skipOldPayoutForRemaining(GROUP);
+
+    expect(tx.beneficiaryRedeem.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.beneficiaryRedeem.updateMany.mock.calls[0][0].where.uuid.in).toHaveLength(500);
+    expect(tx.beneficiaryRedeem.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.beneficiaryRedeem.createMany.mock.calls[0][0].data).toHaveLength(500);
+    expect(prisma.$transaction.mock.calls[0][1]).toMatchObject({ timeout: expect.any(Number) });
+    expect(chain.queueReturnTokens).toHaveBeenCalledTimes(1); // chunking happens in queueReturnTokens
   });
 
   it('does not block or throw when enqueue fails, records FAILED on payout', async () => {

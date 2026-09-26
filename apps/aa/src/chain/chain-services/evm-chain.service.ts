@@ -1551,7 +1551,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       );
 
       this.logger.log(
-        `sendOtp phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+        `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
           .map((c) => `${c.group.uuid}/${c.token.uuid}`)
           .join(', ')}]`
       );

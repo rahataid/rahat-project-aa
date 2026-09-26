@@ -37,11 +37,17 @@ import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
 import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
 
+// Wallets per RETURN_TOKENS job: 2 sponsored batches of MAX_TRANSFERS_PER_BATCH (12).
+// Keeps each job short and the Redis payload small no matter how large the group is.
+export const RETURN_TOKENS_CHUNK_SIZE = 24;
+
 export interface ReturnTokensJobData {
   payoutUuid: string;
   wallets: string[];
   // old per-beneficiary amount; caps each return so new-reservation tokens stay put
   amountPerWallet?: number;
+  chunkIndex?: number;
+  totalChunks?: number;
 }
 
 export interface BeneficiaryCsvData {
@@ -937,89 +943,191 @@ export class StellarChainService implements IChainService, OnModuleInit {
     return results;
   }
 
-  /** Queues the background token return (runs on the STELLAR_SEND_ASSET queue). */
+  /**
+   * Queues the background token return as one small job per RETURN_TOKENS_CHUNK_SIZE wallets
+   * (never one job for the whole group). Job ids are deterministic so re-queueing the same
+   * payout can't duplicate chunks that are still waiting.
+   */
   async queueReturnTokens(payload: ReturnTokensJobData): Promise<void> {
+    const { payoutUuid, wallets, amountPerWallet } = payload;
+    const chunks = chunkArray(wallets, RETURN_TOKENS_CHUNK_SIZE);
     this.logger.log(
-      `Queueing RETURN_TOKENS payout=${payload.payoutUuid} wallets=${payload.wallets.length} cap=${payload.amountPerWallet}`
+      `[ReturnTokens] payout=${payoutUuid} QUEUE ${wallets.length} wallet(s) -> ${chunks.length} job(s) of <=${RETURN_TOKENS_CHUNK_SIZE}, cap=${amountPerWallet}/wallet`
     );
-    await this.stellarSendAssetQueue.add(
-      JOBS.STELLAR.RETURN_TOKENS,
-      payload,
-      {
-        attempts: 3,
-        removeOnComplete: true,
-        removeOnFail: false,
-        backoff: { type: 'exponential', delay: 5000 },
-      }
+    if (!chunks.length) {
+      await this.setTokenReturnState(payoutUuid, {
+        status: 'COMPLETED',
+        totalWallets: 0,
+        totalChunks: 0,
+        completedChunks: [],
+        failedChunks: [],
+      });
+      return;
+    }
+
+    await this.setTokenReturnState(payoutUuid, {
+      status: 'QUEUED',
+      totalWallets: wallets.length,
+      totalChunks: chunks.length,
+      completedChunks: [],
+      failedChunks: [],
+    });
+    const queuedAt = Date.now();
+    await this.stellarSendAssetQueue.addBulk(
+      chunks.map((chunk, chunkIndex) => ({
+        name: JOBS.STELLAR.RETURN_TOKENS,
+        data: {
+          payoutUuid,
+          wallets: chunk,
+          amountPerWallet,
+          chunkIndex,
+          totalChunks: chunks.length,
+        } as ReturnTokensJobData,
+        opts: {
+          jobId: `return-tokens-${payoutUuid}-${chunkIndex}`,
+          attempts: 3,
+          removeOnComplete: true,
+          removeOnFail: false,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      }))
+    );
+    this.logger.log(
+      `[ReturnTokens] payout=${payoutUuid} QUEUED ${chunks.length} job(s) in ${Date.now() - queuedAt}ms (queue STELLAR_SEND_ASSET, concurrency 1, 3 attempts each)`
     );
   }
 
   /**
-   * Job handler. Progress is persisted on payout.extras.tokenReturn so a retry never
-   * resends wallets that were already returned (which, with a new reservation
-   * disbursed in the meantime, would otherwise claw back the new tokens).
+   * Job handler for one chunk. Per-wallet progress lives on the payout's redeem rows
+   * (info.tokenReturn.txHash), so a retried/stalled chunk never resends a wallet that was
+   * already returned (which, with a new reservation disbursed meanwhile, would otherwise
+   * claw back the new tokens). Chunk-level progress is aggregated on payout.extras.tokenReturn.
    */
   async processReturnTokens(
     payload: ReturnTokensJobData,
     isLastAttempt = true
   ): Promise<void> {
-    const { payoutUuid, wallets, amountPerWallet } = payload;
+    const { payoutUuid, wallets, amountPerWallet, chunkIndex = 0 } = payload;
+    const totalChunks = payload.totalChunks ?? 1;
+
     const payout = await this.prisma.payouts.findUnique({
       where: { uuid: payoutUuid },
+      select: { uuid: true },
     });
     if (!payout) {
       this.logger.warn(`returnTokens: payout ${payoutUuid} not found, skipping`);
       return;
     }
 
-    const returned: Record<string, string> = {
-      ...((payout.extras as any)?.tokenReturn?.returned ?? {}),
-    };
-    const pending = wallets.filter((w) => !returned[w]);
-    this.logger.log(
-      `returnTokens payout=${payoutUuid}: ${pending.length} pending, ${
-        wallets.length - pending.length
-      } already returned, lastAttempt=${isLastAttempt}`
+    const rows = await this.prisma.beneficiaryRedeem.findMany({
+      where: { payoutId: payoutUuid, beneficiaryWalletAddress: { in: wallets } },
+      select: { uuid: true, beneficiaryWalletAddress: true, info: true },
+    });
+    const done = new Set(
+      rows
+        .filter((r) => (r.info as any)?.tokenReturn?.txHash)
+        .map((r) => r.beneficiaryWalletAddress)
     );
-    let error: string | undefined;
-    let failedWallets: string[] = [];
+    const pending = wallets.filter((w) => !done.has(w));
+    const chunkStartedAt = Date.now();
+    this.logger.log(
+      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} START ${pending.length} to return, ${done.size} already returned, lastAttempt=${isLastAttempt}`
+    );
 
+    let error: string | undefined;
     try {
       const results = await this.returnTokensToDistributionWallet(
         pending,
         amountPerWallet
       );
-      for (const r of results) {
-        if (!r.error) returned[r.walletAddress] = r.txHash ?? 'NO_BALANCE';
-      }
-      failedWallets = results.filter((r) => r.error).map((r) => r.walletAddress);
-      if (failedWallets.length) {
-        error = `${failedWallets.length} wallet(s) failed: ${
-          results.find((r) => r.error)?.error
-        }`;
+      const at = new Date().toISOString();
+      await Promise.all(
+        results
+          .filter((r) => !r.error)
+          .flatMap((r) =>
+            rows
+              .filter((row) => row.beneficiaryWalletAddress === r.walletAddress)
+              .map((row) =>
+                this.prisma.beneficiaryRedeem.update({
+                  where: { uuid: row.uuid },
+                  data: {
+                    info: {
+                      ...((row.info as object) ?? {}),
+                      tokenReturn: {
+                        txHash: r.txHash ?? 'NO_BALANCE',
+                        amount: r.amount,
+                        at,
+                      },
+                    },
+                  },
+                })
+              )
+          )
+      );
+      const failed = results.filter((r) => r.error);
+      if (failed.length) {
+        error = `${failed.length} wallet(s) failed: ${failed[0].error}`;
       }
     } catch (err: any) {
       error = err?.message ?? String(err);
     }
 
-    await this.setTokenReturnState(payoutUuid, {
-      status: !error ? 'COMPLETED' : isLastAttempt ? 'FAILED' : 'RETRYING',
-      returned,
-      failedWallets,
-      error,
-    });
+    await this.updateTokenReturnProgress(
+      payoutUuid,
+      chunkIndex,
+      totalChunks,
+      error ? (isLastAttempt ? 'failed' : 'retry') : 'completed',
+      error
+    );
 
     if (error) {
       this.logger.error(
-        `returnTokens payout=${payoutUuid} ${
-          isLastAttempt ? 'FAILED' : 'attempt failed, will retry'
-        }: ${error}`
+        `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} ${
+          isLastAttempt ? 'FAILED (no more retries)' : 'attempt failed, will retry'
+        } after ${Date.now() - chunkStartedAt}ms: ${error}`
       );
       throw new Error(error);
     }
     this.logger.log(
-      `returnTokens COMPLETED payout=${payoutUuid} wallets=${wallets.length}`
+      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} COMPLETED in ${Date.now() - chunkStartedAt}ms`
     );
+  }
+
+  /** Aggregates chunk outcomes into payout.extras.tokenReturn (chunk indexes only, so it stays small). */
+  private async updateTokenReturnProgress(
+    payoutUuid: string,
+    chunkIndex: number,
+    totalChunks: number,
+    outcome: 'completed' | 'failed' | 'retry',
+    error?: string
+  ): Promise<void> {
+    const fresh = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      select: { extras: true },
+    });
+    const prev = ((fresh?.extras as any)?.tokenReturn ?? {}) as Record<string, any>;
+    const completed = new Set<number>(prev.completedChunks ?? []);
+    const failed = new Set<number>(prev.failedChunks ?? []);
+    if (outcome === 'completed') {
+      completed.add(chunkIndex);
+      failed.delete(chunkIndex);
+    } else if (outcome === 'failed') {
+      failed.add(chunkIndex);
+    }
+    const finished = completed.size + failed.size >= totalChunks;
+    this.logger.log(
+      `[ReturnTokens] payout=${payoutUuid} PROGRESS ${completed.size}/${totalChunks} chunks done, ${failed.size} failed${
+        finished ? ` -> ${failed.size ? 'FAILED' : 'COMPLETED'}` : ''
+      }`
+    );
+    await this.setTokenReturnState(payoutUuid, {
+      ...prev,
+      status: finished ? (failed.size ? 'FAILED' : 'COMPLETED') : 'PROCESSING',
+      totalChunks,
+      completedChunks: [...completed].sort((x, y) => x - y),
+      failedChunks: [...failed].sort((x, y) => x - y),
+      error: outcome === 'completed' ? prev.error : error ?? prev.error,
+    });
   }
 
   /** Merges tokenReturn into a freshly-read extras so concurrent extras writes aren't clobbered. */
@@ -1089,7 +1197,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     const client = new StellarClient(clientConfig);
     this.logger.log(
-      `returnTokens mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} destination=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
+      `[ReturnTokens] TRANSFER mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} to=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
     );
 
     const secrets: { address: string; privateKey: string }[] =
@@ -1112,7 +1220,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const toSend: { walletAddress: string; secret: string; amount: string }[] =
       [];
 
-    for (const walletAddress of walletAddresses) {
+    await Promise.all(
+      walletAddresses.map(async (walletAddress) => {
       try {
         const secret = secretByWallet.get(walletAddress);
         if (!secret) throw new Error(`No secret found for wallet ${walletAddress}`);
@@ -1135,7 +1244,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
             ? balance
             : Math.min(balance, maxAmountPerWallet);
         this.logger.debug(
-          `returnTokens ${walletAddress}: balance=${balance} sending=${Math.max(sendable, 0)}`
+          `[ReturnTokens] wallet=${walletAddress} balance=${balance} sending=${Math.max(sendable, 0)}`
         );
         if (sendable > 0)
           toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
@@ -1143,7 +1252,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
       } catch (err: any) {
         results.push({ walletAddress, amount: '0', error: err?.message });
       }
-    }
+      })
+    );
 
     for (const chunk of chunkArray(toSend, MAX_TRANSFERS_PER_BATCH)) {
       try {
@@ -1155,7 +1265,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
           }))
         );
         this.logger.log(
-          `returnTokens batch of ${chunk.length} sent to ${destination}, txHash=${res.hash}, from=${chunk
+          `[ReturnTokens] batch OK ${chunk.length} wallet(s) -> ${destination}, txHash=${res.hash}, from=${chunk
             .map((c) => c.walletAddress)
             .join(',')}`
         );
@@ -1168,7 +1278,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
         );
       } catch (err: any) {
         this.logger.error(
-          `returnTokens batch of ${chunk.length} failed (${chunk
+          `[ReturnTokens] batch FAILED ${chunk.length} wallet(s) (${chunk
             .map((c) => c.walletAddress)
             .join(',')}): ${err?.message}`,
           err?.stack
@@ -1184,7 +1294,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     }
 
     this.logger.log(
-      `Returned tokens to ${destination}: ${
+      `[ReturnTokens] TRANSFER SUMMARY to ${destination}: ${
         results.filter((r) => r.txHash).length
       } sent, ${results.filter((r) => r.error).length} failed, ${
         results.filter((r) => !r.txHash && !r.error).length
@@ -1213,7 +1323,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const balance = await sdp.balances.get();
     let account = balance?.account;
     this.logger.log(
-      `SDP distribution account from /balances: ${account ?? 'not present, falling back to /organization'}`
+      `[ReturnTokens] SDP distribution account from /balances: ${account ?? 'not present, falling back to /organization'}`
     );
     if (!account) {
       const org = await sdp.organization.get();
@@ -1599,7 +1709,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     );
 
     this.logger.log(
-      `sendOtp phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+      `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
         .map((c) => `${c.group.uuid}/${c.token.uuid}`)
         .join(', ')}]`
     );

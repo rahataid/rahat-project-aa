@@ -1,45 +1,86 @@
 import { StellarChainService } from './stellar-chain.service';
 
-describe('StellarChainService.processReturnTokens', () => {
-  const payoutRow = (tokenReturn?: any) => ({
-    uuid: 'p1',
-    extras: { skippedAt: 'x', ...(tokenReturn ? { tokenReturn } : {}) },
-  });
+describe('StellarChainService token return (chunked)', () => {
   const prisma: any = {
     payouts: { findUnique: jest.fn(), update: jest.fn() },
+    beneficiaryRedeem: { findMany: jest.fn(), update: jest.fn() },
   };
+  const queue = { addBulk: jest.fn() };
   let service: any;
+  let tokenReturn: any; // simulated payout.extras.tokenReturn
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new (StellarChainService as any)({}, {}, {}, {}, prisma, {}, {}, {}, {});
-    prisma.payouts.findUnique.mockResolvedValue(payoutRow());
+    tokenReturn = undefined;
+    prisma.payouts.findUnique.mockImplementation(async () => ({
+      uuid: 'p1',
+      extras: { skippedAt: 'x', ...(tokenReturn ? { tokenReturn } : {}) },
+    }));
+    prisma.payouts.update.mockImplementation(async ({ data }: any) => {
+      tokenReturn = data.extras.tokenReturn;
+    });
+    prisma.beneficiaryRedeem.findMany.mockResolvedValue([]);
+    service = new (StellarChainService as any)({}, {}, queue, {}, prisma, {}, {}, {}, {});
   });
 
-  const savedState = (call = 0) =>
-    prisma.payouts.update.mock.calls[call][0].data.extras.tokenReturn;
+  const rowsFor = (...wallets: string[]) =>
+    wallets.map((w) => ({ uuid: `r-${w}`, beneficiaryWalletAddress: w, info: null }));
 
-  it('skips wallets already returned and caps amount', async () => {
-    prisma.payouts.findUnique.mockResolvedValue(
-      payoutRow({ returned: { W1: 'H0' } })
-    );
+  it('splits 1000 wallets into small deterministic jobs, never one big job', async () => {
+    const wallets = Array.from({ length: 1000 }, (_, i) => `W${i}`);
+
+    await service.queueReturnTokens({ payoutUuid: 'p1', wallets, amountPerWallet: 10 });
+
+    const jobs = queue.addBulk.mock.calls[0][0];
+    expect(jobs).toHaveLength(42); // ceil(1000 / 24)
+    expect(Math.max(...jobs.map((j: any) => j.data.wallets.length))).toBeLessThanOrEqual(24);
+    expect(jobs.flatMap((j: any) => j.data.wallets)).toEqual(wallets);
+    expect(jobs[0].opts.jobId).toBe('return-tokens-p1-0');
+    expect(jobs[41].data).toMatchObject({ chunkIndex: 41, totalChunks: 42, amountPerWallet: 10 });
+    expect(tokenReturn).toMatchObject({ status: 'QUEUED', totalWallets: 1000, totalChunks: 42 });
+  });
+
+  it('skips wallets already returned, caps amount and records the tx on the redeem row', async () => {
+    prisma.beneficiaryRedeem.findMany.mockResolvedValue([
+      { ...rowsFor('W1')[0], info: { tokenReturn: { txHash: 'H0' } } },
+      ...rowsFor('W2'),
+    ]);
     const spy = jest
       .spyOn(service, 'returnTokensToDistributionWallet')
-      .mockResolvedValue([{ walletAddress: 'W2', amount: '10', txHash: 'H1' }]);
+      .mockResolvedValue([{ walletAddress: 'W2', amount: '10.0000000', txHash: 'H1' }]);
 
     await service.processReturnTokens(
-      { payoutUuid: 'p1', wallets: ['W1', 'W2'], amountPerWallet: 10 },
+      { payoutUuid: 'p1', wallets: ['W1', 'W2'], amountPerWallet: 10, chunkIndex: 0, totalChunks: 1 },
       true
     );
 
     expect(spy).toHaveBeenCalledWith(['W2'], 10);
-    expect(savedState()).toMatchObject({
-      status: 'COMPLETED',
-      returned: { W1: 'H0', W2: 'H1' },
+    expect(prisma.beneficiaryRedeem.update).toHaveBeenCalledTimes(1);
+    expect(prisma.beneficiaryRedeem.update.mock.calls[0][0]).toMatchObject({
+      where: { uuid: 'r-W2' },
+      data: { info: { tokenReturn: { txHash: 'H1' } } },
     });
+    expect(tokenReturn).toMatchObject({ status: 'COMPLETED', completedChunks: [0], failedChunks: [] });
   });
 
-  it('persists partial progress and throws to trigger retry', async () => {
+  it('is PROCESSING until every chunk has reported', async () => {
+    jest.spyOn(service, 'returnTokensToDistributionWallet').mockResolvedValue([]);
+
+    await service.processReturnTokens(
+      { payoutUuid: 'p1', wallets: ['W1'], chunkIndex: 0, totalChunks: 2 },
+      true
+    );
+    expect(tokenReturn).toMatchObject({ status: 'PROCESSING', completedChunks: [0] });
+
+    await service.processReturnTokens(
+      { payoutUuid: 'p1', wallets: ['W2'], chunkIndex: 1, totalChunks: 2 },
+      true
+    );
+    expect(tokenReturn).toMatchObject({ status: 'COMPLETED', completedChunks: [0, 1] });
+  });
+
+  it('keeps partial progress and throws to trigger a retry without marking the chunk done', async () => {
+    prisma.beneficiaryRedeem.findMany.mockResolvedValue(rowsFor('W1', 'W2'));
     jest.spyOn(service, 'returnTokensToDistributionWallet').mockResolvedValue([
       { walletAddress: 'W1', amount: '10', txHash: 'H1' },
       { walletAddress: 'W2', amount: '10', error: 'tx_bad_seq' },
@@ -47,28 +88,27 @@ describe('StellarChainService.processReturnTokens', () => {
 
     await expect(
       service.processReturnTokens(
-        { payoutUuid: 'p1', wallets: ['W1', 'W2'] },
+        { payoutUuid: 'p1', wallets: ['W1', 'W2'], chunkIndex: 0, totalChunks: 1 },
         false
       )
     ).rejects.toThrow('tx_bad_seq');
 
-    expect(savedState()).toMatchObject({
-      status: 'RETRYING',
-      returned: { W1: 'H1' },
-      failedWallets: ['W2'],
-    });
+    expect(prisma.beneficiaryRedeem.update).toHaveBeenCalledTimes(1); // W1 only
+    expect(tokenReturn).toMatchObject({ status: 'PROCESSING', completedChunks: [], failedChunks: [] });
+    expect(tokenReturn.error).toContain('tx_bad_seq');
   });
 
-  it('marks FAILED on the last attempt', async () => {
-    jest
-      .spyOn(service, 'returnTokensToDistributionWallet')
-      .mockRejectedValue(new Error('no secret'));
+  it('marks the chunk failed on the last attempt and the payout FAILED when all chunks reported', async () => {
+    jest.spyOn(service, 'returnTokensToDistributionWallet').mockRejectedValue(new Error('no secret'));
 
     await expect(
-      service.processReturnTokens({ payoutUuid: 'p1', wallets: ['W1'] }, true)
+      service.processReturnTokens(
+        { payoutUuid: 'p1', wallets: ['W1'], chunkIndex: 0, totalChunks: 1 },
+        true
+      )
     ).rejects.toThrow('no secret');
 
-    expect(savedState()).toMatchObject({ status: 'FAILED', error: 'no secret' });
+    expect(tokenReturn).toMatchObject({ status: 'FAILED', failedChunks: [0], error: 'no secret' });
   });
 });
 

@@ -899,6 +899,9 @@ export class BeneficiaryService {
    */
   private async skipOldPayoutForRemaining(groupUuid: string, user?: any) {
     if (!(await this.isStellarChain())) {
+      this.logger.warn(
+        `[SkipOldPayout] group=${groupUuid} rejected: only supported on Stellar chain`
+      );
       throw new RpcException({
         message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
         code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
@@ -919,12 +922,12 @@ export class BeneficiaryService {
 
     if (!openPayouts.length) {
       this.logger.log(
-        `No open payout to skip for group ${groupUuid} (${tokens.length} disbursed token(s) checked)`
+        `[SkipOldPayout] group=${groupUuid} step 1/4 nothing to skip (${tokens.length} disbursed token(s) checked, none with an open payout)`
       );
       return;
     }
     this.logger.log(
-      `Skipping ${openPayouts.length} open payout(s) for group ${groupUuid}: ${openPayouts
+      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${openPayouts.length} open payout(s): ${openPayouts
         .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
         .join(', ')}`
     );
@@ -939,6 +942,7 @@ export class BeneficiaryService {
     const skippedAt = new Date().toISOString();
 
     for (const { payout, numberOfTokens } of openPayouts) {
+      const startedAt = Date.now();
       const redeems = payout.beneficiaryRedeem;
       // per-beneficiary amount of the old reservation; caps the return so tokens from the
       // new reservation (possibly disbursed before the job runs) are never taken back
@@ -950,68 +954,74 @@ export class BeneficiaryService {
       );
       const remaining = wallets.filter((w) => !paid.has(w));
       this.logger.log(
-        `Payout ${payout.uuid}: ${wallets.length} beneficiaries, ${paid.size} already paid, ${remaining.length} remaining; ${numberOfTokens} tokens => ${amountPerWallet} per wallet cap`
+        `[SkipOldPayout] payout=${payout.uuid} step 2/4 ${wallets.length} beneficiaries: ${paid.size} already paid (kept), ${remaining.length} remaining (to cancel + return); old reservation ${numberOfTokens} tokens => cap ${amountPerWallet}/wallet`
       );
 
       const skipInfo = { skipReason: 'skipOldPayoutForRemaining', skippedAt };
       const remainingSet = new Set(remaining);
       const hasRow = new Set(redeems.map((r) => r.beneficiaryWalletAddress));
 
-      let cancelled = 0;
-      let created = 0;
-      await this.prisma.$transaction(async (tx) => {
-        for (const r of redeems) {
-          if (!remainingSet.has(r.beneficiaryWalletAddress)) continue;
-          if (PAID.includes(r.status) || r.status === 'CANCELLED') continue;
-          cancelled++;
-          await tx.beneficiaryRedeem.update({
-            where: { uuid: r.uuid },
+      // Bulk statements only: an interactive tx looping one update per beneficiary blows the
+      // default 5s tx timeout at ~1000 beneficiaries.
+      const toCancel = redeems
+        .filter(
+          (r) =>
+            remainingSet.has(r.beneficiaryWalletAddress) &&
+            !PAID.includes(r.status) &&
+            r.status !== 'CANCELLED'
+        )
+        .map((r) => r.uuid);
+      const missing = remaining.filter((w) => !hasRow.has(w));
+      const cancelled = toCancel.length;
+      const created = missing.length;
+
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (toCancel.length) {
+            await tx.beneficiaryRedeem.updateMany({
+              where: { uuid: { in: toCancel } },
+              data: { status: 'CANCELLED', isCompleted: false },
+            });
+          }
+
+          if (missing.length) {
+            await tx.beneficiaryRedeem.createMany({
+              data: missing.map((w) => ({
+                beneficiaryWalletAddress: w,
+                amount: Math.round(amountPerWallet),
+                transactionType:
+                  payout.type === 'VENDOR'
+                    ? ('VENDOR_REIMBURSEMENT' as const)
+                    : ('FIAT_TRANSFER' as const),
+                status: 'CANCELLED' as const,
+                isCompleted: false,
+                payoutId: payout.uuid,
+                info: skipInfo,
+              })),
+            });
+          }
+
+          await tx.payouts.update({
+            where: { uuid: payout.uuid },
             data: {
-              status: 'CANCELLED',
-              isCompleted: false,
-              info: { ...((r.info as object) ?? {}), ...skipInfo },
-            },
-          });
-        }
-
-        const missing = remaining.filter((w) => !hasRow.has(w));
-        if (missing.length) {
-          created = missing.length;
-          await tx.beneficiaryRedeem.createMany({
-            data: missing.map((w) => ({
-              beneficiaryWalletAddress: w,
-              amount: Math.round(amountPerWallet),
-              transactionType:
-                payout.type === 'VENDOR'
-                  ? ('VENDOR_REIMBURSEMENT' as const)
-                  : ('FIAT_TRANSFER' as const),
-              status: 'CANCELLED' as const,
-              isCompleted: false,
-              payoutId: payout.uuid,
-              info: skipInfo,
-            })),
-          });
-        }
-
-        await tx.payouts.update({
-          where: { uuid: payout.uuid },
-          data: {
-            extras: {
-              ...((payout.extras as object) ?? {}),
-              skippedAt,
-              skippedBy: user?.name,
-              tokenReturn: {
-                status: 'QUEUED',
-                returned: {},
-                updatedAt: skippedAt,
+              extras: {
+                ...((payout.extras as object) ?? {}),
+                skippedAt,
+                skippedBy: user?.name,
+                skipReason: skipInfo.skipReason,
+                tokenReturn: {
+                  status: 'QUEUED',
+                  updatedAt: skippedAt,
+                },
               },
             },
-          },
-        });
-      });
+          });
+        },
+        { timeout: 60000, maxWait: 10000 }
+      );
 
       this.logger.log(
-        `Payout ${payout.uuid}: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${Date.now() - startedAt}ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
       );
       await this.payoutService.checkAndCompletePayout(payout.uuid);
 
@@ -1024,7 +1034,7 @@ export class BeneficiaryService {
       } catch (err: any) {
         // Redis down etc. — don't block the reservation; surface on the payout for ops.
         this.logger.error(
-          `Failed to queue token return for payout ${payout.uuid}: ${err?.message}`
+          `[SkipOldPayout] payout=${payout.uuid} step 4/4 FAILED to queue token return (reservation continues, tokenReturn marked FAILED): ${err?.message}`
         );
         await chain.setTokenReturnState(payout.uuid, {
           status: 'FAILED',
@@ -1033,7 +1043,7 @@ export class BeneficiaryService {
         });
       }
       this.logger.log(
-        `Skipped old payout ${payout.uuid} for group ${groupUuid}: ${remaining.length} beneficiaries marked CANCELLED, token return queued`
+        `[SkipOldPayout] payout=${payout.uuid} step 4/4 token return queued for ${remaining.length} wallet(s); total ${Date.now() - startedAt}ms in request. Track via payout.extras.tokenReturn`
       );
     }
   }
@@ -1121,11 +1131,11 @@ export class BeneficiaryService {
     // start disbursing immediately and the return would otherwise claw back new tokens.
     if (skipOldPayoutForRemaining) {
       this.logger.log(
-        `skipOldPayoutForRemaining requested for group ${beneficiaryGroupId} by ${user?.name}`
+        `[SkipOldPayout] group=${beneficiaryGroupId} START requested by ${user?.name} (new reservation: ${totalTokensReserved} tokens, payoutIntegrated=${isPayoutIntegrated})`
       );
       await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
       this.logger.log(
-        `skipOldPayoutForRemaining finished for group ${beneficiaryGroupId}, continuing with new reservation`
+        `[SkipOldPayout] group=${beneficiaryGroupId} DONE -> continuing with assignment check and new reservation`
       );
     }
 
