@@ -852,14 +852,7 @@ describe('BeneficiaryService', () => {
         mockPrismaService.beneficiaryGroups.findUnique
       ).toHaveBeenCalledWith({
         where: { uuid, deletedAt: null },
-        include: {
-          tokensReserved: true,
-          beneficiaries: {
-            include: {
-              beneficiary: true,
-            },
-          },
-        },
+        select: { uuid: true },
       });
 
       expect(mockClientProxy.send).toHaveBeenCalledWith(

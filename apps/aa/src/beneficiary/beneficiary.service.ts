@@ -531,19 +531,16 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
+    // Existence check only — the actual data returned comes from the microservice call below,
+    // not from this row. Previously this fetched the full group with every beneficiary's full
+    // record joined in (include: beneficiaries.beneficiary) and then discarded it entirely, on
+    // every call — including once per row in the getAllTokenReservations listing loop.
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
         deletedAt: null,
       },
-      include: {
-        tokensReserved: true,
-        beneficiaries: {
-          include: {
-            beneficiary: true,
-          },
-        },
-      },
+      select: { uuid: true },
     });
 
     if (!benfGroup)
@@ -1055,10 +1052,6 @@ export class BeneficiaryService {
       `Fetched ${data.length} token reservations, enriching with group data`
     );
 
-    const formattedData: Array<
-      DataItem & { group: ReturnType<typeof this.getOneGroup> }
-    > = [];
-
     const disburseOnCreate = await this.settingsService
       .getPublic('DISBURSED_ON_CREATE')
       .catch(() => null);
@@ -1067,21 +1060,51 @@ export class BeneficiaryService {
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
 
-    for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID);
-      const synced = shouldSyncFromSdp
-        ? await this.syncDisbursementStatusFromSdp(d)
-        : null;
+    // FE only ever reads group.name and a beneficiary count (never individual
+    // records), so fetch that directly from the local mirror table instead of
+    // round-tripping to core for the full group + all beneficiaries per row.
+    const groupIds = [...new Set(data.map((d) => d['groupId'] as string))];
+    const groups = await this.prisma.beneficiaryGroups.findMany({
+      where: { uuid: { in: groupIds } },
+      select: {
+        uuid: true,
+        name: true,
+        _count: { select: { beneficiaries: true } },
+      },
+    });
+    const groupByUuid = new Map(groups.map((g) => [g.uuid, g]));
 
-      formattedData.push({
-        ...d,
-        ...synced,
-        group,
-      });
-    }
+    const enriched = await Promise.all(
+      data.map(async (d) => {
+        const g = groupByUuid.get(d['groupId'] as string);
+        const synced = shouldSyncFromSdp
+          ? await this.syncDisbursementStatusFromSdp(d)
+          : null;
+
+        // `info` carries batchStatus (up to ~334 entries per group, with
+        // error objects/gasUsed/retryCount/etc per batch) — FE doesn't read
+        // it in this list view, drop it from the response entirely.
+        const { info, ...rest } = d;
+
+        return {
+          ...rest,
+          ...synced,
+          group: g
+            ? {
+                uuid: g.uuid,
+                name: g.name,
+                // Shim: FE only reads groupedBeneficiaries.length, never the
+                // records themselves. Keep that shape without shipping the
+                // full 10k-row array — avoids a coordinated FE deploy.
+                groupedBeneficiaries: { length: g._count.beneficiaries },
+              }
+            : null,
+        };
+      })
+    );
 
     return {
-      data: formattedData,
+      data: enriched,
       meta,
     };
   }
@@ -1196,11 +1219,33 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    if (!benfGroupToken)
+      throw new RpcException({
+        message: 'Token reservation not found.',
+        code: 'TOKEN_RESERVATION_NOT_FOUND',
+      });
+
+    // Same fix as getAllTokenReservations: skip the cross-service RPC (which
+    // returned the full group with every beneficiary joined in) and read
+    // name/count directly from the local mirror table instead.
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: benfGroupToken.groupId as string },
+      select: {
+        uuid: true,
+        name: true,
+        groupPurpose: true,
+        _count: { select: { beneficiaries: true } },
+      },
+    });
 
     return {
       ...benfGroupToken,
-      ...groupDetails,
+      ...(group && {
+        uuid: group.uuid,
+        name: group.name,
+        groupPurpose: group.groupPurpose,
+        groupedBeneficiaries: { length: group._count.beneficiaries },
+      }),
     };
   }
 
@@ -1283,17 +1328,85 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(
-        `Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(
-          data
-        )}`
-      );
+      this.logger.log(`Group token ${benfGroupToken.uuid} updated to status: ${data.status}`);
 
       return benfGroupToken;
     } catch (error) {
       this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Get disbursement progress for a group
+   * Reads batchStatus from info JSON field in beneficiaryGroupTokens
+   * Calculates progress metrics based on batch statuses
+   /**
+   * Get disbursement progress for a beneficiary group
+   * Reads batch status from the info JSON field of the active token reservation
+   * Returns detailed progress metrics including batch counts, beneficiary counts, and percentage
+   * 
+   * Why this approach:
+   * - Uses existing info JSON field (no schema changes needed)
+   * - Provides granular per-batch visibility for monitoring
+   * - Calculates progress based on confirmed beneficiaries only
+   * - Distinguishes between failed (exhausted retries) and retrying batches
+   */
+  async getDisbursementProgress(groupUuid: string) {
+    this.logger.debug(`Fetching disbursement progress for group: ${groupUuid}`);
+    // Get the active (not yet disbursed) token reservation for this group
+    const groupToken = await this.getOneTokenReservationByGroupId(groupUuid);
+    
+    // If no token reservation or no info field, return default progress
+    // This handles groups that haven't started disbursement yet
+    if (!groupToken || !groupToken.info) {
+      return {
+        totalBatches: 0,
+        completedBatches: 0,
+        failedBatches: 0,
+        pendingBatches: 0,
+        disbursedBeneficiariesCount: 0,
+        totalBeneficiaries: 0,
+        progressPercent: 0,
+        status: 'NOT_STARTED',
+      };
+    }
+
+    // Parse info field (stored as JSON string in database)
+    const info = groupToken.info as any;
+    const batchStatus = info.batchStatus || [];
+    // Get total batches from info or fallback to batchStatus length
+    const totalBatches = info.totalBatches || batchStatus.length;
+    // Get total beneficiaries from info or default to 0
+    const totalBeneficiaries = info.totalBeneficiaries || 0;
+    // Get already disbursed beneficiaries count from info
+    // This is maintained by updateBatchStatus in the processor
+    const disbursedCount = info.disbursedBeneficiariesCount || 0;
+
+    // Count batches by status for detailed progress tracking
+    // CONFIRMED = successfully disbursed on-chain
+    const completedBatches = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+    // FAILED with retryCount >= 3 = exhausted all retries, permanently failed
+    const failedBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3).length;
+    // PENDING = waiting to be processed or currently processing
+    const pendingBatches = batchStatus.filter((b: any) => b.status === 'PENDING').length;
+    // FAILED with retryCount < 3 = will be retried automatically
+    const retryingBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3).length;
+
+    return {
+      totalBatches,
+      completedBatches,
+      failedBatches,
+      pendingBatches,
+      retryingBatches,
+      disbursedBeneficiariesCount: disbursedCount,
+      totalBeneficiaries,
+      // Progress percentage based on confirmed beneficiaries / total beneficiaries
+      progressPercent: totalBeneficiaries > 0 ? Math.round((disbursedCount / totalBeneficiaries) * 100) : 0,
+      status: groupToken.status,
+      isDisbursed: groupToken.isDisbursed,
+      lastUpdated: info.lastUpdated,
+    };
   }
 
   private async seedOtpsForBeneficiaries(
