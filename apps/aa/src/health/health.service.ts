@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BQUEUE } from '../constants';
 import { PrismaService } from '@rumsan/prisma';
 import { Queue } from 'bull';
@@ -13,6 +13,7 @@ import {
 import { TriggerType } from '@rumsan/connect';
 import { lastValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
+import axios from 'axios';
 
 // Stores the last-known set of down services + timestamp of last down-alert.
 // Diffed each run to detect newly-down (alert) and restored (notice) services.
@@ -26,10 +27,11 @@ interface AlertState {
 }
 
 @Injectable()
-export class HealthService {
+export class HealthService implements OnModuleInit {
   private readonly CACHE_KEY = `${process.env.PROJECT_ID}:project_health_status`;
   private readonly CACHE_TTL = 300;
   private readonly _logger = new Logger(HealthService.name);
+  private serverIp: string = '';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,6 +43,26 @@ export class HealthService {
     @InjectQueue(BQUEUE.COMMUNICATION)
     private readonly rahatQueue: Queue
   ) {}
+
+  async onModuleInit() {
+    this.serverIp = await this.getServerIp();
+  }
+
+  private async getServerIp(): Promise<string> {
+    const envIp = process.env.SERVER_IP || process.env.HOST_IP;
+    if (envIp) return envIp;
+    try {
+      const res = await axios.get<{ ip: string }>(
+        'https://api.ipify.org?format=json',
+        { timeout: 3000 }
+      );
+      if (res.data?.ip) return res.data.ip;
+    } catch (err) {
+      this._logger.warn(`Could not fetch public IP: ${err}`);
+    }
+
+    return '';
+  }
 
   async getHealthStatus(): Promise<HealthStatus> {
     this._logger.log('Get the health status');
@@ -353,6 +375,9 @@ export class HealthService {
       <div class="foot">
       <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard</a>· ${new Date().toLocaleString()} </p>
       ${projectDetails}
+      <span style="margin-left:12px">Server IP: <strong>${
+        this.serverIp
+      }</strong></span>
       </div>
       </div>
     </body>
