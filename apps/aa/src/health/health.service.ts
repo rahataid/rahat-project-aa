@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bull';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BQUEUE } from '../constants';
 import { PrismaService } from '@rumsan/prisma';
 import { Queue } from 'bull';
@@ -13,11 +13,12 @@ import {
 import { TriggerType } from '@rumsan/connect';
 import { lastValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
+import axios from 'axios';
 
 // Stores the last-known set of down services + timestamp of last down-alert.
 // Diffed each run to detect newly-down (alert) and restored (notice) services.
 // Re-alerts every 24h while the same services remain down.
-const ALERT_STATE_KEY = 'project_health_alert_state';
+const ALERT_STATE_KEY = `${process.env.PROJECT_ID}:project_health_alert_state`;
 const RE_ALERT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface AlertState {
@@ -26,10 +27,11 @@ interface AlertState {
 }
 
 @Injectable()
-export class HealthService {
-  private readonly CACHE_KEY = 'health_status';
-  private readonly CACHE_TTL = 60;
+export class HealthService implements OnModuleInit {
+  private readonly CACHE_KEY = `${process.env.PROJECT_ID}:project_health_status`;
+  private readonly CACHE_TTL = 300;
   private readonly _logger = new Logger(HealthService.name);
+  private serverIp: string = '';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,6 +43,26 @@ export class HealthService {
     @InjectQueue(BQUEUE.COMMUNICATION)
     private readonly rahatQueue: Queue
   ) {}
+
+  async onModuleInit() {
+    this.serverIp = await this.getServerIp();
+  }
+
+  private async getServerIp(): Promise<string> {
+    const envIp = process.env.SERVER_IP || process.env.HOST_IP;
+    if (envIp) return envIp;
+    try {
+      const res = await axios.get<{ ip: string }>(
+        'https://api.ipify.org?format=json',
+        { timeout: 3000 }
+      );
+      if (res.data?.ip) return res.data.ip;
+    } catch (err) {
+      this._logger.warn(`Could not fetch public IP: ${err}`);
+    }
+
+    return '';
+  }
 
   async getHealthStatus(): Promise<HealthStatus> {
     this._logger.log('Get the health status');
@@ -54,7 +76,7 @@ export class HealthService {
   }
 
   async checkHealthStatus(): Promise<HealthStatus> {
-    this._logger.log('Check the health status of all  used services');
+    // this._logger.log('Check the health status of all  used services');
     const result = await updateHealthStatus(
       this.prisma,
       this.rahatQueue,
@@ -82,10 +104,10 @@ export class HealthService {
 
   async sendHealthAlertEmail(
     downServices: Array<{ name: string; message?: string }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): Promise<void> {
     try {
-      this._logger.log('Health status alert email sending..');
       const transportId = await this.commsService.getEmailTransportId();
       const recipients = (process.env.HEALTH_ALERT_EMAILS ?? '')
         .split(',')
@@ -103,7 +125,12 @@ export class HealthService {
         maxAttempts: 3,
         trigger: TriggerType.IMMEDIATE,
         message: {
-          content: this.buildHealthEmailHtml('down', downServices, frontendUrl),
+          content: this.buildHealthEmailHtml(
+            'down',
+            downServices,
+            frontendUrl,
+            projectName
+          ),
           meta: {
             subject: `[ALERT] ${downServices.length} service(s) down – Rahat Health Check`,
           },
@@ -119,7 +146,8 @@ export class HealthService {
 
   async sendHealthRestoredEmail(
     restoredServices: Array<{ name: string; restored: boolean }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): Promise<void> {
     try {
       const transportId = await this.commsService.getEmailTransportId();
@@ -129,7 +157,6 @@ export class HealthService {
         .filter(Boolean);
 
       if (!recipients.length) return;
-
       await this.commsService.broadcast.create({
         transport: transportId,
         addresses: recipients,
@@ -139,7 +166,8 @@ export class HealthService {
           content: this.buildHealthEmailHtml(
             'up',
             restoredServices.map(({ name }) => ({ name })),
-            frontendUrl
+            frontendUrl,
+            projectName
           ),
           meta: {
             subject: `[NOTICE] All services restored – Rahat Health Check`,
@@ -163,6 +191,13 @@ export class HealthService {
 
       const newlyDown = downNow.filter((s) => !prev.down.includes(s));
       const restored = prev.down.filter((s) => !downNow.includes(s));
+      const settings = await this.prisma.setting.findUnique({
+        where: {
+          name: 'PROJECTINFO',
+        },
+      });
+      const settingValue = settings?.value as any;
+      const projectName = settingValue?.PROJECT_NAME;
       const [frontendSetting] = await lastValueFrom(
         this.coreClient.send({ cmd: 'appJobs.frontendUrl.get' }, {})
       );
@@ -180,20 +215,22 @@ export class HealthService {
               message: svc?.message,
             };
           }),
-          frontendUrl
+          frontendUrl,
+          projectName
         );
         prev.lastAlertAt = Date.now();
       }
 
       if (restored.length) {
-        this._logger.log('health status up ');
-        const upServices = Object.entries(result.services)
-          .filter(([, status]) => status.status === 'up')
-          .map(([name]) => ({
-            name: SERVICE_LABELS[name] ?? name,
-            restored: restored.includes(name),
-          }));
-        await this.sendHealthRestoredEmail(upServices, frontendUrl);
+        const upServices = restored.map((name) => ({
+          name: SERVICE_LABELS[name] ?? name,
+          restored: true,
+        }));
+        await this.sendHealthRestoredEmail(
+          upServices,
+          frontendUrl,
+          projectName
+        );
       }
 
       // Re-alert only when state is stable (no transition) and the same
@@ -214,7 +251,8 @@ export class HealthService {
               message: svc?.message,
             };
           }),
-          frontendUrl
+          frontendUrl,
+          projectName
         );
         prev.lastAlertAt = Date.now();
       }
@@ -253,7 +291,9 @@ export class HealthService {
   }
 
   private async setCache(data: HealthStatus): Promise<void> {
-    this._logger.log('Caching the health status');
+    this._logger.log(
+      'Checking the health status of all  used services and caching the health status'
+    );
     await this.rahatQueue.client.setex(
       this.CACHE_KEY,
       this.CACHE_TTL,
@@ -264,11 +304,14 @@ export class HealthService {
   private buildHealthEmailHtml(
     type: 'down' | 'up',
     services: Array<{ name: string; message?: string; restored?: boolean }>,
-    frontendUrl?: string
+    frontendUrl?: string,
+    projectName?: string
   ): string {
     const isDown = type === 'down';
     const accent = isDown ? '#d9534f' : '#5cb85c';
-    const heading = isDown ? '⚠ Service Health Alert' : '✓ Services Restored';
+    const heading = isDown
+      ? `⚠ Service Health Alert ${projectName}`
+      : `✓ Services Restored ${projectName}`;
     const intro = isDown
       ? 'The following service(s) are currently unavailable:'
       : 'All services are now healthy:';
@@ -297,6 +340,9 @@ export class HealthService {
 
     const extraHeader = isDown
       ? `<th style="text-align:left;padding:10px 12px;font-size:.85em">Message</th>`
+      : '';
+    const projectDetails = projectName
+      ? `<p><strong>Project:</strong> ${projectName}</p>`
       : '';
 
     return `<!DOCTYPE html>
@@ -327,7 +373,11 @@ export class HealthService {
       </table>
       </div>
       <div class="foot">
-      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard</a>· ${new Date().toLocaleString()} </p>
+      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard(${frontendUrl})</a>· ${new Date().toLocaleString()} </p>
+      ${projectDetails}
+      <span style="margin-left:12px">Server IP: <strong>${
+        this.serverIp
+      }</strong></span>
       </div>
       </div>
     </body>
