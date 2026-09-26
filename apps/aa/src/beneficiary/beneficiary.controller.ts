@@ -290,8 +290,13 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GENERATE_QR_PDF,
     uuid: process.env.PROJECT_ID,
   })
-  generateQrPdf(@Payload() payload: { groupId: string }) {
-    return this.beneficiaryService.initiateQrPdf(payload.groupId);
+  generateQrPdf(
+    @Payload() payload: { groupId: string; includeOtp?: boolean }
+  ) {
+    return this.beneficiaryService.initiateQrPdf(
+      payload.groupId,
+      payload.includeOtp
+    );
   }
 
   @MessagePattern({
