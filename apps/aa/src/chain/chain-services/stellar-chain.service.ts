@@ -1195,16 +1195,16 @@ export class StellarChainService implements IChainService, OnModuleInit {
         message: 'OTP record not found',
         code: 'OTP_RECORD_NOT_FOUND',
       });
-    if (record.isVerified)
-      throw new RpcException({
-        message: 'OTP already verified',
-        code: 'OTP_ALREADY_VERIFIED',
-      });
-    if (record.expiresAt < new Date())
-      throw new RpcException({
-        message: 'OTP has expired',
-        code: 'OTP_EXPIRED',
-      });
+    // if (record.isVerified)
+    //   throw new RpcException({
+    //     message: 'OTP already verified',
+    //     code: 'OTP_ALREADY_VERIFIED',
+    //   });
+    // if (record.expiresAt < new Date())
+    //   throw new RpcException({
+    //     message: 'OTP has expired',
+    //     code: 'OTP_EXPIRED',
+    //   });
 
     const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
     if (!isValid)
