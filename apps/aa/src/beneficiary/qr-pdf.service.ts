@@ -8,11 +8,34 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { BQUEUE } from '../constants';
+import { BQUEUE, QR_PDF_MAX_FIELDS } from '../constants';
 import { buildQrPdf, QrCardData } from './qr-pdf-builder';
 import { AppService } from '../app/app.service';
+import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
 
 const BATCH_SIZE = 200;
+
+// Turns an arbitrary field token ("NAME", "tole_name") into a readable
+// label ("Name", "Tole Name").
+function toLabel(key: string): string {
+  return key
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Case-insensitively finds `field` among the beneficiary's extras keys
+// and returns its value, or undefined if extras has no matching key.
+function findExtraValue(
+  extras: Record<string, unknown>,
+  field: string
+): unknown {
+  const key = Object.keys(extras).find(
+    (k) => k.toLowerCase() === field.toLowerCase()
+  );
+  return key ? extras[key] : undefined;
+}
 
 interface R2Settings {
   R2_ACCOUNT_ID: string;
@@ -48,8 +71,16 @@ export class QrPdfService implements OnModuleInit {
     });
   }
 
-  async initiateQrPdf(groupId: string, includeOtp = true) {
-    const withOtp = includeOtp !== false;
+  async initiateQrPdf(payload: GenerateQrPdfDto) {
+    const {
+      groupId,
+      includeOtp = true,
+      excludeUnphonedBeneficiaries = false,
+      pdfFields = [],
+    } = payload;
+
+    this.assertPdfFieldsWithinLimit(pdfFields);
+
     const existing = await this.prisma.pdfGenerationJob.findFirst({
       where: { groupId, status: { in: ['pending', 'processing'] } },
       orderBy: { createdAt: 'desc' },
@@ -60,6 +91,72 @@ export class QrPdfService implements OnModuleInit {
       return { jobId: existing.uuid, alreadyRunning: true };
     }
 
+    return this.enqueueQrPdfJob(
+      groupId,
+      includeOtp,
+      excludeUnphonedBeneficiaries,
+      pdfFields
+    );
+  }
+
+  // Removes any previous PDF generation job record for the group and
+  // starts a fresh generation job with the given payload. Refuses if a job
+  // for the group is still pending/processing instead of racing with it.
+  async regenerateQrPdf(payload: RegenerateQrPdfDto) {
+    const {
+      groupId,
+      includeOtp = true,
+      excludeUnphonedBeneficiaries = false,
+      pdfFields = [],
+    } = payload;
+
+    this.assertPdfFieldsWithinLimit(pdfFields);
+
+    const lastJob = await this.prisma.pdfGenerationJob.findFirst({
+      where: { groupId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (lastJob && ['pending', 'processing'].includes(lastJob.status)) {
+      throw new Error(
+        `QR PDF generation is already in progress for group ${groupId}; ` +
+          'wait for it to finish before regenerating.'
+      );
+    }
+
+    if (lastJob) {
+      this.logger.log(
+        `Removing previous QR PDF job ${lastJob.uuid} for group ${groupId}`
+      );
+      await this.prisma.pdfGenerationJob.delete({
+        where: { uuid: lastJob.uuid },
+      });
+    }
+
+    return this.enqueueQrPdfJob(
+      groupId,
+      includeOtp,
+      excludeUnphonedBeneficiaries,
+      pdfFields
+    );
+  }
+
+  private assertPdfFieldsWithinLimit(pdfFields: string[]) {
+    if (pdfFields.length > QR_PDF_MAX_FIELDS) {
+      throw new Error(
+        `pdfFields supports at most ${QR_PDF_MAX_FIELDS} fields, got ${pdfFields.length}`
+      );
+    }
+  }
+
+  private async enqueueQrPdfJob(
+    groupId: string,
+    includeOtp: boolean,
+    excludeUnphonedBeneficiaries: boolean,
+    pdfFields: string[]
+  ) {
+    const withOtp = includeOtp !== false;
+
     const job = await this.prisma.pdfGenerationJob.create({
       data: { groupId, status: 'pending' },
     });
@@ -68,9 +165,12 @@ export class QrPdfService implements OnModuleInit {
       groupId,
       jobUuid: job.uuid,
       includeOtp: withOtp,
+      excludeUnphonedBeneficiaries,
+      pdfFields,
     });
     this.logger.log(
-      `QR PDF generation queued for group ${groupId} (includeOtp=${withOtp})`
+      `QR PDF generation queued for group ${groupId} (includeOtp=${withOtp}, ` +
+        `excludeUnphonedBeneficiaries=${excludeUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
     );
 
     return { jobId: job.uuid, alreadyRunning: false };
@@ -103,7 +203,13 @@ export class QrPdfService implements OnModuleInit {
     return job;
   }
 
-  async processQrPdf(groupId: string, jobUuid: string, includeOtp = true) {
+  async processQrPdf(
+    groupId: string,
+    jobUuid: string,
+    includeOtp = true,
+    excludeUnphonedBeneficiaries = false,
+    pdfFields: string[] = []
+  ) {
     const withOtp = includeOtp !== false;
     await this.prisma.pdfGenerationJob.update({
       where: { uuid: jobUuid },
@@ -111,7 +217,12 @@ export class QrPdfService implements OnModuleInit {
     });
 
     try {
-      const cards = await this.collectCards(groupId, withOtp);
+      const cards = await this.collectCards(
+        groupId,
+        withOtp,
+        excludeUnphonedBeneficiaries,
+        pdfFields
+      );
       this.logger.log(
         `Building PDF for ${cards.length} beneficiaries in group ${groupId}`
       );
@@ -151,11 +262,14 @@ export class QrPdfService implements OnModuleInit {
 
   private async collectCards(
     groupId: string,
-    includeOtp = true
+    includeOtp = true,
+    excludeUnphonedBeneficiaries = false,
+    pdfFields: string[] = []
   ): Promise<QrCardData[]> {
     const withOtp = includeOtp !== false;
     this.logger.log(
-      `Collecting beneficiaries for group ${groupId} (includeOtp=${withOtp})`
+      `Collecting beneficiaries for group ${groupId} (includeOtp=${withOtp}, ` +
+        `excludeUnphonedBeneficiaries=${excludeUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
     );
     const cards: QrCardData[] = [];
     let skip = 0;
@@ -190,46 +304,36 @@ export class QrPdfService implements OnModuleInit {
         const name = this.resolveName(extras);
         const otp = withOtp ? otpMap[ben.walletAddress || ''] ?? '' : '';
 
-        const isRandom =
-          extras.isRandomNumber === true || extras.isRandomNumber === 'true';
         const rawPhone = ben.phone || (extras.phone as string) || '';
-        const phone = isRandom
+        const isRandomPhone = rawPhone.startsWith('+000');
+
+        // random/placeholder phone numbers are never displayed, and the
+        // whole beneficiary is dropped when explicitly excluded.
+        if (isRandomPhone && excludeUnphonedBeneficiaries) continue;
+
+        const phone = isRandomPhone
           ? undefined
           : (rawPhone.startsWith('+977') ? rawPhone.slice(4) : rawPhone) ||
             undefined;
 
-        const ward =
-          extras.ward_no != null ? String(extras.ward_no) : undefined;
-        const location =
-          typeof extras.tole_name === 'string' && extras.tole_name.trim()
-            ? extras.tole_name.trim()
-            : undefined;
-        const district =
-          typeof extras.district === 'string' && extras.district.trim()
-            ? extras.district.trim()
-            : undefined;
-
-        const govIdType =
-          typeof extras.interviewee_government_id_type === 'string' &&
-          extras.interviewee_government_id_type.trim()
-            ? extras.interviewee_government_id_type.trim()
-            : undefined;
-        const govIdNumber =
-          typeof extras.ssa_id_number === 'string' &&
-          extras.ssa_id_number.trim()
-            ? extras.ssa_id_number.trim()
-            : undefined;
+        // pdfFields is a dynamic, arbitrary list of tokens matched
+        // case-insensitively against this beneficiary's own extras keys;
+        // a token with no matching key (or an empty value) is dropped.
+        const extraFields: { label: string; value: string }[] = [];
+        for (const field of pdfFields) {
+          const value = findExtraValue(extras, field);
+          if (value === undefined || value === null) continue;
+          const strValue = String(value).trim();
+          if (!strValue) continue;
+          extraFields.push({ label: toLabel(field), value: strValue });
+        }
 
         cards.push({
           walletAddress: ben.walletAddress || '',
           name,
           phone,
           otp,
-          ward,
-          location,
-          district,
-          governmentIdType: govIdType,
-          governmentIdNumber: govIdNumber,
+          extraFields,
         });
       }
 

@@ -9,11 +9,9 @@ export interface QrCardData {
   name: string;
   phone?: string;
   otp: string;
-  ward?: string;
-  location?: string;
-  district?: string;
-  governmentIdType?: string;
-  governmentIdNumber?: string;
+  // Dynamic set of extra fields to print, resolved from pdfFields against
+  // this beneficiary's own extras — already labeled and stringified.
+  extraFields?: { label: string; value: string }[];
 }
 
 // Report typeface. Mukta covers Latin + Devanagari; pdfkit's built-in
@@ -81,19 +79,6 @@ function cardOrigin(index: number): { x: number; y: number } {
     x: MARGIN + col * (CARD_WIDTH + GUTTER_H),
     y: MARGIN + row * (CARD_HEIGHT + GUTTER_V),
   };
-}
-
-// Format government ID: "citizenship_card" + "1234567890" → "Citizenship Card: 12345*****"
-function formatGovId(typeKey: string, idNumber?: string): string {
-  const label = typeKey
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-  if (!idNumber) return label;
-  const masked =
-    idNumber.length <= 5
-      ? idNumber
-      : idNumber.slice(0, 5) + '*'.repeat(Math.min(idNumber.length - 5, 8));
-  return `${label}: ${masked}`;
 }
 
 // Card background: full blue, white top strip for logo, white wave section for QR
@@ -232,25 +217,6 @@ function renderCardsToPdf(
       .text(card.name || '', x, textY, { width: CARD_WIDTH, align: 'center' });
     textY += lineH;
 
-    const locationParts = [card.location, card.district].filter(Boolean);
-    if (locationParts.length > 0) {
-      doc
-        .font(REPORT_FONT)
-        .fontSize(8)
-        .fillColor('#ddeeff')
-        .text(locationParts.join(', '), x, textY, { width: CARD_WIDTH, align: 'center' });
-      textY += lineH;
-    }
-
-    if (card.ward) {
-      doc
-        .font(REPORT_FONT)
-        .fontSize(8)
-        .fillColor('#ddeeff')
-        .text(`Ward: ${card.ward}`, x, textY, { width: CARD_WIDTH, align: 'center' });
-      textY += lineH;
-    }
-
     if (card.phone) {
       doc
         .font(REPORT_FONT)
@@ -269,16 +235,18 @@ function renderCardsToPdf(
       textY += lineH;
     }
 
-    if (card.governmentIdType) {
+    // Dynamic fields resolved from pdfFields, one line each.
+    for (const field of card.extraFields || []) {
       doc
         .font(REPORT_FONT)
         .fontSize(8)
         .fillColor('#ddeeff')
         .text(
-          `Govt ID: ${formatGovId(card.governmentIdType, card.governmentIdNumber)}`,
+          `${field.label}: ${field.value}`,
           x, textY,
           { width: CARD_WIDTH, align: 'center' }
         );
+      textY += lineH;
     }
   }
 }

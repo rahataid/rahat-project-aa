@@ -11,12 +11,22 @@ export class PdfGenerationProcessor {
   constructor(private readonly qrPdfService: QrPdfService) {}
 
   @Process()
-  async handle(job: Job<{ groupId: string; jobUuid: string; includeOtp?: boolean }>) {
+  async handle(
+    job: Job<{
+      groupId: string;
+      jobUuid: string;
+      includeOtp?: boolean;
+      excludeUnphonedBeneficiaries?: boolean;
+      pdfFields?: string[];
+    }>
+  ) {
     this.logger.log(`Processing QR PDF job ${job.data.jobUuid} for group ${job.data.groupId}`);
     await this.qrPdfService.processQrPdf(
       job.data.groupId,
       job.data.jobUuid,
-      job.data.includeOtp
+      job.data.includeOtp,
+      job.data.excludeUnphonedBeneficiaries,
+      job.data.pdfFields
     );
   }
 }

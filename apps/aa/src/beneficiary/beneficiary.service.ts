@@ -27,6 +27,7 @@ import { PayoutsService } from '../payouts/payouts.service';
 import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
+import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -68,8 +69,12 @@ export class BeneficiaryService {
     this.rsprisma = prisma.rsclient;
   }
 
-  initiateQrPdf(groupId: string, includeOtp = true) {
-    return this.qrPdfService.initiateQrPdf(groupId, includeOtp);
+  initiateQrPdf(payload: GenerateQrPdfDto) {
+    return this.qrPdfService.initiateQrPdf(payload);
+  }
+
+  regenerateQrPdf(payload: RegenerateQrPdfDto) {
+    return this.qrPdfService.regenerateQrPdf(payload);
   }
 
   getQrPdf(groupId: string) {

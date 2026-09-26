@@ -7,6 +7,9 @@ export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 // Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
 export const STELLAR_TRANSFER_BATCH_SIZE = 6;
+// QR PDF card layout is fixed (4 cards/page), so the number of dynamic
+// extra fields printed per card is capped to keep the card from overflowing.
+export const QR_PDF_MAX_FIELDS = 5;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -91,6 +94,7 @@ export const JOBS = {
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    REGENERATE_QR_PDF: 'aa.jobs.beneficiary.regenerateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
