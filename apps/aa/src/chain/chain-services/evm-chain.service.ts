@@ -1230,7 +1230,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
       throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
     }
 
-    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
 
     if (!isValid) {
       this.logger.log('Invalid OTP or amount mismatch');
@@ -1424,12 +1424,16 @@ export class EvmChainService implements IChainService, OnModuleInit {
       EvmChainService.name
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
-    );
+    const res = await this.prisma.otp.findFirst({
+      where: { phoneNumber: sendOtpDto.phoneNumber },
+    });
+
+    if (!res) {
+      throw new RpcException({
+        message: 'OTP record not found for phone number',
+        code: 'OTP_RECORD_NOT_FOUND_FOR_PHONE',
+      });
+    }
 
     // Find existing BeneficiaryRedeem record for this beneficiary
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -1472,7 +1476,8 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
     }
 
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+    const { otpHash: _, ...safeRes } = res;
+    return safeRes;
   }
 
   private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
