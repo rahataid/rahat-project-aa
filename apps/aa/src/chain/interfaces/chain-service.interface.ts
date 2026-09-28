@@ -5,6 +5,8 @@ export class SendAssetDto {
   otp: string;
   mediaUrl?: string;
   fileName?: string;
+  skipOtpVerification?: boolean;
+  otpSkipReason?: string;
 }
 
 export interface IChainService {

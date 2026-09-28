@@ -100,6 +100,7 @@ export const JOBS = {
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
       'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
     RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
+    GET_PAYOUT_MODE: 'aa.jobs.beneficiary.getPayoutMode',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
@@ -171,6 +172,7 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
+    EXPORT_PAYOUT_LOGS_PDF_FILE: 'aa.jobs.payout.exportPayoutLogsPdfFile',
     VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
@@ -199,6 +201,9 @@ export const JOBS = {
     UPDATE: 'rahat.jobs.settings.update',
     UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
+  },
+  VERSION: {
+    GET: 'aa.jobs.version.get',
   },
   CONTRACT: {
     // Token Management

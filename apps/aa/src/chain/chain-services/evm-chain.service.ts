@@ -931,11 +931,13 @@ export class EvmChainService implements IChainService, OnModuleInit {
         `Transferring ${amount} to ${verifyOtpDto.receiverAddress}`
       );
 
-      await this.verifyOTP(
-        verifyOtpDto.otp,
-        verifyOtpDto.phoneNumber,
-        amount as number
-      );
+      if (!verifyOtpDto.skipOtpVerification) {
+        await this.verifyOTP(
+          verifyOtpDto.otp,
+          verifyOtpDto.phoneNumber,
+          amount as number
+        );
+      }
 
       const keys = (await this.getSecretByPhone(
         verifyOtpDto.phoneNumber
@@ -1009,6 +1011,12 @@ export class EvmChainService implements IChainService, OnModuleInit {
         });
       }
 
+      const info = (existingRedeem.info as Record<string, any>) ?? {};
+      if (verifyOtpDto.skipOtpVerification) {
+        info.otpSkip = true;
+        info.otpSkipReason = verifyOtpDto.otpSkipReason;
+      }
+
       // Update the BeneficiaryRedeem record with transaction details
       await this.prisma.beneficiaryRedeem.update({
         where: {
@@ -1019,6 +1027,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
           txHash: result.txHash,
           isCompleted: true,
           status: 'COMPLETED',
+          info,
         },
       });
 
@@ -1333,21 +1342,21 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
     }
 
-    if (record.isVerified) {
-      this.logger.log('OTP already verified');
-      throw new RpcException({
-        message: 'OTP already verified',
-        code: 'OTP_ALREADY_VERIFIED',
-      });
-    }
+    // if (record.isVerified) {
+    //   this.logger.log('OTP already verified');
+    //   throw new RpcException({
+    //     message: 'OTP already verified',
+    //     code: 'OTP_ALREADY_VERIFIED',
+    //   });
+    // }
 
-    const now = new Date();
-    if (record.expiresAt < now) {
-      this.logger.log('OTP has expired');
-      throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
-    }
+    // const now = new Date();
+    // if (record.expiresAt < now) {
+    //   this.logger.log('OTP has expired');
+    //   throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
+    // }
 
-    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
 
     if (!isValid) {
       this.logger.log('Invalid OTP or amount mismatch');
@@ -1541,12 +1550,16 @@ export class EvmChainService implements IChainService, OnModuleInit {
       EvmChainService.name
     );
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: sendOtpDto.phoneNumber, amount }
-      )
-    );
+    const res = await this.prisma.otp.findFirst({
+      where: { phoneNumber: sendOtpDto.phoneNumber },
+    });
+
+    if (!res) {
+      throw new RpcException({
+        message: 'OTP record not found for phone number',
+        code: 'OTP_RECORD_NOT_FOUND_FOR_PHONE',
+      });
+    }
 
     // Find existing BeneficiaryRedeem record for this beneficiary
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -1589,7 +1602,8 @@ export class EvmChainService implements IChainService, OnModuleInit {
       });
     }
 
-    return this.storeOTP(res.otp, sendOtpDto.phoneNumber, amount as number);
+    const { otpHash: _, ...safeRes } = res;
+    return safeRes;
   }
 
   private async getBeneficiaryPayoutTypeByPhone(phone: string): Promise<any> {
@@ -1619,7 +1633,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
       const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
-        (g) => g.groupPurpose !== 'COMMUNICATION'
+        (g) => g.beneficiaryGroup?.groupPurpose !== 'COMMUNICATION'
       );
 
       if (!payoutEligibleGroups.length) {

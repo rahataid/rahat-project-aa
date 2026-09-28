@@ -17,6 +17,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
+  DownloadPayoutLogsPdfType,
   DownloadPayoutLogsType,
   IPaymentProvider,
   PayoutStats,
@@ -27,6 +28,12 @@ import {
   EntityConfig,
   PayoutWithBeneficiaryDetails,
 } from './dto/types';
+import { ExportPayoutLogsPdfFileDto } from './dto/export-payout-logs-pdf-file.dto';
+import {
+  buildPayoutLogsPdf,
+  PayoutLogsPdfFile,
+  toPayoutLogsPdfFile,
+} from './payout-logs-pdf.builder';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
@@ -909,8 +916,13 @@ export class PayoutsService {
 
       delete tokenData.info;
 
+      const totalSkipOtp = (beneficiaryRedeem ?? []).filter(
+        (redeem) => (redeem.info as Record<string, any>)?.otpSkip === true
+      ).length;
+
       return {
         ...rest,
+        totalSkipOtp,
         beneficiaryGroupToken: {
           ...tokenData,
           beneficiaryGroup: {
@@ -1781,9 +1793,24 @@ export class PayoutsService {
       benfRedeemRequest.Beneficiary.phone ||
       (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
+    // Older BeneficiaryRedeem records may predate persisting `offrampType` into
+    // `info`, so fall back to the payout's own paymentProviderType extra.
+    const payoutExtras = benfRedeemRequest.payout?.extras as {
+      paymentProviderType?: string;
+    } | null;
+    const offrampType = info.offrampType || payoutExtras?.paymentProviderType;
+
+    if (!offrampType) {
+      throw new RpcException({
+        message: `Offramp type not found for beneficiary redeem request with UUID '${beneficiaryRedeemUuid}'`,
+        code: 'PAYOUT_ERR_REDEEM_OFFRAMP_TYPE_MISSING',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
+    }
+
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
-      offrampType: info.offrampType,
+      offrampType,
       beneficiaryBankDetails: {
         accountName: benfExtras.bank_ac_name,
         accountNumber: benfExtras.bank_ac_number,
@@ -2469,6 +2496,19 @@ export class PayoutsService {
       const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
+        const extrasFullName = `${extras?.firstName || ''} ${
+          extras?.lastName || ''
+        }`.trim();
+        const extrasName =
+          typeof extras?.name === 'string' ? extras.name.trim() : '';
+        const beneficiaryName = extrasFullName || extrasName || '';
+
+        const municipality = extras?.municipality || '';
+        const district = extras?.district || extras?.location || '';
+        const ward = extras?.ward || '';
+        const tole = extras?.tole || '';
+        const governmentIdType = extras?.governmentIdType || '';
+        const governmentIdNumber = extras?.govtIDNumber || '';
 
         const transaction = info?.cipsResponseData?.transaction;
         const offrampRequest = info?.cipsResponseData?.offrampRequest;
@@ -2503,8 +2543,7 @@ export class PayoutsService {
 
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
-          'Beneficiary First Name': extras?.firstName || '',
-          'Beneficiary Last Name': extras?.lastName || '',
+          'Beneficiary Name': beneficiaryName,
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
@@ -2514,28 +2553,28 @@ export class PayoutsService {
           'Actual Budget': actualBudget,
           'Amount Disbursed': amountDisbursed,
 
-          ...(extras?.municipality && {
-            Municipality: extras.municipality,
+          ...(municipality && {
+            Municipality: municipality,
           }),
 
-          ...(extras?.district && {
-            Location: extras.district,
+          ...(district && {
+            Location: district,
           }),
 
-          ...(extras?.ward && {
-            Ward: extras.ward,
+          ...(ward && {
+            Ward: ward,
           }),
 
-          ...(extras?.tole_name && {
-            Tole: extras.tole_name,
+          ...(tole && {
+            Tole: tole,
           }),
 
-          ...(extras?.governmentIdType && {
-            'Government ID Type': extras.governmentIdType,
+          ...(governmentIdType && {
+            'Government ID Type': governmentIdType,
           }),
 
-          ...(extras?.govtIDNumber && {
-            'Government ID Number': extras.govtIDNumber,
+          ...(governmentIdNumber && {
+            'Government ID Number': governmentIdNumber,
           }),
         };
 
@@ -2597,6 +2636,191 @@ export class PayoutsService {
     } catch (error) {
       this.logger.error(
         `Failed to get payout log: ${error.message}`,
+        error.stack
+      );
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Summarize non-photo BeneficiaryRedeem.info keys into a short display
+   * note. Returns undefined when there is nothing meaningful to show.
+   * Never throws.
+   */
+  private buildPayoutInfoNote(info: any): string | undefined {
+    try {
+      if (!info || typeof info !== 'object') return undefined;
+      if (info.otpSkip) {
+        const reason =
+          typeof info.otpSkipReason === 'string' && info.otpSkipReason.trim()
+            ? ` — Reason: ${info.otpSkipReason.trim()}`
+            : '';
+        const note = `OTP verification was skipped${reason}`;
+        return note.length > 200 ? `${note.slice(0, 200)}…` : note;
+      }
+      const parts: string[] = [];
+      if (typeof info.mode === 'string' && info.mode.trim()) {
+        parts.push(`Mode: ${info.mode.trim()}`);
+      }
+      if (typeof info.error === 'string' && info.error.trim()) {
+        parts.push(info.error.trim());
+      }
+      if (
+        typeof info.fileName === 'string' &&
+        info.fileName.trim() &&
+        !info.mediaUrl
+      ) {
+        parts.push(`File: ${info.fileName.trim()}`);
+      }
+      if (parts.length === 0) return undefined;
+      const note = parts.join(' • ');
+      return note.length > 200 ? `${note.slice(0, 200)}…` : note;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Collect slim payout log rows for the PDF table (name, phone, disbursed
+   * amount, municipality/ward, gov ID, location, photo evidence + info note),
+   * honoring applied list filters. Never fails when photo evidence is
+   * missing (photoUrl: null).
+   */
+  private async getPayoutLogsPdfRows(
+    payload: ExportPayoutLogsPdfFileDto
+  ): Promise<DownloadPayoutLogsPdfType[]> {
+    const {
+      payoutUUID,
+      transactionType,
+      transactionStatus,
+      search,
+      sort,
+      order,
+    } = payload;
+
+    this.logger.log(
+      `Exporting payout logs for PDF, payout: ${payoutUUID} filters: ${JSON.stringify(
+        { transactionType, transactionStatus, search }
+      )}`
+    );
+
+    try {
+      const payout = await this.prisma.payouts.findUnique({
+        where: { uuid: payoutUUID },
+      });
+
+      if (!payout) {
+        throw new RpcException({
+          message: `Payout with UUID '${payoutUUID}' not found`,
+          code: 'PAYOUT_ERR_NOT_FOUND',
+          params: { uuid: payoutUUID },
+        });
+      }
+      const redeemLogs = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          payoutId: payoutUUID,
+          ...(transactionType && { transactionType }),
+          ...(transactionStatus && { status: transactionStatus }),
+          ...(search && {
+            OR: [
+              {
+                beneficiaryWalletAddress: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              { txHash: { contains: search, mode: 'insensitive' } },
+              {
+                Beneficiary: {
+                  phone: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }),
+        },
+        include: {
+          Beneficiary: true,
+        },
+        ...(sort && {
+          orderBy: { [sort]: order || 'asc' },
+        }),
+      });
+
+      return redeemLogs.map((redeemLog) => {
+        const extras = parseJsonField(redeemLog.Beneficiary?.extras);
+        const info = parseJsonField(redeemLog.info);
+
+        const amountDisbursed =
+          redeemLog.status === 'COMPLETED'
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
+            : 0;
+
+        const firstName = extras?.firstName || '';
+        const lastName = extras?.lastName || '';
+        const fallbackName =
+          typeof extras?.name === 'string' ? extras.name : '';
+        const beneficiaryName =
+          `${firstName} ${lastName}`.trim() || fallbackName || '';
+        const beneficiaryPhone =
+          extras?.phone || redeemLog.Beneficiary?.phone || '';
+        const photoUrl =
+          typeof info?.mediaUrl === 'string' && info.mediaUrl.trim()
+            ? info.mediaUrl
+            : null;
+        const infoNote = this.buildPayoutInfoNote(info);
+
+        return {
+          uuid: redeemLog.uuid,
+          'Beneficiary First Name': firstName,
+          'Beneficiary Last Name': lastName,
+          'Phone number': beneficiaryPhone,
+          'Amount Disbursed': amountDisbursed,
+          photoUrl,
+          beneficiaryName,
+          beneficiaryPhone,
+          municipality: extras?.municipality,
+          district: extras?.district || extras?.location,
+          ward: extras?.ward,
+          tole: extras?.tole,
+          governmentIdNumber: extras?.govtIDNumber,
+          infoNote,
+        };
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to export payout logs for PDF: ${error.message}`,
+        error.stack
+      );
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Generate the CVA payout logs PDF server-side (table only, no header)
+   * and return it as base64 for download. Honors the same filters as the
+   * log list; missing photo evidence leaves the cell blank (or shows the
+   * info note) and never fails generation.
+   */
+  async exportPayoutLogsPdfFile(
+    payload: ExportPayoutLogsPdfFileDto
+  ): Promise<PayoutLogsPdfFile> {
+    const { payoutUUID } = payload;
+
+    this.logger.log(
+      `Generating payout logs PDF file for payout: ${payoutUUID}`
+    );
+
+    try {
+      const rows = await this.getPayoutLogsPdfRows(payload);
+
+      const buffer = await buildPayoutLogsPdf(rows);
+
+      return toPayoutLogsPdfFile(buffer, payoutUUID);
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate payout logs PDF file: ${error.message}`,
         error.stack
       );
       if (error instanceof RpcException) throw error;

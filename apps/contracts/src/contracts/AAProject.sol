@@ -53,6 +53,8 @@ contract AAProject is
   mapping(address => uint) public benTokens;
   mapping(address => uint) public benCashTokens;
 
+  uint256 totalAmountAssigned; 
+
   ///@notice constructor
   ///@param _name name of the project
   ///@param _defaultToken address of the default token(ERC20)
@@ -105,20 +107,19 @@ contract AAProject is
   ) public restricted {
     require(
       IERC20(defaultToken).balanceOf(address(this)) >=
-        totalClaimsAssigned() + _amount,
+        totalAmountAssigned + _amount,
       'not enough tokens'
     );
     _addBeneficiary(_address);
     benTokens[_address] = benTokens[_address] + _amount;
+    totalAmountAssigned = totalAmountAssigned + _amount;
     emit BenTokensAssigned(_address, _amount);
   }
 
   ///@notice function to add beneficiaries
   ///@dev can only be called by project admin when project is open
   function totalClaimsAssigned() public view returns (uint _totalClaims) {
-    for (uint i = 0; i < _beneficiaries.length(); i++) {
-      _totalClaims += benTokens[_beneficiaries.at(i)];
-    }
+    return totalAmountAssigned;
   }
 
   ///@notice function to remove beneficiaries
@@ -150,6 +151,7 @@ contract AAProject is
     require(benTokens[_beneficiary] >= _tokenAssigned, 'not enough balance');
     IERC20(_tokenAddress).transfer(_beneficiary, _tokenAssigned);
     benTokens[_beneficiary] = benTokens[_beneficiary] - _tokenAssigned;
+    totalAmountAssigned = totalAmountAssigned - _tokenAssigned;
     emit ClaimAssigned(_beneficiary, _tokenAddress, _assigner);
   }
 
