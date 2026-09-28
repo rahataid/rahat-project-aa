@@ -1507,7 +1507,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
 
       // Filter groupedBeneficiaries to only payout-eligible groups (not COMMUNICATION)
       const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
-        (g) => g.groupPurpose !== 'COMMUNICATION'
+        (g) => g.beneficiaryGroup?.groupPurpose !== 'COMMUNICATION'
       );
 
       if (!payoutEligibleGroups.length) {

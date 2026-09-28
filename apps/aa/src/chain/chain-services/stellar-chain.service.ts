@@ -1261,7 +1261,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
 
     const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
-      (g: any) => g.groupPurpose !== 'COMMUNICATION'
+      (g: any) => g.beneficiaryGroup?.groupPurpose !== 'COMMUNICATION'
     );
 
     if (!payoutEligibleGroups.length)
