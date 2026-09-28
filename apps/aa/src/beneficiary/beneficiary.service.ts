@@ -1207,33 +1207,11 @@ export class BeneficiaryService {
       },
     });
 
-    if (!benfGroupToken)
-      throw new RpcException({
-        message: 'Token reservation not found.',
-        code: 'TOKEN_RESERVATION_NOT_FOUND',
-      });
-
-    // Same fix as getAllTokenReservations: skip the cross-service RPC (which
-    // returned the full group with every beneficiary joined in) and read
-    // name/count directly from the local mirror table instead.
-    const group = await this.prisma.beneficiaryGroups.findUnique({
-      where: { uuid: benfGroupToken.groupId as string },
-      select: {
-        uuid: true,
-        name: true,
-        groupPurpose: true,
-        _count: { select: { beneficiaries: true } },
-      },
-    });
+    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
 
     return {
       ...benfGroupToken,
-      ...(group && {
-        uuid: group.uuid,
-        name: group.name,
-        groupPurpose: group.groupPurpose,
-        groupedBeneficiaries: { length: group._count.beneficiaries },
-      }),
+      ...groupDetails,
     };
   }
 
