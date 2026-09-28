@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, RpcException } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { StakeholdersService } from './stakeholders.service';
@@ -15,8 +15,11 @@ import {
   UpdateStakeholdersData,
   UpdateStakeholdersGroups,
 } from './dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class StakeholdersController {
   constructor(private readonly stakeholdersService: StakeholdersService) {}
 
@@ -25,6 +28,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.ADD,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.STAKEHOLDER)
   async add(payload: AddStakeholdersData) {
     return this.stakeholdersService.add(payload);
   }
@@ -33,6 +37,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.VALIDATE_BULK_STAKEHOLDERS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.STAKEHOLDER)
   async validateBulkStakeholders(payload: any) {
     if (!payload) {
       throw new RpcException({
@@ -41,7 +46,7 @@ export class StakeholdersController {
       });
     }
 
-    const { user, ...stakeholderData } = payload;
+    const { user, appId, ...stakeholderData } = payload;
     const normalizedData = Array.isArray(payload)
       ? stakeholderData
       : Object.values(stakeholderData);
@@ -52,6 +57,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.BULK_ADD,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.STAKEHOLDER)
   async bulkAdd(payloads: BulkAddStakeholdersPayload) {
     if (!payloads || !payloads?.data) {
       throw new RpcException({
@@ -82,6 +88,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.DELETE, SUBJECTS.STAKEHOLDER)
   async remove(payload: RemoveStakeholdersData) {
     return this.stakeholdersService.remove(payload);
   }
@@ -90,6 +97,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.UPDATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.STAKEHOLDER)
   async update(payload: UpdateStakeholdersData) {
     return this.stakeholdersService.update(payload);
   }
@@ -108,6 +116,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.ADD_GROUP,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.STAKEHOLDER)
   async addGroup(payload: AddStakeholdersGroups) {
     return this.stakeholdersService.addGroup(payload);
   }
@@ -116,6 +125,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.UPDATE_GROUP,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.STAKEHOLDER)
   async updateGroup(payload: UpdateStakeholdersGroups) {
     return this.stakeholdersService.updateGroup(payload);
   }
@@ -124,6 +134,7 @@ export class StakeholdersController {
     cmd: JOBS.STAKEHOLDERS.DELETE_GROUP,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.DELETE, SUBJECTS.STAKEHOLDER)
   async removeGroup(payload: RemoveStakeholdersGroup) {
     return this.stakeholdersService.removeGroup(payload);
   }

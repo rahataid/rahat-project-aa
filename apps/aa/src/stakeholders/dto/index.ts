@@ -8,6 +8,7 @@ export interface AddStakeholdersData {
   municipality: string;
   supportArea: string[];
   user?: any;
+  appId?: string;
 }
 
 export interface UpdateStakeholdersData {
