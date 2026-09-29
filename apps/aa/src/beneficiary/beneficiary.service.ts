@@ -2006,13 +2006,23 @@ export class BeneficiaryService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const benf of beneficiariesData) {
+        const existingBeneficiary = await tx.beneficiary.findUnique({
+          where: { uuid: benf.uuid },
+        });
+
+        const existingExtras = existingBeneficiary?.extras as any;
+        const extras =
+          existingExtras?.stellarSponsored === true
+            ? { ...benf.extras, stellarSponsored: true }
+            : benf.extras;
+
         await tx.beneficiary.upsert({
           where: { uuid: benf.uuid },
           update: {
             walletAddress: benf.walletAddress,
             gender: (benf.gender as any) || 'UNKNOWN',
             isVerified: benf.isVerified ?? false,
-            extras: benf.extras,
+            extras,
             phone: benf.phone || null,
           },
           create: {
@@ -2020,7 +2030,7 @@ export class BeneficiaryService {
             walletAddress: benf.walletAddress,
             gender: (benf.gender as any) || 'UNKNOWN',
             isVerified: benf.isVerified ?? false,
-            extras: benf.extras,
+            extras,
             phone: benf.phone || null,
           },
         });
@@ -2036,7 +2046,7 @@ export class BeneficiaryService {
           create: { beneficiaryId: benf.uuid, groupId: groupUuid },
         });
 
-        if (benf.phone && benf.walletAddress) {
+        if (!existingBeneficiary && benf.phone && benf.walletAddress) {
           const otp = isDev
             ? '1234'
             : Math.floor(1000 + Math.random() * 9000).toString();
@@ -2044,15 +2054,8 @@ export class BeneficiaryService {
             ? devHash!
             : await bcrypt.hash(otp, BCRYPT_ROUNDS);
 
-          await tx.otp.upsert({
-            where: { walletAddress: benf.walletAddress },
-            update: {
-              phoneNumber: benf.phone,
-              otp,
-              otpHash,
-              expiresAt,
-            },
-            create: {
+          await tx.otp.create({
+            data: {
               phoneNumber: benf.phone,
               walletAddress: benf.walletAddress,
               otp,
@@ -2102,7 +2105,7 @@ export class BeneficiaryService {
 
     const payoutMode =
       payoutDetails?.BeneficiaryToGroup?.find(
-        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode
       )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
 
     return { benId, payoutMode };
