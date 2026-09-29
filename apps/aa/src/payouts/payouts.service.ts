@@ -52,6 +52,7 @@ import { OtpService } from '../otp/otp.service';
 import bcrypt from 'bcryptjs';
 import {
   calculatePayoutStatus,
+  REDEEM_PAID_STATUSES,
   PayoutWithRelations,
   RedeemStatus,
 } from '../utils/getBeneficiaryRedemStatus';
@@ -728,8 +729,11 @@ export class PayoutsService {
     newStatus: RedeemStatus,
     refreshGap = false
   ): Promise<void> {
-    const hasPaidRedeems =
-      newStatus === 'COMPLETED' || newStatus === 'PARTIALLY_COMPLETED';
+    // any paid beneficiary is enough; status can still be PENDING while the
+    // rest of the group is in flight
+    const hasPaidRedeems = payout.beneficiaryRedeem.some((r) =>
+      REDEEM_PAID_STATUSES.includes(r.status)
+    );
 
     if (payout.status !== newStatus) {
       await this.prisma.payouts.update({
@@ -797,18 +801,19 @@ export class PayoutsService {
       frozenActivatedAt ?? (await this.resolveActivationTime());
 
     const gaps: {
-      payoutGap: string;
+      payoutGap?: string;
       group_gap?: string;
       payoutActivatedAt?: string;
-    } = {
-      payoutGap: await this.calculatePayoutCompletionGap(
-        payoutUuid,
-        payoutActivatedAt
-      ),
-    };
-    // only freeze a timestamp that produced a valid gap
-    if (!frozenActivatedAt && gaps.payoutGap !== 'N/A') {
-      gaps.payoutActivatedAt = payoutActivatedAt;
+    } = {};
+    const payoutGap = await this.calculatePayoutCompletionGap(
+      payoutUuid,
+      payoutActivatedAt
+    );
+    // never store N/A: findOne would return it instead of retrying the lookup.
+    // Only freeze a timestamp that produced a valid gap.
+    if (payoutGap !== 'N/A') {
+      gaps.payoutGap = payoutGap;
+      if (!frozenActivatedAt) gaps.payoutActivatedAt = payoutActivatedAt;
     }
 
     // group_gap: time from triggerPayout call to last paid beneficiary, FSP only.
@@ -816,6 +821,8 @@ export class PayoutsService {
       const groupGap = await this.calculateGroupGap(payout);
       if (groupGap) gaps.group_gap = groupGap;
     }
+
+    if (!Object.keys(gaps).length) return;
 
     // jsonb merge in SQL: single-row atomic write, doesn't clobber extras keys
     // written concurrently by other flows (e.g. skippedAt).
@@ -948,8 +955,9 @@ export class PayoutsService {
       let payoutGap = 'N/A';
 
       if (
-        isPayoutTriggered &&
-        (isCompleted || payout.status === 'PARTIALLY_COMPLETED')
+        payout.beneficiaryRedeem.some((r) =>
+          REDEEM_PAID_STATUSES.includes(r.status)
+        )
       ) {
         const storedGap = (payout.extras as { payoutGap?: string })?.payoutGap;
 
@@ -2026,7 +2034,7 @@ export class PayoutsService {
     return this.prisma.beneficiaryRedeem.findFirst({
       where: {
         payout: { uuid: payoutUuid },
-        status: { in: ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'] },
+        status: { in: REDEEM_PAID_STATUSES as PayoutTransactionStatus[] },
       },
       orderBy: { updatedAt: 'desc' },
     });
