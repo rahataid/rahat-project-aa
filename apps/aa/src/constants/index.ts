@@ -107,6 +107,7 @@ export const JOBS = {
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
     REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',

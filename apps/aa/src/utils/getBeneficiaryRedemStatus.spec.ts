@@ -23,4 +23,9 @@ describe('calculatePayoutStatus', () => {
       calculatePayoutStatus(payout(['FIAT_TRANSACTION_COMPLETED', 'FIAT_TRANSACTION_FAILED']))
     ).toBe('PARTIALLY_COMPLETED');
   });
+
+  it('CANCELLED redeems (skipped payout) still render the payout as failed/partial', () => {
+    expect(calculatePayoutStatus(payout(['CANCELLED', 'CANCELLED']))).toBe('FAILED');
+    expect(calculatePayoutStatus(payout(['COMPLETED', 'CANCELLED']))).toBe('PARTIALLY_COMPLETED');
+  });
 });
