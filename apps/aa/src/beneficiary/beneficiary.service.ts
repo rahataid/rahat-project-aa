@@ -2046,7 +2046,7 @@ export class BeneficiaryService {
           create: { beneficiaryId: benf.uuid, groupId: groupUuid },
         });
 
-        if ( benf.phone && benf.walletAddress) {
+        if (benf.phone && benf.walletAddress) {
           const otp = isDev
             ? '1234'
             : Math.floor(1000 + Math.random() * 9000).toString();
@@ -2082,6 +2082,21 @@ export class BeneficiaryService {
     // }
 
     return { message: 'Sync process completed successfully' };
+  }
+
+  async syncGroupBeneficiariesToProjectCompleted(payload: {
+    groupUuid: string;
+  }) {
+    const { groupUuid } = payload;
+
+    await this.prisma.pdfGenerationJob.deleteMany({
+      where: { groupId: groupUuid },
+    });
+    this.logger.log(`Cleared PDF generation jobs for group ${groupUuid}`);
+
+    const retryResult = await this.retrySponsorshipForGroup({ groupUuid });
+
+    return { pdfJobsCleared: true, ...retryResult };
   }
 
   async getBeneficiaryPayoutMode(payload: { benId: string }) {
