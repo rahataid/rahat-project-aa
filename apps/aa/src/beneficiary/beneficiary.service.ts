@@ -2046,7 +2046,7 @@ export class BeneficiaryService {
           create: { beneficiaryId: benf.uuid, groupId: groupUuid },
         });
 
-        if (!existingBeneficiary && benf.phone && benf.walletAddress) {
+        if ( benf.phone && benf.walletAddress) {
           const otp = isDev
             ? '1234'
             : Math.floor(1000 + Math.random() * 9000).toString();
@@ -2054,8 +2054,12 @@ export class BeneficiaryService {
             ? devHash!
             : await bcrypt.hash(otp, BCRYPT_ROUNDS);
 
-          await tx.otp.create({
-            data: {
+          await tx.otp.upsert({
+            where: { walletAddress: benf.walletAddress },
+            update: {
+              phoneNumber: benf.phone,
+            },
+            create: {
               phoneNumber: benf.phone,
               walletAddress: benf.walletAddress,
               otp,
