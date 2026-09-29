@@ -16,8 +16,11 @@ on:
       tag_prefix:
         description: 'Tag prefix (e.g., Img tag)'
         required: true
-        default: 'release-v4.0.0-nrcs-client'
-        type: string
+        default: 'Drop Down'
+        type: choice
+        options:
+          - nrcs-client-steller-2026
+          - nrcs-client-2026
 
 env:
   CI: false
