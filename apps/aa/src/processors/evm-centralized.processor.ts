@@ -475,6 +475,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     if (nextBatch.status === 'CONFIRMED' || nextBatch.status === 'SUBMITTED') {
       if (nextBatchIndex < totalBatches - 1) {
         await this.requeueNextBatch(groupUuid, nextBatchIndex + 1, totalBatches, dName, group);
+      } else {
+        this.logger.log(`No more pending batches for group ${groupUuid} (remaining already ${nextBatch.status})`);
       }
       return;
     }
@@ -549,40 +551,49 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     preloaded?: { uuid: string; info: any }
   ): Promise<{ uuid: string; info: any } | undefined> {
     // Fetch without isDisbursed filter — record may already be finalized
-    const group = preloaded ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid));
-    if (!group || !group.info) return undefined;
+    const uuid =
+      preloaded?.uuid ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid))?.uuid;
+    if (!uuid) return undefined;
 
-    // Shallow copy, not a JSON.parse(JSON.stringify(...)) deep clone — we only replace the
-    // top-level object, the batchStatus array, and one array entry (as a new object), never
-    // mutate anything nested in place, so a deep clone buys nothing here and costs CPU that
-    // scales with the (growing, up to 334-entry) batchStatus array on every single call.
-    const info: any = { ...(group.info as any) };
-    const batchStatus = [...(info.batchStatus || [])];
+    // Why: the assign job (tx queue) and status job (query queue) run concurrently and both
+    // rewrite the whole info JSON. Merging onto a `preloaded` snapshot let one job clobber the
+    // other's batch entry (CONFIRMED reverted to SUBMITTED, txHash dropped), so the group never
+    // finalized and re-disburse skipped batches. Re-read the row under a lock and merge onto that.
+    return this.prismaService.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ info: any }[]>`
+        SELECT info FROM tbl_beneficiaries_groups_tokens WHERE uuid = ${uuid} FOR UPDATE`;
+      if (!row?.info) return undefined;
 
-    batchStatus[batchIndex] = { ...(batchStatus[batchIndex] || { batchIndex }), ...updates };
+      // Shallow copy — we only replace the top-level object, the batchStatus array, and one
+      // array entry (as a new object), never mutate anything nested in place.
+      const info: any = { ...row.info };
+      const batchStatus = [...(info.batchStatus || [])];
 
-    const disbursedCount = batchStatus
-      .filter((b: any) => b.status === 'CONFIRMED')
-      .reduce((sum: number, b: any) => sum + (b.beneficiaryCount || 0), 0);
+      batchStatus[batchIndex] = { ...(batchStatus[batchIndex] || { batchIndex }), ...updates };
 
-    const mergedInfo = {
-      ...info,
-      batchStatus,
-      disbursedBeneficiariesCount: disbursedCount,
-      lastUpdated: new Date().toISOString(),
-    };
+      const disbursedCount = batchStatus
+        .filter((b: any) => b.status === 'CONFIRMED')
+        .reduce((sum: number, b: any) => sum + (b.beneficiaryCount || 0), 0);
 
-    // Update directly by uuid — avoids the isDisbursed:false guard in updateGroupToken
-    await this.prismaService.beneficiaryGroupTokens.update({
-      where: { uuid: group.uuid },
-      data: {
-        status: 'STARTED',
-        info: mergedInfo,
-        updatedAt: new Date(),
-      },
+      const mergedInfo = {
+        ...info,
+        batchStatus,
+        disbursedBeneficiariesCount: disbursedCount,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Update directly by uuid — avoids the isDisbursed:false guard in updateGroupToken
+      await tx.beneficiaryGroupTokens.update({
+        where: { uuid },
+        data: {
+          status: 'STARTED',
+          info: mergedInfo,
+          updatedAt: new Date(),
+        },
+      });
+
+      return { uuid, info: mergedInfo };
     });
-
-    return { uuid: group.uuid, info: mergedInfo };
   }
 
   async handleStatusUpdate(job: Job<EVMStatusUpdateJob>): Promise<any> {
@@ -653,17 +664,17 @@ export class EVMCentralizedProcessor implements OnModuleInit {
           // Returned info reflects the write we just made — no need to re-fetch to see it.
           const updated = await this.updateBatchStatus(groupUuid, batchIndex, {
             status: 'CONFIRMED',
+            txHash,
             confirmedAt: new Date().toISOString(),
             blockNumber: txReceipt.blockNumber,
             gasUsed: txReceipt.gasUsed?.toString(),
           }, preloaded);
           const batchStatus = (updated?.info as any)?.batchStatus || [];
 
-          // Only count batches that were actually submitted (CONFIRMED, SUBMITTED, or FAILED)
-          // PENDING batches without txHash are queued but not yet sent — they have their own ASSIGN_TOKENS job
-          const submittedBatches = batchStatus.filter((b: any) => b.txHash);
-          const allSubmittedConfirmed = submittedBatches.length === totalBatches &&
-            submittedBatches.every((b: any) => b.status === 'CONFIRMED');
+          // CONFIRMED is only set from an on-chain receipt, so don't also require txHash —
+          // rows written before the updateBatchStatus lock fix can have CONFIRMED without it.
+          const confirmedCount = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+          const allSubmittedConfirmed = confirmedCount === totalBatches;
           const failedRetryable = batchStatus.filter(
             (b: any) => b.status === 'FAILED' && !b.terminal && (b.retryCount || 0) < 3
           );

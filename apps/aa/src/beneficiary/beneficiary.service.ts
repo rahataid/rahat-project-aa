@@ -1219,11 +1219,43 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    if (!benfGroupToken)
+      throw new RpcException({
+        message: 'Token reservation not found.',
+        code: 'TOKEN_RESERVATION_NOT_FOUND',
+      });
 
+    // Everything the fund detail page renders lives in the AA DB — no core call, and only
+    // uuid/beneficiaryId/walletAddress per member (no PII) goes to the browser.
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: benfGroupToken.groupId, deletedAt: null },
+      select: {
+        name: true,
+        beneficiaries: {
+          where: { beneficiary: { deletedAt: null } },
+          select: {
+            uuid: true,
+            beneficiaryId: true,
+            beneficiary: { select: { walletAddress: true } },
+          },
+        },
+      },
+    });
+    if (!benfGroup)
+      throw new RpcException({
+        message: 'Beneficiary group not found.',
+        code: 'BENEFICIARY_GROUP_NOT_FOUND',
+      });
+
+    // Pick fields explicitly so group fields can't overwrite the reservation's uuid/createdAt/updatedAt.
+    // `Beneficiary` (capital B) keeps the response shape the UI already reads.
     return {
       ...benfGroupToken,
-      ...groupDetails,
+      name: benfGroup.name,
+      groupedBeneficiaries: benfGroup.beneficiaries.map(({ beneficiary, ...rest }) => ({
+        ...rest,
+        Beneficiary: beneficiary,
+      })),
     };
   }
 
