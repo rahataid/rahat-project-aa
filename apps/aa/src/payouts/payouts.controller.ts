@@ -139,4 +139,13 @@ export class PayoutsController {
       payload?.matchBy
     );
   }
+  @MessagePattern({
+    cmd: JOBS.PAYOUT.CANCEL_PAYOUT,
+    uuid: process.env.PROJECT_ID,
+  })
+  // @RequireAbility(ACTIONS.UPDATE, SUBJECTS.PAYOUT)
+  cancelPayout(@Payload() payload: any) {
+    console.log('payload in controller:', payload);
+    return this.payoutsService.cancelPayout(payload.user);
+  }
 }

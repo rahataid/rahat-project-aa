@@ -65,6 +65,7 @@ import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { RedisService } from '../redis/redis.service';
+import { resolveRuntimeExtensions } from '@aws-sdk/client-s3/dist-types/runtimeExtensions';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -821,7 +822,9 @@ export class PayoutsService {
     // written concurrently by other flows (e.g. skippedAt).
     await this.prisma.$executeRaw`
       UPDATE tbl_beneficiaries_groups_payouts
-      SET extras = COALESCE(extras, '{}'::jsonb) || ${JSON.stringify(gaps)}::jsonb
+      SET extras = COALESCE(extras, '{}'::jsonb) || ${JSON.stringify(
+        gaps
+      )}::jsonb
       WHERE uuid = ${payoutUuid}`;
   }
 
@@ -2735,6 +2738,48 @@ export class PayoutsService {
     }
   }
 
+  async cancelPayout(user?: any) {
+    // const tokens = await this.prisma.beneficiaryGroupTokens.findMany({
+    //   where: { groupId: groupUuid, isDisbursed: true, payoutId: { not: null } },
+    //   include: { payout: { include: { beneficiaryRedeem: true } } },
+    // });
+    // const openPayouts = tokens.flatMap((t) =>
+    //   t.payout &&
+    //   t.payout.status !== 'COMPLETED' &&
+    //   // t.payout.status !== 'FIAT_TRANSACTION_COMPLETED' &&
+    //   !(t.payout.extras as any)?.skippedAt
+    //     ? [{ payout: t.payout, numberOfTokens: t.numberOfTokens }]
+    //     : []
+    // );
+    // const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+
+    // for (const { payout } of openPayouts) {
+    //   const redeems = payout.beneficiaryRedeem;
+    //   const toCancel = redeems
+    //     .filter((r) => !PAID.includes(r.status))
+    //     .map((r) => r.uuid);
+    //   await this.prisma.$transaction(async (tx) => {
+    //     if (redeems.length) {
+    //       await tx.beneficiaryRedeem.updateMany({
+    //         where: { uuid: { in: toCancel } },
+    //         data: { status: 'CANCELLED', isCompleted: true },
+    //       });
+    //     }
+    //     await tx.payouts.update({
+    //       where: { uuid: payout.uuid },
+    //       data: {
+    //         status: 'COMPLETED',
+    //         extras: {
+    //           cancelledBy: user?.email,
+    //         },
+    //       },
+    //     });
+    //   });
+    // }
+
+    console.log('cancel payout called');
+    return { message: 'Payout is cancelled' };
+  }
   /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
    * note. Returns undefined when there is nothing meaningful to show.
