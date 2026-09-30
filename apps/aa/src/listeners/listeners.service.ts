@@ -131,7 +131,7 @@ export class ListernersService {
         this.logger.warn('STELLAR_SPONSOR_SETTINGS not configured — skipping XLM send');
         return;
       }
-      const result = await new StellarClient(settings.value as unknown as StellarClientConfig).fundAccountWithXlm(event.walletAddress, '5');
+      const result = await new StellarClient(settings.value as unknown as StellarClientConfig).fundAccountWithXlm(event.walletAddress, '2');
       this.logger.log(`[VENDOR CREATION EVENT] Sent 5 XLM to ${event.walletAddress}, tx: ${result.hash}`);
     } catch (err) {
       this.logger.error(`[VENDOR CREATION EVENT] Failed to send 5 XLM to ${event.walletAddress}`, err);

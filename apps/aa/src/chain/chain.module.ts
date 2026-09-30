@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ChainService } from './chain.service';
 import { ChainController } from './chain.controller';
@@ -10,6 +10,7 @@ import { BQUEUE, CHAIN_SERVICE } from '../constants';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
 import { PrismaService } from '@rumsan/prisma';
+import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { PrismaService } from '@rumsan/prisma';
     BullModule.registerQueue({ name: BQUEUE.STELLAR_DISBURSE }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_INKIND_REDEEM }),
+    forwardRef(() => BeneficiaryModule),
   ],
   controllers: [ChainController],
   providers: [

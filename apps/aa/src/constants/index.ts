@@ -99,6 +99,8 @@ export const JOBS = {
     EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    SYNC_GROUP_BENEFICIARIES_TO_PROJECT_COMPLETED:
+      'rahat.jobs.beneficiary.sync_group_beneficiaries_to_project_completed',
     REVOKE_SPONSORSHIP_FOR_GROUP:
       'aa.jobs.beneficiary.revokeSponsorshipForGroup',
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
@@ -111,6 +113,7 @@ export const JOBS = {
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
     REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',

@@ -28,6 +28,8 @@ import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
 import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
+import { ModuleRef } from '@nestjs/core';
+import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BATCH_SIZE = 50;
@@ -64,7 +66,8 @@ export class BeneficiaryService {
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
     private readonly qrPdfService: QrPdfService,
-    private readonly sseService: SseService
+    private readonly sseService: SseService,
+    private readonly moduleRef: ModuleRef
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -536,19 +539,16 @@ export class BeneficiaryService {
 
   // *****  beneficiary groups ********** //
   async getOneGroup(uuid: UUID) {
+    // Existence check only — the actual data returned comes from the microservice call below,
+    // not from this row. Previously this fetched the full group with every beneficiary's full
+    // record joined in (include: beneficiaries.beneficiary) and then discarded it entirely, on
+    // every call — including once per row in the getAllTokenReservations listing loop.
     const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: {
         uuid: uuid,
         deletedAt: null,
       },
-      include: {
-        tokensReserved: true,
-        beneficiaries: {
-          include: {
-            beneficiary: true,
-          },
-        },
-      },
+      select: { uuid: true },
     });
 
     if (!benfGroup)
@@ -817,6 +817,11 @@ export class BeneficiaryService {
 
         const payout = token.payout;
 
+        if (payout && (payout.extras as any)?.skippedAt) {
+          // explicitly skipped (skipOldPayoutForRemaining) — never blocks, whatever its status
+          continue;
+        }
+
         if (!payout || payout.status === 'NOT_STARTED') {
           tokenAssignedBenfWallet.push(benf.walletAddress);
           break;
@@ -883,6 +888,165 @@ export class BeneficiaryService {
     };
   }
 
+  /**
+   * Closes the group's open payout(s) so the group can be reserved again:
+   * marks remaining beneficiaries' unfinished redeems CANCELLED and stamps
+   * payout.extras.skippedAt (honoured by checkIsTokenAlreadyAssigned) — DB only, so the
+   * new reservation + payout proceed immediately. Returning their tokens to the
+   * distribution wallet runs in the background queue; progress/failure is recorded on
+   * payout.extras.tokenReturn.
+   */
+  private async skipOldPayoutForRemaining(groupUuid: string, user?: any) {
+    if (!(await this.isStellarChain())) {
+      this.logger.warn(
+        `[SkipOldPayout] group=${groupUuid} rejected: only supported on Stellar chain`
+      );
+      throw new RpcException({
+        message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
+        code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
+      });
+    }
+
+    const tokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: { groupId: groupUuid, isDisbursed: true, payoutId: { not: null } },
+      include: { payout: { include: { beneficiaryRedeem: true } } },
+    });
+    const openPayouts = tokens.flatMap((t) =>
+      t.payout &&
+      t.payout.status !== 'COMPLETED' &&
+      !(t.payout.extras as any)?.skippedAt
+        ? [{ payout: t.payout, numberOfTokens: t.numberOfTokens }]
+        : []
+    );
+
+    if (!openPayouts.length) {
+      this.logger.log(
+        `[SkipOldPayout] group=${groupUuid} step 1/4 nothing to skip (${tokens.length} disbursed token(s) checked, none with an open payout)`
+      );
+      return;
+    }
+    this.logger.log(
+      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${openPayouts.length} open payout(s): ${openPayouts
+        .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
+        .join(', ')}`
+    );
+
+    const group = await this.getOneGroup(groupUuid as UUID);
+    const wallets: string[] = (group.groupedBeneficiaries ?? [])
+      .map((d: any) => d?.Beneficiary?.walletAddress)
+      .filter(Boolean);
+
+    const chain = this.moduleRef.get(StellarChainService, { strict: false });
+    const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+    const skippedAt = new Date().toISOString();
+
+    for (const { payout, numberOfTokens } of openPayouts) {
+      const startedAt = Date.now();
+      const redeems = payout.beneficiaryRedeem;
+      // per-beneficiary amount of the old reservation; caps the return so tokens from the
+      // new reservation (possibly disbursed before the job runs) are never taken back
+      const amountPerWallet = wallets.length ? numberOfTokens / wallets.length : 0;
+      const paid = new Set(
+        redeems
+          .filter((r) => PAID.includes(r.status))
+          .map((r) => r.beneficiaryWalletAddress)
+      );
+      const remaining = wallets.filter((w) => !paid.has(w));
+      this.logger.log(
+        `[SkipOldPayout] payout=${payout.uuid} step 2/4 ${wallets.length} beneficiaries: ${paid.size} already paid (kept), ${remaining.length} remaining (to cancel + return); old reservation ${numberOfTokens} tokens => cap ${amountPerWallet}/wallet`
+      );
+
+      const skipInfo = { skipReason: 'skipOldPayoutForRemaining', skippedAt };
+      const remainingSet = new Set(remaining);
+      const hasRow = new Set(redeems.map((r) => r.beneficiaryWalletAddress));
+
+      // Bulk statements only: an interactive tx looping one update per beneficiary blows the
+      // default 5s tx timeout at ~1000 beneficiaries.
+      const toCancel = redeems
+        .filter(
+          (r) =>
+            remainingSet.has(r.beneficiaryWalletAddress) &&
+            !PAID.includes(r.status) &&
+            r.status !== 'CANCELLED'
+        )
+        .map((r) => r.uuid);
+      const missing = remaining.filter((w) => !hasRow.has(w));
+      const cancelled = toCancel.length;
+      const created = missing.length;
+
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (toCancel.length) {
+            await tx.beneficiaryRedeem.updateMany({
+              where: { uuid: { in: toCancel } },
+              data: { status: 'CANCELLED', isCompleted: false },
+            });
+          }
+
+          if (missing.length) {
+            await tx.beneficiaryRedeem.createMany({
+              data: missing.map((w) => ({
+                beneficiaryWalletAddress: w,
+                amount: Math.round(amountPerWallet),
+                transactionType:
+                  payout.type === 'VENDOR'
+                    ? ('VENDOR_REIMBURSEMENT' as const)
+                    : ('FIAT_TRANSFER' as const),
+                status: 'CANCELLED' as const,
+                isCompleted: false,
+                payoutId: payout.uuid,
+                info: skipInfo,
+              })),
+            });
+          }
+
+          await tx.payouts.update({
+            where: { uuid: payout.uuid },
+            data: {
+              extras: {
+                ...((payout.extras as object) ?? {}),
+                skippedAt,
+                skippedBy: user?.name,
+                skipReason: skipInfo.skipReason,
+                tokenReturn: {
+                  status: 'QUEUED',
+                  updatedAt: skippedAt,
+                },
+              },
+            },
+          });
+        },
+        { timeout: 60000, maxWait: 10000 }
+      );
+
+      this.logger.log(
+        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${Date.now() - startedAt}ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+      );
+      await this.payoutService.checkAndCompletePayout(payout.uuid);
+
+      try {
+        await chain.queueReturnTokens({
+          payoutUuid: payout.uuid,
+          wallets: remaining,
+          amountPerWallet,
+        });
+      } catch (err: any) {
+        // Redis down etc. — don't block the reservation; surface on the payout for ops.
+        this.logger.error(
+          `[SkipOldPayout] payout=${payout.uuid} step 4/4 FAILED to queue token return (reservation continues, tokenReturn marked FAILED): ${err?.message}`
+        );
+        await chain.setTokenReturnState(payout.uuid, {
+          status: 'FAILED',
+          returned: {},
+          error: `enqueue failed: ${err?.message}`,
+        });
+      }
+      this.logger.log(
+        `[SkipOldPayout] payout=${payout.uuid} step 4/4 token return queued for ${remaining.length} wallet(s); total ${Date.now() - startedAt}ms in request. Track via payout.extras.tokenReturn`
+      );
+    }
+  }
+
   async reserveTokenToGroup(payload: AddTokenToGroup) {
     const {
       beneficiaryGroupId,
@@ -890,6 +1054,7 @@ export class BeneficiaryService {
       totalTokensReserved,
       user,
       isPayoutIntegrated,
+      skipOldPayoutForRemaining,
       params,
     } = payload;
 
@@ -959,6 +1124,18 @@ export class BeneficiaryService {
           params: { payoutType: params?.type ?? 'none' },
         });
       }
+    }
+
+    // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
+    // start disbursing immediately and the return would otherwise claw back new tokens.
+    if (skipOldPayoutForRemaining) {
+      this.logger.log(
+        `[SkipOldPayout] group=${beneficiaryGroupId} START requested by ${user?.name} (new reservation: ${totalTokensReserved} tokens, payoutIntegrated=${isPayoutIntegrated})`
+      );
+      await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
+      this.logger.log(
+        `[SkipOldPayout] group=${beneficiaryGroupId} DONE -> continuing with assignment check and new reservation`
+      );
     }
 
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
@@ -1060,10 +1237,6 @@ export class BeneficiaryService {
       `Fetched ${data.length} token reservations, enriching with group data`
     );
 
-    const formattedData: Array<
-      DataItem & { group: ReturnType<typeof this.getOneGroup> }
-    > = [];
-
     const disburseOnCreate = await this.settingsService
       .getPublic('DISBURSED_ON_CREATE')
       .catch(() => null);
@@ -1072,21 +1245,51 @@ export class BeneficiaryService {
       disburseOnCreate?.value === true &&
       (await this.isTokenPayoutPhaseActive());
 
-    for (const d of data) {
-      const group = await this.getOneGroup(d['groupId'] as UUID);
-      const synced = shouldSyncFromSdp
-        ? await this.syncDisbursementStatusFromSdp(d)
-        : null;
+    // FE only ever reads group.name and a beneficiary count (never individual
+    // records), so fetch that directly from the local mirror table instead of
+    // round-tripping to core for the full group + all beneficiaries per row.
+    const groupIds = [...new Set(data.map((d) => d['groupId'] as string))];
+    const groups = await this.prisma.beneficiaryGroups.findMany({
+      where: { uuid: { in: groupIds } },
+      select: {
+        uuid: true,
+        name: true,
+        _count: { select: { beneficiaries: true } },
+      },
+    });
+    const groupByUuid = new Map(groups.map((g) => [g.uuid, g]));
 
-      formattedData.push({
-        ...d,
-        ...synced,
-        group,
-      });
-    }
+    const enriched = await Promise.all(
+      data.map(async (d) => {
+        const g = groupByUuid.get(d['groupId'] as string);
+        const synced = shouldSyncFromSdp
+          ? await this.syncDisbursementStatusFromSdp(d)
+          : null;
+
+        // `info` carries batchStatus (up to ~334 entries per group, with
+        // error objects/gasUsed/retryCount/etc per batch) — FE doesn't read
+        // it in this list view, drop it from the response entirely.
+        const { info, ...rest } = d;
+
+        return {
+          ...rest,
+          ...synced,
+          group: g
+            ? {
+                uuid: g.uuid,
+                name: g.name,
+                // Shim: FE only reads groupedBeneficiaries.length, never the
+                // records themselves. Keep that shape without shipping the
+                // full 10k-row array — avoids a coordinated FE deploy.
+                groupedBeneficiaries: { length: g._count.beneficiaries },
+              }
+            : null,
+        };
+      })
+    );
 
     return {
-      data: formattedData,
+      data: enriched,
       meta,
     };
   }
@@ -1201,11 +1404,43 @@ export class BeneficiaryService {
       },
     });
 
-    const groupDetails = await this.getOneGroup(benfGroupToken.groupId as UUID);
+    if (!benfGroupToken)
+      throw new RpcException({
+        message: 'Token reservation not found.',
+        code: 'TOKEN_RESERVATION_NOT_FOUND',
+      });
 
+    // Everything the fund detail page renders lives in the AA DB — no core call, and only
+    // uuid/beneficiaryId/walletAddress per member (no PII) goes to the browser.
+    const benfGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: benfGroupToken.groupId, deletedAt: null },
+      select: {
+        name: true,
+        beneficiaries: {
+          where: { beneficiary: { deletedAt: null } },
+          select: {
+            uuid: true,
+            beneficiaryId: true,
+            beneficiary: { select: { walletAddress: true } },
+          },
+        },
+      },
+    });
+    if (!benfGroup)
+      throw new RpcException({
+        message: 'Beneficiary group not found.',
+        code: 'BENEFICIARY_GROUP_NOT_FOUND',
+      });
+
+    // Pick fields explicitly so group fields can't overwrite the reservation's uuid/createdAt/updatedAt.
+    // `Beneficiary` (capital B) keeps the response shape the UI already reads.
     return {
       ...benfGroupToken,
-      ...groupDetails,
+      name: benfGroup.name,
+      groupedBeneficiaries: benfGroup.beneficiaries.map(({ beneficiary, ...rest }) => ({
+        ...rest,
+        Beneficiary: beneficiary,
+      })),
     };
   }
 
@@ -1288,17 +1523,85 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(
-        `Group token with uuid ${benfGroupToken.uuid} updated: ${JSON.stringify(
-          data
-        )}`
-      );
+      this.logger.log(`Group token ${benfGroupToken.uuid} updated to status: ${data.status}`);
 
       return benfGroupToken;
     } catch (error) {
       this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Get disbursement progress for a group
+   * Reads batchStatus from info JSON field in beneficiaryGroupTokens
+   * Calculates progress metrics based on batch statuses
+   /**
+   * Get disbursement progress for a beneficiary group
+   * Reads batch status from the info JSON field of the active token reservation
+   * Returns detailed progress metrics including batch counts, beneficiary counts, and percentage
+   * 
+   * Why this approach:
+   * - Uses existing info JSON field (no schema changes needed)
+   * - Provides granular per-batch visibility for monitoring
+   * - Calculates progress based on confirmed beneficiaries only
+   * - Distinguishes between failed (exhausted retries) and retrying batches
+   */
+  async getDisbursementProgress(groupUuid: string) {
+    this.logger.debug(`Fetching disbursement progress for group: ${groupUuid}`);
+    // Get the active (not yet disbursed) token reservation for this group
+    const groupToken = await this.getOneTokenReservationByGroupId(groupUuid);
+    
+    // If no token reservation or no info field, return default progress
+    // This handles groups that haven't started disbursement yet
+    if (!groupToken || !groupToken.info) {
+      return {
+        totalBatches: 0,
+        completedBatches: 0,
+        failedBatches: 0,
+        pendingBatches: 0,
+        disbursedBeneficiariesCount: 0,
+        totalBeneficiaries: 0,
+        progressPercent: 0,
+        status: 'NOT_STARTED',
+      };
+    }
+
+    // Parse info field (stored as JSON string in database)
+    const info = groupToken.info as any;
+    const batchStatus = info.batchStatus || [];
+    // Get total batches from info or fallback to batchStatus length
+    const totalBatches = info.totalBatches || batchStatus.length;
+    // Get total beneficiaries from info or default to 0
+    const totalBeneficiaries = info.totalBeneficiaries || 0;
+    // Get already disbursed beneficiaries count from info
+    // This is maintained by updateBatchStatus in the processor
+    const disbursedCount = info.disbursedBeneficiariesCount || 0;
+
+    // Count batches by status for detailed progress tracking
+    // CONFIRMED = successfully disbursed on-chain
+    const completedBatches = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+    // FAILED with retryCount >= 3 = exhausted all retries, permanently failed
+    const failedBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3).length;
+    // PENDING = waiting to be processed or currently processing
+    const pendingBatches = batchStatus.filter((b: any) => b.status === 'PENDING').length;
+    // FAILED with retryCount < 3 = will be retried automatically
+    const retryingBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3).length;
+
+    return {
+      totalBatches,
+      completedBatches,
+      failedBatches,
+      pendingBatches,
+      retryingBatches,
+      disbursedBeneficiariesCount: disbursedCount,
+      totalBeneficiaries,
+      // Progress percentage based on confirmed beneficiaries / total beneficiaries
+      progressPercent: totalBeneficiaries > 0 ? Math.round((disbursedCount / totalBeneficiaries) * 100) : 0,
+      status: groupToken.status,
+      isDisbursed: groupToken.isDisbursed,
+      lastUpdated: info.lastUpdated,
+    };
   }
 
   private async seedOtpsForBeneficiaries(
@@ -2011,13 +2314,23 @@ export class BeneficiaryService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const benf of beneficiariesData) {
+        const existingBeneficiary = await tx.beneficiary.findUnique({
+          where: { uuid: benf.uuid },
+        });
+
+        const existingExtras = existingBeneficiary?.extras as any;
+        const extras =
+          existingExtras?.stellarSponsored === true
+            ? { ...benf.extras, stellarSponsored: true }
+            : benf.extras;
+
         await tx.beneficiary.upsert({
           where: { uuid: benf.uuid },
           update: {
             walletAddress: benf.walletAddress,
             gender: (benf.gender as any) || 'UNKNOWN',
             isVerified: benf.isVerified ?? false,
-            extras: benf.extras,
+            extras,
             phone: benf.phone || null,
           },
           create: {
@@ -2025,7 +2338,7 @@ export class BeneficiaryService {
             walletAddress: benf.walletAddress,
             gender: (benf.gender as any) || 'UNKNOWN',
             isVerified: benf.isVerified ?? false,
-            extras: benf.extras,
+            extras,
             phone: benf.phone || null,
           },
         });
@@ -2053,9 +2366,6 @@ export class BeneficiaryService {
             where: { walletAddress: benf.walletAddress },
             update: {
               phoneNumber: benf.phone,
-              otp,
-              otpHash,
-              expiresAt,
             },
             create: {
               phoneNumber: benf.phone,
@@ -2080,6 +2390,21 @@ export class BeneficiaryService {
     // }
 
     return { message: 'Sync process completed successfully' };
+  }
+
+  async syncGroupBeneficiariesToProjectCompleted(payload: {
+    groupUuid: string;
+  }) {
+    const { groupUuid } = payload;
+
+    await this.prisma.pdfGenerationJob.deleteMany({
+      where: { groupId: groupUuid },
+    });
+    this.logger.log(`Cleared PDF generation jobs for group ${groupUuid}`);
+
+    const retryResult = await this.retrySponsorshipForGroup({ groupUuid });
+
+    return { pdfJobsCleared: true, ...retryResult };
   }
 
   async getBeneficiaryPayoutMode(payload: { benId: string }) {
@@ -2107,7 +2432,7 @@ export class BeneficiaryService {
 
     const payoutMode =
       payoutDetails?.BeneficiaryToGroup?.find(
-        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode
       )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
 
     return { benId, payoutMode };

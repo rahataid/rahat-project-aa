@@ -343,4 +343,16 @@ export class BeneficiaryController {
   async syncBeneficiaryGroupData(@Payload() dto: any) {
     return this.beneficiaryService.syncBeneficiaryGroupData(dto);
   }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.SYNC_GROUP_BENEFICIARIES_TO_PROJECT_COMPLETED,
+    uuid: process.env.PROJECT_ID,
+  })
+  async syncGroupBeneficiariesToProjectCompleted(
+    @Payload() dto: { groupUuid: string }
+  ) {
+    return this.beneficiaryService.syncGroupBeneficiariesToProjectCompleted(
+      dto
+    );
+  }
 }

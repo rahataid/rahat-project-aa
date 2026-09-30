@@ -15,6 +15,9 @@ export const REDEEM_COMPLETED_STATUSES = [
   'TOKEN_TRANSACTION_COMPLETED',
 ];
 
+// final leg only: the beneficiary actually received money (FSP token leg alone doesn't count)
+export const REDEEM_PAID_STATUSES = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+
 export type PayoutWithRelations = Payouts & {
   beneficiaryGroupToken?: {
     uuid: string;
@@ -38,6 +41,8 @@ export function calculatePayoutStatus(
     'FAILED',
     'FIAT_TRANSACTION_FAILED',
     'TOKEN_TRANSACTION_FAILED',
+    // redeem cancelled by a skipped payout (double fund assignment); the payout still renders as failed
+    'CANCELLED',
   ];
   const COMPLETED_STATUSES = REDEEM_COMPLETED_STATUSES;
   const PENDING_STATUSES = [
@@ -57,8 +62,8 @@ export function calculatePayoutStatus(
   if (redeemCount === 0) return 'NOT_STARTED';
   if (redeemStatuses.some((s) => FAILED_STATUSES.includes(s))) {
     // final leg only: FSP token leg (TOKEN_TRANSACTION_COMPLETED) alone means no money reached the beneficiary
-    const anyPaid = redeemStatuses.some(
-      (s) => s === 'COMPLETED' || s === 'FIAT_TRANSACTION_COMPLETED'
+    const anyPaid = redeemStatuses.some((s) =>
+      REDEEM_PAID_STATUSES.includes(s)
     );
     return anyPaid ? 'PARTIALLY_COMPLETED' : 'FAILED';
   }

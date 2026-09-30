@@ -52,6 +52,9 @@ export interface AddTokenToGroup {
   title: string;
   user?: any;
   isPayoutIntegrated: boolean;
+  // Stellar only: close the group's open payout (CANCELLED redeems), return remaining
+  // beneficiary tokens to the distribution wallet, then reserve again.
+  skipOldPayoutForRemaining?: boolean;
   params?: {
     type: PayoutType;
     mode: PayoutMode;
