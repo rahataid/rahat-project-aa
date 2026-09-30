@@ -30,3 +30,21 @@ export class GenerateQrPdfDto {
 }
 
 export class RegenerateQrPdfDto extends GenerateQrPdfDto {}
+
+export class ExportGroupExcelDto {
+  @IsUUID()
+  groupId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  includeOtp?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  excludeUnphonedBeneficiaries?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excelFields?: string[];
+}
