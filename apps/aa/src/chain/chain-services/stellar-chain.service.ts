@@ -1365,6 +1365,13 @@ export class StellarChainService implements IChainService, OnModuleInit {
     });
   }
 
+  async getDisbursementProgress(_groupUuid: string): Promise<any> {
+    throw new RpcException({
+      message: 'Not supported on Stellar SDP chain',
+      code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
+    });
+  }
+
   async addTrigger(_data: AddTriggerDto): Promise<any> {
     throw new RpcException({
       message: 'Not supported on Stellar SDP chain',
@@ -1605,18 +1612,18 @@ export class StellarChainService implements IChainService, OnModuleInit {
         message: 'OTP record not found',
         code: 'OTP_RECORD_NOT_FOUND',
       });
-    if (record.isVerified)
-      throw new RpcException({
-        message: 'OTP already verified',
-        code: 'OTP_ALREADY_VERIFIED',
-      });
-    if (record.expiresAt < new Date())
-      throw new RpcException({
-        message: 'OTP has expired',
-        code: 'OTP_EXPIRED',
-      });
+    // if (record.isVerified)
+    //   throw new RpcException({
+    //     message: 'OTP already verified',
+    //     code: 'OTP_ALREADY_VERIFIED',
+    //   });
+    // if (record.expiresAt < new Date())
+    //   throw new RpcException({
+    //     message: 'OTP has expired',
+    //     code: 'OTP_EXPIRED',
+    //   });
 
-    const isValid = await bcrypt.compare(`${otp}:${amount}`, record.otpHash);
+    const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
     if (!isValid)
       throw new RpcException({
         message: 'Invalid OTP or amount mismatch',
@@ -1671,7 +1678,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
 
     const payoutEligibleGroups = beneficiary.groupedBeneficiaries.filter(
-      (g: any) => g.groupPurpose !== 'COMMUNICATION'
+      (g: any) => g.beneficiaryGroup?.groupPurpose !== 'COMMUNICATION'
     );
 
     if (!payoutEligibleGroups.length)
@@ -1782,12 +1789,15 @@ export class StellarChainService implements IChainService, OnModuleInit {
         code: 'PAYOUT_ERR_AMOUNT_NOT_POSITIVE',
       });
 
-    const res = await lastValueFrom(
-      this.client.send(
-        { cmd: 'rahat.jobs.otp.send_otp' },
-        { phoneNumber: data.phoneNumber, amount }
-      )
-    );
+    const res = await this.prisma.otp.findFirst({
+      where: { phoneNumber: data.phoneNumber }
+    });
+    if(!res) {
+      throw new RpcException({
+        message: 'OTP record not found for phone number',
+        code: 'OTP_RECORD_NOT_FOUND_FOR_PHONE',
+      });
+    }
 
     const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
       where: { beneficiaryWalletAddress: keys.address },
@@ -1821,7 +1831,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
     }
 
-    return this.storeOTP(res.otp, data.phoneNumber, amount as number);
+    const { otpHash: _, ...safeRes } = res;
+    return safeRes;
   }
 
   private async getFromSettings(key: string) {
