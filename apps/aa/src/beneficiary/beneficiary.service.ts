@@ -30,6 +30,7 @@ import { SseService } from '../sse/sse.service';
 import { ModuleRef } from '@nestjs/core';
 import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
 import { getOtpHash } from '../utils/hash';
+import { AsyncQueueService } from '../queue/async-queue.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BENEFICIARY_BATCH_SIZE = 500;
@@ -62,12 +63,14 @@ export class BeneficiaryService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
     private readonly qrPdfService: QrPdfService,
     private readonly sseService: SseService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly asyncQueueService: AsyncQueueService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -2521,9 +2524,9 @@ export class BeneficiaryService {
       throw new RpcException('beneficiaries array is required and cannot be empty.');
     }
 
-    const isQueueReady = await this.contractQueue.isReady().catch(() => null);
+    const isQueueReady = await this.beneficiaryQueue.isReady().catch(() => null);
     if (!isQueueReady) {
-      throw new RpcException('Contract queue is not available. Aborting before any data is persisted.');
+      throw new RpcException('Beneficiary queue is not available. Aborting before any data is persisted.');
     }
 
     const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
@@ -2566,22 +2569,23 @@ export class BeneficiaryService {
           isLastBatch: index === batches.length - 1,
         };
 
-        const job = await this.contractQueue.add(
-          JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
-          jobData,
-          {
-            attempts: 3,
-            removeOnComplete: true,
-            removeOnFail: false,
-            backoff: {
-              type: 'exponential',
-              delay: 1000,
-            },
-          }
-        );
+        const { uuid } = await this.asyncQueueService.enqueue({
+          jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+          queue: this.beneficiaryQueue,
+          jobTypeData: jobData,
+          metadata: {
+            source: 'beneficiary.createBeneficiariesInBatches',
+            totalBatches: batches.length,
+          },
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
 
-        jobIds.push(job.id.toString());
-        this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${job.id})`);
+        jobIds.push(uuid);
+        this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${uuid})`);
       }
     } catch (error) {
       this.logger.error(
