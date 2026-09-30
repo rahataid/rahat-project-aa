@@ -14,6 +14,7 @@ import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { GroupUuidDto } from './dto/group-uuid.dto';
 import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
+import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
@@ -290,13 +291,16 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GENERATE_QR_PDF,
     uuid: process.env.PROJECT_ID,
   })
-  generateQrPdf(
-    @Payload() payload: { groupId: string; includeOtp?: boolean }
-  ) {
-    return this.beneficiaryService.initiateQrPdf(
-      payload.groupId,
-      payload.includeOtp
-    );
+  generateQrPdf(@Payload() payload: GenerateQrPdfDto) {
+    return this.beneficiaryService.initiateQrPdf(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.REGENERATE_QR_PDF,
+    uuid: process.env.PROJECT_ID,
+  })
+  regenerateQrPdf(@Payload() payload: RegenerateQrPdfDto) {
+    return this.beneficiaryService.regenerateQrPdf(payload);
   }
 
   @MessagePattern({
