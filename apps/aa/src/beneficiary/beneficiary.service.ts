@@ -900,7 +900,8 @@ export class BeneficiaryService {
         `[SkipOldPayout] group=${groupUuid} rejected: only supported on Stellar chain`
       );
       throw new RpcException({
-        message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
+        message:
+          'skipOldPayoutForRemaining is only supported on Stellar chain.',
         code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
       });
     }
@@ -924,7 +925,9 @@ export class BeneficiaryService {
       return;
     }
     this.logger.log(
-      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${openPayouts.length} open payout(s): ${openPayouts
+      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${
+        openPayouts.length
+      } open payout(s): ${openPayouts
         .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
         .join(', ')}`
     );
@@ -943,7 +946,9 @@ export class BeneficiaryService {
       const redeems = payout.beneficiaryRedeem;
       // per-beneficiary amount of the old reservation; caps the return so tokens from the
       // new reservation (possibly disbursed before the job runs) are never taken back
-      const amountPerWallet = wallets.length ? numberOfTokens / wallets.length : 0;
+      const amountPerWallet = wallets.length
+        ? numberOfTokens / wallets.length
+        : 0;
       const paid = new Set(
         redeems
           .filter((r) => PAID.includes(r.status))
@@ -980,6 +985,11 @@ export class BeneficiaryService {
               data: { status: 'CANCELLED', isCompleted: false },
             });
           }
+
+          tx.payouts.update({
+            where: { uuid: payout.uuid },
+            data: { status: 'COMPLETED' },
+          });
 
           if (missing.length) {
             await tx.beneficiaryRedeem.createMany({
@@ -1018,7 +1028,9 @@ export class BeneficiaryService {
       );
 
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${Date.now() - startedAt}ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${
+          Date.now() - startedAt
+        }ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
       );
       await this.payoutService.checkAndCompletePayout(payout.uuid);
 
@@ -1040,7 +1052,13 @@ export class BeneficiaryService {
         });
       }
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 4/4 token return queued for ${remaining.length} wallet(s); total ${Date.now() - startedAt}ms in request. Track via payout.extras.tokenReturn`
+        `[SkipOldPayout] payout=${
+          payout.uuid
+        } step 4/4 token return queued for ${
+          remaining.length
+        } wallet(s); total ${
+          Date.now() - startedAt
+        }ms in request. Track via payout.extras.tokenReturn`
       );
     }
   }
@@ -2282,7 +2300,7 @@ export class BeneficiaryService {
 
     const payoutMode =
       payoutDetails?.BeneficiaryToGroup?.find(
-        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode,
+        (btg) => btg.group?.tokensReserved?.[0]?.payout?.mode
       )?.group?.tokensReserved?.[0]?.payout?.mode ?? null;
 
     return { benId, payoutMode };

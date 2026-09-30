@@ -66,7 +66,8 @@ import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
 import { RedisService } from '../redis/redis.service';
-import { resolveRuntimeExtensions } from '@aws-sdk/client-s3/dist-types/runtimeExtensions';
+import { StellarChainService } from '../chain';
+import { ModuleRef } from '@nestjs/core';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
@@ -94,7 +95,8 @@ export class PayoutsService {
     private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
     private readonly batchTransferQueue: Queue,
-    private readonly redisService: RedisService
+    private readonly redisService: RedisService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   async sendOtp(email: string) {
@@ -712,6 +714,11 @@ export class PayoutsService {
       return;
     }
 
+    // Cancelled payouts are terminal — see syncPayoutStatus guard.
+    if ((payout.extras as { cancelledBy?: string } | null)?.cancelledBy) {
+      return;
+    }
+
     const calculatedStatus = calculatePayoutStatus(
       payout as PayoutWithRelations
     );
@@ -730,6 +737,12 @@ export class PayoutsService {
     newStatus: RedeemStatus,
     refreshGap = false
   ): Promise<void> {
+    // Cancelled payouts are terminal (cancelPayout stamps extras.cancelledBy).
+    // Never auto-recompute them — lingering queued jobs may still fail
+    // afterwards and would otherwise flip COMPLETED back to FAILED.
+    if ((payout.extras as { cancelledBy?: string } | null)?.cancelledBy) {
+      return;
+    }
     // any paid beneficiary is enough; status can still be PENDING while the
     // rest of the group is in flight
     const hasPaidRedeems = payout.beneficiaryRedeem.some((r) =>
@@ -2746,47 +2759,113 @@ export class PayoutsService {
     }
   }
 
-  async cancelPayout(user?: any) {
-    // const tokens = await this.prisma.beneficiaryGroupTokens.findMany({
-    //   where: { groupId: groupUuid, isDisbursed: true, payoutId: { not: null } },
-    //   include: { payout: { include: { beneficiaryRedeem: true } } },
-    // });
-    // const openPayouts = tokens.flatMap((t) =>
-    //   t.payout &&
-    //   t.payout.status !== 'COMPLETED' &&
-    //   // t.payout.status !== 'FIAT_TRANSACTION_COMPLETED' &&
-    //   !(t.payout.extras as any)?.skippedAt
-    //     ? [{ payout: t.payout, numberOfTokens: t.numberOfTokens }]
-    //     : []
-    // );
-    // const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+  async completePayout(payoutUuid: string, user?: any) {
+    const chain = this.moduleRef.get(StellarChainService, { strict: false });
 
-    // for (const { payout } of openPayouts) {
-    //   const redeems = payout.beneficiaryRedeem;
-    //   const toCancel = redeems
-    //     .filter((r) => !PAID.includes(r.status))
-    //     .map((r) => r.uuid);
-    //   await this.prisma.$transaction(async (tx) => {
-    //     if (redeems.length) {
-    //       await tx.beneficiaryRedeem.updateMany({
-    //         where: { uuid: { in: toCancel } },
-    //         data: { status: 'CANCELLED', isCompleted: true },
-    //       });
-    //     }
-    //     await tx.payouts.update({
-    //       where: { uuid: payout.uuid },
-    //       data: {
-    //         status: 'COMPLETED',
-    //         extras: {
-    //           cancelledBy: user?.email,
-    //         },
-    //       },
-    //     });
-    //   });
-    // }
+    const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      include: {
+        beneficiaryGroupToken: { where: { isDisbursed: true } },
+        beneficiaryRedeem: true,
+      },
+    });
+    if (!payout) {
+      this.logger.log(`Payout with uuid ${payoutUuid} not found`);
+      throw new RpcException({
+        message: `Payout with uuid ${payoutUuid} not found`,
+        code: 'PAYOUT_NOT_FOUND',
+        params: { payoutUuid },
+      });
+    }
+    const { beneficiaryGroupToken } = payout;
 
-    console.log('cancel payout called');
-    return { message: 'Payout is cancelled' };
+    if (payout?.status === 'COMPLETED') {
+      throw new RpcException({
+        message: `Payout with uuid '${payout.uuid}' is already completed`,
+        code: 'PAYOUT_ALREADY_COMPLETED',
+        params: { payoutUuid },
+      });
+    }
+
+    if (!beneficiaryGroupToken?.isDisbursed) {
+      throw new RpcException({
+        message: `Fund for beneficiaryGroupToken with uuis ${beneficiaryGroupToken?.uuid} is not disbursed`,
+        code: 'FUND_NOT_DISBURSED',
+        params: { payoutUuid },
+      });
+    }
+    const { toCancel, tokenReturnWallets } = payout.beneficiaryRedeem.reduce(
+      (acc, r) => {
+        if (!PAID.includes(r.status)) {
+          acc.toCancel.push(r.uuid);
+          acc.tokenReturnWallets.push(r.beneficiaryWalletAddress);
+        }
+        return acc;
+      },
+      { toCancel: [], tokenReturnWallets: [] }
+    );
+
+    const amountPerWallet = tokenReturnWallets.length
+      ? Number(beneficiaryGroupToken?.numberOfTokens) /
+        Number(tokenReturnWallets)
+      : 0;
+
+    // extras.cancelledBy marks this payout as cancelled — syncPayoutStatus and
+    // checkAndCompletePayout treat it as terminal and never auto-recompute it,
+    // otherwise a lingering queued job that fails afterwards would flip the
+    // status back to FAILED on the next read (the reported bug).
+    const updatedPayout = await this.prisma.$transaction(async (tx) => {
+      if (toCancel?.length) {
+        await tx.beneficiaryRedeem.updateMany({
+          where: { uuid: { in: toCancel } },
+          data: { status: 'CANCELLED', isCompleted: true },
+        });
+      }
+      return tx.payouts.update({
+        where: { uuid: payoutUuid },
+        data: {
+          status: 'COMPLETED',
+          // spread: preserve payoutTriggeredAt/paymentProvider/gap snapshots
+          extras: {
+            ...((payout.extras as object) ?? {}),
+            cancelledBy: user?.email,
+          },
+        },
+      });
+    });
+
+    this.logger.log(
+      `Payout ${payoutUuid} cancelled by ${user?.email}: ${
+        toCancel?.length ?? 0
+      } redeems marked CANCELLED`
+    );
+    // Block: Token returning from cancelled wallets in beneficiaryRedeem
+    try {
+      await chain.queueReturnTokens({
+        payoutUuid: payout.uuid,
+        wallets: tokenReturnWallets,
+        amountPerWallet,
+      });
+    } catch (err: any) {
+      // Redis down etc. — don't block the reservation; surface on the payout for ops.
+      this.logger.error(
+        `[SkipOldPayout] payout=${payout.uuid} step 4/4 FAILED to queue token return (reservation continues, tokenReturn marked FAILED): ${err?.message}`
+      );
+      await chain.setTokenReturnState(payout.uuid, {
+        status: 'FAILED',
+        returned: {},
+        error: `enqueue failed: ${err?.message}`,
+      });
+    }
+    this.logger.log(
+      'Token returned from the cancelled wallets in beneficiaryRedeem'
+    );
+    return {
+      message: 'Payout is completed and pending redeemed is cancelled',
+      code: 'PAYOUT_COMPLETED_AND_REDEEMED_CANCELLED',
+      data: updatedPayout,
+    };
   }
   /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
