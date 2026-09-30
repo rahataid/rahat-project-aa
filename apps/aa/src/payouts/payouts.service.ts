@@ -2761,7 +2761,6 @@ export class PayoutsService {
 
   async completePayout(payoutUuid: string, user?: any) {
     const chain = this.moduleRef.get(StellarChainService, { strict: false });
-
     const PAID = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
     const payout = await this.prisma.payouts.findUnique({
       where: { uuid: payoutUuid },
@@ -2771,13 +2770,13 @@ export class PayoutsService {
       },
     });
     if (!payout) {
-      this.logger.log(`Payout with uuid ${payoutUuid} not found`);
       throw new RpcException({
         message: `Payout with uuid ${payoutUuid} not found`,
         code: 'PAYOUT_NOT_FOUND',
         params: { payoutUuid },
       });
     }
+
     const { beneficiaryGroupToken } = payout;
 
     if (payout?.status === 'COMPLETED') {
@@ -2795,6 +2794,7 @@ export class PayoutsService {
         params: { payoutUuid },
       });
     }
+
     const { toCancel, tokenReturnWallets } = payout.beneficiaryRedeem.reduce(
       (acc, r) => {
         if (!PAID.includes(r.status)) {
@@ -2807,8 +2807,7 @@ export class PayoutsService {
     );
 
     const amountPerWallet = tokenReturnWallets.length
-      ? Number(beneficiaryGroupToken?.numberOfTokens) /
-        Number(tokenReturnWallets)
+      ? beneficiaryGroupToken?.numberOfTokens / tokenReturnWallets.length
       : 0;
 
     // extras.cancelledBy marks this payout as cancelled — syncPayoutStatus and
@@ -2841,23 +2840,31 @@ export class PayoutsService {
       } redeems marked CANCELLED`
     );
     // Block: Token returning from cancelled wallets in beneficiaryRedeem
-    try {
-      await chain.queueReturnTokens({
-        payoutUuid: payout.uuid,
-        wallets: tokenReturnWallets,
-        amountPerWallet,
-      });
-    } catch (err: any) {
-      // Redis down etc. — don't block the reservation; surface on the payout for ops.
-      this.logger.error(
-        `[SkipOldPayout] payout=${payout.uuid} step 4/4 FAILED to queue token return (reservation continues, tokenReturn marked FAILED): ${err?.message}`
+    // Skip when every redeem already succeeded — nothing to return.
+    if (tokenReturnWallets.length) {
+      try {
+        await chain.queueReturnTokens({
+          payoutUuid: payout.uuid,
+          wallets: tokenReturnWallets,
+          amountPerWallet,
+        });
+      } catch (err: any) {
+        // Redis down etc. — don't block the reservation; surface on the payout for ops.
+        this.logger.error(
+          `[SkipOldPayout] payout=${payout.uuid} step 4/4 FAILED to queue token return (reservation continues, tokenReturn marked FAILED): ${err?.message}`
+        );
+        await chain.setTokenReturnState(payout.uuid, {
+          status: 'FAILED',
+          returned: {},
+          error: `enqueue failed: ${err?.message}`,
+        });
+      }
+    } else {
+      this.logger.log(
+        `[SkipOldPayout] payout=${payout.uuid} no unpaid wallets, skipping token return`
       );
-      await chain.setTokenReturnState(payout.uuid, {
-        status: 'FAILED',
-        returned: {},
-        error: `enqueue failed: ${err?.message}`,
-      });
     }
+
     this.logger.log(
       'Token returned from the cancelled wallets in beneficiaryRedeem'
     );
