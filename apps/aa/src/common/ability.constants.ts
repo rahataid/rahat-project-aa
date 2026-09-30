@@ -13,4 +13,5 @@ export const SUBJECTS = {
   MULTI_SIG: 'Multi Sig',
   PAYOUT: 'Payout',
   INKIND: 'Inkind',
+  STAKEHOLDER: 'Stakeholder',
 };

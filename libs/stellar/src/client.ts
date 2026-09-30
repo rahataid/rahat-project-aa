@@ -54,7 +54,6 @@ export class StellarClient {
       ? Keypair.fromSecret(config.distributionWalletSecret)
       : undefined;
     this.maxBatchTransfers = config.maxBatchTransfers || MAX_TRANSFERS_PER_BATCH;
-    console.log('StellarClient initialized with config:', config);
   }
 
   get sponsorPublicKey(): string {

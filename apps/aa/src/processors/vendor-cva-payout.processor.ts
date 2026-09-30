@@ -477,6 +477,8 @@ export class VendorOfflinePayoutProcessor {
                   vendorUid: vendorUuid,
                   beneficiaryWalletAddress: beneficiary.walletAddress,
                   transactionType: 'VENDOR_REIMBURSEMENT',
+                  // scope to this payout so rows of an earlier (e.g. skipped) payout are never re-pointed
+                  payoutId: payoutUuid,
                 },
                 orderBy: { createdAt: 'desc' },
               });

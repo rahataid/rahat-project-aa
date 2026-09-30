@@ -7,6 +7,9 @@ export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 // Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
 export const STELLAR_TRANSFER_BATCH_SIZE = 6;
+// QR PDF card layout is fixed (4 cards/page), so the number of dynamic
+// extra fields printed per card is capped to keep the card from overflowing.
+export const QR_PDF_MAX_FIELDS = 5;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -91,10 +94,13 @@ export const JOBS = {
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    REGENERATE_QR_PDF: 'aa.jobs.beneficiary.regenerateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    SYNC_GROUP_BENEFICIARIES_TO_PROJECT_COMPLETED:
+      'rahat.jobs.beneficiary.sync_group_beneficiaries_to_project_completed',
     REVOKE_SPONSORSHIP_FOR_GROUP:
       'aa.jobs.beneficiary.revokeSponsorshipForGroup',
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
@@ -107,6 +113,7 @@ export const JOBS = {
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
     REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
