@@ -99,6 +99,8 @@ export const JOBS = {
     EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    SYNC_GROUP_BENEFICIARIES_TO_PROJECT_COMPLETED:
+      'rahat.jobs.beneficiary.sync_group_beneficiaries_to_project_completed',
     REVOKE_SPONSORSHIP_FOR_GROUP:
       'aa.jobs.beneficiary.revokeSponsorshipForGroup',
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
