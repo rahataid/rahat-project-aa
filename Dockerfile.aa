@@ -41,7 +41,7 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-ENV NODE_ENV=dev
+ENV NODE_ENV=stage
 RUN apk add --no-cache openssl
 
 # Copy built app

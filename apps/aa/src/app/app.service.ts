@@ -1,18 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, SettingDataType } from '@prisma/client';
 import {
   lowerCaseObjectKeys,
   normalizeRequiredFields,
   parseValueForPrisma,
 } from '../utils/utility';
+import { getVersionFromPackageJson } from '../utils/version.helper';
 import { sanitizeSettingValue } from './settings-sanitizer';
 import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
-import { RpcException } from '@nestjs/microservices';
+import { UpdateSettingsByNameDto } from './dto/update-settings-by-name.dto';
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name);
+
   constructor(
     private readonly settingService: SettingsService,
     private readonly prisma: PrismaService
@@ -22,6 +25,12 @@ export class AppService {
 
   getData(): { message: string } {
     return { message: 'Hello API' };
+  }
+
+  // Returns the current app version and runtime environment.
+  async getVersion(): Promise<{ version: string; env: string | null }> {
+    const version = await getVersionFromPackageJson();
+    return { version, env: process.env.NODE_ENV || null };
   }
 
   async addSettings(dto: any) {
@@ -43,6 +52,7 @@ export class AppService {
     return lowerCaseObjectKeys(res);
   }
 
+  // this function used to update setting with project setup, it will create new setting if not exist, and update if exist
   async updateSettingsBulk(dto: UpdateSettingsPayloadDto) {
     const { projectId, settings } = dto;
 
@@ -75,6 +85,66 @@ export class AppService {
     await this.refreshSettings();
 
     return { projectId, upserted };
+  }
+
+  // updates settings by name; creates the setting (with default flags) if it doesn't exist yet
+  // (e.g. seed was never run), otherwise skips any existing setting that is read-only or private
+  async updateSettingsByName(dto: UpdateSettingsByNameDto) {
+    const { settings } = dto;
+    this.logger.log(
+      `updateSettingsByName: received ${settings.length} setting(s) to update`
+    );
+
+    const updated = [];
+    const skipped = [];
+
+    for (const setting of settings) {
+      const name = setting.name.toUpperCase();
+      const value = setting.value as Prisma.InputJsonValue;
+      const existing = await this.prisma.setting.findUnique({
+        where: { name },
+      });
+
+      if (existing && (existing.isReadOnly || existing.isPrivate)) {
+        this.logger.warn(
+          `updateSettingsByName: skipping '${name}' (${
+            existing.isReadOnly ? 'read-only' : 'private'
+          })`
+        );
+        skipped.push(name);
+        continue;
+      }
+
+      if (!existing && !setting.dataType) {
+        this.logger.warn(
+          `updateSettingsByName: skipping '${name}' (dataType required to create a new setting)`
+        );
+        skipped.push(name);
+        continue;
+      }
+
+      await this.prisma.setting.upsert({
+        where: { name },
+        update: { value },
+        create: {
+          name,
+          value,
+          dataType: setting.dataType as SettingDataType,
+          requiredFields: [],
+          isReadOnly: false,
+          isPrivate: false,
+        },
+      });
+      this.logger.log(`updateSettingsByName: upserted '${name}'`);
+      updated.push(name);
+    }
+
+    await this.refreshSettings();
+    this.logger.log(
+      `updateSettingsByName: done. updated=${updated.length} skipped=${skipped.length}`
+    );
+
+    return { updated, skipped };
   }
 
   async refreshSettings() {

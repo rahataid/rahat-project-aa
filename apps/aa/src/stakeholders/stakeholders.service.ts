@@ -63,12 +63,12 @@ export class StakeholdersService {
     });
   }
 
-  // ***** stakeholders start ********** //
+  // ***** stakeholders start ********* //
   async add(payload: AddStakeholdersData) {
     this.logger.log(
       `Adding stakeholder with name: ${payload.name}, phone: ${payload.phone}, email: ${payload.email}`
     );
-    const { phone, ...rest } = payload;
+    const { phone, user, appId, ...rest } = payload;
     const validPhone = phone && phone.trim() !== '';
     if (validPhone) {
       const stakeholderWithSamePhone = await this.prisma.stakeholders.findFirst(
@@ -90,7 +90,10 @@ export class StakeholdersService {
       }
 
       if (stakeholderWithSamePhone)
-        throw new RpcException('Phone number must be unique');
+        throw new RpcException({
+          message: 'Phone number must be unique',
+          code: 'PHONE_NUMBER_MUST_BE_UNIQUE',
+        });
     }
 
     const rData = await this.prisma.stakeholders.create({
@@ -111,7 +114,10 @@ export class StakeholdersService {
     this.logger.log('Validating bulk stakeholders...');
 
     if (!payload || !payload.length) {
-      throw new RpcException('No stakeholder data provided for bulk add');
+      throw new RpcException({
+        message: 'No stakeholder data provided for bulk add',
+        code: 'NO_STAKEHOLDER_DATA_PROVIDED',
+      });
     }
 
     const errorsMap = new Map<string, StakeholderValidationError>();
@@ -161,21 +167,28 @@ export class StakeholdersService {
     this.logger.log('Adding bulk stakeholders...');
 
     if (!payload.data || !payload.data.length) {
-      throw new RpcException('No stakeholder data provided for bulk add');
+      throw new RpcException({
+        message: 'No stakeholder data provided for bulk add',
+        code: 'NO_STAKEHOLDER_DATA_PROVIDED',
+      });
     }
 
     if (payload?.isGroupCreate) {
       if (!payload?.groupName?.trim()) {
-        throw new RpcException(
-          'Group name is required when isGroupCreate is true'
-        );
+        throw new RpcException({
+          message: 'Group name is required when isGroupCreate is true',
+          code: 'GROUP_NAME_REQUIRED_FOR_CREATE',
+        });
       }
 
       const existingGroup = await this.prisma.stakeholdersGroups.findFirst({
         where: { name: payload.groupName },
       });
       if (existingGroup) {
-        throw new RpcException('Group name must be unique');
+        throw new RpcException({
+          message: 'Group name must be unique',
+          code: 'GROUP_NAME_MUST_BE_UNIQUE',
+        });
       }
     }
 
@@ -440,7 +453,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingStakeholder) throw new RpcException('Stakeholder not found!');
+    if (!existingStakeholder)
+      throw new RpcException({
+        message: 'Stakeholder not found!',
+        code: 'STAKEHOLDER_NOT_FOUND',
+      });
 
     const validPhone = phone && phone.trim() !== '';
 
@@ -454,7 +471,10 @@ export class StakeholdersService {
         }
       );
       if (stakeholderWithSamePhone)
-        throw new RpcException('Phone number must be unique');
+        throw new RpcException({
+          message: 'Phone number must be unique',
+          code: 'PHONE_NUMBER_MUST_BE_UNIQUE',
+        });
     }
 
     const updatedStakeholder = await this.prisma.stakeholders.update({
@@ -499,7 +519,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingGroup) throw new RpcException('Group not found!');
+    if (!existingGroup)
+      throw new RpcException({
+        message: 'Group not found!',
+        code: 'GROUP_NOT_FOUND',
+      });
 
     const data = {
       ...(name && { name }),
@@ -520,6 +544,38 @@ export class StakeholdersService {
 
   async getAllGroups(payload: GetAllGroups) {
     const { page, perPage, order, search, sort } = payload;
+
+    if (!page || !perPage) {
+      const result = await this.prisma.stakeholdersGroups.findMany({
+        where: {
+          isDeleted: false,
+          ...(search && {
+            name: { contains: search, mode: 'insensitive' },
+          }),
+        },
+        orderBy: {
+          ...(order && sort
+            ? {
+                [sort]: order,
+              }
+            : {
+                createdAt: 'desc',
+              }),
+        },
+        include: {
+          _count: {
+            select: {
+              stakeholders: {
+                where: {
+                  isDeleted: false,
+                },
+              },
+            },
+          },
+        },
+      });
+      return result;
+    }
 
     const query = {
       where: {
@@ -581,9 +637,11 @@ export class StakeholdersService {
 
       return groups;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching stakeholders groups by uuids. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching stakeholders groups by uuids. ${err.message}`,
+        code: 'FAILED_TO_FETCH_STAKEHOLDERS_GROUPS_BY_UUIDS',
+        params: { message: err.message },
+      });
     }
   }
 
@@ -608,9 +666,11 @@ export class StakeholdersService {
       });
       return groups;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching stakeholders groups by uuids. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching stakeholders groups by uuids. ${err.message}`,
+        code: 'FAILED_TO_FETCH_STAKEHOLDERS_GROUPS_BY_UUIDS',
+        params: { message: err.message },
+      });
     }
   }
 
@@ -640,7 +700,11 @@ export class StakeholdersService {
       },
     });
 
-    if (!existingGroup) throw new RpcException('Group not found!');
+    if (!existingGroup)
+      throw new RpcException({
+        message: 'Group not found!',
+        code: 'GROUP_NOT_FOUND',
+      });
 
     const activities = await this.getActivitiesByStakeholderGroupUuid(uuid);
 
@@ -677,9 +741,11 @@ export class StakeholdersService {
       );
       return activities;
     } catch (err) {
-      throw new RpcException(
-        `Error while fetching related activities. ${err.message}`
-      );
+      throw new RpcException({
+        message: `Error while fetching related activities. ${err.message}`,
+        code: 'FAILED_TO_FETCH_RELATED_ACTIVITIES',
+        params: { message: err.message },
+      });
     }
   }
 
@@ -696,9 +762,18 @@ export class StakeholdersService {
   }
 
   // Looks up a value by key, ignoring case/whitespace differences in the key itself
-  private getFieldCaseInsensitive(item: Record<string, any>, ...keys: string[]): any {
+  private getFieldCaseInsensitive(
+    item: Record<string, any>,
+    ...keys: string[]
+  ): any {
+    if (!item || typeof item !== 'object') return undefined;
+
     const normalizedKeys = keys.map((key) => key.trim().toLowerCase());
-    this.logger.log(`Looking for keys ${normalizedKeys.join(', ')} in item with keys: ${Object.keys(item).join(', ')}`);
+    this.logger.log(
+      `Looking for keys ${normalizedKeys.join(
+        ', '
+      )} in item with keys: ${Object.keys(item).join(', ')}`
+    );
 
     const matchEntry = Object.entries(item).find(([itemKey]) =>
       normalizedKeys.includes(itemKey.trim().toLowerCase())
@@ -709,57 +784,59 @@ export class StakeholdersService {
 
   // Maps raw Excel rows → CreateStakeholderDto shape — no validation
   private parseStakeholderPayload(payload: any[]): CreateStakeholderDto[] {
-    return payload.map((item) => {
-      const rawSupportArea = this.getFieldCaseInsensitive(
-        item,
-        'Support Area',
-        'Support Area #'
-      );
+    return payload
+      .filter((item) => item !== null && item !== undefined)
+      .map((item) => {
+        const rawSupportArea = this.getFieldCaseInsensitive(
+          item,
+          'Support Area',
+          'Support Area #'
+        );
 
-      return {
-        name:
-          this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        designation:
-          this.getFieldCaseInsensitive(item, 'Designation')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        organization:
-          this.getFieldCaseInsensitive(item, 'Organization')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        district:
-          this.getFieldCaseInsensitive(item, 'District')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        municipality:
-          this.getFieldCaseInsensitive(item, 'Municipality')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-        phone:
-          this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
-            ?.toString()
-            .trim() || '',
-        supportArea:
-          typeof rawSupportArea === 'string' && rawSupportArea
-            ? rawSupportArea
-                .split(',')
-                .map((v) => v.trim().toLowerCase())
-                .filter(Boolean)
-            : [],
-        email:
-          this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
-            ?.toString()
-            .trim()
-            .toLowerCase() || '',
-      };
-    });
+        return {
+          name:
+            this.getFieldCaseInsensitive(item, 'Name', 'Stakeholders Name')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          designation:
+            this.getFieldCaseInsensitive(item, 'Designation')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          organization:
+            this.getFieldCaseInsensitive(item, 'Organization')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          district:
+            this.getFieldCaseInsensitive(item, 'District')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          municipality:
+            this.getFieldCaseInsensitive(item, 'Municipality')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+          phone:
+            this.getFieldCaseInsensitive(item, 'Mobile #', 'Phone Number')
+              ?.toString()
+              .trim() || '',
+          supportArea:
+            typeof rawSupportArea === 'string' && rawSupportArea
+              ? rawSupportArea
+                  .split(',')
+                  .map((v) => v.trim().toLowerCase())
+                  .filter(Boolean)
+              : [],
+          email:
+            this.getFieldCaseInsensitive(item, 'Email ID', 'Email')
+              ?.toString()
+              .trim()
+              .toLowerCase() || '',
+        };
+      });
   }
 
   // Runs class-validator on already-parsed rows — no raw Excel mapping

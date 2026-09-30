@@ -70,6 +70,7 @@ export async function createContractInstanceSign(
       name: 'DEPLOYER_PRIVATE_KEY',
     },
   });
+  console.log('contract details:', contract);
 
   //  Get RPC URL
   const res = await model.findFirstOrThrow({

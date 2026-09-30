@@ -5,6 +5,8 @@ export class SendAssetDto {
   otp: string;
   mediaUrl?: string;
   fileName?: string;
+  skipOtpVerification?: boolean;
+  otpSkipReason?: string;
 }
 
 export interface IChainService {
@@ -16,6 +18,7 @@ export interface IChainService {
   disburse(data: DisburseDto): Promise<any>;
   preDisburse?(data: DisburseDto): Promise<any>;
   getDisbursementStatus(id: string): Promise<any>;
+  getDisbursementProgress(groupUuid: string): Promise<any>;
 
   // Send otp operations
   sendOtp(data: SendOtpDto): Promise<any>;
@@ -123,6 +126,8 @@ export interface RedeemInkindDto {
   beneficiaryAddress: string;
   inkindId: string[];
   vendorAddress: string;
+  /** Total quantity redeemed across inkindId — used by chains that move real value (e.g. Stellar). */
+  amount?: number;
 }
 
 export interface RedeemInkindTokenForCashDto {

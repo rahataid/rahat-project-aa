@@ -23,6 +23,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const SETTING_NAME = 'CLOUDFLARE_R2';
@@ -118,6 +119,7 @@ async function updateDeploymentFile(fileName, entry) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 10: Cloudflare R2');
 	const config = await askR2Values();
 	const confirmed = await confirmSelection(selectedFile, config);
 

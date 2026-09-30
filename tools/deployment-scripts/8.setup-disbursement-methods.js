@@ -23,6 +23,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const SETTING_NAME = 'DISBURSHMENT_METHODS';
@@ -99,6 +100,7 @@ async function updateDeploymentFile(fileName, setting) {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 8: Disbursement methods');
 	const selectedMethods = await askDisbursementMethods();
 	const confirmed = await confirmSelection(selectedFile, selectedMethods);
 

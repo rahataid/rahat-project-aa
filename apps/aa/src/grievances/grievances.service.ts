@@ -114,13 +114,17 @@ export class GrievancesService {
   }
 
   async updateStatus(dto: UpdateGrievanceStatusDto) {
-    const { uuid, ...updateDto } = dto;
+    const { uuid, user: updatedByUser, ...updateDto } = dto;
 
     const existingGrievance = await this.prisma.grievance.findUnique({
       where: { uuid },
     });
     if (!existingGrievance) {
-      throw new RpcException('Grievance not found');
+      throw new RpcException({
+        message: 'Grievance not found',
+        code: 'GRIEVANCE_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -159,7 +163,16 @@ export class GrievancesService {
 
       const grievance = await tx.grievance.update({
         where: { uuid },
-        data: updateData,
+        data: {
+          ...updateData,
+          createdByUser: updatedByUser
+            ? {
+                id: updatedByUser.id,
+                name: updatedByUser.name,
+                email: updatedByUser.email,
+              }
+            : Prisma.JsonNull,
+        },
       });
 
       await handleMicroserviceCall({
@@ -191,7 +204,11 @@ export class GrievancesService {
       where: { uuid },
     });
     if (!existingGrievance) {
-      throw new RpcException('Grievance not found');
+      throw new RpcException({
+        message: 'Grievance not found',
+        code: 'GRIEVANCE_NOT_FOUND',
+        params: { uuid },
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {

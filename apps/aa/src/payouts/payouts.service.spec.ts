@@ -607,34 +607,46 @@ describe('PayoutsService', () => {
   });
 
   describe('calculatePayoutCompletionGap', () => {
-    it('should calculate payout completion gap successfully', async () => {
-      const mockProjectInfo = {
-        value: { activatedAt: '2024-01-01T00:00:00Z' },
-      };
-
-      const mockPayoutLastLog = {
+    it('should calculate gap from activation to last paid redeem', async () => {
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
         updatedAt: new Date('2024-01-02T00:00:00Z'),
-      };
+      });
 
-      mockAppService.getSettings.mockResolvedValue(mockProjectInfo);
-      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue(
-        mockPayoutLastLog
+      const result = await service.calculatePayoutCompletionGap(
+        'payout-123',
+        '2024-01-01T00:00:00Z'
       );
 
-      const result = await service.calculatePayoutCompletionGap('payout-123');
-
-      expect(result).toBeDefined();
-      expect(mockAppService.getSettings).toHaveBeenCalledWith({
-        name: 'PROJECTINFO',
-      });
+      expect(result).not.toBe('N/A');
     });
 
+    it('should return N/A when activation is after last payment (reactivated phase)', async () => {
+      mockPrismaService.beneficiaryRedeem.findFirst.mockResolvedValue({
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
+      });
+
+      const result = await service.calculatePayoutCompletionGap(
+        'payout-123',
+        '2024-01-02T00:00:00Z'
+      );
+
+      expect(result).toBe('N/A');
+    });
+
+    it('should return N/A without activation time', async () => {
+      expect(
+        await service.calculatePayoutCompletionGap('payout-123', null)
+      ).toBe('N/A');
+    });
+  });
+
+  describe('resolveActivationTime', () => {
     it('should handle missing project info', async () => {
       mockAppService.getSettings.mockResolvedValue(null);
 
-      await expect(
-        service.calculatePayoutCompletionGap('payout-123')
-      ).rejects.toThrow('Project info not found, in SETTINGS');
+      await expect(service.resolveActivationTime()).rejects.toThrow(
+        'Project info not found, in SETTINGS'
+      );
     });
   });
 
@@ -1717,15 +1729,15 @@ describe('PayoutsService', () => {
     });
   });
 
-  describe('calculatePayoutCompletionGap - edge cases', () => {
+  describe('resolveActivationTime - edge cases', () => {
     it('should return N/A when active year or river basin missing', async () => {
       mockAppService.getSettings.mockResolvedValue({
         value: { project_name: 'Test' }, // missing active_year and river_basin
       });
 
-      const result = await service.calculatePayoutCompletionGap('payout-123');
+      const result = await service.resolveActivationTime();
 
-      expect(result).toBe('N/A');
+      expect(result).toBeNull();
     });
 
     it('should return N/A when activation phase not found', async () => {
@@ -1735,9 +1747,9 @@ describe('PayoutsService', () => {
 
       mockClientProxy.send.mockReturnValue(of({ data: [] }));
 
-      const result = await service.calculatePayoutCompletionGap('payout-123');
+      const result = await service.resolveActivationTime();
 
-      expect(result).toBe('N/A');
+      expect(result).toBeNull();
     });
 
     it('should return N/A when activation phase is not active', async () => {
@@ -1749,9 +1761,9 @@ describe('PayoutsService', () => {
         of({ data: [{ name: 'ACTIVATION', isActive: false }] })
       );
 
-      const result = await service.calculatePayoutCompletionGap('payout-123');
+      const result = await service.resolveActivationTime();
 
-      expect(result).toBe('N/A');
+      expect(result).toBeNull();
     });
   });
 

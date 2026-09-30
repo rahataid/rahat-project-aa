@@ -1,4 +1,9 @@
-import { GroupPurpose, PayoutMode, PayoutType } from '@prisma/client';
+import {
+  DisbursementStatus,
+  GroupPurpose,
+  PayoutMode,
+  PayoutType,
+} from '@prisma/client';
 import { BaseBeneficiaryDto } from '@rahat-project/cva';
 import { Enums } from '@rahataid/sdk';
 import {
@@ -47,6 +52,9 @@ export interface AddTokenToGroup {
   title: string;
   user?: any;
   isPayoutIntegrated: boolean;
+  // Stellar only: close the group's open payout (CANCELLED redeems), return remaining
+  // beneficiary tokens to the distribution wallet, then reserve again.
+  skipOldPayoutForRemaining?: boolean;
   params?: {
     type: PayoutType;
     mode: PayoutMode;
@@ -54,6 +62,7 @@ export interface AddTokenToGroup {
     extras?: any;
     payoutProcessorId?: string;
     user?: any;
+    disbursementStatus?: string;
   };
 }
 

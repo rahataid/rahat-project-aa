@@ -21,6 +21,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const SETTING_NAME = 'PROJECT_NAV_CONFIG';
@@ -147,6 +148,7 @@ async function updateDeploymentFile(fileName, entry) {
 
 async function main() {
   const selectedFile = await selectDeploymentFile();
+  await maybeSkipStep('Step 7: Project nav settings');
   const confirmed = await confirmSelection(selectedFile);
 
   if (!confirmed) {

@@ -16,6 +16,43 @@ export interface QrCardData {
   governmentIdNumber?: string;
 }
 
+// Report typeface. Mukta covers Latin + Devanagari; pdfkit's built-in
+// Helvetica only covers Latin, which renders Nepali names as mojibake.
+// Falls back to Helvetica when the font files are unavailable.
+let REPORT_FONT = 'Helvetica';
+let REPORT_FONT_BOLD = 'Helvetica-Bold';
+
+let resolvedFontPaths: { regular: string; bold: string } | null | undefined;
+function resolveFontPaths(): { regular: string; bold: string } | null {
+  if (resolvedFontPaths !== undefined) return resolvedFontPaths;
+  const candidates = (file: string) => [
+    path.join(__dirname, 'assets', 'fonts', file),
+    path.join(__dirname, '..', 'assets', 'fonts', file),
+    path.join(process.cwd(), 'dist', 'apps', 'aa', 'assets', 'fonts', file),
+    path.join(process.cwd(), 'apps', 'aa', 'src', 'assets', 'fonts', file),
+  ];
+  const pick = (file: string): string | null =>
+    candidates(file).find((p) => fs.existsSync(p)) ?? null;
+  const regular = pick('Mukta-Regular.ttf');
+  const bold = pick('Mukta-Bold.ttf');
+  resolvedFontPaths = regular && bold ? { regular, bold } : null;
+  return resolvedFontPaths;
+}
+
+function registerReportFonts(doc: typeof PDFDocument) {
+  const paths = resolveFontPaths();
+  if (!paths) return;
+  try {
+    doc.registerFont('Report', paths.regular);
+    doc.registerFont('Report-Bold', paths.bold);
+    REPORT_FONT = 'Report';
+    REPORT_FONT_BOLD = 'Report-Bold';
+  } catch {
+    REPORT_FONT = 'Helvetica';
+    REPORT_FONT_BOLD = 'Helvetica-Bold';
+  }
+}
+
 // A4 dimensions in points at 72dpi
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -152,7 +189,7 @@ function renderCardsToPdf(
       });
     } else {
       doc
-        .font('Helvetica-Bold')
+        .font(REPORT_FONT_BOLD)
         .fontSize(12)
         .fillColor(BLUE_COLOR)
         .text('Rahat', x, logoAreaCenterY - 6, {
@@ -189,7 +226,7 @@ function renderCardsToPdf(
     const lineH = 14;
 
     doc
-      .font('Helvetica-Bold')
+      .font(REPORT_FONT_BOLD)
       .fontSize(9)
       .fillColor('#ffffff')
       .text(card.name || '', x, textY, { width: CARD_WIDTH, align: 'center' });
@@ -198,7 +235,7 @@ function renderCardsToPdf(
     const locationParts = [card.location, card.district].filter(Boolean);
     if (locationParts.length > 0) {
       doc
-        .font('Helvetica')
+        .font(REPORT_FONT)
         .fontSize(8)
         .fillColor('#ddeeff')
         .text(locationParts.join(', '), x, textY, { width: CARD_WIDTH, align: 'center' });
@@ -207,7 +244,7 @@ function renderCardsToPdf(
 
     if (card.ward) {
       doc
-        .font('Helvetica')
+        .font(REPORT_FONT)
         .fontSize(8)
         .fillColor('#ddeeff')
         .text(`Ward: ${card.ward}`, x, textY, { width: CARD_WIDTH, align: 'center' });
@@ -216,7 +253,7 @@ function renderCardsToPdf(
 
     if (card.phone) {
       doc
-        .font('Helvetica')
+        .font(REPORT_FONT)
         .fontSize(8)
         .fillColor('#ddeeff')
         .text(card.phone, x, textY, { width: CARD_WIDTH, align: 'center' });
@@ -225,7 +262,7 @@ function renderCardsToPdf(
 
     if (card.otp) {
       doc
-        .font('Helvetica-Bold')
+        .font(REPORT_FONT_BOLD)
         .fontSize(8.5)
         .fillColor('#ffffff')
         .text(`Rahat Pin: ${card.otp}`, x, textY, { width: CARD_WIDTH, align: 'center' });
@@ -234,7 +271,7 @@ function renderCardsToPdf(
 
     if (card.governmentIdType) {
       doc
-        .font('Helvetica')
+        .font(REPORT_FONT)
         .fontSize(8)
         .fillColor('#ddeeff')
         .text(
@@ -260,6 +297,7 @@ export async function buildQrPdf(cards: QrCardData[]): Promise<Buffer> {
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
+    registerReportFonts(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));

@@ -8,13 +8,6 @@
 -- CreateEnum
 CREATE TYPE "StellarBatchStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
 
--- DropIndex
-DROP INDEX "tbl_otp_email_key";
-
--- AlterTable
-ALTER TABLE "tbl_otp" DROP COLUMN "email",
-ALTER COLUMN "phoneNumber" SET NOT NULL;
-
 -- CreateTable
 CREATE TABLE "tbl_stellar_disburse_batches" (
     "id" SERIAL NOT NULL,

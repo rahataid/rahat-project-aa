@@ -118,6 +118,17 @@ async function readEnvFile(envPath: string) {
   }
 }
 
+// PREPARE TRANSACTION / COMMIT PREPARED must run on the same physical
+// connection as the preceding BEGIN + writes. Prisma's default pool can
+// route raw statements from the same PrismaClient to different pooled
+// connections, which surfaces as "prepared transaction ... does not exist"
+// on commit. Pin each client to a single connection to prevent that.
+function withSingleConnection(url: string): string {
+  const u = new URL(url);
+  u.searchParams.set('connection_limit', '1');
+  return u.toString();
+}
+
 async function initializePrismaClients(envPath: string) {
   const envVariables = await readEnvFile(envPath);
 
@@ -132,9 +143,9 @@ async function initializePrismaClients(envPath: string) {
   }
 
   return {
-    prisma: new PrismaClient({ datasourceUrl: coreDbUrl }),
-    projectPrisma: new PrismaClient({ datasourceUrl: projectDbUrl }),
-    triggerPrisma: new PrismaClient({ datasourceUrl: triggerDbUrl }),
+    prisma: new PrismaClient({ datasourceUrl: withSingleConnection(coreDbUrl) }),
+    projectPrisma: new PrismaClient({ datasourceUrl: withSingleConnection(projectDbUrl) }),
+    triggerPrisma: new PrismaClient({ datasourceUrl: withSingleConnection(triggerDbUrl) }),
   };
 }
 
@@ -390,63 +401,49 @@ async function modifyEnvAndSettings(
     const newData = newLines.join('\n');
     await fs.writeFile(envPath, newData, 'utf8');
 
-    await projectPrisma.setting.upsert({
-      where: {
-        name: 'DEPLOYER_PRIVATE_KEY',
-      },
-      create: {
-        name: 'DEPLOYER_PRIVATE_KEY',
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
-      },
-      update: {
-        value: prvKey,
-        dataType: 'STRING',
-        isPrivate: true,
-      },
-    });
+    // These must run as raw SQL on txManager's own connection rather than via
+    // the Prisma Client API (e.g. projectPrisma.setting.upsert): mixing the
+    // high-level Client API with a manually-managed raw BEGIN/PREPARE/COMMIT
+    // session on the same PrismaClient is unsupported by Prisma's query
+    // engine and silently breaks the prepared transaction.
+    await txManager.executeRaw(
+      1,
+      Prisma.sql`
+      INSERT INTO tbl_settings (name, value, "dataType", "isPrivate")
+      VALUES ('DEPLOYER_PRIVATE_KEY', ${JSON.stringify(prvKey)}::jsonb, 'STRING', true)
+      ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value, "dataType" = EXCLUDED."dataType", "isPrivate" = EXCLUDED."isPrivate"`
+    );
 
     // Minimal defaults so the aa app can boot (QrPdfService and EvmChainService
     // read these on startup and crash if the rows don't exist at all).
-    await projectPrisma.setting.upsert({
-      where: {
-        name: 'CHAIN_SETTINGS',
-      },
-      create: {
-        name: 'CHAIN_SETTINGS',
-        value: {
-          name: '',
-          type: '',
-          rpcUrl: '',
-          chainId: '',
-          currency: { name: '', symbol: '' },
-          explorerUrl: '',
-        },
-        dataType: 'OBJECT',
-        isPrivate: false,
-      },
-      update: {},
-    });
+    await txManager.executeRaw(
+      1,
+      Prisma.sql`
+      INSERT INTO tbl_settings (name, value, "dataType", "isPrivate")
+      VALUES ('CHAIN_SETTINGS', ${JSON.stringify({
+        name: '',
+        type: '',
+        rpcUrl: '',
+        chainId: '',
+        currency: { name: '', symbol: '' },
+        explorerUrl: '',
+      })}::jsonb, 'OBJECT', false)
+      ON CONFLICT (name) DO NOTHING`
+    );
 
-    await projectPrisma.setting.upsert({
-      where: {
-        name: 'CLOUDFLARE_R2',
-      },
-      create: {
-        name: 'CLOUDFLARE_R2',
-        value: {
-          R2_ACCOUNT_ID: '',
-          R2_ACCESS_KEY_ID: '',
-          R2_SECRET_ACCESS_KEY: '',
-          R2_BUCKET: '',
-          R2_PUBLIC_DOMAIN: '',
-        },
-        dataType: 'OBJECT',
-        isPrivate: false,
-      },
-      update: {},
-    });
+    await txManager.executeRaw(
+      1,
+      Prisma.sql`
+      INSERT INTO tbl_settings (name, value, "dataType", "isPrivate")
+      VALUES ('CLOUDFLARE_R2', ${JSON.stringify({
+        R2_ACCOUNT_ID: '',
+        R2_ACCESS_KEY_ID: '',
+        R2_SECRET_ACCESS_KEY: '',
+        R2_BUCKET: '',
+        R2_PUBLIC_DOMAIN: '',
+      })}::jsonb, 'OBJECT', false)
+      ON CONFLICT (name) DO NOTHING`
+    );
 
     await seedProject();
     console.log('ProjectInfo seeded successfully.');

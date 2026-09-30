@@ -1,6 +1,7 @@
 import { Logger, Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { CONTROLLERS, JOBS } from '../constants';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CONTROLLERS, EVENTS, JOBS } from '../constants';
 import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
@@ -12,6 +13,8 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { UUID } from 'crypto';
 import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
+import { GroupUuidDto } from './dto/group-uuid.dto';
+import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 // Threshold to create batches for benf creation
@@ -23,8 +26,9 @@ export class BeneficiaryController {
 
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
-    private readonly beneficiaryMultisigService: BeneficiaryMultisigService
-  ) { }
+    private readonly beneficiaryMultisigService: BeneficiaryMultisigService,
+    private readonly eventEmitter: EventEmitter2
+  ) {}
 
   // @MessagePattern({ cmd: JOBS.BENEFICIARY.LIST, uuid: process.env.PROJECT_ID })
   // findAll(data) {
@@ -38,7 +42,6 @@ export class BeneficiaryController {
   create(data: CreateBeneficiaryDto) {
     return this.beneficiaryService.create(data);
   }
-
 
   @MessagePattern({ cmd: JOBS.BENEFICIARY.GET, uuid: process.env.PROJECT_ID })
   findOne(payload) {
@@ -74,7 +77,10 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   createMany(data) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT', JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT);
+    console.log(
+      'Received bulk beneficiary creation request with data JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT',
+      JOBS.BENEFICIARY.BULK_ASSIGN_TO_PROJECT
+    );
     return this.beneficiaryService.createMany(data);
   }
 
@@ -91,17 +97,18 @@ export class BeneficiaryController {
     );
   }
 
-
   //NOTE: used in group-assignment to project in platform
   @MessagePattern({
     cmd: JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT,
     uuid: process.env.PROJECT_ID,
   })
   createBulk(data: CreateBulkBeneficiaryDto) {
-    console.log('Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT', JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT);
+    console.log(
+      'Received bulk beneficiary creation request with data JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT',
+      JOBS.BENEFICIARY.ADD_BULK_TO_PROJECT
+    );
     return this.beneficiaryService.createBulk(data);
   }
-
 
   // ***** groups start ********** //
   //NOTE: used in group-assignment to project in platform
@@ -110,29 +117,48 @@ export class BeneficiaryController {
     uuid: process.env.PROJECT_ID,
   })
   async addGroupToProject(payload) {
-    console.log(`Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`, JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT);
+    console.log(
+      `Adding beneficiary group to project with command BENEFICIARY.ADD_GROUP_TO_PROJECT`,
+      JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT
+    );
     return this.beneficiaryService.addGroupToProject(payload);
   }
 
   @MessagePattern({
-    cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
+    cmd: JOBS.BENEFICIARY.SPONSOR_BENEFICIARY_GROUP,
     uuid: process.env.PROJECT_ID,
   })
-  async createBenfAndAddGroupToProject(
-    payload: CreateBenfAddGroupToProjectDto
-  ) {
-    const { beneficiaries } = payload;
+  sponsorBeneficiaryGroup(@Payload() payload: GroupUuidDto) {
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
+      groupUuid: payload.groupUuid,
+    });
+  }
 
-    if (beneficiaries.length > BENEFICIARY_BATCH_THRESHOLD) {
-      this.logger.log(
-        `Beneficiary count (${beneficiaries.length}) exceeds threshold, using batched processing`
-      );
-      // Batched process to prevent db connection pool limit
-      return this.beneficiaryService.createBeneficiariesInBatches(payload);
-    }
+  //NOTE: called from core repo when a group's Stellar sponsorship should be torn down (e.g. project closes)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.REVOKE_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async revokeSponsorshipForGroup(payload: RevokeSponsorshipForGroupDto) {
+    return this.beneficiaryService.revokeSponsorshipForGroup(payload);
+  }
 
-    // Default process
-    return this.beneficiaryService.createBenfAndAddGroupToProject(payload);
+  //NOTE: called from core repo to report Stellar sponsorship status for a group's beneficiaries (sponsored/pending/failed counts + per-account reasons)
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_SPONSORSHIP_STATUS_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getSponsorshipStatusForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.getSponsorshipStatusForGroup(payload);
+  }
+
+  //NOTE: called from core repo to re-attempt Stellar sponsorship for a group's not-yet-sponsored beneficiaries
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.RETRY_SPONSORSHIP_FOR_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async retrySponsorshipForGroup(@Payload() payload: GroupUuidDto) {
+    return this.beneficiaryService.retrySponsorshipForGroup(payload);
   }
 
   @MessagePattern({
@@ -240,6 +266,14 @@ export class BeneficiaryController {
     return this.beneficiaryService.assignToken();
   }
 
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.GET_PAYOUT_MODE,
+    uuid: process.env.PROJECT_ID,
+  })
+  async getBeneficiaryPayoutMode(payload: any) {
+    return this.beneficiaryService.getBeneficiaryPayoutMode(payload);
+  }
+
   // ***** multisig starts ********** //
   @MessagePattern({
     cmd: JOBS.MULTISIG.GET_SAFE_OWNER,
@@ -262,8 +296,13 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.GENERATE_QR_PDF,
     uuid: process.env.PROJECT_ID,
   })
-  generateQrPdf(@Payload() payload: { groupId: string }) {
-    return this.beneficiaryService.initiateQrPdf(payload.groupId);
+  generateQrPdf(
+    @Payload() payload: { groupId: string; includeOtp?: boolean }
+  ) {
+    return this.beneficiaryService.initiateQrPdf(
+      payload.groupId,
+      payload.includeOtp
+    );
   }
 
   @MessagePattern({
@@ -272,6 +311,16 @@ export class BeneficiaryController {
   })
   getQrPdfJob(@Payload() payload: { groupId: string }) {
     return this.beneficiaryService.getQrPdf(payload.groupId);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.EXPORT_GROUP_EXCEL,
+    uuid: process.env.PROJECT_ID,
+  })
+  exportGroupBeneficiariesExcel(@Payload() payload: { groupId: string }) {
+    return this.beneficiaryService.exportGroupBeneficiariesExcel(
+      payload.groupId
+    );
   }
 
   @MessagePattern({

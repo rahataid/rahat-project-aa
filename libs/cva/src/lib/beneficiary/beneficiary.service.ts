@@ -52,30 +52,29 @@ export class CvaBeneficiaryService {
 
     const conditions = {
       deletedAt: null,
-      ...(search
-        && {
-        OR: [
-          { walletAddress: { contains: search } },
-        ],
-      }
-      ),
+      ...(search && {
+        OR: [{ walletAddress: { contains: search } }],
+      }),
     };
 
     const beneficiaries = await paginate(
       this.prisma.beneficiary,
       {
         where: conditions,
-      ...(order && sort && {
-        orderBy: {
-          [sort]: order
-        },
-      })
+        ...(order &&
+          sort && {
+            orderBy: {
+              [sort]: order,
+            },
+          }),
       },
       {
         page,
         perPage,
       }
     );
+    console.log('benefeciarie:', beneficiaries);
+
     return this.client
       .send({ cmd: CVA_JOBS.BENEFICIARY.LIST_BY_PROJECT }, beneficiaries)
       .pipe(timeout(5000));

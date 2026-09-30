@@ -82,6 +82,7 @@ export const JOBS = {
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     CREATE_BENF_ADD_GROUP_TO_PROJECT:
       'rahat.jobs.beneficiary.create_benf_add_group_to_project',
+    SPONSOR_BENEFICIARY_GROUP: 'aa.jobs.beneficiary.sponsorBeneficiaryGroup',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
     GET_RESERVATION_STATS: 'aa.jobs.beneficiary.getReservationStats',
@@ -95,14 +96,23 @@ export const JOBS = {
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
+    EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    REVOKE_SPONSORSHIP_FOR_GROUP:
+      'aa.jobs.beneficiary.revokeSponsorshipForGroup',
+    GET_SPONSORSHIP_STATUS_FOR_GROUP:
+      'aa.jobs.beneficiary.getSponsorshipStatusForGroup',
+    RETRY_SPONSORSHIP_FOR_GROUP: 'aa.jobs.beneficiary.retrySponsorshipForGroup',
+    GET_PAYOUT_MODE: 'aa.jobs.beneficiary.getPayoutMode',
   },
   STELLAR: {
     DISBURSE: 'aa.jobs.stellar.disburse',
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
+    REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
@@ -127,10 +137,12 @@ export const JOBS = {
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
+    REVOKE_SPONSORSHIP_BATCH: 'aa.jobs.stellar.revokeSponsorshipBatch',
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
-    DISBURSEMENT_STATUS_UPDATE: 'aa.jobs.stellar_sdp.disbursement_status_update',
+    DISBURSEMENT_STATUS_UPDATE:
+      'aa.jobs.stellar_sdp.disbursement_status_update',
   },
   STELLAR_DIRECT: {
     DISBURSE: 'aa.jobs.stellar_direct.disburse',
@@ -165,7 +177,8 @@ export const JOBS = {
     UPDATE: 'aa.jobs.payout.update',
     GET_PAYMENT_PROVIDERS: 'aa.jobs.payout.getPaymentProviders',
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
-    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout'
+    EXPORT_PAYOUT_LOGS_PDF_FILE: 'aa.jobs.payout.exportPayoutLogsPdfFile',
+    VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -191,7 +204,11 @@ export const JOBS = {
     LIST: 'rahat.jobs.settings.list',
     GET: 'rahat.jobs.settings.get',
     UPDATE: 'rahat.jobs.settings.update',
+    UPDATE_VALUES: 'aa.jobs.settings.updateValues',
     REMOVE: 'rahat.jobs.settings.remove',
+  },
+  VERSION: {
+    GET: 'aa.jobs.version.get',
   },
   CONTRACT: {
     // Token Management
@@ -228,6 +245,7 @@ export const JOBS = {
   },
   STATS: {
     GET_ALL: 'aa.jobs.stats.getAll',
+    BACK_FILL: 'aa.jobs.stats.backFill',
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
@@ -383,6 +401,9 @@ export const JOBS = {
     TOKEN_DETAILS: 'aa.jobs.fundManagement.tokenDetails',
     TRANSFER_LIST: 'aa.jobs.fundManagement.transferList',
   },
+  HEALTH: {
+    GET: 'rahat.jobs.health.getcheck',
+  },
 };
 
 export const EVENTS = {
@@ -396,7 +417,11 @@ export const EVENTS = {
   STAKEHOLDER_CREATED: 'events.stakeholders_created',
   STAKEHOLDER_REMOVED: 'events.stakeholders_removed',
   TOKEN_DISBURSED: 'events.token_disbursed',
-  BENEFICIARY_GROUP_ADDED_TO_PROJECT: 'events.beneficiary_group_added_to_project',
+  BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
+  BENEFICIARY_GROUP_ADDED_TO_PROJECT:
+    'events.beneficiary_group_added_to_project',
+  BENEFICIARY_GROUP_SPONSORSHIP_REVOKE:
+    'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
     CREATE: 'events.notification.create',
   },
@@ -409,6 +434,7 @@ export const BQUEUE = {
   COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_SEND_ASSET: `STELLAR_SEND_ASSET_${process.env.PROJECT_ID}`,
+  STELLAR_INKIND_REDEEM: `STELLAR_INKIND_REDEEM_${process.env.PROJECT_ID}`,
   STELLAR_CHECK_TRUSTLINE: `STELLAR_CHECK_TRUSTLINE_${process.env.PROJECT_ID}`,
   OFFRAMP: `OFFRAMP_${process.env.PROJECT_ID}`,
   EVM: `EVM_${process.env.PROJECT_ID}`,
@@ -428,6 +454,14 @@ export const BQUEUE = {
   STELLAR_TRANSFER_BATCH: `STELLAR_TRANSFER_BATCH_${process.env.PROJECT_ID}`,
   MANUAL_PAYOUT: `MANUAL_PAYOUT_${process.env.PROJECT_ID}`,
   OFFLINE_REDEEM: `OFFLINE_REDEEM_${process.env.PROJECT_ID}`,
+};
+
+export const SSE_EVENTS = {
+  PUBLISHER: 'REDIS_EVENTS_PUBLISHER',
+};
+
+export const REDIS_CHANNELS = {
+  SSE_LISTENER: 'sse:listener',
 };
 
 export const VULNERABILITY_FIELD = {

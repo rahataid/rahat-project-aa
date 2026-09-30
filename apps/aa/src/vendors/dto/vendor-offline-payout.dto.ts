@@ -55,6 +55,10 @@ export class VendorOfflinePayoutDto {
   @IsString()
   @IsNotEmpty()
   amount: string;
+
+  @IsString()
+  @IsOptional()
+  disbursementStatus?: string;
 }
 
 export class VendorOnlinePayoutDto extends VendorOfflinePayoutDto {}
@@ -83,7 +87,8 @@ export interface BeneficiaryOtpData {
 
 export class QueueOfflineRedemptionDto {
   @ApiProperty({
-    description: 'Vendor UUID whose pending offline redemptions should be settled on-chain',
+    description:
+      'Vendor UUID whose pending offline redemptions should be settled on-chain',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsString()

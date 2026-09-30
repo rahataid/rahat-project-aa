@@ -11,6 +11,7 @@ import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { GetBenfGroupDto } from './dto/get-group.dto';
 import { GroupPurpose, PayoutMode, PayoutType } from '@prisma/client';
 import { of } from 'rxjs';
+import { SseService } from '../sse/sse.service';
 import { PayoutsService } from '../payouts/payouts.service';
 import { QrPdfService } from './qr-pdf.service';
 
@@ -115,6 +116,7 @@ describe('BeneficiaryService', () => {
           provide: CORE_MODULE,
           useValue: mockClientProxy,
         },
+        { provide: SseService, useValue: { emit: jest.fn() } },
         {
           provide: getQueueToken(BQUEUE.CONTRACT),
           useValue: mockQueue,
@@ -852,14 +854,7 @@ describe('BeneficiaryService', () => {
         mockPrismaService.beneficiaryGroups.findUnique
       ).toHaveBeenCalledWith({
         where: { uuid, deletedAt: null },
-        include: {
-          tokensReserved: true,
-          beneficiaries: {
-            include: {
-              beneficiary: true,
-            },
-          },
-        },
+        select: { uuid: true },
       });
 
       expect(mockClientProxy.send).toHaveBeenCalledWith(
@@ -1725,33 +1720,28 @@ describe('BeneficiaryService', () => {
   });
 
   describe('getOneTokenReservation', () => {
-    it('should get one token reservation with group details', async () => {
-      const payload = { uuid: 'token-res-123' };
-      const mockTokenReservation = {
-        id: 1,
-        uuid: 'token-res-123',
-        groupId: 'group-123',
-        title: 'Test Reservation',
-      };
-      const mockGroupDetails = { name: 'Test Group', beneficiaries: [] };
+    it('reads group from AA DB and keeps the reservation uuid', async () => {
+      const mockTokenReservation = { id: 1, uuid: 'token-res-123', groupId: 'group-123', title: 'Test Reservation' };
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(mockTokenReservation);
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue({
+        name: 'Test Group',
+        beneficiaries: [{ uuid: 'bg-1', beneficiaryId: 'ben-1', beneficiary: { walletAddress: '0xabc' } }],
+      });
 
-      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue(
-        mockTokenReservation
-      );
-      jest.spyOn(service, 'getOneGroup').mockResolvedValue(mockGroupDetails);
-
-      const result = await service.getOneTokenReservation(payload);
+      const result = await service.getOneTokenReservation({ uuid: 'token-res-123' });
 
       expect(result).toEqual({
         ...mockTokenReservation,
-        ...mockGroupDetails,
+        name: 'Test Group',
+        groupedBeneficiaries: [{ uuid: 'bg-1', beneficiaryId: 'ben-1', Beneficiary: { walletAddress: '0xabc' } }],
       });
+      expect(mockClientProxy.send).not.toHaveBeenCalled();
+    });
 
-      expect(
-        mockPrismaService.beneficiaryGroupTokens.findUnique
-      ).toHaveBeenCalledWith({
-        where: { uuid: 'token-res-123' },
-      });
+    it('throws when the group is missing', async () => {
+      mockPrismaService.beneficiaryGroupTokens.findUnique.mockResolvedValue({ uuid: 't', groupId: 'g' });
+      mockPrismaService.beneficiaryGroups.findUnique.mockResolvedValue(null);
+      await expect(service.getOneTokenReservation({ uuid: 't' })).rejects.toThrow();
     });
   });
 

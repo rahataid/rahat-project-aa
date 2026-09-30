@@ -77,7 +77,6 @@ export class GrievancesController {
     })
   )
   update(@Payload() payload: UpdateGrievanceDto) {
-    console.log('grievance update controller');
     return this.grievancesService.update(payload);
   }
 

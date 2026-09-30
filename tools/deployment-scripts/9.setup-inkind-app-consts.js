@@ -21,6 +21,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const inquirer = require('inquirer');
 const { selectDeploymentFile, DEPLOYMENT_DIR } = require('./lib/select-deployment-file');
+const { maybeSkipStep } = require('./lib/skip-step');
 
 const prompt = inquirer.prompt ?? inquirer.default?.prompt;
 const SETTING_NAME = 'INKIND_APP_CONSTS';
@@ -134,6 +135,7 @@ async function askProjectType() {
 
 async function main() {
 	const selectedFile = await selectDeploymentFile();
+	await maybeSkipStep('Step 9: Inkind app consts');
 	const projectType = await askProjectType();
 	const value = PRESETS[projectType];
 	const confirmed = await confirmSelection(selectedFile, value);

@@ -17,6 +17,7 @@ import { PaginatorTypes, PrismaService, paginator } from '@rumsan/prisma';
 import { PaginatedResult } from '@rumsan/communication/types/pagination.types';
 import {
   BeneficiaryPayoutDetails,
+  DownloadPayoutLogsPdfType,
   DownloadPayoutLogsType,
   IPaymentProvider,
   PayoutStats,
@@ -27,6 +28,12 @@ import {
   EntityConfig,
   PayoutWithBeneficiaryDetails,
 } from './dto/types';
+import { ExportPayoutLogsPdfFileDto } from './dto/export-payout-logs-pdf-file.dto';
+import {
+  buildPayoutLogsPdf,
+  PayoutLogsPdfFile,
+  toPayoutLogsPdfFile,
+} from './payout-logs-pdf.builder';
 import { OfframpService } from './offramp.service';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
@@ -45,6 +52,7 @@ import { OtpService } from '../otp/otp.service';
 import { getOtpHash, verifyOtpHash } from '../utils/hash';
 import {
   calculatePayoutStatus,
+  REDEEM_PAID_STATUSES,
   PayoutWithRelations,
   RedeemStatus,
 } from '../utils/getBeneficiaryRedemStatus';
@@ -57,10 +65,13 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
+import { RedisService } from '../redis/redis.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 10 });
 
 export const ONE_TOKEN_VALUE = 1;
+
+const PAYOUT_CACHE_KEY_PREFIX = 'payout:progress:';
 
 @Injectable()
 export class PayoutsService {
@@ -81,12 +92,16 @@ export class PayoutsService {
     private settingService: SettingsService,
     private readonly otpService: OtpService,
     @InjectQueue(BQUEUE.BATCH_TRANSFER)
-    private readonly batchTransferQueue: Queue
+    private readonly batchTransferQueue: Queue,
+    private readonly redisService: RedisService
   ) {}
 
   async sendOtp(email: string) {
     if (!email) {
-      throw new RpcException('Email is required to send OTP');
+      throw new RpcException({
+        message: 'Email is required to send OTP',
+        code: 'EMAIL_REQUIRED_TO_SEND_OTP',
+      });
     }
 
     const defaultOpt = await this.prisma.otp.findUnique({ where: { email } });
@@ -129,21 +144,30 @@ export class PayoutsService {
 
   private async verifyOtp(email?: string, otp?: string) {
     if (!email || !otp) {
-      throw new RpcException('Email and OTP are required');
+      throw new RpcException({
+        message: 'Email and OTP are required',
+        code: 'EMAIL_AND_OTP_REQUIRED',
+      });
     }
 
     const otpRecord = await this.prisma.otp.findUnique({ where: { email } });
     if (!otpRecord) {
-      throw new RpcException('OTP record not found');
+      throw new RpcException({
+        message: 'OTP record not found',
+        code: 'OTP_RECORD_NOT_FOUND',
+      });
     }
 
     if (otpRecord.expiresAt < new Date()) {
-      throw new RpcException('OTP has expired');
+      throw new RpcException({
+        message: 'OTP has expired',
+        code: 'OTP_EXPIRED',
+      });
     }
 
     const isValid = verifyOtpHash(otpRecord.otpHash, otp);
     if (!isValid) {
-      throw new RpcException('Invalid OTP');
+      throw new RpcException({ message: 'Invalid OTP', code: 'INVALID_OTP' });
     }
 
     // consume OTP so it cannot be reused
@@ -246,7 +270,10 @@ export class PayoutsService {
       };
     } catch (error) {
       console.error('Failed to fetch payout stats:', error);
-      throw new Error('Failed to fetch payout stats');
+      throw new RpcException({
+        message: 'Failed to fetch payout stats',
+        code: 'FAILED_TO_FETCH_PAYOUT_STATS',
+      });
     }
   }
 
@@ -278,9 +305,11 @@ export class PayoutsService {
         });
 
       if (!beneficiaryGroupTokens) {
-        throw new RpcException(
-          `Beneficiary group tokens with UUID '${groupId}' not found`
-        );
+        throw new RpcException({
+          message: `Beneficiary group tokens with UUID '${groupId}' not found`,
+          code: 'PAYOUT_ERR_GROUP_TOKENS_NOT_FOUND',
+          params: { groupId },
+        });
       }
 
       this.validateGroupPurposeForPayoutType(
@@ -297,9 +326,11 @@ export class PayoutsService {
       });
 
       if (existingPayout) {
-        throw new RpcException(
-          `Payout with groupId '${groupId}' already exists`
-        );
+        throw new RpcException({
+          message: `Payout with groupId '${groupId}' already exists`,
+          code: 'PAYOUT_ERR_GROUP_PAYOUT_EXISTS',
+          params: { groupId },
+        });
       }
 
       /*
@@ -311,9 +342,10 @@ export class PayoutsService {
       //TODO validate bankdetails of the beneficiary
       if (createPayoutDto.type === 'FSP') {
         if (!createPayoutDto.payoutProcessorId) {
-          throw new RpcException(
-            `Payout processor ID is required for FSP payout`
-          );
+          throw new RpcException({
+            message: `Payout processor ID is required for FSP payout`,
+            code: 'PAYOUT_ERR_PROCESSOR_ID_REQUIRED_FSP',
+          });
         }
       } else {
         /*
@@ -323,13 +355,17 @@ export class PayoutsService {
          */
         if (createPayoutDto.mode === 'OFFLINE') {
           if (!createPayoutDto.payoutProcessorId) {
-            throw new RpcException(
-              `Payout processor ID is required for OFFLINE payout`
-            );
+            throw new RpcException({
+              message: `Payout processor ID is required for OFFLINE payout`,
+              code: 'PAYOUT_ERR_PROCESSOR_ID_REQUIRED_OFFLINE',
+            });
           }
 
           if (!isUUID(createPayoutDto.payoutProcessorId)) {
-            throw new RpcException(`Payout processor ID is not a valid UUID`);
+            throw new RpcException({
+              message: `Payout processor ID is not a valid UUID`,
+              code: 'PAYOUT_ERR_INVALID_PROCESSOR_ID',
+            });
           }
 
           const vendor = await this.vendorsService.findOne(
@@ -337,9 +373,11 @@ export class PayoutsService {
           );
 
           if (!vendor) {
-            throw new RpcException(
-              `Vendor with ID '${createPayoutDto.payoutProcessorId}' not found`
-            );
+            throw new RpcException({
+              message: `Vendor with ID '${createPayoutDto.payoutProcessorId}' not found`,
+              code: 'PAYOUT_ERR_VENDOR_NOT_FOUND',
+              params: { id: createPayoutDto.payoutProcessorId },
+            });
           }
         }
       }
@@ -348,7 +386,9 @@ export class PayoutsService {
         data: {
           type: createPayoutDto.type,
           mode: createPayoutDto.mode,
-          status: createPayoutDto.status,
+          // Default to NOT_STARTED if status not provided — prevents NULL in DB
+          // which causes "N/A" on first load before syncPayoutStatus runs
+          status: createPayoutDto.status || 'NOT_STARTED',
           extras: createPayoutDto.extras,
           payoutProcessorId: createPayoutDto.payoutProcessorId,
           beneficiaryGroupToken: {
@@ -362,6 +402,7 @@ export class PayoutsService {
           await this.vendorsService.processVendorOfflinePayout({
             beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
             amount: String(beneficiaryGroupTokens.numberOfTokens),
+            disbursementStatus: createPayoutDto?.disbursementStatus,
           });
         } else {
           await this.vendorsService.processVendorOnlinePayout({
@@ -404,6 +445,7 @@ export class PayoutsService {
         `Failed to create payout: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -424,9 +466,11 @@ export class PayoutsService {
       this.logger.warn(
         `Group purpose GENERAL not allowed for group: ${groupId} with payout type: ${payoutType}`
       );
-      throw new RpcException(
-        `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${payoutType}.`
-      );
+      throw new RpcException({
+        message: `Group purpose GENERAL is only allowed for VENDOR payouts. Received payout type: ${payoutType}.`,
+        code: 'GROUP_PURPOSE_GENERAL_ONLY_FOR_VENDOR_PAYOUTS',
+        params: { payoutType },
+      });
     }
   }
 
@@ -551,6 +595,22 @@ export class PayoutsService {
                 ONE_TOKEN_VALUE,
             };
           }
+
+          const cacheKey = `${PAYOUT_CACHE_KEY_PREFIX}${eachPayout.uuid}`;
+          const cached = await this.redisService.get<{
+            completedCount: number;
+            totalBeneficiaries: number;
+            totalSuccessAmount: number;
+            status: string;
+          }>(cacheKey);
+
+          if (cached) {
+            this.logger.debug(
+              `[findAll] payout=${eachPayout.uuid} served from cache: ${cached.completedCount}/${cached.totalBeneficiaries}`
+            );
+            return { ...rest, totalSuccessAmount: cached.totalSuccessAmount };
+          }
+
           const calculatedStatus = calculatePayoutStatus(eachPayout);
           await this.syncPayoutStatus(eachPayout, calculatedStatus);
 
@@ -616,18 +676,160 @@ export class PayoutsService {
     }
   }
 
+  /**
+   * Re-evaluates a payout's status right after a beneficiaryRedeem write and
+   * persists it (with the completion gap snapshot) if it just became COMPLETED.
+   * Call this from processors immediately after updating a redeem's status,
+   * instead of relying on a later findOne/findAll read to discover completion.
+   *
+   * @param payoutUuid - The UUID of the payout to re-check
+   */
+  async checkAndCompletePayout(payoutUuid: string): Promise<void> {
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      include: {
+        beneficiaryRedeem: { select: { status: true } },
+        beneficiaryGroupToken: {
+          select: {
+            uuid: true,
+            status: true,
+            numberOfTokens: true,
+            isDisbursed: true,
+            createdBy: true,
+            beneficiaryGroup: {
+              select: { _count: { select: { beneficiaries: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payout) {
+      this.logger.warn(
+        `[checkAndCompletePayout] payout not found: ${payoutUuid}`
+      );
+      return;
+    }
+
+    const calculatedStatus = calculatePayoutStatus(
+      payout as PayoutWithRelations
+    );
+    // refreshGap: a partially completed payout keeps getting redeems after
+    // its status flips, so re-snapshot the gap on every redeem write.
+    await this.syncPayoutStatus(
+      payout as PayoutWithRelations,
+      calculatedStatus,
+      true
+    );
+  }
+
   //  Sync payout status in DB if changed, and update object
   async syncPayoutStatus(
     payout: PayoutWithRelations,
-    newStatus: RedeemStatus
+    newStatus: RedeemStatus,
+    refreshGap = false
   ): Promise<void> {
+    // any paid beneficiary is enough; status can still be PENDING while the
+    // rest of the group is in flight
+    const hasPaidRedeems = payout.beneficiaryRedeem.some((r) =>
+      REDEEM_PAID_STATUSES.includes(r.status)
+    );
+
     if (payout.status !== newStatus) {
       await this.prisma.payouts.update({
         where: { uuid: payout.uuid },
         data: { status: newStatus },
       });
       payout.status = newStatus;
+    } else if (!refreshGap) {
+      return;
     }
+
+    // ponytail: snapshot the gap as soon as any beneficiary is paid (not only
+    // on full completion, so one failure still yields a gap), since the
+    // activation phase can be reverted+reactivated later and lose its
+    // original activatedAt, making later recalculation wrong/negative.
+    if (hasPaidRedeems) this.scheduleGapSnapshot(payout.uuid);
+  }
+
+  // payoutUuid -> "another redeem landed while computing, run again"
+  private gapSnapshotInFlight = new Map<string, boolean>();
+
+  /**
+   * Fire-and-forget gap snapshot so redeem processors / API reads never wait
+   * on the phases RPC. Coalesced per payout: a burst of redeem writes runs at
+   * most one computation at a time plus one trailing rerun.
+   * ponytail: in-memory per process; multiple instances may each run one, harmless.
+   */
+  private scheduleGapSnapshot(payoutUuid: string): void {
+    if (this.gapSnapshotInFlight.has(payoutUuid)) {
+      this.gapSnapshotInFlight.set(payoutUuid, true);
+      return;
+    }
+    this.gapSnapshotInFlight.set(payoutUuid, false);
+
+    setImmediate(async () => {
+      try {
+        do {
+          this.gapSnapshotInFlight.set(payoutUuid, false);
+          await this.snapshotGaps(payoutUuid);
+        } while (this.gapSnapshotInFlight.get(payoutUuid));
+      } catch (error) {
+        this.logger.error(
+          `[scheduleGapSnapshot] failed for payout ${payoutUuid}: ${error.message}`,
+          error.stack
+        );
+      } finally {
+        this.gapSnapshotInFlight.delete(payoutUuid);
+      }
+    });
+  }
+
+  private async snapshotGaps(payoutUuid: string): Promise<void> {
+    const payout = await this.prisma.payouts.findUnique({
+      where: { uuid: payoutUuid },
+      select: { uuid: true, type: true, extras: true },
+    });
+    if (!payout) return;
+
+    // ponytail: freeze activation time on the payout at first snapshot. Later
+    // snapshots reuse it, so no phases RPC per redeem, and a revert or
+    // reactivation of the phase can no longer shift or negate this payout's gap.
+    const frozenActivatedAt = (payout.extras as { payoutActivatedAt?: string })
+      ?.payoutActivatedAt;
+    const payoutActivatedAt =
+      frozenActivatedAt ?? (await this.resolveActivationTime());
+
+    const gaps: {
+      payoutGap?: string;
+      group_gap?: string;
+      payoutActivatedAt?: string;
+    } = {};
+    const payoutGap = await this.calculatePayoutCompletionGap(
+      payoutUuid,
+      payoutActivatedAt
+    );
+    // never store N/A: findOne would return it instead of retrying the lookup.
+    // Only freeze a timestamp that produced a valid gap.
+    if (payoutGap !== 'N/A') {
+      gaps.payoutGap = payoutGap;
+      if (!frozenActivatedAt) gaps.payoutActivatedAt = payoutActivatedAt;
+    }
+
+    // group_gap: time from triggerPayout call to last paid beneficiary, FSP only.
+    if (payout.type === 'FSP') {
+      const groupGap = await this.calculateGroupGap(payout);
+      if (groupGap) gaps.group_gap = groupGap;
+    }
+
+    if (!Object.keys(gaps).length) return;
+
+    // jsonb merge in SQL: single-row atomic write, doesn't clobber extras keys
+    // written concurrently by other flows (e.g. skippedAt).
+    await this.prisma.$executeRaw`
+      UPDATE tbl_beneficiaries_groups_payouts
+      SET extras = COALESCE(extras, '{}'::jsonb) || ${JSON.stringify(gaps)}::jsonb
+      WHERE uuid = ${payoutUuid}`;
   }
 
   /**
@@ -696,7 +898,11 @@ export class PayoutsService {
 
       if (!payout) {
         this.logger.warn(`Payout not found with UUID: '${uuid}'`);
-        throw new RpcException(`Payout with UUID '${uuid}' not found`);
+        throw new RpcException({
+          message: `Payout with UUID '${uuid}' not found`,
+          code: 'PAYOUT_ERR_NOT_FOUND',
+          params: { uuid },
+        });
       }
       const calculatedStatus = calculatePayoutStatus(payout);
       await this.syncPayoutStatus(payout, calculatedStatus);
@@ -748,8 +954,22 @@ export class PayoutsService {
 
       let payoutGap = 'N/A';
 
-      if (isCompleted && isPayoutTriggered) {
-        payoutGap = await this.calculatePayoutCompletionGap(uuid);
+      if (
+        payout.beneficiaryRedeem.some((r) =>
+          REDEEM_PAID_STATUSES.includes(r.status)
+        )
+      ) {
+        const storedGap = (payout.extras as { payoutGap?: string })?.payoutGap;
+
+        // backfill for payouts completed before the gap started getting
+        // stored on completion
+        payoutGap =
+          storedGap ??
+          (await this.calculatePayoutCompletionGap(
+            uuid,
+            (payout.extras as { payoutActivatedAt?: string })
+              ?.payoutActivatedAt ?? (await this.resolveActivationTime())
+          ));
       }
 
       return {
@@ -769,6 +989,7 @@ export class PayoutsService {
         `Failed to fetch payout: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -784,8 +1005,13 @@ export class PayoutsService {
 
       delete tokenData.info;
 
+      const totalSkipOtp = (beneficiaryRedeem ?? []).filter(
+        (redeem) => (redeem.info as Record<string, any>)?.otpSkip === true
+      ).length;
+
       return {
         ...rest,
+        totalSkipOtp,
         beneficiaryGroupToken: {
           ...tokenData,
           beneficiaryGroup: {
@@ -798,6 +1024,7 @@ export class PayoutsService {
         `Failed to fetch payout: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -813,7 +1040,12 @@ export class PayoutsService {
       };
     }
   ): Promise<boolean> {
-    if (payout.type === 'VENDOR') {
+    const extras = payout.extras as { paymentProviderType?: string } | null;
+    if (
+      payout.type === 'VENDOR' ||
+      (payout.type === 'FSP' &&
+        extras?.paymentProviderType === 'manual_bank_transfer')
+    ) {
       return (
         payout.beneficiaryRedeem.length > 0 &&
         payout.beneficiaryRedeem.length ===
@@ -844,7 +1076,11 @@ export class PayoutsService {
 
       if (!existingPayout) {
         this.logger.warn(`Payout not found with UUID: ${uuid}`);
-        throw new RpcException(`Payout with UUID '${uuid}' not found`);
+        throw new RpcException({
+          message: `Payout with UUID '${uuid}' not found`,
+          code: 'PAYOUT_ERR_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
       const updatedPayout = await this.prisma.payouts.update({
@@ -859,6 +1095,7 @@ export class PayoutsService {
         `Failed to update payout: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -914,9 +1151,10 @@ export class PayoutsService {
       this.logger.error(
         `Some beneficiaries have null or undefined wallet addresses for payout with UUID: '${uuid}'`
       );
-      throw new RpcException(
-        'Some beneficiaries have missing wallet addresses'
-      );
+      throw new RpcException({
+        message: 'Some beneficiaries have missing wallet addresses',
+        code: 'PAYOUT_ERR_MISSING_WALLET_ADDRESSES',
+      });
     }
 
     this.logger.log(
@@ -1040,24 +1278,31 @@ export class PayoutsService {
       name: 'PROJECTINFO',
     });
     if (payoutDetails.isPayoutTriggered) {
-      throw new RpcException(
-        `Payout with UUID '${uuid}' has already been triggered`
-      );
+      throw new RpcException({
+        message: `Payout with UUID '${uuid}' has already been triggered`,
+        code: 'PAYOUT_ERR_ALREADY_TRIGGERED',
+        params: { uuid },
+      });
     }
 
     // Check if tokens have been disbursed to the beneficiary group
     // isDisbursed is set to true only after EVM/Stellar blockchain confirmation
     if (!payoutDetails.beneficiaryGroupToken?.isDisbursed) {
-      throw new RpcException(
-        `Payout cannot be triggered as tokens have not been disbursed to the beneficiary group "${payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name}" yet. Please wait until the fund disbursement is completed and try again later.`
-      );
+      throw new RpcException({
+        message: `Payout cannot be triggered as tokens have not been disbursed to the beneficiary group "${payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name}" yet. Please wait until the fund disbursement is completed and try again later.`,
+        code: 'PAYOUT_TRIGGER_TOKENS_NOT_DISBURSED',
+        params: {
+          groupName: payoutDetails.beneficiaryGroupToken.beneficiaryGroup.name,
+        },
+      });
     }
 
     // Check if this is a manual bank transfer payout - these cannot be triggered
     if (payoutDetails.payoutProcessorId === 'manual-bank-transfer') {
-      throw new RpcException(
-        `Manual bank transfer payouts cannot be triggered. They are processed automatically upon creation.`
-      );
+      throw new RpcException({
+        message: `Manual bank transfer payouts cannot be triggered. They are processed automatically upon creation.`,
+        code: 'MANUAL_BANK_TRANSFER_PAYOUTS_CANNOT_BE_TRIGGERED',
+      });
     }
 
     const payoutExtras = payoutDetails.extras as {
@@ -1068,6 +1313,20 @@ export class PayoutsService {
     const BeneficiaryPayoutDetails = await this.fetchBeneficiaryPayoutDetails(
       uuid
     );
+
+    // Stash trigger time for group_gap (trigger -> completion), FSP only.
+    if (payoutDetails.type === 'FSP') {
+      await this.prisma.payouts.update({
+        where: { uuid },
+        data: {
+          extras: {
+            ...(payoutDetails.extras as object),
+            payoutTriggeredAt: new Date().toISOString(),
+            payoutTriggeredBy: user?.name,
+          },
+        },
+      });
+    }
 
     // Handle regular FSP payouts (existing logic)
     const offrampWalletAddress =
@@ -1120,28 +1379,36 @@ export class PayoutsService {
         );
 
       if (!benfRedeemRequest) {
-        throw new RpcException(
-          `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' not found`
-        );
+        throw new RpcException({
+          message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' not found`,
+          code: 'PAYOUT_ERR_REDEEM_NOT_FOUND',
+          params: { uuid: beneficiaryRedeemUuid },
+        });
       }
 
       if (benfRedeemRequest.isCompleted)
-        throw new RpcException(
-          `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already completed`
-        );
+        throw new RpcException({
+          message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already completed`,
+          code: 'PAYOUT_ERR_REDEEM_ALREADY_COMPLETED',
+          params: { uuid: beneficiaryRedeemUuid },
+        });
 
       const transactionType = benfRedeemRequest.transactionType;
 
       if (transactionType === 'VENDOR_REIMBURSEMENT')
-        throw new RpcException(
-          `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is not a FSP Payout request`
-        );
+        throw new RpcException({
+          message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is not a FSP Payout request`,
+          code: 'PAYOUT_ERR_REDEEM_NOT_FSP',
+          params: { uuid: beneficiaryRedeemUuid },
+        });
 
       if (transactionType === 'TOKEN_TRANSFER') {
         if (benfRedeemRequest.status === 'TOKEN_TRANSACTION_INITIATED') {
-          throw new RpcException(
-            `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
-          );
+          throw new RpcException({
+            message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`,
+            code: 'PAYOUT_ERR_REDEEM_ALREADY_INITIATED',
+            params: { uuid: beneficiaryRedeemUuid },
+          });
         }
         return await this.processOneFailedTokenTransferPayout({
           beneficiaryRedeemUuid,
@@ -1149,24 +1416,29 @@ export class PayoutsService {
       }
       if (transactionType === 'FIAT_TRANSFER') {
         if (benfRedeemRequest.status === 'FIAT_TRANSACTION_INITIATED') {
-          throw new RpcException(
-            `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`
-          );
+          throw new RpcException({
+            message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is already initiated`,
+            code: 'PAYOUT_ERR_REDEEM_ALREADY_INITIATED',
+            params: { uuid: beneficiaryRedeemUuid },
+          });
         }
         return await this.processOneFailedFiatPayout({
           beneficiaryRedeemUuid,
         });
       }
 
-      throw new RpcException(
-        `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is not a FSP Payout request`
-      );
+      throw new RpcException({
+        message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' is not a FSP Payout request`,
+        code: 'PAYOUT_ERR_REDEEM_NOT_FSP',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to trigger payout for failed request: ${error.message}`,
         error.stack
       );
 
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1183,22 +1455,27 @@ export class PayoutsService {
       const { payoutUUID } = payload;
 
       if (!payoutUUID) {
-        throw new RpcException(
-          'Payout UUID is required for failed payout request'
-        );
+        throw new RpcException({
+          message: 'Payout UUID is required for failed payout request',
+          code: 'PAYOUT_ERR_FAILED_UUID_REQUIRED',
+        });
       }
 
       const payout = await this.findOne(payoutUUID);
       if (!payout) {
-        throw new RpcException(
-          `Payout with UUID '${payoutUUID}' not found for failed payout request`
-        );
+        throw new RpcException({
+          message: `Payout with UUID '${payoutUUID}' not found for failed payout request`,
+          code: 'PAYOUT_ERR_FAILED_NOT_FOUND',
+          params: { uuid: payoutUUID },
+        });
       }
 
       if (!payout.isPayoutTriggered) {
-        throw new RpcException(
-          `Payout with UUID '${payoutUUID}' has not been triggered`
-        );
+        throw new RpcException({
+          message: `Payout with UUID '${payoutUUID}' has not been triggered`,
+          code: 'PAYOUT_ERR_NOT_TRIGGERED',
+          params: { uuid: payoutUUID },
+        });
       }
 
       const result =
@@ -1267,6 +1544,7 @@ export class PayoutsService {
         error.stack
       );
 
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1299,7 +1577,11 @@ export class PayoutsService {
       });
 
       if (!payout) {
-        throw new RpcException(`Payout with UUID '${payoutUUID}' not found`);
+        throw new RpcException({
+          message: `Payout with UUID '${payoutUUID}' not found`,
+          code: 'PAYOUT_ERR_NOT_FOUND',
+          params: { uuid: payoutUUID },
+        });
       }
 
       if (payout.type === 'VENDOR') {
@@ -1390,12 +1672,17 @@ export class PayoutsService {
         };
       }
 
-      throw new RpcException(`Unsupported payout type: ${payout.type}`);
+      throw new RpcException({
+        message: `Unsupported payout type: ${payout.type}`,
+        code: 'PAYOUT_ERR_UNSUPPORTED_TYPE',
+        params: { type: payout.type },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to get payout log: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1424,9 +1711,11 @@ export class PayoutsService {
       });
 
       if (!log) {
-        throw new RpcException(
-          `Beneficiary redeem log with UUID '${uuid}' not found`
-        );
+        throw new RpcException({
+          message: `Beneficiary redeem log with UUID '${uuid}' not found`,
+          code: 'PAYOUT_ERR_REDEEM_LOG_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
       // const info = log.info as Record<string, any> | null;
@@ -1439,6 +1728,7 @@ export class PayoutsService {
         `Failed to get payout log: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1481,6 +1771,7 @@ export class PayoutsService {
         error.stack
       );
 
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -1557,9 +1848,11 @@ export class PayoutsService {
       await this.beneficiaryService.getBeneficiaryRedeem(beneficiaryRedeemUuid);
 
     if (!benfRedeemRequest) {
-      throw new RpcException(
-        `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' not found`
-      );
+      throw new RpcException({
+        message: `Beneficiary redeem request with UUID '${beneficiaryRedeemUuid}' not found`,
+        code: 'PAYOUT_ERR_REDEEM_NOT_FOUND',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
     }
 
     const benfExtras = benfRedeemRequest.Beneficiary.extras as {
@@ -1579,18 +1872,35 @@ export class PayoutsService {
 
     // check if offrampWalletAddress is in the info
     if (!info.offrampWalletAddress) {
-      throw new RpcException(
-        `Offramp wallet address not found for beneficiary redeem request with UUID '${beneficiaryRedeemUuid}'`
-      );
+      throw new RpcException({
+        message: `Offramp wallet address not found for beneficiary redeem request with UUID '${beneficiaryRedeemUuid}'`,
+        code: 'PAYOUT_ERR_REDEEM_OFFRAMP_WALLET_MISSING',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
     }
 
     const beneficiaryPhoneNumber =
       benfRedeemRequest.Beneficiary.phone ||
       (benfRedeemRequest.Beneficiary.extras as any)?.phone;
 
+    // Older BeneficiaryRedeem records may predate persisting `offrampType` into
+    // `info`, so fall back to the payout's own paymentProviderType extra.
+    const payoutExtras = benfRedeemRequest.payout?.extras as {
+      paymentProviderType?: string;
+    } | null;
+    const offrampType = info.offrampType || payoutExtras?.paymentProviderType;
+
+    if (!offrampType) {
+      throw new RpcException({
+        message: `Offramp type not found for beneficiary redeem request with UUID '${beneficiaryRedeemUuid}'`,
+        code: 'PAYOUT_ERR_REDEEM_OFFRAMP_TYPE_MISSING',
+        params: { uuid: beneficiaryRedeemUuid },
+      });
+    }
+
     const offrampQueuePayload: FSPOfframpDetails = {
       amount: benfRedeemRequest.amount,
-      offrampType: info.offrampType,
+      offrampType,
       beneficiaryBankDetails: {
         accountName: benfExtras.bank_ac_name,
         accountNumber: benfExtras.bank_ac_number,
@@ -1609,26 +1919,66 @@ export class PayoutsService {
 
   /**
    * Calculate the payout completion gap
-   * From the triggerness of activation phase to the completion of the last payout request.
+   * From the triggerness of activation phase to the last paid beneficiary (failed requests ignored).
    *
-   * @param payout - The payout
-   * @returns { number } - The payout completion gap
+   * @param payoutUuid - The payout UUID
+   * @param activatedAtRaw - Activation time (frozen on payout, or from resolveActivationTime)
+   * @returns { string } - The formatted payout completion gap, or 'N/A'
    */
-  async calculatePayoutCompletionGap(payoutUuid: string) {
+  async calculatePayoutCompletionGap(
+    payoutUuid: string,
+    activatedAtRaw: string | null
+  ): Promise<string> {
+    if (!activatedAtRaw) return 'N/A';
+
+    const activatedAt = new Date(activatedAtRaw);
+    const payoutLastLog = await this.findLastPaidRedeem(payoutUuid);
+
+    if (!payoutLastLog) {
+      this.logger.warn(
+        `No paid beneficiary found for payout with UUID ${payoutUuid}`
+      );
+      return 'N/A';
+    }
+
+    const diffInMs =
+      new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
+
+    // activation newer than the last payment = phase was reactivated after
+    // this payout ran; the timestamp belongs to another cycle, don't use it.
+    if (diffInMs < 0) {
+      this.logger.warn(
+        `Activation ${activatedAtRaw} is after last payment for payout ${payoutUuid}, gap N/A`
+      );
+      return 'N/A';
+    }
+
+    return getFormattedTimeDiff(diffInMs);
+  }
+
+  /**
+   * Current activation time of the TOKEN activation phase, falling back to the
+   * last revert-history snapshot when the phase is reverted. Null if unknown.
+   */
+  async resolveActivationTime(): Promise<string | null> {
     const projectInfo = await this.appService.getSettings({
       name: 'PROJECTINFO',
     });
 
     if (!projectInfo) {
-      throw new RpcException('Project info not found, in SETTINGS');
+      throw new RpcException({
+        message: 'Project info not found, in SETTINGS',
+        code: 'PAYOUT_ERR_PROJECT_INFO_NOT_FOUND',
+      });
     }
+
     const activeYear = projectInfo?.value?.active_year;
     const riverBasin = projectInfo?.value?.river_basin;
 
     if (!activeYear || !riverBasin) {
       this.logger.warn(`Active year or river basin not found, in SETTINGS`);
 
-      return 'N/A';
+      return null;
     }
 
     const data = await lastValueFrom(
@@ -1641,42 +1991,103 @@ export class PayoutsService {
       )
     );
 
-    const activationPhase = data.data.find((p) => p.name === 'ACTIVATION');
+    const activationPhase = data.data.find((p) =>
+      p?.disbursementConfig?.disbursementMethods?.includes('TOKEN')
+    );
 
     if (!activationPhase) {
       this.logger.warn(
         `Activation phase not found for riverBasin ${riverBasin} and activeYear ${activeYear}`
       );
 
-      return 'N/A';
+      return null;
     }
 
-    if (!activationPhase.isActive) {
-      this.logger.warn(
-        `Activation phase is not active for riverBasin ${riverBasin} and activeYear ${activeYear}`
+    // ponytail: activatedAt goes null once a phase is reverted; fall back to the
+    // last trigger-history snapshot (taken right before the null-out) so a
+    // completed payout keeps its gap instead of going negative/N/A.
+    let activatedAtRaw = activationPhase.activatedAt;
+
+    this.logger.log(
+      `Activation phase found for riverBasin ${riverBasin} and activeYear ${activeYear}, activatedAt: ${activatedAtRaw}`
+    );
+
+    if (!activatedAtRaw) {
+      const history = await lastValueFrom(
+        this.client.send(
+          { cmd: 'ms.jobs.revertPhase.getAll' },
+          { phaseUuid: activationPhase.uuid }
+        )
       );
 
-      return 'N/A';
+      this.logger.log(
+        `Revert history found for phase ${
+          activationPhase.uuid
+        }: ${JSON.stringify(history)}`
+      );
+
+      activatedAtRaw = history?.data?.[0]?.phaseActivationDate;
+      this.logger.log(
+        `Fallback to last trigger-history snapshot, activatedAt: ${activatedAtRaw}`
+      );
     }
 
-    const activatedAt = new Date(activationPhase.activatedAt);
-    const payoutLastLog = await this.prisma.beneficiaryRedeem.findFirst({
-      where: { payout: { uuid: payoutUuid } },
-      orderBy: {
-        updatedAt: 'desc',
+    if (!activatedAtRaw) {
+      this.logger.warn(
+        `No activation timestamp (current or historical) found for riverBasin ${riverBasin} and activeYear ${activeYear}`
+      );
+      return null;
+    }
+
+    return activatedAtRaw;
+  }
+
+  // Last redeem that actually paid a beneficiary (final leg only, same as
+  // calculatePayoutStatus' anyPaid). Failed redeems are ignored so a payout
+  // with some failures still gets a gap.
+  private findLastPaidRedeem(payoutUuid: string) {
+    return this.prisma.beneficiaryRedeem.findFirst({
+      where: {
+        payout: { uuid: payoutUuid },
+        status: { in: REDEEM_PAID_STATUSES as PayoutTransactionStatus[] },
       },
+      orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  /**
+   * Calculate group_gap: time from triggerPayout call to last paid beneficiary.
+   * FSP payouts only. Uses the `payoutTriggeredAt` timestamp stashed in
+   * extras by triggerPayout, and the last paid beneficiaryRedeem as the end time.
+   *
+   * @param payout - The payout (must have uuid, type, extras)
+   * @returns { Promise<string | null> } - formatted gap, or null if trigger time unknown
+   */
+  async calculateGroupGap(
+    payout: Pick<Payouts, 'uuid' | 'type' | 'extras'>
+  ): Promise<string | null> {
+    const payoutTriggeredAt = (payout.extras as { payoutTriggeredAt?: string })
+      ?.payoutTriggeredAt;
+
+    if (!payoutTriggeredAt) {
+      this.logger.warn(
+        `[calculateGroupGap] payoutTriggeredAt not found for payout ${payout.uuid}, skipping group_gap`
+      );
+      return null;
+    }
+
+    const payoutLastLog = await this.findLastPaidRedeem(payout.uuid);
 
     if (!payoutLastLog) {
       this.logger.warn(
-        `Payout last log not found for payout with UUID ${payoutUuid}`
+        `[calculateGroupGap] payout last log not found for payout with UUID ${payout.uuid}`
       );
+      return null;
     }
 
     const diffInMs =
-      new Date(payoutLastLog.updatedAt).getTime() - activatedAt.getTime();
-
-    console.log(`Payout completion gap in ms: ${diffInMs}`);
+      new Date(payoutLastLog.updatedAt).getTime() -
+      new Date(payoutTriggeredAt).getTime();
 
     return getFormattedTimeDiff(diffInMs);
   }
@@ -1743,15 +2154,19 @@ export class PayoutsService {
    */
   private validatePayoutUUID(payoutUUID: string): void {
     if (!payoutUUID) {
-      throw new RpcException(
-        'Payout verification failed: Payout UUID is required but was not provided'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Payout UUID is required but was not provided',
+        code: 'PAYOUT_VERIFY_UUID_REQUIRED',
+      });
     }
 
     if (!isUUID(payoutUUID)) {
-      throw new RpcException(
-        `Payout verification failed: Invalid UUID format provided: '${payoutUUID}'`
-      );
+      throw new RpcException({
+        message: `Payout verification failed: Invalid UUID format provided: '${payoutUUID}'`,
+        code: 'PAYOUT_VERIFY_INVALID_UUID_FORMAT',
+        params: { payoutUUID },
+      });
     }
   }
 
@@ -1781,21 +2196,29 @@ export class PayoutsService {
       payout?.beneficiaryGroupToken &&
       !payout.beneficiaryGroupToken.isDisbursed
     ) {
-      throw new RpcException(
-        `Payout cannot be verified as tokens have not been disbursed to the beneficiary group "${payout.beneficiaryGroupToken.beneficiaryGroup.name}" yet. Please wait until the fund disbursement is completed and try again later.`
-      );
+      throw new RpcException({
+        message: `Payout cannot be verified as tokens have not been disbursed to the beneficiary group "${payout.beneficiaryGroupToken.beneficiaryGroup.name}" yet. Please wait until the fund disbursement is completed and try again later.`,
+        code: 'PAYOUT_VERIFY_TOKENS_NOT_DISBURSED',
+        params: {
+          groupName: payout.beneficiaryGroupToken.beneficiaryGroup.name,
+        },
+      });
     }
 
     if (!payout) {
-      throw new RpcException(
-        `Payout verification failed: Payout with UUID '${payoutUUID}' not found in database`
-      );
+      throw new RpcException({
+        message: `Payout verification failed: Payout with UUID '${payoutUUID}' not found in database`,
+        code: 'PAYOUT_VERIFY_PAYOUT_NOT_FOUND',
+        params: { payoutUUID },
+      });
     }
 
     if (!payout.beneficiaryGroupToken?.beneficiaryGroup?.beneficiaries) {
-      throw new RpcException(
-        `Payout verification failed: No beneficiaries found for payout '${payoutUUID}'`
-      );
+      throw new RpcException({
+        message: `Payout verification failed: No beneficiaries found for payout '${payoutUUID}'`,
+        code: 'PAYOUT_VERIFY_NO_BENEFICIARIES_FOUND',
+        params: { payoutUUID },
+      });
     }
 
     return payout as PayoutWithBeneficiaryDetails;
@@ -1809,50 +2232,62 @@ export class PayoutsService {
     matchBy: ManualPayoutMatchBy = 'bankAccount'
   ): ManualPayoutRowData[] {
     if (!data || typeof data !== 'object') {
-      throw new RpcException(
-        'Payout verification failed: Invalid or missing payout data provided'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Invalid or missing payout data provided',
+        code: 'PAYOUT_VERIFY_INVALID_DATA',
+      });
     }
 
     let rows = Object.values(data);
 
     if (rows.length === 0) {
-      throw new RpcException(
-        'Payout verification failed: No payout records found in provided data'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: No payout records found in provided data',
+        code: 'PAYOUT_VERIFY_NO_RECORDS_FOUND',
+      });
     }
 
     // Validate required fields in each row
     rows.forEach((row, index) => {
       if (!row['Transaction Status']) {
-        throw new RpcException(
-          `Payout verification failed: Missing transaction status in row ${
+        throw new RpcException({
+          message: `Payout verification failed: Missing transaction status in row ${
             index + 1
-          }`
-        );
+          }`,
+          code: 'PAYOUT_VERIFY_MISSING_TRANSACTION_STATUS',
+          params: { row: index + 1 },
+        });
       }
       if (matchBy === 'phoneNumber') {
         if (!row['Phone Number']) {
-          throw new RpcException(
-            `Payout verification failed: Missing phone number in row ${
+          throw new RpcException({
+            message: `Payout verification failed: Missing phone number in row ${
               index + 1
-            }`
-          );
+            }`,
+            code: 'PAYOUT_VERIFY_MISSING_PHONE_NUMBER',
+            params: { row: index + 1 },
+          });
         }
       } else {
         if (!row['Bank Account Number']) {
-          throw new RpcException(
-            `Payout verification failed: Missing bank account number in row ${
+          throw new RpcException({
+            message: `Payout verification failed: Missing bank account number in row ${
               index + 1
-            }`
-          );
+            }`,
+            code: 'PAYOUT_VERIFY_MISSING_BANK_ACCOUNT_NUMBER',
+            params: { row: index + 1 },
+          });
         }
         if (!row['Bank Account Holder Name ']) {
-          throw new RpcException(
-            `Payout verification failed: Missing bank account holder name in row ${
+          throw new RpcException({
+            message: `Payout verification failed: Missing bank account holder name in row ${
               index + 1
-            }`
-          );
+            }`,
+            code: 'PAYOUT_VERIFY_MISSING_BANK_ACCOUNT_HOLDER_NAME',
+            params: { row: index + 1 },
+          });
         }
       }
     });
@@ -1947,15 +2382,19 @@ export class PayoutsService {
   ): void {
     if (result.matched.length === 0) {
       if (matchBy === 'phoneNumber') {
-        throw new RpcException(
-          'Payout verification failed: No beneficiary phone numbers matched with the provided data. ' +
-            'Please verify that the phone numbers in your file match the registered beneficiaries.'
-        );
+        throw new RpcException({
+          message:
+            'Payout verification failed: No beneficiary phone numbers matched with the provided data. ' +
+            'Please verify that the phone numbers in your file match the registered beneficiaries.',
+          code: 'PAYOUT_VERIFY_NO_PHONE_MATCHES',
+        });
       }
-      throw new RpcException(
-        'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
-          'Please verify that the bank account numbers in your file match the registered beneficiaries.'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: No beneficiary bank accounts matched with the provided data. ' +
+          'Please verify that the bank account numbers in your file match the registered beneficiaries.',
+        code: 'PAYOUT_VERIFY_NO_BANK_ACCOUNT_MATCHES',
+      });
     }
   }
 
@@ -1977,9 +2416,11 @@ export class PayoutsService {
 
     if (!isProjectCashTracker) {
       if (!deployerPrivateKey.value) {
-        throw new RpcException(
-          'Payout verification failed: Deployer private key not configured in system settings'
-        );
+        throw new RpcException({
+          message:
+            'Payout verification failed: Deployer private key not configured in system settings',
+          code: 'PAYOUT_VERIFY_DEPLOYER_KEY_NOT_CONFIGURED',
+        });
       }
 
       const deployerWalletAddress = new ethers.Wallet(
@@ -1992,25 +2433,31 @@ export class PayoutsService {
     const entitiesSettings = await this.settingService.getPublic('ENTITIES');
 
     if (!entitiesSettings?.value) {
-      throw new RpcException(
-        'Payout verification failed: Entity configuration not found in system settings'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Entity configuration not found in system settings',
+        code: 'PAYOUT_VERIFY_ENTITY_CONFIG_NOT_FOUND',
+      });
     }
 
     const entities = entitiesSettings.value as unknown as EntityConfig[];
 
     if (!Array.isArray(entities)) {
-      throw new RpcException(
-        'Payout verification failed: Invalid entity configuration format in system settings'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Invalid entity configuration format in system settings',
+        code: 'PAYOUT_VERIFY_INVALID_ENTITY_CONFIG_FORMAT',
+      });
     }
 
     const fieldOfficer = entities.find((entity) => entity.isFieldOffice);
 
     if (!fieldOfficer?.address) {
-      throw new RpcException(
-        'Payout verification failed: Field officer wallet address not configured in system settings'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Field officer wallet address not configured in system settings',
+        code: 'PAYOUT_VERIFY_FIELD_OFFICER_ADDRESS_NOT_CONFIGURED',
+      });
     }
 
     this.logger.log(
@@ -2030,9 +2477,11 @@ export class PayoutsService {
       payout.beneficiaryGroupToken.beneficiaryGroup.beneficiaries.length;
 
     if (beneficiaryCount === 0) {
-      throw new RpcException(
-        'Payout verification failed: Cannot calculate token amount - no beneficiaries found'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification failed: Cannot calculate token amount - no beneficiaries found',
+        code: 'PAYOUT_VERIFY_CANNOT_CALCULATE_TOKEN_AMOUNT',
+      });
     }
 
     const tokenAmountPerBeneficiary = totalTokens / beneficiaryCount;
@@ -2100,10 +2549,12 @@ export class PayoutsService {
         `Failed to add records to offramp verification queue: ${error.message}`,
         error.stack
       );
-      throw new RpcException(
-        'Payout verification completed but failed to queue offramp verification. ' +
-          'Manual intervention may be required.'
-      );
+      throw new RpcException({
+        message:
+          'Payout verification completed but failed to queue offramp verification. ' +
+          'Manual intervention may be required.',
+        code: 'PAYOUT_VERIFY_FAILED_TO_QUEUE_OFFRAMP',
+      });
     }
   }
 
@@ -2111,6 +2562,7 @@ export class PayoutsService {
     this.logger.log(
       `Getting payout log for beneficiary redeem with UUID: ${uuid}`
     );
+
     try {
       const log = await this.prisma.payouts.findUnique({
         where: { uuid },
@@ -2141,13 +2593,15 @@ export class PayoutsService {
       });
 
       if (!log) {
-        throw new RpcException(
-          `Beneficiary redeem log with UUID '${uuid}' not found`
-        );
+        throw new RpcException({
+          message: `Beneficiary redeem log with UUID '${uuid}' not found`,
+          code: 'PAYOUT_ERR_REDEEM_LOG_NOT_FOUND',
+          params: { uuid },
+        });
       }
 
-      // 👇 if payout type is FSP, use your filtering function
       let redeemLogs = log.beneficiaryRedeem;
+
       if (log.type === 'FSP') {
         redeemLogs = await this.getFilteredFspRedeems({
           payoutUUID: uuid,
@@ -2157,43 +2611,140 @@ export class PayoutsService {
       const result = redeemLogs.map((redeemLog) => {
         const extras = parseJsonField(redeemLog.Beneficiary?.extras);
         const info = parseJsonField(redeemLog.info);
+        const extrasFullName = `${extras?.firstName || ''} ${
+          extras?.lastName || ''
+        }`.trim();
+        const extrasName =
+          typeof extras?.name === 'string' ? extras.name.trim() : '';
+        const beneficiaryName = extrasFullName || extrasName || '';
+
+        const municipality = extras?.municipality || '';
+        const district = extras?.district || extras?.location || '';
+        const ward = extras?.ward || '';
+        const tole = extras?.tole || '';
+        const governmentIdType = extras?.governmentIdType || '';
+        const governmentIdNumber = extras?.govtIDNumber || '';
+
+        const transaction = info?.cipsResponseData?.transaction;
+        const offrampRequest = info?.cipsResponseData?.offrampRequest;
+        const paymentDetails = offrampRequest?.paymentDetails;
 
         const payoutType = redeemLog.payout?.type;
 
+        const actualBudget = (() => {
+          const totalTokens = log?.beneficiaryGroupToken?.numberOfTokens || 0;
+
+          const beneficiaryCount =
+            log?.beneficiaryGroupToken?.beneficiaryGroup?._count
+              ?.beneficiaries || 1;
+
+          return (totalTokens / beneficiaryCount) * ONE_TOKEN_VALUE;
+        })();
+
+        const amountDisbursed = [
+          'COMPLETED',
+          'FIAT_TRANSACTION_COMPLETED',
+          'TOKEN_TRANSACTION_COMPLETED',
+        ].includes(redeemLog.status)
+          ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
+          : 0;
+
+        const remarks =
+          offrampRequest?.status === 'REJECTED'
+            ? transaction?.cipsTxnResponseList?.[0]?.responseMessage || ''
+            : offrampRequest?.status === 'FAILED'
+            ? info?.error || ''
+            : '';
+
         const base = {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
+          'Beneficiary Name': beneficiaryName,
           'Phone number': extras?.phone || '',
           'Transaction Wallet ID': redeemLog.txHash || '',
           'Transaction Hash': info?.transactionHash || '',
           'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
           'Updated At': redeemLog.updatedAt,
-          'Actual Budget': (() => {
-            const totalTokens = log?.beneficiaryGroupToken?.numberOfTokens || 0;
-            const beneficiaryCount =
-              log?.beneficiaryGroupToken?.beneficiaryGroup?._count
-                ?.beneficiaries || 1;
-            return (totalTokens / beneficiaryCount) * ONE_TOKEN_VALUE;
-          })(),
-          'Amount Disbursed': [
-            'COMPLETED',
-            'FIAT_TRANSACTION_COMPLETED',
-            'TOKEN_TRANSACTION_COMPLETED',
-          ].includes(redeemLog?.status)
-            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
-            : 0,
+          'Actual Budget': actualBudget,
+          'Amount Disbursed': amountDisbursed,
+
+          ...(municipality && {
+            Municipality: municipality,
+          }),
+
+          ...(district && {
+            Location: district,
+          }),
+
+          ...(ward && {
+            Ward: ward,
+          }),
+
+          ...(tole && {
+            Tole: tole,
+          }),
+
+          ...(governmentIdType && {
+            'Government ID Type': governmentIdType,
+          }),
+
+          ...(governmentIdNumber && {
+            'Government ID Number': governmentIdNumber,
+          }),
         };
 
-        if (payoutType === 'FSP') {
-          return {
-            ...base,
-            'Bank a/c name': extras?.bank_ac_name || '',
-            'Bank a/c number': extras?.bank_ac_number || '',
-            'Bank Name': extras?.bank_name || '',
-          };
-        } else {
+        if (payoutType !== 'FSP') {
           return base;
         }
+
+        return {
+          ...base,
+
+          ...(extras?.bank_ac_name && {
+            'Bank a/c name': extras.bank_ac_name,
+          }),
+
+          ...(extras?.bank_ac_number && {
+            'Bank a/c number': extras.bank_ac_number,
+          }),
+
+          ...(extras?.bank_name && {
+            'Bank Name': extras.bank_name,
+          }),
+
+          ...(transaction?.cipsBatchResponse?.batchId && {
+            'Batch ID': transaction.cipsBatchResponse.batchId,
+          }),
+
+          ...(transaction?.cipsTxnResponseList?.[0]?.responseMessage && {
+            'Response Message':
+              transaction.cipsTxnResponseList[0].responseMessage,
+          }),
+
+          ...(paymentDetails?.creditorName && {
+            'Creditor Name': paymentDetails.creditorName,
+          }),
+
+          ...(offrampRequest?.status && {
+            Status: offrampRequest.status,
+          }),
+
+          ...(paymentDetails?.creditorAccount && {
+            'Creditor Account': paymentDetails.creditorAccount,
+          }),
+
+          ...(paymentDetails?.creditorAgent && {
+            'Creditor Agent': paymentDetails.creditorAgent,
+          }),
+
+          ...(offrampRequest?.paymentProviderId && {
+            'Payment Provider ID': offrampRequest.paymentProviderId,
+          }),
+
+          ...(remarks && {
+            Remarks: remarks,
+          }),
+        };
       });
 
       return result;
@@ -2202,6 +2753,192 @@ export class PayoutsService {
         `Failed to get payout log: ${error.message}`,
         error.stack
       );
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Summarize non-photo BeneficiaryRedeem.info keys into a short display
+   * note. Returns undefined when there is nothing meaningful to show.
+   * Never throws.
+   */
+  private buildPayoutInfoNote(info: any): string | undefined {
+    try {
+      if (!info || typeof info !== 'object') return undefined;
+      if (info.otpSkip) {
+        const reason =
+          typeof info.otpSkipReason === 'string' && info.otpSkipReason.trim()
+            ? ` — Reason: ${info.otpSkipReason.trim()}`
+            : '';
+        const note = `OTP verification was skipped${reason}`;
+        return note.length > 200 ? `${note.slice(0, 200)}…` : note;
+      }
+      const parts: string[] = [];
+      if (typeof info.mode === 'string' && info.mode.trim()) {
+        parts.push(`Mode: ${info.mode.trim()}`);
+      }
+      if (typeof info.error === 'string' && info.error.trim()) {
+        parts.push(info.error.trim());
+      }
+      if (
+        typeof info.fileName === 'string' &&
+        info.fileName.trim() &&
+        !info.mediaUrl
+      ) {
+        parts.push(`File: ${info.fileName.trim()}`);
+      }
+      if (parts.length === 0) return undefined;
+      const note = parts.join(' • ');
+      return note.length > 200 ? `${note.slice(0, 200)}…` : note;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Collect slim payout log rows for the PDF table (name, phone, disbursed
+   * amount, municipality/ward, gov ID, location, photo evidence + info note),
+   * honoring applied list filters. Never fails when photo evidence is
+   * missing (photoUrl: null).
+   */
+  private async getPayoutLogsPdfRows(
+    payload: ExportPayoutLogsPdfFileDto
+  ): Promise<DownloadPayoutLogsPdfType[]> {
+    const {
+      payoutUUID,
+      transactionType,
+      transactionStatus,
+      search,
+      sort,
+      order,
+    } = payload;
+
+    this.logger.log(
+      `Exporting payout logs for PDF, payout: ${payoutUUID} filters: ${JSON.stringify(
+        { transactionType, transactionStatus, search }
+      )}`
+    );
+
+    try {
+      const payout = await this.prisma.payouts.findUnique({
+        where: { uuid: payoutUUID },
+      });
+
+      if (!payout) {
+        throw new RpcException({
+          message: `Payout with UUID '${payoutUUID}' not found`,
+          code: 'PAYOUT_ERR_NOT_FOUND',
+          params: { uuid: payoutUUID },
+        });
+      }
+      const redeemLogs = await this.prisma.beneficiaryRedeem.findMany({
+        where: {
+          payoutId: payoutUUID,
+          ...(transactionType && { transactionType }),
+          ...(transactionStatus && { status: transactionStatus }),
+          ...(search && {
+            OR: [
+              {
+                beneficiaryWalletAddress: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              { txHash: { contains: search, mode: 'insensitive' } },
+              {
+                Beneficiary: {
+                  phone: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }),
+        },
+        include: {
+          Beneficiary: true,
+        },
+        ...(sort && {
+          orderBy: { [sort]: order || 'asc' },
+        }),
+      });
+
+      return redeemLogs.map((redeemLog) => {
+        const extras = parseJsonField(redeemLog.Beneficiary?.extras);
+        const info = parseJsonField(redeemLog.info);
+
+        const amountDisbursed =
+          redeemLog.status === 'COMPLETED'
+            ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
+            : 0;
+
+        const firstName = extras?.firstName || '';
+        const lastName = extras?.lastName || '';
+        const fallbackName =
+          typeof extras?.name === 'string' ? extras.name : '';
+        const beneficiaryName =
+          `${firstName} ${lastName}`.trim() || fallbackName || '';
+        const beneficiaryPhone =
+          extras?.phone || redeemLog.Beneficiary?.phone || '';
+        const photoUrl =
+          typeof info?.mediaUrl === 'string' && info.mediaUrl.trim()
+            ? info.mediaUrl
+            : null;
+        const infoNote = this.buildPayoutInfoNote(info);
+
+        return {
+          uuid: redeemLog.uuid,
+          'Beneficiary First Name': firstName,
+          'Beneficiary Last Name': lastName,
+          'Phone number': beneficiaryPhone,
+          'Amount Disbursed': amountDisbursed,
+          photoUrl,
+          beneficiaryName,
+          beneficiaryPhone,
+          municipality: extras?.municipality,
+          district: extras?.district || extras?.location,
+          ward: extras?.ward,
+          tole: extras?.tole,
+          governmentIdNumber: extras?.govtIDNumber,
+          infoNote,
+        };
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to export payout logs for PDF: ${error.message}`,
+        error.stack
+      );
+      if (error instanceof RpcException) throw error;
+      throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Generate the CVA payout logs PDF server-side (table only, no header)
+   * and return it as base64 for download. Honors the same filters as the
+   * log list; missing photo evidence leaves the cell blank (or shows the
+   * info note) and never fails generation.
+   */
+  async exportPayoutLogsPdfFile(
+    payload: ExportPayoutLogsPdfFileDto
+  ): Promise<PayoutLogsPdfFile> {
+    const { payoutUUID } = payload;
+
+    this.logger.log(
+      `Generating payout logs PDF file for payout: ${payoutUUID}`
+    );
+
+    try {
+      const rows = await this.getPayoutLogsPdfRows(payload);
+
+      const buffer = await buildPayoutLogsPdf(rows);
+
+      return toPayoutLogsPdfFile(buffer, payoutUUID);
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate payout logs PDF file: ${error.message}`,
+        error.stack
+      );
+      if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
     }
   }
@@ -2294,11 +3031,16 @@ export class PayoutsService {
       });
 
       if (!settings?.value) {
-        throw new Error(`${key} not found`);
+        throw new RpcException({
+          message: `${key} not found`,
+          code: 'SETTING_KEY_NOT_FOUND',
+          params: { key },
+        });
       }
 
       return settings.value;
     } catch (error) {
+      if (error instanceof RpcException) throw error;
       this.logger.error(`Error getting setting ${key}: ${error.message}`);
       throw error;
     }

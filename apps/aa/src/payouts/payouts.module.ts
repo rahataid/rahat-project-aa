@@ -6,12 +6,13 @@ import { PayoutsService } from './payouts.service';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { VendorsModule } from '../vendors/vendors.module';
 import { AppService } from '../app/app.service';
-import { HttpModule} from '@nestjs/axios';
+import { HttpModule } from '@nestjs/axios';
 import { OfframpService } from './offramp.service';
 import { BullModule } from '@nestjs/bull';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StellarTransferModule } from '../stellar-transfer/stellar-transfer.module';
 import { OtpModule } from '../otp/otp.module';
+import { MicroserviceAuthModule } from '@rumsan/user';
 
 @Module({
   imports: [
@@ -51,9 +52,10 @@ import { OtpModule } from '../otp/otp.module';
     BullModule.registerQueue({
       name: BQUEUE.BATCH_TRANSFER,
     }),
+    MicroserviceAuthModule,
   ],
   controllers: [PayoutsController],
   providers: [PayoutsService, PrismaService, AppService, OfframpService],
-  exports: [PayoutsService, OfframpService, AppService,PrismaService],
+  exports: [PayoutsService, OfframpService, AppService, PrismaService],
 })
 export class PayoutsModule {}

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import SafeApiKit from '@safe-global/api-kit';
 import Safe from '@safe-global/protocol-kit';
 import { PrismaService } from '@rumsan/prisma';
@@ -9,13 +10,17 @@ import {
   MetaTransactionData,
   OperationType,
 } from '@safe-global/safe-core-sdk-types';
+import { SseService } from '../sse/sse.service';
 
 @Injectable()
 export class BeneficiaryMultisigService {
   private safeApiKit: SafeApiKit;
   private NETWORK_PROVIDER: string;
   private SAFE_PROPOSER_PRIVATE_ADDRESS: string;
-  constructor(protected prisma: PrismaService) {}
+  constructor(
+    protected prisma: PrismaService,
+    private readonly sseService: SseService
+  ) {}
 
   async onModuleInit() {
     const fundManagementConfig = await this.prisma.setting.findFirst({
@@ -56,9 +61,11 @@ export class BeneficiaryMultisigService {
     });
 
     if (!chainSettings || !safeProposerPrivateKeySetting || !safeApiKey) {
-      throw new Error(
-        'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS or SAFE_API_KEY may be missing'
-      );
+      throw new RpcException({
+        message:
+          'CHAIN_SETTINGS, SAFE_PROPOSER_PRIVATE_ADDRESS or SAFE_API_KEY may be missing',
+        code: 'MULTISIG_SETTINGS_MISSING',
+      });
     }
 
     const CHAIN_ID = chainSettings.value['chainId'];
@@ -204,21 +211,19 @@ export class BeneficiaryMultisigService {
 
       // Propose transaction to the service
 
-      await this.safeApiKit.proposeTransaction({
-        safeAddress: safeAddress,
-        safeTransactionData: safeTransaction.data,
-        safeTxHash,
-        senderAddress: deployerWallet.address,
-        senderSignature: signature.data,
-      });
+      const proposeTransactionResponse =
+        await this.safeApiKit.proposeTransaction({
+          safeAddress: safeAddress,
+          safeTransactionData: safeTransaction.data,
+          safeTxHash,
+          senderAddress: deployerWallet.address,
+          senderSignature: signature.data,
+        });
 
-      // console.log({
-      //   safeAddress,
-      //   safeTransactionData: safeTransaction.data,
-      //   safeTxHash,
-      //   senderAddress: deployerWallet.address,
-      //   senderSignature: signature.data,
-      // });
+      await this.sseService.publishEvent(
+        'fund.event',
+        proposeTransactionResponse
+      );
 
       return {
         safeAddress: safeAddress,

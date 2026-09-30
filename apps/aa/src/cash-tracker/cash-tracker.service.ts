@@ -217,12 +217,20 @@ export class CashTrackerService {
       const fromSDK = this.entitySDKs.get(from);
 
       if (!fromSDK) {
-        throw new Error(`Entity not found for smart address: ${from}`);
+        throw new RpcException({
+          message: `Entity not found for smart address: ${from}`,
+          code: 'CASH_TRACKER_ENTITY_NOT_FOUND',
+          params: { address: from },
+        });
       }
 
       // For actions that require both from and to, ensure 'to' is provided
       if (normalizedAction !== 'get_cash_balance' && !to) {
-        throw new Error(`Missing 'to' smart address for action: ${action}`);
+        throw new RpcException({
+          message: `Missing 'to' smart address for action: ${action}`,
+          code: 'CASH_TRACKER_MISSING_TO_ADDRESS',
+          params: { action },
+        });
       }
 
       // Validate action based on user roles (if roles are defined)
@@ -251,7 +259,11 @@ export class CashTrackerService {
           return this.serializeBigInt(balance);
 
         default:
-          throw new Error(`Unknown action: ${action}`);
+          throw new RpcException({
+            message: `Unknown action: ${action}`,
+            code: 'CASH_TRACKER_UNKNOWN_ACTION',
+            params: { action },
+          });
       }
 
       return this.serializeBigInt(result as TransactionResult);
@@ -488,7 +500,11 @@ export class CashTrackerService {
       const result = await evmUtils.mintTokens(mintRequest, rahatDonorConfig);
 
       if (!result.success) {
-        throw new RpcException(`Mint operation failed: ${result.error}`);
+        throw new RpcException({
+          message: `Mint operation failed: ${result.error}`,
+          code: 'CASH_TRACKER_MINT_FAILED',
+          params: { error: result.error },
+        });
       }
 
       this.logger.log(
@@ -503,7 +519,11 @@ export class CashTrackerService {
       };
     } catch (error) {
       this.logger.error(`Failed to create budget: ${error.message}`);
-      throw new RpcException(`Budget creation failed: ${error.message}`);
+      throw new RpcException({
+        message: `Budget creation failed: ${error.message}`,
+        code: 'CASH_TRACKER_BUDGET_CREATE_FAILED',
+        params: { message: error.message },
+      });
     }
   }
 }

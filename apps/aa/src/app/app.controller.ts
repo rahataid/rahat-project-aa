@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { UpdateSettingsPayloadDto } from './dto/update-settings-payload.dto';
+import { UpdateSettingsByNameDto } from './dto/update-settings-by-name.dto';
 
 @Controller()
 export class AppController {
@@ -34,6 +35,14 @@ export class AppController {
     return this.appService.updateSettingsBulk(dto);
   }
 
+  @MessagePattern({
+    cmd: JOBS.SETTINGS.UPDATE_VALUES,
+    uuid: process.env.PROJECT_ID,
+  })
+  updateSettingsByName(dto: UpdateSettingsByNameDto) {
+    return this.appService.updateSettingsByName(dto);
+  }
+
   @MessagePattern({ cmd: JOBS.APP.RESET_ALL, uuid: process.env.PROJECT_ID })
   resetAll() {
     return this.appService.resetAll();
@@ -43,5 +52,11 @@ export class AppController {
   @MessagePattern({ cmd: JOBS.PROJECT.SETUP, uuid: process.env.PROJECT_ID })
   setupProjectSettings(payload: any) {
     return this.appService.setupProjectSettings(payload);
+  }
+
+  // Returns the AA service version.
+  @MessagePattern({ cmd: JOBS.VERSION.GET })
+  getVersion() {
+    return this.appService.getVersion();
   }
 }

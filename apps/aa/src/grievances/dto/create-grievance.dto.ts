@@ -68,7 +68,8 @@ export class CreateGrievanceDto {
   @IsString()
   @IsNotEmpty()
   @IsEmailOrPhoneNumber({
-    message: 'reporterContact must be a valid email or phone number',
+    message:
+      '[REPORTER_CONTACT_INVALID] reporterContact must be a valid email or phone number',
   })
   reporterContact: string;
 
@@ -81,10 +82,10 @@ export class CreateGrievanceDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(5, {
-    message: 'Title must be at least 5 characters long',
+    message: '[TITLE_TOO_SHORT] Title must be at least 5 characters long',
   })
   @MaxLength(100, {
-    message: 'Title must not be longer than 100 characters',
+    message: '[TITLE_TOO_LONG] Title must not be longer than 100 characters',
   })
   title: string;
 
@@ -106,10 +107,12 @@ export class CreateGrievanceDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(10, {
-    message: 'Description must be at least 10 characters long',
+    message:
+      '[DESCRIPTION_TOO_SHORT] Description must be at least 10 characters long',
   })
   @MaxLength(1000, {
-    message: 'Description must not be longer than 1000 characters',
+    message:
+      '[DESCRIPTION_TOO_LONG] Description must not be longer than 1000 characters',
   })
   description: string;
 
