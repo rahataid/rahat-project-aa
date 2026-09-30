@@ -4,7 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, timeout } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
@@ -34,6 +34,8 @@ import { AsyncQueueService } from '../queue/async-queue.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 const BENEFICIARY_BATCH_SIZE = 500;
+// ponytail: one multicall tx per batch, keep small to stay under gas/size limits
+const TOKEN_ASSIGN_BATCH_SIZE = 30;
 interface DataItem {
   groupId: UUID;
   [key: string]: any;
@@ -565,30 +567,9 @@ export class BeneficiaryService {
     return data;
   }
 
-  async createBenfAndAddGroupToProject(
-    dto: CreateBenfAddGroupToProjectDto,
-    skipGroupCreation = false
-  ) {
-    const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose, } = dto;
-
-    if (!beneficiaries?.length) {
-      throw new RpcException('beneficiaries array is required and cannot be empty.');
-    }
-    if (!beneficiaryGroupId) {
-      throw new RpcException('beneficiaryGroupId is required.');
-    }
-    if (!skipGroupCreation && (!beneficiaryGroupName || !groupPurpose)) {
-      throw new RpcException('beneficiaryGroupName and groupPurpose are required when creating a new group.');
-    }
-
-    if (!skipGroupCreation) {
-      const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
-        where: { uuid: beneficiaryGroupId },
-      });
-      if (existingGroup) {
-        throw new RpcException(`Beneficiary group ${beneficiaryGroupId} already exists.`);
-      }
-    }
+  // Batch worker for createBeneficiariesInBatches; the group is created before batches are queued.
+  async createBenfAndAddGroupToProject(dto: CreateBenfAddGroupToProjectDto) {
+    const { beneficiaries, beneficiaryGroupId } = dto;
 
     this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
 
@@ -604,57 +585,46 @@ export class BeneficiaryService {
       })
     )
 
-    let groupedBeneficiaries: any;
-    let group: any;
-
     try {
-      await this.prisma.$transaction(async (txn) => {
-        const rdata = await txn.beneficiary.createMany({
-          data: processedBeneficiaries,
-          skipDuplicates: true,
-        });
+      const { group, groupedBeneficiaries } = await this.prisma.$transaction(
+        async (txn) => {
+          const rdata = await txn.beneficiary.createMany({
+            data: processedBeneficiaries,
+            skipDuplicates: true,
+          });
 
-        this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
+          this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
 
-        await this.seedOtpsForBeneficiaries(processedBeneficiaries);
+          await this.seedOtpsForBeneficiaries(processedBeneficiaries, txn);
 
-        // Group creation and assignment starts here
-        if (skipGroupCreation) {
-          group = await txn.beneficiaryGroups.findUniqueOrThrow({
+          const group = await txn.beneficiaryGroups.findUniqueOrThrow({
             where: { uuid: beneficiaryGroupId },
           });
-        } else {
-          this.logger.debug(
-            `Adding beneficiary group ${dto.beneficiaryGroupId} to project`
-          );
-          group = await txn.beneficiaryGroups.create({
-            data: {
-              uuid: beneficiaryGroupId,
-              name: beneficiaryGroupName,
-              groupPurpose: groupPurpose,
-            },
-          });
-        }
 
-        groupedBeneficiaries =
-          await txn.beneficiaryToGroup.createMany({
+          const groupedBeneficiaries = await txn.beneficiaryToGroup.createMany({
             data: beneficiaries.map((beneficiary) => ({
               beneficiaryId: beneficiary.uuid,
-              groupId: beneficiary.beneficiaryGroupId,
+              groupId: beneficiaryGroupId,
             })),
             skipDuplicates: true,
           });
-      })
+
+          return { group, groupedBeneficiaries };
+        },
+        { timeout: 30000, maxWait: 10000 }
+      );
 
       this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
-      this.eventEmitter.emit(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT, {
-        groupUuid: beneficiaryGroupId
+      // Sponsor only this batch; the group-level event re-reads the whole group.
+      this.eventEmitter.emit(EVENTS.BENEFICIARY_BATCH_ADDED_TO_GROUP, {
+        groupUuid: beneficiaryGroupId,
+        beneficiaries: beneficiaries.map((b) => ({
+          beneficiaryId: b.uuid,
+          walletAddress: b.walletAddress,
+        })),
       });
 
-      return {
-        group,
-        groupedBeneficiaries
-      }
+      return { group, groupedBeneficiaries };
     }
     catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1590,7 +1560,7 @@ export class BeneficiaryService {
   async assignToken() {
     this.logger.log('Starting token assignment process');
     const allBenfs = await this.getCount();
-    const batches = this.createBatches(allBenfs, BENEFICIARY_BATCH_SIZE);
+    const batches = this.createBatches(allBenfs, TOKEN_ASSIGN_BATCH_SIZE);
     this.logger.debug(
       `Total beneficiaries: ${allBenfs}, batches: ${batches.length}`
     );
@@ -1600,8 +1570,7 @@ export class BeneficiaryService {
       return;
     }
 
-    const isQueueReady = await this.contractQueue.isReady().catch(() => null);
-    if (!isQueueReady) {
+    if (!(await this.isQueueReady(this.contractQueue))) {
       throw new RpcException('Contract queue is not available. Aborting token assignment.');
     }
 
@@ -1737,7 +1706,8 @@ export class BeneficiaryService {
       phone?: string;
       walletAddress?: string;
       [key: string]: any;
-    }>
+    }>,
+    db: Prisma.TransactionClient = this.prisma
   ) {
     this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
     const CHUNK_SIZE = 100;
@@ -1788,7 +1758,7 @@ export class BeneficiaryService {
     this.logger.debug(
       `Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`
     );
-    await this.prisma.otp.createMany({
+    await db.otp.createMany({
       data: otpRecords,
       skipDuplicates: true,
     });
@@ -2519,31 +2489,35 @@ export class BeneficiaryService {
     return { message: 'Sync process completed successfully' };
   }
 
+  /**
+   * Entry point for platform group assignment (CREATE_BENF_ADD_GROUP_TO_PROJECT).
+   * Validates, creates the group and queues batches; the result is reported back to
+   * platform via GROUP_ASSIGN_SYNC_RESULT once all batches finish or one finally fails.
+   * Safe to call again for the same group (platform sweeper re-sends).
+   */
   async createBeneficiariesInBatches(
     dto: CreateBenfAddGroupToProjectDto
-  ): Promise<{ jobIds: string[] }> {
-    const { beneficiaries, beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
+  ): Promise<{ status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED'; jobIds?: string[] }> {
+    const { beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
+    const beneficiaries = dto.beneficiaries ?? [];
 
-    if (!beneficiaryGroupId) {
-      throw new RpcException('beneficiaryGroupId is required.');
-    }
-    if (!beneficiaries?.length) {
-      throw new RpcException('beneficiaries array is required and cannot be empty.');
-    }
-
-    const isQueueReady = await this.beneficiaryQueue.isReady().catch(() => null);
-    if (!isQueueReady) {
-      throw new RpcException('Beneficiary queue is not available. Aborting before any data is persisted.');
+    if (!beneficiaryGroupId || !beneficiaryGroupName) {
+      throw new RpcException('beneficiaryGroupId and beneficiaryGroupName are required.');
     }
 
     const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: beneficiaryGroupId },
     });
     if (existingGroup) {
-      throw new RpcException(`Beneficiary group ${beneficiaryGroupId} already exists.`);
+      const pendingJobs = await this.countGroupImportJobs(beneficiaryGroupId);
+      return { status: pendingJobs > 0 ? 'IN_PROGRESS' : 'COMPLETED' };
     }
 
-    this.logger.log(`Processing ${beneficiaries.length} beneficiaries in batches of ${BENEFICIARY_BATCH_SIZE}`);
+    await this.assertNoWalletConflicts(beneficiaries);
+
+    if (!(await this.isQueueReady(this.beneficiaryQueue))) {
+      throw new RpcException('Beneficiary queue is not available. Aborting before any data is persisted.');
+    }
 
     this.logger.debug(`Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`);
     await this.prisma.beneficiaryGroups.create({
@@ -2554,13 +2528,17 @@ export class BeneficiaryService {
       },
     });
 
+    if (!beneficiaries.length) {
+      return { status: 'COMPLETED' };
+    }
+
     const batches: { batch: any[]; index: number }[] = [];
     for (let i = 0; i < beneficiaries.length; i += BENEFICIARY_BATCH_SIZE) {
       const batch = beneficiaries.slice(i, i + BENEFICIARY_BATCH_SIZE);
       batches.push({ batch, index: Math.floor(i / BENEFICIARY_BATCH_SIZE) });
     }
 
-    this.logger.log(`Created ${batches.length} batches for processing`);
+    this.logger.log(`Queuing ${beneficiaries.length} beneficiaries in ${batches.length} batch(es) of ${BENEFICIARY_BATCH_SIZE}`);
 
     const jobIds: string[] = [];
 
@@ -2573,7 +2551,6 @@ export class BeneficiaryService {
           groupPurpose,
           totalBatches: batches.length,
           currentBatchIndex: index,
-          isLastBatch: index === batches.length - 1,
         };
 
         const { uuid } = await this.asyncQueueService.enqueue({
@@ -2599,15 +2576,120 @@ export class BeneficiaryService {
         `Failed to queue batches for group ${beneficiaryGroupId} after queuing ${jobIds.length}/${batches.length}. Rolling back group.`,
         error
       );
-      await this.prisma.beneficiaryGroups
-        .delete({ where: { uuid: beneficiaryGroupId } })
-        .catch((cleanupError) =>
-          this.logger.error(`Rollback of group ${beneficiaryGroupId} failed`, cleanupError)
-        );
+      await this.removeGroupImport(beneficiaryGroupId).catch((cleanupError) =>
+        this.logger.error(`Rollback of group ${beneficiaryGroupId} failed`, cleanupError)
+      );
       throw new RpcException(`Failed to queue beneficiary batches: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    return { jobIds };
+    return { status: 'QUEUED', jobIds };
+  }
+
+  /** Called after each batch completes; reports success once no batch of the group is left. */
+  async onGroupImportBatchCompleted(beneficiaryGroupId: string) {
+    if ((await this.countGroupImportJobs(beneficiaryGroupId)) > 0) return;
+
+    // ponytail: a batch finishing right after failGroupImport can still slip past this check; row locks if it shows up
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: beneficiaryGroupId },
+    });
+    if (!group) return;
+
+    this.logger.log(`All batches completed for group ${beneficiaryGroupId}`);
+    await this.reportGroupAssignResult(beneficiaryGroupId, 'SUCCESS');
+  }
+
+  /** Called when a batch exhausts its retries: drops the group so the user can assign again. */
+  async failGroupImport(beneficiaryGroupId: string, error: string) {
+    this.logger.error(`Group import failed for ${beneficiaryGroupId}: ${error}`);
+    try {
+      await this.removeGroupImport(beneficiaryGroupId);
+    } catch (cleanupError) {
+      this.logger.error(`Cleanup of failed group ${beneficiaryGroupId} failed`, cleanupError);
+    }
+    await this.reportGroupAssignResult(beneficiaryGroupId, 'FAILED', error);
+  }
+
+  // Beneficiary rows are kept: other groups may reference them.
+  private async removeGroupImport(beneficiaryGroupId: string) {
+    await this.prisma.$transaction([
+      this.prisma.asyncQueueJob.deleteMany({
+        where: this.groupImportJobsWhere(beneficiaryGroupId),
+      }),
+      this.prisma.beneficiaryToGroup.deleteMany({
+        where: { groupId: beneficiaryGroupId },
+      }),
+      this.prisma.beneficiaryGroups.deleteMany({
+        where: { uuid: beneficiaryGroupId },
+      }),
+    ]);
+  }
+
+  private groupImportJobsWhere(beneficiaryGroupId: string): Prisma.AsyncQueueJobWhereInput {
+    return {
+      jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+      jobTypeData: { path: ['beneficiaryGroupId'], equals: beneficiaryGroupId },
+    };
+  }
+
+  private countGroupImportJobs(beneficiaryGroupId: string) {
+    return this.prisma.asyncQueueJob.count({
+      where: this.groupImportJobsWhere(beneficiaryGroupId),
+    });
+  }
+
+  // Same wallet under a different uuid means platform and AA data drifted; fail loudly.
+  private async assertNoWalletConflicts(
+    beneficiaries: CreateBenfAddGroupToProjectDto['beneficiaries']
+  ) {
+    const uuidByWallet = new Map(
+      beneficiaries.filter((b) => b.walletAddress).map((b) => [b.walletAddress, b.uuid])
+    );
+    if (!uuidByWallet.size) return;
+
+    const existing = await this.prisma.beneficiary.findMany({
+      where: { walletAddress: { in: [...uuidByWallet.keys()] } },
+      select: { uuid: true, walletAddress: true },
+    });
+    const conflicts = existing.filter((b) => uuidByWallet.get(b.walletAddress) !== b.uuid);
+    if (!conflicts.length) return;
+
+    throw new RpcException({
+      message: `[WALLET_ADDRESS_CONFLICT] ${conflicts.length} wallet address(es) already belong to a different beneficiary in this project.`,
+      code: 'WALLET_ADDRESS_CONFLICT',
+      params: { walletAddresses: conflicts.map((c) => c.walletAddress) },
+    });
+  }
+
+  // Platform reconciles through its sweeper if this message is lost.
+  private async reportGroupAssignResult(
+    beneficiaryGroupId: string,
+    status: 'SUCCESS' | 'FAILED',
+    error?: string
+  ) {
+    try {
+      await lastValueFrom(
+        this.client
+          .send(
+            { cmd: JOBS.BENEFICIARY.GROUP_ASSIGN_SYNC_RESULT },
+            { projectId: process.env.PROJECT_ID, beneficiaryGroupId, status, error }
+          )
+          .pipe(timeout(10000))
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not report ${status} for group ${beneficiaryGroupId} to platform; its sweeper will reconcile`,
+        err
+      );
+    }
+  }
+
+  // isReady() never settles while Redis is unreachable, so bound it.
+  private isQueueReady(queue: Queue): Promise<boolean> {
+    return Promise.race([
+      queue.isReady().then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+    ]).catch(() => false);
   }
 
   async syncGroupBeneficiariesToProjectCompleted(payload: {

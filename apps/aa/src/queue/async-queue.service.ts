@@ -42,15 +42,17 @@ export class AsyncQueueService {
     return { uuid: row.uuid };
   }
 
-  async markProcessing(uuid: string) {
-    await this.prisma.asyncQueueJob.update({
+  /** Returns false when the tracking row is gone (job was cancelled/cleaned up). */
+  async markProcessing(uuid: string): Promise<boolean> {
+    const { count } = await this.prisma.asyncQueueJob.updateMany({
       where: { uuid },
       data: { status: 'PROCESSING', startedAt: new Date() },
     });
+    return count > 0;
   }
 
   async complete(uuid: string) {
-    await this.prisma.asyncQueueJob.delete({ where: { uuid } });
+    await this.prisma.asyncQueueJob.deleteMany({ where: { uuid } });
   }
 
   async fail(uuid: string, error: string) {

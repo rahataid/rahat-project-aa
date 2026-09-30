@@ -1,4 +1,4 @@
-import { Logger, Controller } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CONTROLLERS, EVENTS, JOBS } from '../constants';
@@ -17,13 +17,8 @@ import { GroupUuidDto } from './dto/group-uuid.dto';
 import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
-// Threshold to create batches for benf creation
-const BENEFICIARY_BATCH_THRESHOLD = 500;
-
 @Controller()
 export class BeneficiaryController {
-  private logger = new Logger(BeneficiaryController.name);
-
   constructor(
     private readonly beneficiaryService: BeneficiaryService,
     private readonly beneficiaryMultisigService: BeneficiaryMultisigService,
@@ -122,6 +117,16 @@ export class BeneficiaryController {
       JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT
     );
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  // Platform group assignment: returns QUEUED / IN_PROGRESS / COMPLETED, final result is
+  // reported back via GROUP_ASSIGN_SYNC_RESULT.
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  createBenfAndAddGroupToProject(payload: CreateBenfAddGroupToProjectDto) {
+    return this.beneficiaryService.createBeneficiariesInBatches(payload);
   }
 
   @MessagePattern({

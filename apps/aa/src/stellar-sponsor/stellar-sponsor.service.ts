@@ -52,6 +52,32 @@ export class StellarSponsorService implements OnApplicationBootstrap {
       return;
     }
 
+    await this.queueSponsorBatches(groupUuid, beneficiaries);
+  }
+
+  /**
+   * Batched group creation (createBeneficiariesInBatches) emits this once per
+   * batch with only that batch's beneficiaries, so each account is queued once
+   * instead of re-queuing the whole group on every batch.
+   */
+  @OnEvent(EVENTS.BENEFICIARY_BATCH_ADDED_TO_GROUP)
+  async sponsorBeneficiaryBatch(payload: {
+    groupUuid: string;
+    beneficiaries: { beneficiaryId: string; walletAddress: string }[];
+  }) {
+    const { groupUuid } = payload;
+    if (!(await this.isSponsorshipEnabled(groupUuid))) return;
+
+    const beneficiaries = payload.beneficiaries.filter((b) => b.walletAddress);
+    if (!beneficiaries.length) return;
+
+    await this.queueSponsorBatches(groupUuid, beneficiaries);
+  }
+
+  private async queueSponsorBatches(
+    groupUuid: string,
+    beneficiaries: { beneficiaryId: string; walletAddress: string }[]
+  ) {
     this.logger.log(`Queuing ${beneficiaries.length} beneficiaries in batches of ${STELLAR_SPONSOR_BATCH_SIZE} for group ${groupUuid}`);
 
     for (let i = 0; i < beneficiaries.length; i += STELLAR_SPONSOR_BATCH_SIZE) {

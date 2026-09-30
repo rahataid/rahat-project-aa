@@ -82,6 +82,7 @@ export const JOBS = {
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
     CREATE_BENF_ADD_GROUP_TO_PROJECT:
       'rahat.jobs.beneficiary.create_benf_add_group_to_project',
+    GROUP_ASSIGN_SYNC_RESULT: 'rahat.jobs.beneficiary.group_assign_sync_result',
     SPONSOR_BENEFICIARY_GROUP: 'aa.jobs.beneficiary.sponsorBeneficiaryGroup',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
@@ -422,6 +423,7 @@ export const EVENTS = {
   BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
   BENEFICIARY_GROUP_ADDED_TO_PROJECT:
     'events.beneficiary_group_added_to_project',
+  BENEFICIARY_BATCH_ADDED_TO_GROUP: 'events.beneficiary_batch_added_to_group',
   BENEFICIARY_GROUP_SPONSORSHIP_REVOKE:
     'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
