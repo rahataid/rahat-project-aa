@@ -856,6 +856,7 @@ export class PayoutsService {
       isPayoutTriggered?: boolean;
       totalSuccessRequests?: number;
       payoutGap?: string;
+      groupGap?: string;
       totalSuccessAmount?: number;
       totalFailedPayoutRequests?: number;
     }
@@ -953,6 +954,7 @@ export class PayoutsService {
       }
 
       let payoutGap = 'N/A';
+      let groupGap = 'N/A';
 
       if (
         payout.beneficiaryRedeem.some((r) =>
@@ -970,6 +972,14 @@ export class PayoutsService {
             (payout.extras as { payoutActivatedAt?: string })
               ?.payoutActivatedAt ?? (await this.resolveActivationTime())
           ));
+
+        // same as payoutGap: stored snapshot, else compute (FSP only)
+        if (payout.type === 'FSP') {
+          groupGap =
+            (payout.extras as { group_gap?: string })?.group_gap ??
+            (await this.calculateGroupGap(payout)) ??
+            'N/A';
+        }
       }
 
       return {
@@ -981,6 +991,7 @@ export class PayoutsService {
         totalSuccessRequests,
         totalFailedPayoutRequests,
         payoutGap,
+        groupGap,
         isCompleted,
         isPayoutTriggered,
       };
@@ -2088,6 +2099,14 @@ export class PayoutsService {
     const diffInMs =
       new Date(payoutLastLog.updatedAt).getTime() -
       new Date(payoutTriggeredAt).getTime();
+
+    // same guard as payoutGap: last payment predating the trigger is bogus
+    if (diffInMs < 0) {
+      this.logger.warn(
+        `[calculateGroupGap] trigger ${payoutTriggeredAt} is after last payment for payout ${payout.uuid}, skipping group_gap`
+      );
+      return null;
+    }
 
     return getFormattedTimeDiff(diffInMs);
   }
