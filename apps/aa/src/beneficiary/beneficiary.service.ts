@@ -619,7 +619,6 @@ export class BeneficiaryService {
         { timeout: 30000, maxWait: 10000 }
       );
 
-      this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
       // Sponsor only this batch; the group-level event re-reads the whole group.
       this.eventEmitter.emit(EVENTS.BENEFICIARY_BATCH_ADDED_TO_GROUP, {
         groupUuid: beneficiaryGroupId,
@@ -2601,6 +2600,8 @@ export class BeneficiaryService {
     if (!group) return;
 
     this.logger.log(`All batches completed for group ${beneficiaryGroupId}`);
+    // Stats once per import instead of per batch
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     await this.reportGroupAssignResult(beneficiaryGroupId, 'SUCCESS');
   }
 
@@ -2612,6 +2613,8 @@ export class BeneficiaryService {
     } catch (cleanupError) {
       this.logger.error(`Cleanup of failed group ${beneficiaryGroupId} failed`, cleanupError);
     }
+    // Beneficiaries from finished batches are kept, so stats still change
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
     await this.reportGroupAssignResult(beneficiaryGroupId, 'FAILED', error);
   }
 
