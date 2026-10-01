@@ -608,10 +608,10 @@ export class VendorsService {
     });
     if (!vendor) {
       throw new RpcException({
-      message: `Vendor with id ${payload.vendorUuid} not found`,
-      code: 'VENDOR_NOT_FOUND',
-      params: { uuid: payload.vendorUuid },
-    });
+        message: `Vendor with id ${payload.vendorUuid} not found`,
+        code: 'VENDOR_NOT_FOUND',
+        params: { uuid: payload.vendorUuid },
+      });
     }
 
     const pending = await this.prisma.beneficiaryRedeem.findMany({
@@ -914,6 +914,7 @@ export class VendorsService {
           otpHash: otpData?.otpHash || '',
           amount: redeem.amount,
           status: redeem.status,
+          walletAddress: beneficiary.walletAddress,
         });
       }
 
@@ -1021,7 +1022,9 @@ export class VendorsService {
 
       const chainType =
         await this.chainServiceRegistry.detectChainFromSettings();
-      this.logger.log(`Vendor ${payload.vendorUuid}: chain type resolved to ${chainType}`);
+      this.logger.log(
+        `Vendor ${payload.vendorUuid}: chain type resolved to ${chainType}`
+      );
 
       const items = verified.map((r) => ({
         redeemUuid: r.uuid,
@@ -1061,7 +1064,9 @@ export class VendorsService {
         throw dbError;
       }
       this.logger.log(
-        `Vendor ${payload.vendorUuid}: created ${batchRecords.length} tempOfflineRedemption record(s): ${batchRecords
+        `Vendor ${payload.vendorUuid}: created ${
+          batchRecords.length
+        } tempOfflineRedemption record(s): ${batchRecords
           .map((r: any) => r.uuid)
           .join(', ')}`
       );

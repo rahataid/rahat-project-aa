@@ -18,7 +18,7 @@ export class GenerateQrPdfDto {
 
   @IsOptional()
   @IsBoolean()
-  excludeUnphonedBeneficiaries?: boolean;
+  onlyUnphonedBeneficiaries?: boolean;
 
   // Arbitrary, case-insensitive tokens matched against each beneficiary's
   // own `extras` keys; a token with no matching key is dropped per-beneficiary.

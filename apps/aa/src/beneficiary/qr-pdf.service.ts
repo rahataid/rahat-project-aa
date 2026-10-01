@@ -75,7 +75,7 @@ export class QrPdfService implements OnModuleInit {
     const {
       groupId,
       includeOtp = true,
-      excludeUnphonedBeneficiaries = false,
+      onlyUnphonedBeneficiaries = false,
       pdfFields = [],
     } = payload;
 
@@ -94,7 +94,7 @@ export class QrPdfService implements OnModuleInit {
     return this.enqueueQrPdfJob(
       groupId,
       includeOtp,
-      excludeUnphonedBeneficiaries,
+      onlyUnphonedBeneficiaries,
       pdfFields
     );
   }
@@ -106,7 +106,7 @@ export class QrPdfService implements OnModuleInit {
     const {
       groupId,
       includeOtp = true,
-      excludeUnphonedBeneficiaries = false,
+      onlyUnphonedBeneficiaries = false,
       pdfFields = [],
     } = payload;
 
@@ -136,7 +136,7 @@ export class QrPdfService implements OnModuleInit {
     return this.enqueueQrPdfJob(
       groupId,
       includeOtp,
-      excludeUnphonedBeneficiaries,
+      onlyUnphonedBeneficiaries,
       pdfFields
     );
   }
@@ -152,7 +152,7 @@ export class QrPdfService implements OnModuleInit {
   private async enqueueQrPdfJob(
     groupId: string,
     includeOtp: boolean,
-    excludeUnphonedBeneficiaries: boolean,
+    onlyUnphonedBeneficiaries: boolean,
     pdfFields: string[]
   ) {
     const withOtp = includeOtp !== false;
@@ -165,12 +165,12 @@ export class QrPdfService implements OnModuleInit {
       groupId,
       jobUuid: job.uuid,
       includeOtp: withOtp,
-      excludeUnphonedBeneficiaries,
+      onlyUnphonedBeneficiaries,
       pdfFields,
     });
     this.logger.log(
       `QR PDF generation queued for group ${groupId} (includeOtp=${withOtp}, ` +
-        `excludeUnphonedBeneficiaries=${excludeUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
+        `onlyUnphonedBeneficiaries=${onlyUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
     );
 
     return { jobId: job.uuid, alreadyRunning: false };
@@ -207,7 +207,7 @@ export class QrPdfService implements OnModuleInit {
     groupId: string,
     jobUuid: string,
     includeOtp = true,
-    excludeUnphonedBeneficiaries = false,
+    onlyUnphonedBeneficiaries = false,
     pdfFields: string[] = []
   ) {
     const withOtp = includeOtp !== false;
@@ -220,7 +220,7 @@ export class QrPdfService implements OnModuleInit {
       const cards = await this.collectCards(
         groupId,
         withOtp,
-        excludeUnphonedBeneficiaries,
+        onlyUnphonedBeneficiaries,
         pdfFields
       );
       this.logger.log(
@@ -263,13 +263,13 @@ export class QrPdfService implements OnModuleInit {
   private async collectCards(
     groupId: string,
     includeOtp = true,
-    excludeUnphonedBeneficiaries = false,
+    onlyUnphonedBeneficiaries = false,
     pdfFields: string[] = []
   ): Promise<QrCardData[]> {
     const withOtp = includeOtp !== false;
     this.logger.log(
       `Collecting beneficiaries for group ${groupId} (includeOtp=${withOtp}, ` +
-        `excludeUnphonedBeneficiaries=${excludeUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
+        `onlyUnphonedBeneficiaries=${onlyUnphonedBeneficiaries}, pdfFields=${pdfFields.join(',')})`
     );
     const cards: QrCardData[] = [];
     let skip = 0;
@@ -307,9 +307,8 @@ export class QrPdfService implements OnModuleInit {
         const rawPhone = ben.phone || (extras.phone as string) || '';
         const isRandomPhone = rawPhone.startsWith('+000');
 
-        // random/placeholder phone numbers are never displayed, and the
-        // whole beneficiary is dropped when explicitly excluded.
-        if (isRandomPhone && excludeUnphonedBeneficiaries) continue;
+        // onlyUnphonedBeneficiaries is an include-only filter
+        if (onlyUnphonedBeneficiaries && !isRandomPhone) continue;
 
         const phone = isRandomPhone
           ? undefined

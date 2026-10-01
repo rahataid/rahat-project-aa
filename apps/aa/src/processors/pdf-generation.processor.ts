@@ -16,7 +16,7 @@ export class PdfGenerationProcessor {
       groupId: string;
       jobUuid: string;
       includeOtp?: boolean;
-      excludeUnphonedBeneficiaries?: boolean;
+      onlyUnphonedBeneficiaries?: boolean;
       pdfFields?: string[];
     }>
   ) {
@@ -25,7 +25,7 @@ export class PdfGenerationProcessor {
       job.data.groupId,
       job.data.jobUuid,
       job.data.includeOtp,
-      job.data.excludeUnphonedBeneficiaries,
+      job.data.onlyUnphonedBeneficiaries,
       job.data.pdfFields
     );
   }
