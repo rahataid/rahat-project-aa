@@ -2820,29 +2820,48 @@ export class PayoutsService {
         params: { payoutUuid },
       });
     }
-
+    // check if the fund is disbursed for the beneficiary group token
     if (!beneficiaryGroupToken?.isDisbursed) {
       throw new RpcException({
-        message: `Fund for beneficiaryGroupToken with uuis ${beneficiaryGroupToken?.uuid} is not disbursed`,
+        message: `Fund for beneficiaryGroupToken with uuid ${beneficiaryGroupToken?.uuid} is not disbursed`,
         code: 'FUND_NOT_DISBURSED',
         params: { payoutUuid },
       });
     }
+    // fetching the beneficiary group to get the wallet addresses of the beneficiaries in the group
+    const beneficiaryGroup = await this.prisma.beneficiaryToGroup.findMany({
+      where: { groupId: beneficiaryGroupToken?.groupId },
+      include: {
+        beneficiary: { select: { walletAddress: true } },
+      },
+    });
 
-    const { toCancel, tokenReturnWallets } = payout.beneficiaryRedeem.reduce(
+    // getting the wallet addresses of the beneficiaries in the group
+    const walletAddressWithGroupId = beneficiaryGroup.map(
+      (item) => item.beneficiary.walletAddress
+    );
+
+    // separating the beneficiaryRedeem records into two arrays: one for the records that are paid and one for the records that are not paid
+    const { toCancel, walletNotForReturn } = payout.beneficiaryRedeem.reduce(
       (acc, r) => {
-        if (!PAID.includes(r.status)) {
+        if (PAID.includes(r.status)) {
+          acc.walletNotForReturn.push(r.beneficiaryWalletAddress);
+        } else {
           acc.toCancel.push(r.uuid);
-          acc.tokenReturnWallets.push(r.beneficiaryWalletAddress);
         }
         return acc;
       },
-      { toCancel: [], tokenReturnWallets: [] }
+      { toCancel: [], walletNotForReturn: [] }
     );
 
-    const amountPerWallet = tokenReturnWallets.length
-      ? beneficiaryGroupToken?.numberOfTokens / tokenReturnWallets.length
-      : 0;
+    // filtering the wallet addresses of the beneficiaries that are not paid and need to be returned
+    const walletForReturn = walletAddressWithGroupId.filter(
+      (wallet) => !walletNotForReturn.includes(wallet)
+    );
+
+    // calculating the amount of tokens to be returned from each wallet address
+    const amountPerWallet =
+      beneficiaryGroupToken?.numberOfTokens / walletAddressWithGroupId.length;
 
     // extras.cancelledBy marks this payout as cancelled — syncPayoutStatus and
     // checkAndCompletePayout treat it as terminal and never auto-recompute it,
@@ -2875,11 +2894,11 @@ export class PayoutsService {
     );
     // Block: Token returning from cancelled wallets in beneficiaryRedeem
     // Skip when every redeem already succeeded — nothing to return.
-    if (tokenReturnWallets.length) {
+    if (walletForReturn.length) {
       try {
         await chain.queueReturnTokens({
           payoutUuid: payout.uuid,
-          wallets: tokenReturnWallets,
+          wallets: walletForReturn,
           amountPerWallet,
         });
       } catch (err: any) {
@@ -2902,6 +2921,7 @@ export class PayoutsService {
     this.logger.log(
       'Token returned from the cancelled wallets in beneficiaryRedeem'
     );
+
     return {
       message: 'Payout is completed and pending redeemed is cancelled',
       code: 'PAYOUT_COMPLETED_AND_REDEEMED_CANCELLED',
