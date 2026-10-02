@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BeneficiaryService } from './beneficiary.service';
+import { AsyncQueueService } from '../queue/async-queue.service';
 import { PrismaService } from '@rumsan/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -124,6 +125,14 @@ describe('BeneficiaryService', () => {
         {
           provide: getQueueToken(BQUEUE.STELLAR),
           useValue: mockQueue,
+        },
+        {
+          provide: getQueueToken(BQUEUE.BENEFICIARY),
+          useValue: mockQueue,
+        },
+        {
+          provide: AsyncQueueService,
+          useValue: { enqueue: jest.fn() },
         },
         {
           provide: EventEmitter2,

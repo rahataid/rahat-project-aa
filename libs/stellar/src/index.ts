@@ -8,3 +8,4 @@ export * from './utils/errors';
 
 // Re-export commonly needed stellar-sdk primitives for convenience
 export { Asset, BASE_FEE, Keypair, Networks } from '@stellar/stellar-sdk';
+export * from './utils/sponsor';

@@ -30,6 +30,7 @@ import { SseService } from '../sse/sse.service';
 import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
 import { ModuleRef } from '@nestjs/core';
 import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
+import { StellarSponsorService } from '../stellar-sponsor/stellar-sponsor.service';
 import { getOtpHash } from '../utils/hash';
 import { AsyncQueueService } from '../queue/async-queue.service';
 
@@ -2516,6 +2517,11 @@ export class BeneficiaryService {
       const pendingJobs = await this.countGroupImportJobs(beneficiaryGroupId);
       return { status: pendingJobs > 0 ? 'IN_PROGRESS' : 'COMPLETED' };
     }
+
+    // Resends for an existing group return above, so this only gates a new assignment.
+    await this.moduleRef
+      .get(StellarSponsorService, { strict: false })
+      .assertSponsorFundsForGroup(beneficiaries);
 
     await this.assertNoWalletConflicts(beneficiaries);
 
