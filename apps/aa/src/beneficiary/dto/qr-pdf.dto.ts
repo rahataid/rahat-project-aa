@@ -41,7 +41,7 @@ export class ExportGroupExcelDto {
 
   @IsOptional()
   @IsBoolean()
-  excludeUnphonedBeneficiaries?: boolean;
+  onlyUnphonedBeneficiaries?: boolean;
 
   @IsOptional()
   @IsArray()

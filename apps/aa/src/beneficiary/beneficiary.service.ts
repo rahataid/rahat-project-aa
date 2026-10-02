@@ -94,7 +94,7 @@ export class BeneficiaryService {
     const {
       groupId,
       includeOtp = true,
-      excludeUnphonedBeneficiaries = false,
+      onlyUnphonedBeneficiaries = false,
       excelFields = [],
     } = payload;
     const requested = excelFields;
@@ -139,7 +139,7 @@ export class BeneficiaryService {
 
       const rawPhone = ben.phone || (extras.phone as string) || '';
       const isRandomPhone = rawPhone.startsWith('+000');
-      if (isRandomPhone && excludeUnphonedBeneficiaries) continue;
+      if (onlyUnphonedBeneficiaries && !isRandomPhone) continue;
 
       const syncedLocation =
         typeof extras.location === 'string' ? extras.location.trim() : '';
