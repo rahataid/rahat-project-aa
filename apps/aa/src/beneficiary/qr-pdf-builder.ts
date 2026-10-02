@@ -55,10 +55,12 @@ function registerReportFonts(doc: typeof PDFDocument) {
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 
-// 4 cards per page: 2 cols x 2 rows
+// 6 cards per page: 2 cols x 3 rows. Same portrait card UI as before
+// (logo strip, wave, centered QR + stacked text), uniformly scaled down
+// to fit the denser grid.
 const MARGIN = 24;
 const COLS = 2;
-const ROWS = 2;
+const ROWS = 3;
 const CARDS_PER_PAGE = COLS * ROWS;
 const GUTTER_H = 16;
 const GUTTER_V = 16;
@@ -69,8 +71,8 @@ const CARD_HEIGHT = (PAGE_HEIGHT - MARGIN * 2 - GUTTER_V * (ROWS - 1)) / ROWS;
 const BLUE_COLOR = '#2F7FC1';
 const LOGO_SECTION_H = CARD_HEIGHT * 0.13;
 const BLUE_TOP_H = CARD_HEIGHT * 0.56;
-const WAVE_DIP = 14;
-const QR_SIZE = Math.floor(CARD_WIDTH * 0.55);
+const WAVE_DIP = 10;
+const QR_SIZE = Math.floor(Math.min(CARD_WIDTH * 0.5, CARD_HEIGHT * 0.38));
 
 function cardOrigin(index: number): { x: number; y: number } {
   const col = index % COLS;
@@ -89,15 +91,9 @@ function drawCardBackground(doc: typeof PDFDocument, x: number, y: number) {
 
   doc.save();
 
-  doc
-    .rect(x, y, CARD_WIDTH, CARD_HEIGHT)
-    .fillColor(BLUE_COLOR)
-    .fill();
+  doc.rect(x, y, CARD_WIDTH, CARD_HEIGHT).fillColor(BLUE_COLOR).fill();
 
-  doc
-    .rect(x, y, CARD_WIDTH, LOGO_SECTION_H)
-    .fillColor('#ffffff')
-    .fill();
+  doc.rect(x, y, CARD_WIDTH, LOGO_SECTION_H).fillColor('#ffffff').fill();
 
   doc
     .moveTo(x, y + LOGO_SECTION_H)
@@ -168,10 +164,15 @@ function renderCardsToPdf(
     if (logo) {
       const logoH = LOGO_SECTION_H * 0.65;
       const logoW = logoH * 4.2;
-      doc.image(logo, x + (CARD_WIDTH - logoW) / 2, logoAreaCenterY - logoH / 2, {
-        width: logoW,
-        height: logoH,
-      });
+      doc.image(
+        logo,
+        x + (CARD_WIDTH - logoW) / 2,
+        logoAreaCenterY - logoH / 2,
+        {
+          width: logoW,
+          height: logoH,
+        }
+      );
     } else {
       doc
         .font(REPORT_FONT_BOLD)
@@ -184,9 +185,9 @@ function renderCardsToPdf(
     }
 
     // QR code box: white rounded rect with blue border
-    const qrBoxPadding = 5;
+    const qrBoxPadding = 4;
     const qrX = x + (CARD_WIDTH - QR_SIZE) / 2;
-    const qrY = y + LOGO_SECTION_H + 8;
+    const qrY = y + LOGO_SECTION_H + 6;
     const qrBoxX = qrX - qrBoxPadding;
     const qrBoxY = qrY - qrBoxPadding;
     const qrBoxSize = QR_SIZE + qrBoxPadding * 2;
@@ -206,13 +207,13 @@ function renderCardsToPdf(
     doc.restore();
 
     // Text section on blue background below the wave
-    const textStartY = y + BLUE_TOP_H + WAVE_DIP + 8;
+    const textStartY = y + BLUE_TOP_H + WAVE_DIP + 6;
     let textY = textStartY;
-    const lineH = 14;
+    const lineH = 11;
 
     doc
       .font(REPORT_FONT_BOLD)
-      .fontSize(9)
+      .fontSize(8.5)
       .fillColor('#ffffff')
       .text(card.name || '', x, textY, { width: CARD_WIDTH, align: 'center' });
     textY += lineH;
@@ -220,7 +221,7 @@ function renderCardsToPdf(
     if (card.phone) {
       doc
         .font(REPORT_FONT)
-        .fontSize(8)
+        .fontSize(7.5)
         .fillColor('#ddeeff')
         .text(card.phone, x, textY, { width: CARD_WIDTH, align: 'center' });
       textY += lineH;
@@ -229,9 +230,12 @@ function renderCardsToPdf(
     if (card.otp) {
       doc
         .font(REPORT_FONT_BOLD)
-        .fontSize(8.5)
+        .fontSize(8)
         .fillColor('#ffffff')
-        .text(`Rahat Pin: ${card.otp}`, x, textY, { width: CARD_WIDTH, align: 'center' });
+        .text(`Rahat Pin: ${card.otp}`, x, textY, {
+          width: CARD_WIDTH,
+          align: 'center',
+        });
       textY += lineH;
     }
 
@@ -239,13 +243,12 @@ function renderCardsToPdf(
     for (const field of card.extraFields || []) {
       doc
         .font(REPORT_FONT)
-        .fontSize(8)
+        .fontSize(7.5)
         .fillColor('#ddeeff')
-        .text(
-          `${field.label}: ${field.value}`,
-          x, textY,
-          { width: CARD_WIDTH, align: 'center' }
-        );
+        .text(`${field.label}: ${field.value}`, x, textY, {
+          width: CARD_WIDTH,
+          align: 'center',
+        });
       textY += lineH;
     }
   }
