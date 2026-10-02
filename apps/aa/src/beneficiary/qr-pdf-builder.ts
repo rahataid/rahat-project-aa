@@ -159,18 +159,18 @@ function renderCardsToPdf(
     doc.roundedRect(x, y, CARD_WIDTH, CARD_HEIGHT, 6).clip();
     drawCardBackground(doc, x, y);
 
-    // Logo centered in white top strip
     const logoAreaCenterY = y + LOGO_SECTION_H / 2;
     if (logo) {
-      const logoH = LOGO_SECTION_H * 0.65;
-      const logoW = logoH * 4.2;
+      const maxLogoW = CARD_WIDTH * 0.62;
+      const maxLogoH = LOGO_SECTION_H * 0.74;
       doc.image(
         logo,
-        x + (CARD_WIDTH - logoW) / 2,
-        logoAreaCenterY - logoH / 2,
+        x + (CARD_WIDTH - maxLogoW) / 2,
+        logoAreaCenterY - maxLogoH / 2,
         {
-          width: logoW,
-          height: logoH,
+          fit: [maxLogoW, maxLogoH],
+          align: 'center',
+          valign: 'center',
         }
       );
     } else {
