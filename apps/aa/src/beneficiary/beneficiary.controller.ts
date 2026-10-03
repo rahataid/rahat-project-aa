@@ -14,7 +14,11 @@ import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { GroupUuidDto } from './dto/group-uuid.dto';
 import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
-import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
+import {
+  ExportGroupExcelDto,
+  GenerateQrPdfDto,
+  RegenerateQrPdfDto,
+} from './dto/qr-pdf.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
@@ -315,10 +319,8 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.EXPORT_GROUP_EXCEL,
     uuid: process.env.PROJECT_ID,
   })
-  exportGroupBeneficiariesExcel(@Payload() payload: { groupId: string }) {
-    return this.beneficiaryService.exportGroupBeneficiariesExcel(
-      payload.groupId
-    );
+  exportGroupBeneficiariesExcel(@Payload() payload: ExportGroupExcelDto) {
+    return this.beneficiaryService.exportGroupBeneficiariesExcel(payload);
   }
 
   @MessagePattern({

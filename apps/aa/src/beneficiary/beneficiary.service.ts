@@ -27,7 +27,11 @@ import { PayoutsService } from '../payouts/payouts.service';
 import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
-import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
+import {
+  ExportGroupExcelDto,
+  GenerateQrPdfDto,
+  RegenerateQrPdfDto,
+} from './dto/qr-pdf.dto';
 import { ModuleRef } from '@nestjs/core';
 import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
 
@@ -85,8 +89,18 @@ export class BeneficiaryService {
   }
 
   async exportGroupBeneficiariesExcel(
-    groupId: string
-  ): Promise<GroupBeneficiaryExcelRow[]> {
+    payload: ExportGroupExcelDto
+  ): Promise<Record<string, any>[]> {
+    const {
+      groupId,
+      includeOtp = true,
+      onlyUnphonedBeneficiaries = false,
+      excelFields = [],
+    } = payload;
+    const requested = excelFields;
+
+    const withOtp = includeOtp !== false;
+
     const links = await this.prisma.beneficiaryToGroup.findMany({
       where: { groupId },
       include: {
@@ -106,46 +120,80 @@ export class BeneficiaryService {
       .map((l) => l.beneficiary?.walletAddress)
       .filter((address): address is string => !!address);
 
-    const otps = await this.prisma.otp.findMany({
-      where: { walletAddress: { in: wallets } },
-      select: { walletAddress: true, otp: true },
-    });
+    const otpMap: Record<string, string> = withOtp
+      ? Object.fromEntries(
+          (
+            await this.prisma.otp.findMany({
+              where: { walletAddress: { in: wallets } },
+              select: { walletAddress: true, otp: true },
+            })
+          ).map((o) => [o.walletAddress, o.otp ?? ''])
+        )
+      : {};
 
-    const otpMap = Object.fromEntries(
-      otps.map((o) => [o.walletAddress, o.otp ?? ''])
-    );
-
-    return links.flatMap(({ beneficiary: ben }) => {
-      if (!ben) return [];
+    const rows: Record<string, any>[] = [];
+    for (const { beneficiary: ben } of links) {
+      if (!ben) continue;
 
       const extras = (ben.extras as Record<string, unknown>) ?? {};
 
+      const rawPhone = ben.phone || (extras.phone as string) || '';
+      const isRandomPhone = rawPhone.startsWith('+000');
+      if (onlyUnphonedBeneficiaries && !isRandomPhone) continue;
+
       const syncedLocation =
         typeof extras.location === 'string' ? extras.location.trim() : '';
-      return [
-        {
-          name: String(
-            extras.name ||
-              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
-              ''
-          ),
-          phone: ben.phone ?? '',
-          gender: ben.gender ?? 'UNKNOWN',
-          government_id_number: String(extras.govtIDNumber ?? ''),
-          address:
-            syncedLocation ||
-            [
-              extras.district,
-              extras.municipality,
-              extras.ward ? `Ward ${extras.ward}` : null,
-              extras.tole_name,
-            ]
-              .filter(Boolean)
-              .join(', '),
-          otp: otpMap[ben.walletAddress ?? ''] ?? '',
-        },
-      ];
-    });
+      const base: Record<string, any> = {
+        name:
+          typeof extras.name === 'string' && extras.name.trim()
+            ? extras.name.trim()
+            : `${
+                typeof extras.firstName === 'string' ? extras.firstName : ''
+              } ${
+                typeof extras.lastName === 'string' ? extras.lastName : ''
+              }`.trim(),
+        phone: isRandomPhone
+          ? ''
+          : (rawPhone.startsWith('+977') ? rawPhone.slice(4) : rawPhone) || '',
+        gender: ben.gender ?? 'UNKNOWN',
+        address:
+          syncedLocation ||
+          [
+            extras.district,
+            extras.municipality,
+            extras.ward ? `Ward ${extras.ward}` : null,
+            extras.tole_name,
+          ]
+            .filter(Boolean)
+            .join(', '),
+        ...(withOtp ? { otp: otpMap[ben.walletAddress ?? ''] ?? '' } : {}),
+      };
+
+      const baseByLower = new Set(
+        Object.keys(base).map((k) => k.toLowerCase())
+      );
+      for (const field of requested) {
+        const lower = field.toLowerCase();
+        if (baseByLower.has(lower)) continue;
+        if (lower === 'otp' && !withOtp) continue;
+        if (lower === 'walletaddress') {
+          base[field] = ben.walletAddress ?? '';
+          continue;
+        }
+        const extraKey = Object.keys(extras).find(
+          (k) => k.toLowerCase() === lower
+        );
+        if (!extraKey) continue;
+        const value = extras[extraKey];
+        if (value === undefined || value === null) continue;
+        const strValue = String(value).trim();
+        if (!strValue) continue;
+        base[field] = strValue;
+      }
+      rows.push(base);
+    }
+
+    return rows;
   }
 
   async getAllBenfs() {
@@ -902,7 +950,8 @@ export class BeneficiaryService {
         `[SkipOldPayout] group=${groupUuid} rejected: only supported on Stellar chain`
       );
       throw new RpcException({
-        message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
+        message:
+          'skipOldPayoutForRemaining is only supported on Stellar chain.',
         code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
       });
     }
@@ -926,7 +975,9 @@ export class BeneficiaryService {
       return;
     }
     this.logger.log(
-      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${openPayouts.length} open payout(s): ${openPayouts
+      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${
+        openPayouts.length
+      } open payout(s): ${openPayouts
         .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
         .join(', ')}`
     );
@@ -945,7 +996,9 @@ export class BeneficiaryService {
       const redeems = payout.beneficiaryRedeem;
       // per-beneficiary amount of the old reservation; caps the return so tokens from the
       // new reservation (possibly disbursed before the job runs) are never taken back
-      const amountPerWallet = wallets.length ? numberOfTokens / wallets.length : 0;
+      const amountPerWallet = wallets.length
+        ? numberOfTokens / wallets.length
+        : 0;
       const paid = new Set(
         redeems
           .filter((r) => PAID.includes(r.status))
@@ -1020,7 +1073,9 @@ export class BeneficiaryService {
       );
 
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${Date.now() - startedAt}ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${
+          Date.now() - startedAt
+        }ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
       );
       await this.payoutService.checkAndCompletePayout(payout.uuid);
 
@@ -1042,7 +1097,13 @@ export class BeneficiaryService {
         });
       }
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 4/4 token return queued for ${remaining.length} wallet(s); total ${Date.now() - startedAt}ms in request. Track via payout.extras.tokenReturn`
+        `[SkipOldPayout] payout=${
+          payout.uuid
+        } step 4/4 token return queued for ${
+          remaining.length
+        } wallet(s); total ${
+          Date.now() - startedAt
+        }ms in request. Track via payout.extras.tokenReturn`
       );
     }
   }
@@ -1437,10 +1498,12 @@ export class BeneficiaryService {
     return {
       ...benfGroupToken,
       name: benfGroup.name,
-      groupedBeneficiaries: benfGroup.beneficiaries.map(({ beneficiary, ...rest }) => ({
-        ...rest,
-        Beneficiary: beneficiary,
-      })),
+      groupedBeneficiaries: benfGroup.beneficiaries.map(
+        ({ beneficiary, ...rest }) => ({
+          ...rest,
+          Beneficiary: beneficiary,
+        })
+      ),
     };
   }
 
@@ -1523,7 +1586,9 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(`Group token ${benfGroupToken.uuid} updated to status: ${data.status}`);
+      this.logger.log(
+        `Group token ${benfGroupToken.uuid} updated to status: ${data.status}`
+      );
 
       return benfGroupToken;
     } catch (error) {
@@ -1551,7 +1616,7 @@ export class BeneficiaryService {
     this.logger.debug(`Fetching disbursement progress for group: ${groupUuid}`);
     // Get the active (not yet disbursed) token reservation for this group
     const groupToken = await this.getOneTokenReservationByGroupId(groupUuid);
-    
+
     // If no token reservation or no info field, return default progress
     // This handles groups that haven't started disbursement yet
     if (!groupToken || !groupToken.info) {
@@ -1580,13 +1645,21 @@ export class BeneficiaryService {
 
     // Count batches by status for detailed progress tracking
     // CONFIRMED = successfully disbursed on-chain
-    const completedBatches = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+    const completedBatches = batchStatus.filter(
+      (b: any) => b.status === 'CONFIRMED'
+    ).length;
     // FAILED with retryCount >= 3 = exhausted all retries, permanently failed
-    const failedBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3).length;
+    const failedBatches = batchStatus.filter(
+      (b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3
+    ).length;
     // PENDING = waiting to be processed or currently processing
-    const pendingBatches = batchStatus.filter((b: any) => b.status === 'PENDING').length;
+    const pendingBatches = batchStatus.filter(
+      (b: any) => b.status === 'PENDING'
+    ).length;
     // FAILED with retryCount < 3 = will be retried automatically
-    const retryingBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3).length;
+    const retryingBatches = batchStatus.filter(
+      (b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3
+    ).length;
 
     return {
       totalBatches,
@@ -1597,7 +1670,10 @@ export class BeneficiaryService {
       disbursedBeneficiariesCount: disbursedCount,
       totalBeneficiaries,
       // Progress percentage based on confirmed beneficiaries / total beneficiaries
-      progressPercent: totalBeneficiaries > 0 ? Math.round((disbursedCount / totalBeneficiaries) * 100) : 0,
+      progressPercent:
+        totalBeneficiaries > 0
+          ? Math.round((disbursedCount / totalBeneficiaries) * 100)
+          : 0,
       status: groupToken.status,
       isDisbursed: groupToken.isDisbursed,
       lastUpdated: info.lastUpdated,
