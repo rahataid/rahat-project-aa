@@ -768,7 +768,7 @@ export class VendorsService {
         };
       }
 
-      const isValidOtp = verifyOtpHash(
+      const isValidOtp = await verifyOtpHash(
         otpData.otpHash,
         `${payload.otp}:${otpData.amount}`
       );

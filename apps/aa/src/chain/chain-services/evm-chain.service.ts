@@ -1352,7 +1352,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
     //   throw new RpcException({ message: 'OTP has expired', code: 'OTP_EXPIRED' });
     // }
 
-    const isValid = verifyOtpHash(record.otpHash, `${otp}`);
+    const isValid = await verifyOtpHash(record.otpHash, `${otp}`);
 
     if (!isValid) {
       this.logger.log('Invalid OTP or amount mismatch');
@@ -1717,7 +1717,7 @@ export class EvmChainService implements IChainService, OnModuleInit {
     this.logger.log('Expires at: ', expiresAt);
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
 
-    const otpHash = getOtpHash(`${otp}:${amount}`);
+    const otpHash = getOtpHash(`${otp}`);
     this.logger.log('OTP hash: ', otpHash);
 
     const otpRes = await this.prisma.otp.upsert({

@@ -1623,7 +1623,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     //     code: 'OTP_EXPIRED',
     //   });
 
-    const isValid = verifyOtpHash(record.otpHash, `${otp}`);
+    const isValid = await verifyOtpHash(record.otpHash, `${otp}`);
     if (!isValid)
       throw new RpcException({
         message: 'Invalid OTP or amount mismatch',
@@ -1640,7 +1640,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
-    const otpHash = getOtpHash(`${otp}:${amount}`);
+    const otpHash = getOtpHash(`${otp}`);
 
     const otpRes = await this.prisma.otp.upsert({
       where: { phoneNumber },

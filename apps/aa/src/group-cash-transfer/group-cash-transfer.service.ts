@@ -564,7 +564,7 @@ export class GroupCashTransferService {
       });
     }
 
-    const isValid = verifyOtpHash(otpRecord.otpHash, otp);
+    const isValid = await verifyOtpHash(otpRecord.otpHash, otp);
     if (!isValid) {
       throw new RpcException({ message: 'Invalid OTP', code: 'INVALID_OTP' });
     }

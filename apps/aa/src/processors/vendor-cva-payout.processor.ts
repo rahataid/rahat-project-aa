@@ -448,6 +448,7 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
+            // Offline vendor app verifies `otp:amount` on the device, so the amount stays in this hash
             const otpHash = getOtpHash(
               `${result.otp}:${request.amount}`
             );
