@@ -448,10 +448,7 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            const otpHash = await bcrypt.hash(
-              `${result.otp}:${request.amount}`,
-              10
-            );
+            const otpHash = getOtpHash(`${result.otp}`);
             // Store OTP in DB
             await this.prismaService.otp.upsert({
               where: { phoneNumber: request.phoneNumber },
