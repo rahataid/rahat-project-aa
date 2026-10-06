@@ -904,9 +904,28 @@ export class VendorsService {
         const beneficiaryName = benInfo?.piiData?.name || 'Unknown';
 
         // Get OTP for this beneficiary
-        const otpData = await this.prisma.otp.findUnique({
+        let otpData = await this.prisma.otp.findUnique({
           where: { phoneNumber },
         });
+
+        // No OTP yet: create one, same as the seeding flow in beneficiary.service
+        if (!otpData && phoneNumber) {
+          const otp =
+            process.env.NODE_ENV !== 'production'
+              ? '1234'
+              : Math.floor(1000 + Math.random() * 9000).toString();
+          otpData = await this.prisma.otp.upsert({
+            where: { phoneNumber },
+            update: {},
+            create: {
+              phoneNumber,
+              walletAddress: beneficiary.walletAddress,
+              otpHash: getOtpHash(otp),
+              amount: 0,
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            },
+          });
+        }
 
         beneficiaries.push({
           uuid: redeem.uuid,
