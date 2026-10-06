@@ -121,3 +121,17 @@ export class StellarOperationError extends Error {
     }
   }
 }
+
+/** Reserve-relevant state of the sponsor account, as read from Horizon. Amounts are in stroops (1 XLM = 10_000_000). */
+export interface SponsorAccountInfo {
+  publicKey: string;
+  /** Native balance. 0 when the account does not exist yet. */
+  balanceStroops: number;
+  /** Native balance already promised to open DEX offers. */
+  sellingLiabilitiesStroops: number;
+  subentryCount: number;
+  /** Reserve units this account currently pays for other accounts' entries. */
+  numSponsoring: number;
+  /** Reserve units other accounts pay for this account's entries. */
+  numSponsored: number;
+}

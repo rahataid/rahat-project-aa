@@ -6,6 +6,7 @@ import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
   CreateBeneficiaryDto,
+  CreateBenfAddGroupToProjectDto,
   CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -121,6 +122,16 @@ export class BeneficiaryController {
       JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT
     );
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  // Platform group assignment: returns QUEUED / IN_PROGRESS / COMPLETED, final result is
+  // reported back via GROUP_ASSIGN_SYNC_RESULT.
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  createBenfAndAddGroupToProject(payload: CreateBenfAddGroupToProjectDto) {
+    return this.beneficiaryService.createBeneficiariesInBatches(payload);
   }
 
   @MessagePattern({
