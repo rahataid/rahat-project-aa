@@ -1036,6 +1036,11 @@ export class BeneficiaryService {
             });
           }
 
+          tx.payouts.update({
+            where: { uuid: payout.uuid },
+            data: { status: 'COMPLETED' },
+          });
+
           if (missing.length) {
             await tx.beneficiaryRedeem.createMany({
               data: missing.map((w) => ({
