@@ -32,7 +32,7 @@ import { StellarClientConfig } from 'libs/stellar/src/types';
 import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { chunkArray } from '../../utils/utility';
-import bcrypt from 'bcryptjs';
+import { getOtpHash, verifyOtpHash } from '../../utils/hash';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
 import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
@@ -1623,7 +1623,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
     //     code: 'OTP_EXPIRED',
     //   });
 
-    const isValid = await bcrypt.compare(`${otp}`, record.otpHash);
+    const isValid = await verifyOtpHash(record.otpHash, `${otp}`);
     if (!isValid)
       throw new RpcException({
         message: 'Invalid OTP or amount mismatch',
@@ -1640,7 +1640,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
   private async storeOTP(otp: string, phoneNumber: string, amount: number) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
-    const otpHash = await bcrypt.hash(`${otp}:${amount}`, 10);
+    const otpHash = getOtpHash(`${otp}`);
 
     const otpRes = await this.prisma.otp.upsert({
       where: { phoneNumber },

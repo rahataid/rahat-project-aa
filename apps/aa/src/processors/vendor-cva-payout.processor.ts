@@ -14,7 +14,7 @@ import {
 // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
 // equivalent OTP verification / asset transfer methods.
 // import { StellarService } from '../stellar/stellar.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash } from '../utils/hash';
 import { Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.VENDOR_CVA)
@@ -448,9 +448,9 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            const otpHash = await bcrypt.hash(
-              `${result.otp}:${request.amount}`,
-              10
+            // Offline vendor app verifies `otp:amount` on the device, so the amount stays in this hash
+            const otpHash = getOtpHash(
+              `${result.otp}:${request.amount}`
             );
             // Store OTP in DB
             await this.prismaService.otp.upsert({

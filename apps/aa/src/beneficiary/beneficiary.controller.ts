@@ -6,6 +6,7 @@ import { BeneficiaryService } from './beneficiary.service';
 import {
   AddTokenToGroup,
   CreateBeneficiaryDto,
+  CreateBenfAddGroupToProjectDto,
   CreateBulkBeneficiaryDto,
 } from './dto/create-beneficiary.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -14,7 +15,11 @@ import { CVA_JOBS } from '@rahat-project/cva';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { GroupUuidDto } from './dto/group-uuid.dto';
 import { RevokeSponsorshipForGroupDto } from './dto/revoke-sponsorship.dto';
-import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
+import {
+  ExportGroupExcelDto,
+  GenerateQrPdfDto,
+  RegenerateQrPdfDto,
+} from './dto/qr-pdf.dto';
 import { BeneficiaryMultisigService } from './beneficiary.multisig.service';
 
 @Controller()
@@ -117,6 +122,16 @@ export class BeneficiaryController {
       JOBS.BENEFICIARY.ADD_GROUP_TO_PROJECT
     );
     return this.beneficiaryService.addGroupToProject(payload);
+  }
+
+  // Platform group assignment: returns QUEUED / IN_PROGRESS / COMPLETED, final result is
+  // reported back via GROUP_ASSIGN_SYNC_RESULT.
+  @MessagePattern({
+    cmd: JOBS.BENEFICIARY.CREATE_BENF_ADD_GROUP_TO_PROJECT,
+    uuid: process.env.PROJECT_ID,
+  })
+  createBenfAndAddGroupToProject(payload: CreateBenfAddGroupToProjectDto) {
+    return this.beneficiaryService.createBeneficiariesInBatches(payload);
   }
 
   @MessagePattern({
@@ -315,10 +330,8 @@ export class BeneficiaryController {
     cmd: JOBS.BENEFICIARY.EXPORT_GROUP_EXCEL,
     uuid: process.env.PROJECT_ID,
   })
-  exportGroupBeneficiariesExcel(@Payload() payload: { groupId: string }) {
-    return this.beneficiaryService.exportGroupBeneficiariesExcel(
-      payload.groupId
-    );
+  exportGroupBeneficiariesExcel(@Payload() payload: ExportGroupExcelDto) {
+    return this.beneficiaryService.exportGroupBeneficiariesExcel(payload);
   }
 
   @MessagePattern({
