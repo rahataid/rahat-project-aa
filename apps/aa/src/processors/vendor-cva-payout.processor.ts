@@ -14,7 +14,7 @@ import {
 // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
 // equivalent OTP verification / asset transfer methods.
 // import { StellarService } from '../stellar/stellar.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash } from '../utils/hash';
 import { Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.VENDOR_CVA)

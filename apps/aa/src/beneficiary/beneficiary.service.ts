@@ -4,19 +4,19 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { UUID } from 'crypto';
-import { lastValueFrom } from 'rxjs';
-import bcrypt from 'bcryptjs';
+import { lastValueFrom, timeout } from 'rxjs';
 import { BQUEUE, CORE_MODULE, EVENTS, JOBS } from '../constants';
 import {
   AddTokenToGroup,
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
   CreateBulkBeneficiaryDto,
+  CreateBenfAddGroupToProjectDto
 } from './dto/create-beneficiary.dto';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
 import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { Job, Queue } from 'bull';
 import { UpdateBeneficiaryGroupTokenDto } from './dto/update-benf-group-token.dto';
 import { GroupPurpose, PayoutType, Prisma } from '@prisma/client';
 import { QrPdfService } from './qr-pdf.service';
@@ -27,12 +27,21 @@ import { PayoutsService } from '../payouts/payouts.service';
 import { REDEEM_COMPLETED_STATUSES } from '../utils/getBeneficiaryRedemStatus';
 import { createContractInstance } from '../utils/web3';
 import { SseService } from '../sse/sse.service';
-import { GenerateQrPdfDto, RegenerateQrPdfDto } from './dto/qr-pdf.dto';
+import {
+  ExportGroupExcelDto,
+  GenerateQrPdfDto,
+  RegenerateQrPdfDto,
+} from './dto/qr-pdf.dto';
 import { ModuleRef } from '@nestjs/core';
 import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
+import { StellarSponsorService } from '../stellar-sponsor/stellar-sponsor.service';
+import { getOtpHash } from '../utils/hash';
+import { AsyncQueueService } from '../queue/async-queue.service';
 
 const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
-const BATCH_SIZE = 50;
+const BENEFICIARY_BATCH_SIZE = 500;
+// ponytail: one multicall tx per batch, keep small to stay under gas/size limits
+const TOKEN_ASSIGN_BATCH_SIZE = 30;
 interface DataItem {
   groupId: UUID;
   [key: string]: any;
@@ -62,12 +71,14 @@ export class BeneficiaryService {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
+    @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
     private readonly qrPdfService: QrPdfService,
     private readonly sseService: SseService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly asyncQueueService: AsyncQueueService
   ) {
     this.rsprisma = prisma.rsclient;
   }
@@ -85,8 +96,18 @@ export class BeneficiaryService {
   }
 
   async exportGroupBeneficiariesExcel(
-    groupId: string
-  ): Promise<GroupBeneficiaryExcelRow[]> {
+    payload: ExportGroupExcelDto
+  ): Promise<Record<string, any>[]> {
+    const {
+      groupId,
+      includeOtp = true,
+      onlyUnphonedBeneficiaries = false,
+      excelFields = [],
+    } = payload;
+    const requested = excelFields;
+
+    const withOtp = includeOtp !== false;
+
     const links = await this.prisma.beneficiaryToGroup.findMany({
       where: { groupId },
       include: {
@@ -106,46 +127,80 @@ export class BeneficiaryService {
       .map((l) => l.beneficiary?.walletAddress)
       .filter((address): address is string => !!address);
 
-    const otps = await this.prisma.otp.findMany({
-      where: { walletAddress: { in: wallets } },
-      select: { walletAddress: true, otp: true },
-    });
+    const otpMap: Record<string, string> = withOtp
+      ? Object.fromEntries(
+          (
+            await this.prisma.otp.findMany({
+              where: { walletAddress: { in: wallets } },
+              select: { walletAddress: true, otp: true },
+            })
+          ).map((o) => [o.walletAddress, o.otp ?? ''])
+        )
+      : {};
 
-    const otpMap = Object.fromEntries(
-      otps.map((o) => [o.walletAddress, o.otp ?? ''])
-    );
-
-    return links.flatMap(({ beneficiary: ben }) => {
-      if (!ben) return [];
+    const rows: Record<string, any>[] = [];
+    for (const { beneficiary: ben } of links) {
+      if (!ben) continue;
 
       const extras = (ben.extras as Record<string, unknown>) ?? {};
 
+      const rawPhone = ben.phone || (extras.phone as string) || '';
+      const isRandomPhone = rawPhone.startsWith('+000');
+      if (onlyUnphonedBeneficiaries && !isRandomPhone) continue;
+
       const syncedLocation =
         typeof extras.location === 'string' ? extras.location.trim() : '';
-      return [
-        {
-          name: String(
-            extras.name ||
-              [extras.firstName, extras.lastName].filter(Boolean).join(' ') ||
-              ''
-          ),
-          phone: ben.phone ?? '',
-          gender: ben.gender ?? 'UNKNOWN',
-          government_id_number: String(extras.govtIDNumber ?? ''),
-          address:
-            syncedLocation ||
-            [
-              extras.district,
-              extras.municipality,
-              extras.ward ? `Ward ${extras.ward}` : null,
-              extras.tole_name,
-            ]
-              .filter(Boolean)
-              .join(', '),
-          otp: otpMap[ben.walletAddress ?? ''] ?? '',
-        },
-      ];
-    });
+      const base: Record<string, any> = {
+        name:
+          typeof extras.name === 'string' && extras.name.trim()
+            ? extras.name.trim()
+            : `${
+                typeof extras.firstName === 'string' ? extras.firstName : ''
+              } ${
+                typeof extras.lastName === 'string' ? extras.lastName : ''
+              }`.trim(),
+        phone: isRandomPhone
+          ? ''
+          : (rawPhone.startsWith('+977') ? rawPhone.slice(4) : rawPhone) || '',
+        gender: ben.gender ?? 'UNKNOWN',
+        address:
+          syncedLocation ||
+          [
+            extras.district,
+            extras.municipality,
+            extras.ward ? `Ward ${extras.ward}` : null,
+            extras.tole_name,
+          ]
+            .filter(Boolean)
+            .join(', '),
+        ...(withOtp ? { otp: otpMap[ben.walletAddress ?? ''] ?? '' } : {}),
+      };
+
+      const baseByLower = new Set(
+        Object.keys(base).map((k) => k.toLowerCase())
+      );
+      for (const field of requested) {
+        const lower = field.toLowerCase();
+        if (baseByLower.has(lower)) continue;
+        if (lower === 'otp' && !withOtp) continue;
+        if (lower === 'walletaddress') {
+          base[field] = ben.walletAddress ?? '';
+          continue;
+        }
+        const extraKey = Object.keys(extras).find(
+          (k) => k.toLowerCase() === lower
+        );
+        if (!extraKey) continue;
+        const value = extras[extraKey];
+        if (value === undefined || value === null) continue;
+        const strValue = String(value).trim();
+        if (!strValue) continue;
+        base[field] = strValue;
+      }
+      rows.push(base);
+    }
+
+    return rows;
   }
 
   async getAllBenfs() {
@@ -272,23 +327,23 @@ export class BeneficiaryService {
           ...(tokenAssigned === true
             ? { tokensReserved: { some: { isDisbursed: true } } }
             : tokenAssigned === false
-            ? {
+              ? {
                 OR: [
                   { tokensReserved: { none: {} } },
                   { tokensReserved: { some: { isDisbursed: true } } },
                 ],
                 groupPurpose: { not: GroupPurpose.COMMUNICATION },
               }
-            : {}),
+              : {}),
         },
         {
           ...(hasPayout === true
             ? { tokensReserved: { some: { payoutId: { not: null } } } }
             : hasPayout === false
-            ? {
+              ? {
                 tokensReserved: { some: { payoutId: null, isDisbursed: true } },
               }
-            : {}),
+              : {}),
         },
         {
           ...(search && {
@@ -367,8 +422,7 @@ export class BeneficiaryService {
     this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
     this.logger.debug(
-      `Group uuids: ${uuids.length}, selectFields: ${
-        selectField?.join(',') ?? 'all'
+      `Group uuids: ${uuids.length}, selectFields: ${selectField?.join(',') ?? 'all'
       }`
     );
     try {
@@ -567,8 +621,78 @@ export class BeneficiaryService {
     return data;
   }
 
+  // Batch worker for createBeneficiariesInBatches; the group is created before batches are queued.
+  async createBenfAndAddGroupToProject(dto: CreateBenfAddGroupToProjectDto) {
+    const { beneficiaries, beneficiaryGroupId } = dto;
+
+    this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
+
+    const processedBeneficiaries: Prisma.BeneficiaryCreateManyInput[] = beneficiaries.map(
+      ({ uuid, walletAddress, phone, extras, gender, createdAt, updatedAt }) => ({
+        uuid,
+        walletAddress,
+        phone,
+        extras,
+        gender,
+        createdAt,
+        updatedAt
+      })
+    )
+
+    try {
+      const { group, groupedBeneficiaries } = await this.prisma.$transaction(
+        async (txn) => {
+          const rdata = await txn.beneficiary.createMany({
+            data: processedBeneficiaries,
+            skipDuplicates: true,
+          });
+
+          this.logger.log(`Bulk beneficiaries created: ${rdata.count}`);
+
+          await this.seedOtpsForBeneficiaries(processedBeneficiaries, txn);
+
+          const group = await txn.beneficiaryGroups.findUniqueOrThrow({
+            where: { uuid: beneficiaryGroupId },
+          });
+
+          const groupedBeneficiaries = await txn.beneficiaryToGroup.createMany({
+            data: beneficiaries.map((beneficiary) => ({
+              beneficiaryId: beneficiary.uuid,
+              groupId: beneficiaryGroupId,
+            })),
+            skipDuplicates: true,
+          });
+
+          return { group, groupedBeneficiaries };
+        },
+        { timeout: 30000, maxWait: 10000 }
+      );
+
+      // Sponsor only this batch; the group-level event re-reads the whole group.
+      this.eventEmitter.emit(EVENTS.BENEFICIARY_BATCH_ADDED_TO_GROUP, {
+        groupUuid: beneficiaryGroupId,
+        beneficiaries: beneficiaries.map((b) => ({
+          beneficiaryId: b.uuid,
+          walletAddress: b.walletAddress,
+        })),
+      });
+
+      return { group, groupedBeneficiaries };
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error in group creation and addition: ${msg}`, err);
+
+      throw new RpcException(`Error in group creation and addition: ${msg}`);
+    }
+  }
+
+
+
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
+
+    this.logger.debug(`The payload received is:`, payload);
     this.logger.debug(
       `Adding beneficiary group ${beneficiaryGroupData.uuid} to project`
     );
@@ -579,6 +703,8 @@ export class BeneficiaryService {
         groupPurpose: beneficiaryGroupData.groupPurpose,
       },
     });
+
+    this.logger.log(`Group is: `, group);
 
     const groupedBeneficiaries =
       await this.prisma.beneficiaryToGroup.createMany({
@@ -902,7 +1028,8 @@ export class BeneficiaryService {
         `[SkipOldPayout] group=${groupUuid} rejected: only supported on Stellar chain`
       );
       throw new RpcException({
-        message: 'skipOldPayoutForRemaining is only supported on Stellar chain.',
+        message:
+          'skipOldPayoutForRemaining is only supported on Stellar chain.',
         code: 'SKIP_OLD_PAYOUT_STELLAR_ONLY',
       });
     }
@@ -926,7 +1053,9 @@ export class BeneficiaryService {
       return;
     }
     this.logger.log(
-      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${openPayouts.length} open payout(s): ${openPayouts
+      `[SkipOldPayout] group=${groupUuid} step 1/4 found ${
+        openPayouts.length
+      } open payout(s): ${openPayouts
         .map((o) => `${o.payout.uuid}[${o.payout.status}]`)
         .join(', ')}`
     );
@@ -945,7 +1074,9 @@ export class BeneficiaryService {
       const redeems = payout.beneficiaryRedeem;
       // per-beneficiary amount of the old reservation; caps the return so tokens from the
       // new reservation (possibly disbursed before the job runs) are never taken back
-      const amountPerWallet = wallets.length ? numberOfTokens / wallets.length : 0;
+      const amountPerWallet = wallets.length
+        ? numberOfTokens / wallets.length
+        : 0;
       const paid = new Set(
         redeems
           .filter((r) => PAID.includes(r.status))
@@ -982,6 +1113,11 @@ export class BeneficiaryService {
               data: { status: 'CANCELLED', isCompleted: false },
             });
           }
+
+          tx.payouts.update({
+            where: { uuid: payout.uuid },
+            data: { status: 'COMPLETED' },
+          });
 
           if (missing.length) {
             await tx.beneficiaryRedeem.createMany({
@@ -1020,7 +1156,9 @@ export class BeneficiaryService {
       );
 
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${Date.now() - startedAt}ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
+        `[SkipOldPayout] payout=${payout.uuid} step 3/4 DB committed in ${
+          Date.now() - startedAt
+        }ms: ${cancelled} redeem(s) set to CANCELLED, ${created} CANCELLED row(s) created, skippedAt stamped`
       );
       await this.payoutService.checkAndCompletePayout(payout.uuid);
 
@@ -1042,7 +1180,13 @@ export class BeneficiaryService {
         });
       }
       this.logger.log(
-        `[SkipOldPayout] payout=${payout.uuid} step 4/4 token return queued for ${remaining.length} wallet(s); total ${Date.now() - startedAt}ms in request. Track via payout.extras.tokenReturn`
+        `[SkipOldPayout] payout=${
+          payout.uuid
+        } step 4/4 token return queued for ${
+          remaining.length
+        } wallet(s); total ${
+          Date.now() - startedAt
+        }ms in request. Track via payout.extras.tokenReturn`
       );
     }
   }
@@ -1124,6 +1268,18 @@ export class BeneficiaryService {
           params: { payoutType: params?.type ?? 'none' },
         });
       }
+    }
+
+    // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
+    // start disbursing immediately and the return would otherwise claw back new tokens.
+    if (skipOldPayoutForRemaining) {
+      this.logger.log(
+        `[SkipOldPayout] group=${beneficiaryGroupId} START requested by ${user?.name} (new reservation: ${totalTokensReserved} tokens, payoutIntegrated=${isPayoutIntegrated})`
+      );
+      await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
+      this.logger.log(
+        `[SkipOldPayout] group=${beneficiaryGroupId} DONE -> continuing with assignment check and new reservation`
+      );
     }
 
     // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
@@ -1340,10 +1496,10 @@ export class BeneficiaryService {
       const status = isDisbursed
         ? 'DISBURSED'
         : sdpStatus === 'FAILED' || sdpStatus === 'ERROR'
-        ? 'FAILED'
-        : sdpStatus === 'STARTED'
-        ? 'STARTED'
-        : tokenReservation['status'];
+          ? 'FAILED'
+          : sdpStatus === 'STARTED'
+            ? 'STARTED'
+            : tokenReservation['status'];
 
       if (status === tokenReservation['status']) return null;
 
@@ -1437,10 +1593,12 @@ export class BeneficiaryService {
     return {
       ...benfGroupToken,
       name: benfGroup.name,
-      groupedBeneficiaries: benfGroup.beneficiaries.map(({ beneficiary, ...rest }) => ({
-        ...rest,
-        Beneficiary: beneficiary,
-      })),
+      groupedBeneficiaries: benfGroup.beneficiaries.map(
+        ({ beneficiary, ...rest }) => ({
+          ...rest,
+          Beneficiary: beneficiary,
+        })
+      ),
     };
   }
 
@@ -1475,25 +1633,37 @@ export class BeneficiaryService {
   async assignToken() {
     this.logger.log('Starting token assignment process');
     const allBenfs = await this.getCount();
-    const batches = this.createBatches(allBenfs, BATCH_SIZE);
+    const batches = this.createBatches(allBenfs, TOKEN_ASSIGN_BATCH_SIZE);
     this.logger.debug(
       `Total beneficiaries: ${allBenfs}, batches: ${batches.length}`
     );
 
-    if (batches.length) {
-      batches?.forEach((batch) => {
-        this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
-          attempts: 3,
-          removeOnComplete: true,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        });
-      });
-      this.logger.log(`Queued ${batches.length} token assignment batches`);
-    } else {
+    if (!batches.length) {
       this.logger.warn('No batches to process for token assignment');
+      return;
+    }
+
+    if (!(await this.isQueueReady(this.contractQueue))) {
+      throw new RpcException('Contract queue is not available. Aborting token assignment.');
+    }
+
+    try {
+      await Promise.all(
+        batches.map((batch) =>
+          this.contractQueue.add(JOBS.PAYOUT.ASSIGN_TOKEN, batch, {
+            attempts: 3,
+            removeOnComplete: true,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          })
+        )
+      );
+      this.logger.log(`Queued ${batches.length} token assignment batches`);
+    } catch (error) {
+      this.logger.error('Failed to queue token assignment batches', error);
+      throw new RpcException(`Failed to queue token assignment: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1523,7 +1693,9 @@ export class BeneficiaryService {
         },
       });
 
-      this.logger.log(`Group token ${benfGroupToken.uuid} updated to status: ${data.status}`);
+      this.logger.log(
+        `Group token ${benfGroupToken.uuid} updated to status: ${data.status}`
+      );
 
       return benfGroupToken;
     } catch (error) {
@@ -1551,7 +1723,7 @@ export class BeneficiaryService {
     this.logger.debug(`Fetching disbursement progress for group: ${groupUuid}`);
     // Get the active (not yet disbursed) token reservation for this group
     const groupToken = await this.getOneTokenReservationByGroupId(groupUuid);
-    
+
     // If no token reservation or no info field, return default progress
     // This handles groups that haven't started disbursement yet
     if (!groupToken || !groupToken.info) {
@@ -1580,13 +1752,21 @@ export class BeneficiaryService {
 
     // Count batches by status for detailed progress tracking
     // CONFIRMED = successfully disbursed on-chain
-    const completedBatches = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+    const completedBatches = batchStatus.filter(
+      (b: any) => b.status === 'CONFIRMED'
+    ).length;
     // FAILED with retryCount >= 3 = exhausted all retries, permanently failed
-    const failedBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3).length;
+    const failedBatches = batchStatus.filter(
+      (b: any) => b.status === 'FAILED' && (b.retryCount || 0) >= 3
+    ).length;
     // PENDING = waiting to be processed or currently processing
-    const pendingBatches = batchStatus.filter((b: any) => b.status === 'PENDING').length;
+    const pendingBatches = batchStatus.filter(
+      (b: any) => b.status === 'PENDING'
+    ).length;
     // FAILED with retryCount < 3 = will be retried automatically
-    const retryingBatches = batchStatus.filter((b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3).length;
+    const retryingBatches = batchStatus.filter(
+      (b: any) => b.status === 'FAILED' && (b.retryCount || 0) < 3
+    ).length;
 
     return {
       totalBatches,
@@ -1597,7 +1777,10 @@ export class BeneficiaryService {
       disbursedBeneficiariesCount: disbursedCount,
       totalBeneficiaries,
       // Progress percentage based on confirmed beneficiaries / total beneficiaries
-      progressPercent: totalBeneficiaries > 0 ? Math.round((disbursedCount / totalBeneficiaries) * 100) : 0,
+      progressPercent:
+        totalBeneficiaries > 0
+          ? Math.round((disbursedCount / totalBeneficiaries) * 100)
+          : 0,
       status: groupToken.status,
       isDisbursed: groupToken.isDisbursed,
       lastUpdated: info.lastUpdated,
@@ -1609,11 +1792,11 @@ export class BeneficiaryService {
       phone?: string;
       walletAddress?: string;
       [key: string]: any;
-    }>
+    }>,
+    db: Prisma.TransactionClient = this.prisma
   ) {
     this.logger.debug(`Seeding OTPs for ${beneficiaries.length} beneficiaries`);
     const CHUNK_SIZE = 100;
-    const BCRYPT_ROUNDS = 8;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const eligible = beneficiaries.filter((b) => b.phone);
@@ -1622,7 +1805,7 @@ export class BeneficiaryService {
     const isDev = process.env.NODE_ENV !== 'production';
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+      devHash = getOtpHash('1234');
     }
 
     const otpRecords: Array<{
@@ -1644,7 +1827,7 @@ export class BeneficiaryService {
             : Math.floor(1000 + Math.random() * 9000).toString();
           const otpHash = isDev
             ? devHash!
-            : await bcrypt.hash(`${otp}`, BCRYPT_ROUNDS);
+            : getOtpHash(otp);
           return {
             phoneNumber: b.phone!,
             ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
@@ -1661,7 +1844,7 @@ export class BeneficiaryService {
     this.logger.debug(
       `Generated OTP records for ${otpRecords.length} beneficiaries, seeding to database`
     );
-    await this.prisma.otp.createMany({
+    await db.otp.createMany({
       data: otpRecords,
       skipDuplicates: true,
     });
@@ -2309,7 +2492,7 @@ export class BeneficiaryService {
 
     let devHash: string | null = null;
     if (isDev) {
-      devHash = await bcrypt.hash('1234', BCRYPT_ROUNDS);
+      devHash = getOtpHash('1234');
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -2360,7 +2543,7 @@ export class BeneficiaryService {
             : Math.floor(1000 + Math.random() * 9000).toString();
           const otpHash = isDev
             ? devHash!
-            : await bcrypt.hash(otp, BCRYPT_ROUNDS);
+            : getOtpHash(otp);
 
           await tx.otp.upsert({
             where: { walletAddress: benf.walletAddress },
@@ -2390,6 +2573,218 @@ export class BeneficiaryService {
     // }
 
     return { message: 'Sync process completed successfully' };
+  }
+
+  /**
+   * Entry point for platform group assignment (CREATE_BENF_ADD_GROUP_TO_PROJECT).
+   * Validates, creates the group and queues batches; the result is reported back to
+   * platform via GROUP_ASSIGN_SYNC_RESULT once all batches finish or one finally fails.
+   * Safe to call again for the same group (platform sweeper re-sends).
+   */
+  async createBeneficiariesInBatches(
+    dto: CreateBenfAddGroupToProjectDto
+  ): Promise<{ status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED'; jobIds?: string[] }> {
+    const { beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
+    const beneficiaries = dto.beneficiaries ?? [];
+
+    if (!beneficiaryGroupId || !beneficiaryGroupName) {
+      throw new RpcException('beneficiaryGroupId and beneficiaryGroupName are required.');
+    }
+
+    const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: beneficiaryGroupId },
+    });
+    if (existingGroup) {
+      const pendingJobs = await this.countGroupImportJobs(beneficiaryGroupId);
+      return { status: pendingJobs > 0 ? 'IN_PROGRESS' : 'COMPLETED' };
+    }
+
+    // Resends for an existing group return above, so this only gates a new assignment.
+    await this.moduleRef
+      .get(StellarSponsorService, { strict: false })
+      .assertSponsorFundsForGroup(beneficiaries);
+
+    await this.assertNoWalletConflicts(beneficiaries);
+
+    if (!(await this.isQueueReady(this.beneficiaryQueue))) {
+      throw new RpcException('Beneficiary queue is not available. Aborting before any data is persisted.');
+    }
+
+    this.logger.debug(`Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`);
+    await this.prisma.beneficiaryGroups.create({
+      data: {
+        uuid: beneficiaryGroupId,
+        name: beneficiaryGroupName,
+        groupPurpose: groupPurpose,
+      },
+    });
+
+    if (!beneficiaries.length) {
+      return { status: 'COMPLETED' };
+    }
+
+    const batches: { batch: any[]; index: number }[] = [];
+    for (let i = 0; i < beneficiaries.length; i += BENEFICIARY_BATCH_SIZE) {
+      const batch = beneficiaries.slice(i, i + BENEFICIARY_BATCH_SIZE);
+      batches.push({ batch, index: Math.floor(i / BENEFICIARY_BATCH_SIZE) });
+    }
+
+    this.logger.log(`Queuing ${beneficiaries.length} beneficiaries in ${batches.length} batch(es) of ${BENEFICIARY_BATCH_SIZE}`);
+
+    const jobIds: string[] = [];
+
+    try {
+      for (const { batch, index } of batches) {
+        const jobData = {
+          beneficiaries: batch,
+          beneficiaryGroupId,
+          beneficiaryGroupName,
+          groupPurpose,
+          totalBatches: batches.length,
+          currentBatchIndex: index,
+        };
+
+        const { uuid } = await this.asyncQueueService.enqueue({
+          jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+          queue: this.beneficiaryQueue,
+          jobTypeData: jobData,
+          metadata: {
+            source: 'beneficiary.createBeneficiariesInBatches',
+            totalBatches: batches.length,
+          },
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        });
+
+        jobIds.push(uuid);
+        this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${uuid})`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to queue batches for group ${beneficiaryGroupId} after queuing ${jobIds.length}/${batches.length}. Rolling back group.`,
+        error
+      );
+      await this.removeGroupImport(beneficiaryGroupId).catch((cleanupError) =>
+        this.logger.error(`Rollback of group ${beneficiaryGroupId} failed`, cleanupError)
+      );
+      throw new RpcException(`Failed to queue beneficiary batches: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    return { status: 'QUEUED', jobIds };
+  }
+
+  /** Called after each batch completes; reports success once no batch of the group is left. */
+  async onGroupImportBatchCompleted(beneficiaryGroupId: string) {
+    if ((await this.countGroupImportJobs(beneficiaryGroupId)) > 0) return;
+
+    // ponytail: a batch finishing right after failGroupImport can still slip past this check; row locks if it shows up
+    const group = await this.prisma.beneficiaryGroups.findUnique({
+      where: { uuid: beneficiaryGroupId },
+    });
+    if (!group) return;
+
+    this.logger.log(`All batches completed for group ${beneficiaryGroupId}`);
+    // Stats once per import instead of per batch
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.reportGroupAssignResult(beneficiaryGroupId, 'SUCCESS');
+  }
+
+  /** Called when a batch exhausts its retries: drops the group so the user can assign again. */
+  async failGroupImport(beneficiaryGroupId: string, error: string) {
+    this.logger.error(`Group import failed for ${beneficiaryGroupId}: ${error}`);
+    try {
+      await this.removeGroupImport(beneficiaryGroupId);
+    } catch (cleanupError) {
+      this.logger.error(`Cleanup of failed group ${beneficiaryGroupId} failed`, cleanupError);
+    }
+    // Beneficiaries from finished batches are kept, so stats still change
+    this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
+    await this.reportGroupAssignResult(beneficiaryGroupId, 'FAILED', error);
+  }
+
+  // Beneficiary rows are kept: other groups may reference them.
+  private async removeGroupImport(beneficiaryGroupId: string) {
+    await this.prisma.$transaction([
+      this.prisma.asyncQueueJob.deleteMany({
+        where: this.groupImportJobsWhere(beneficiaryGroupId),
+      }),
+      this.prisma.beneficiaryToGroup.deleteMany({
+        where: { groupId: beneficiaryGroupId },
+      }),
+      this.prisma.beneficiaryGroups.deleteMany({
+        where: { uuid: beneficiaryGroupId },
+      }),
+    ]);
+  }
+
+  private groupImportJobsWhere(beneficiaryGroupId: string): Prisma.AsyncQueueJobWhereInput {
+    return {
+      jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
+      jobTypeData: { path: ['beneficiaryGroupId'], equals: beneficiaryGroupId },
+    };
+  }
+
+  private countGroupImportJobs(beneficiaryGroupId: string) {
+    return this.prisma.asyncQueueJob.count({
+      where: this.groupImportJobsWhere(beneficiaryGroupId),
+    });
+  }
+
+  // Same wallet under a different uuid means platform and AA data drifted; fail loudly.
+  private async assertNoWalletConflicts(
+    beneficiaries: CreateBenfAddGroupToProjectDto['beneficiaries']
+  ) {
+    const uuidByWallet = new Map(
+      beneficiaries.filter((b) => b.walletAddress).map((b) => [b.walletAddress, b.uuid])
+    );
+    if (!uuidByWallet.size) return;
+
+    const existing = await this.prisma.beneficiary.findMany({
+      where: { walletAddress: { in: [...uuidByWallet.keys()] } },
+      select: { uuid: true, walletAddress: true },
+    });
+    const conflicts = existing.filter((b) => uuidByWallet.get(b.walletAddress) !== b.uuid);
+    if (!conflicts.length) return;
+
+    throw new RpcException({
+      message: `[WALLET_ADDRESS_CONFLICT] ${conflicts.length} wallet address(es) already belong to a different beneficiary in this project.`,
+      code: 'WALLET_ADDRESS_CONFLICT',
+      params: { walletAddresses: conflicts.map((c) => c.walletAddress) },
+    });
+  }
+
+  // Platform reconciles through its sweeper if this message is lost.
+  private async reportGroupAssignResult(
+    beneficiaryGroupId: string,
+    status: 'SUCCESS' | 'FAILED',
+    error?: string
+  ) {
+    try {
+      await lastValueFrom(
+        this.client
+          .send(
+            { cmd: JOBS.BENEFICIARY.GROUP_ASSIGN_SYNC_RESULT },
+            { projectId: process.env.PROJECT_ID, beneficiaryGroupId, status, error }
+          )
+          .pipe(timeout(10000))
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not report ${status} for group ${beneficiaryGroupId} to platform; its sweeper will reconcile`,
+        err
+      );
+    }
+  }
+
+  // isReady() never settles while Redis is unreachable, so bound it.
+  private isQueueReady(queue: Queue): Promise<boolean> {
+    return Promise.race([
+      queue.isReady().then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+    ]).catch(() => false);
   }
 
   async syncGroupBeneficiariesToProjectCompleted(payload: {

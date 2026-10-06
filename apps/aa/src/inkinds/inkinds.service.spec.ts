@@ -8,6 +8,7 @@ import { AddInkindStockDto, ListStockMovementsDto, RemoveInkindStockDto } from '
 import { AssignGroupInkindDto } from './dto/inkindGroup.dto';
 import { CHAIN_SERVICE, CORE_MODULE } from '../constants';
 import { AppService } from '../app/app.service';
+import { getOtpHash } from '../utils/hash';
 
 // Mock @rumsan/prisma — expose the paginate fn so tests can control it
 jest.mock('@rumsan/prisma', () => {
@@ -935,7 +936,6 @@ describe('InkindsService', () => {
     });
 
     it('throws for invalid OTP', async () => {
-      // bcrypt.compare will return false for mismatched hash
       mockPrismaService.otp.findUnique.mockResolvedValue({
         isVerified: false,
         expiresAt: new Date(Date.now() + 60000),
@@ -946,8 +946,7 @@ describe('InkindsService', () => {
     });
 
     it('validates OTP and marks as verified', async () => {
-      const bcrypt = require('bcryptjs');
-      const hash = await bcrypt.hash('123456', 10);
+      const hash = getOtpHash('123456');
 
       mockPrismaService.otp.findUnique.mockResolvedValue({ isVerified: false, expiresAt: new Date(Date.now() + 60000), otpHash: hash });
       mockPrismaService.otp.update.mockResolvedValue({});

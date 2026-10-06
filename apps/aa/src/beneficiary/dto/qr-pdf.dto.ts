@@ -18,7 +18,7 @@ export class GenerateQrPdfDto {
 
   @IsOptional()
   @IsBoolean()
-  excludeUnphonedBeneficiaries?: boolean;
+  onlyUnphonedBeneficiaries?: boolean;
 
   // Arbitrary, case-insensitive tokens matched against each beneficiary's
   // own `extras` keys; a token with no matching key is dropped per-beneficiary.
@@ -30,3 +30,21 @@ export class GenerateQrPdfDto {
 }
 
 export class RegenerateQrPdfDto extends GenerateQrPdfDto {}
+
+export class ExportGroupExcelDto {
+  @IsUUID()
+  groupId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  includeOtp?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  onlyUnphonedBeneficiaries?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excelFields?: string[];
+}
