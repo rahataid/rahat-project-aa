@@ -81,6 +81,10 @@ export interface FindStakeholdersGroup {
   uuid: string;
 }
 
+export interface ExportStakeholdersGroup {
+  groupUuid: string;
+}
+
 export interface BulkAddStakeholdersPayload {
   data: any[];
   isGroupCreate: boolean;
