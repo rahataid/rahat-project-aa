@@ -844,6 +844,105 @@ describe('StakeholdersService', () => {
     });
   });
 
+  // ==================== exportGroup() ====================
+  describe('exportGroup', () => {
+    it('should return all group members as flat rows', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Group A',
+        isDeleted: false,
+        stakeholders: [
+          {
+            name: 'John Doe',
+            email: 'john@test.com',
+            phone: '+9779841000000',
+            designation: 'Engineer',
+            organization: 'Test Org',
+            district: 'Kathmandu',
+            municipality: 'Metro',
+            supportArea: ['Health', 'Education'],
+          },
+          {
+            name: 'Jane Doe',
+            email: null,
+            phone: null,
+            designation: 'Analyst',
+            organization: 'Org B',
+            district: 'Lalitpur',
+            municipality: 'Metro',
+            supportArea: [],
+          },
+        ],
+      });
+
+      const result = await service.exportGroup({ groupUuid: 'group-uuid-1' });
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        name: 'John Doe',
+        email: 'john@test.com',
+        phone: '+9779841000000',
+        designation: 'Engineer',
+        organization: 'Test Org',
+        district: 'Kathmandu',
+        municipality: 'Metro',
+        supportArea: 'Health, Education',
+      });
+      expect(result[1]).toEqual(
+        expect.objectContaining({ email: '', phone: '', supportArea: '' })
+      );
+    });
+
+    it('should query without pagination and exclude deleted stakeholders', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Group A',
+        isDeleted: false,
+        stakeholders: [],
+      });
+
+      const result = await service.exportGroup({ groupUuid: 'group-uuid-1' });
+
+      expect(result).toEqual([]);
+      const query =
+        mockPrismaService.stakeholdersGroups.findUnique.mock.calls[0][0];
+      expect(query.where).toEqual({ uuid: 'group-uuid-1' });
+      expect(query.select.stakeholders.where).toEqual({ isDeleted: false });
+      expect(query.select.stakeholders).not.toHaveProperty('take');
+      expect(query.select.stakeholders).not.toHaveProperty('skip');
+    });
+
+    it('should throw when groupUuid is missing', async () => {
+      await expect(service.exportGroup({} as any)).rejects.toThrow(
+        RpcException
+      );
+      expect(
+        mockPrismaService.stakeholdersGroups.findUnique
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should throw GROUP_NOT_FOUND when group does not exist', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.exportGroup({ groupUuid: 'missing-group' })
+      ).rejects.toThrow(new RpcException('Stakeholder group not found'));
+    });
+
+    it('should throw GROUP_NOT_FOUND when group is soft deleted', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Old Group',
+        isDeleted: true,
+        stakeholders: [],
+      });
+
+      await expect(
+        service.exportGroup({ groupUuid: 'group-uuid-1' })
+      ).rejects.toThrow(new RpcException('Stakeholder group not found'));
+    });
+  });
+
   // ==================== remove() ====================
   describe('remove', () => {
     it('should soft delete stakeholder and emit removed event', async () => {
