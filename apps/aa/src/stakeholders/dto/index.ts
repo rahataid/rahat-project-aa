@@ -28,16 +28,17 @@ export interface RemoveStakeholdersData {
 }
 
 export interface GetStakeholdersData {
-  name: string;
-  designation: string;
-  organization: string;
-  district: string;
-  municipality: string;
-  supportArea: string;
-  page: number;
+  name?: string;
+  phone?: string;
+  designation?: string;
+  organization?: string;
+  district?: string;
+  municipality?: string;
+  supportArea?: string;
+  page?: number;
   order?: string;
   sort?: string;
-  perPage: number;
+  perPage?: number;
 }
 
 export interface AddStakeholdersGroups {
