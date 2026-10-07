@@ -77,10 +77,12 @@ export class HealthService implements OnModuleInit {
 
   async checkHealthStatus(): Promise<HealthStatus> {
     // this._logger.log('Check the health status of all  used services');
+    const previous = await this.getHealthStatusFromCache();
     const result = await updateHealthStatus(
       this.prisma,
       this.rahatQueue,
-      this.triggerClient
+      this.triggerClient,
+      previous?.services
     );
     await this.setCache(result);
     await this.handleAlertTransitions(result);
