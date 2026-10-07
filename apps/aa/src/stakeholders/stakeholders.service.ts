@@ -6,6 +6,7 @@ import {
   AddStakeholdersGroups,
   BulkAddStakeholdersPayload,
   CreateStakeholderDto,
+  ExportStakeholdersGroup,
   FindStakeholdersGroup,
   GetAllGroups,
   getGroupByUuidDto,
@@ -749,6 +750,48 @@ export class StakeholdersService {
         },
       },
     });
+  }
+
+  async exportGroup(
+    payload: ExportStakeholdersGroup
+  ): Promise<Record<string, any>[]> {
+    const { groupUuid } = payload;
+    if (!groupUuid) {
+      throw new RpcException({
+        message: 'Group uuid is required for export',
+        code: 'GROUP_UUID_REQUIRED_FOR_EXPORT',
+      });
+    }
+
+    const group = await this.prisma.stakeholdersGroups.findUnique({
+      where: { uuid: groupUuid },
+      select: {
+        uuid: true,
+        name: true,
+        isDeleted: true,
+        stakeholders: {
+          where: { isDeleted: false },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+    if (!group || group.isDeleted) {
+      throw new RpcException({
+        message: 'Stakeholder group not found',
+        code: 'GROUP_NOT_FOUND',
+      });
+    }
+
+    return (group.stakeholders ?? []).map((s) => ({
+      name: s.name ?? '',
+      email: s.email ?? '',
+      phone: s.phone ?? '',
+      designation: s.designation ?? '',
+      organization: s.organization ?? '',
+      district: s.district ?? '',
+      municipality: s.municipality ?? '',
+      supportArea: Array.isArray(s.supportArea) ? s.supportArea.join(', ') : '',
+    }));
   }
 
   async removeGroup(payload: RemoveStakeholdersGroup) {

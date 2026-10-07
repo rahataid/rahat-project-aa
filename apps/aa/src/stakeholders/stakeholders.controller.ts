@@ -6,6 +6,7 @@ import {
   AddStakeholdersData,
   AddStakeholdersGroups,
   BulkAddStakeholdersPayload,
+  ExportStakeholdersGroup,
   GetAllGroups,
   getGroupByUuidDto,
   GetOneGroup,
@@ -172,6 +173,14 @@ export class StakeholdersController {
   async getOneGroup(payload: GetOneGroup) {
     console.log('getting one stakeholders group', payload);
     return this.stakeholdersService.getOneGroup(payload);
+  }
+
+  @MessagePattern({
+    cmd: JOBS.STAKEHOLDERS.EXPORT_GROUP,
+    uuid: process.env.PROJECT_ID,
+  })
+  async exportGroup(payload: ExportStakeholdersGroup) {
+    return this.stakeholdersService.exportGroup(payload);
   }
   // ***** stakeholders groups end ********** //
 }

@@ -203,6 +203,7 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
+    EXPORT_GROUP: 'aa.jobs.stakeholders.exportGroup',
   },
   ACTIVITIES: {
     GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
