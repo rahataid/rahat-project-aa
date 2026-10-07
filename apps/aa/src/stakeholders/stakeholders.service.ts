@@ -190,6 +190,17 @@ export class StakeholdersService {
           code: 'GROUP_NAME_MUST_BE_UNIQUE',
         });
       }
+    } else if (payload?.groupUuid) {
+      const targetGroup = await this.prisma.stakeholdersGroups.findFirst({
+        where: { uuid: payload.groupUuid, isDeleted: false },
+        select: { uuid: true },
+      });
+      if (!targetGroup) {
+        throw new RpcException({
+          message: 'Stakeholder group not found',
+          code: 'GROUP_NOT_FOUND',
+        });
+      }
     }
 
     // Step 1: Validate using validateBulkStakeholders
@@ -222,8 +233,11 @@ export class StakeholdersService {
     );
 
     // Step 6: All DB operations inside a single transaction
+    // groupUuid resolves to the newly created group, or to the existing
+    // group passed via payload.groupUuid (validated above).
+    let resolvedGroupUuid: string | null = null;
     await this.prisma.$transaction(async (tx) => {
-      // Step 6a: If isGroupCreate, create group first
+      // Step 6a: If isGroupCreate, create group first, else use existing group
       let groupUuid: string | null = null;
 
       if (payload?.isGroupCreate) {
@@ -231,6 +245,22 @@ export class StakeholdersService {
           data: { name: payload?.groupName },
         });
         groupUuid = group.uuid;
+      } else if (payload?.groupUuid) {
+        groupUuid = payload.groupUuid;
+      }
+      resolvedGroupUuid = groupUuid;
+
+      let existingMemberUuids = new Set<string>();
+      if (groupUuid) {
+        const groupWithMembers = await tx.stakeholdersGroups.findUnique({
+          where: { uuid: groupUuid },
+          select: {
+            stakeholders: { select: { uuid: true } },
+          },
+        });
+        existingMemberUuids = new Set(
+          (groupWithMembers?.stakeholders ?? []).map((s) => s.uuid)
+        );
       }
 
       // Step 6b: createMany for new stakeholders
@@ -250,33 +280,61 @@ export class StakeholdersService {
             select: { uuid: true },
           });
 
-          await tx.stakeholdersGroups.update({
-            where: { uuid: groupUuid },
-            data: {
-              stakeholders: {
-                connect: newlyCreated.map((s) => ({ uuid: s.uuid })),
+          const toConnect = newlyCreated.filter(
+            (s) => !existingMemberUuids.has(s.uuid)
+          );
+          if (toConnect.length) {
+            await tx.stakeholdersGroups.update({
+              where: { uuid: groupUuid },
+              data: {
+                stakeholders: {
+                  connect: toConnect.map((s) => ({ uuid: s.uuid })),
+                },
               },
-            },
-          });
+            });
+          }
         }
       }
 
       // Step 6d: Update existing stakeholders
       if (toUpdate.length) {
+        // Map phone -> uuid so we can skip the group connect for
+        // stakeholders that are already members of the target group.
+        let uuidByPhone = new Map<string, string>();
+        if (groupUuid) {
+          const updatePhones = toUpdate
+            .map((s) => s.phone)
+            .filter((p): p is string => !!p);
+          const updateRows = await tx.stakeholders.findMany({
+            where: { phone: { in: updatePhones } },
+            select: { uuid: true, phone: true },
+          });
+          uuidByPhone = new Map(
+            updateRows
+              .filter((r) => r.phone)
+              .map((r) => [r.phone as string, r.uuid])
+          );
+        }
         await Promise.all(
-          toUpdate.map((stakeholder) =>
-            tx.stakeholders.update({
+          toUpdate.map((stakeholder) => {
+            const memberUuid = stakeholder.phone
+              ? uuidByPhone.get(stakeholder.phone)
+              : undefined;
+            const alreadyMember = memberUuid
+              ? existingMemberUuids.has(memberUuid)
+              : false;
+            return tx.stakeholders.update({
               where: { phone: stakeholder.phone },
               data: {
                 ...this.removeEmptyFields(stakeholder),
                 isDeleted: false,
                 updatedAt: new Date(),
-                ...(groupUuid
+                ...(groupUuid && !alreadyMember
                   ? { stakeholdersGroups: { connect: { uuid: groupUuid } } }
                   : {}),
               },
-            })
-          )
+            });
+          })
         );
       }
     });
@@ -293,6 +351,7 @@ export class StakeholdersService {
       result: {
         createdCount: toCreate.length,
         updatedCount: toUpdate.length,
+        ...(resolvedGroupUuid ? { groupUuid: resolvedGroupUuid } : {}),
       },
       message: 'All stakeholders successfully added.',
     };

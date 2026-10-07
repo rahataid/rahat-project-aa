@@ -85,6 +85,7 @@ export interface BulkAddStakeholdersPayload {
   data: any[];
   isGroupCreate: boolean;
   groupName?: string;
+  groupUuid?: string;
 }
 
 import { Transform } from 'class-transformer';
