@@ -73,6 +73,7 @@ export class StakeholdersController {
       data: normalizedData,
       isGroupCreate: payloads?.isGroupCreate,
       groupName: payloads?.groupName,
+      groupUuid: payloads?.groupUuid,
     });
   }
 
