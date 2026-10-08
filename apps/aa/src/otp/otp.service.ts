@@ -20,16 +20,77 @@ export class OtpService {
 
   ) {}
 
+  // SMS is only actually delivered in production; elsewhere the OTP is just returned.
+  private get isProduction() {
+    return process.env.NODE_ENV === 'production';
+  }
+
   async sendSms(number: string, message: string, defaultOpt?: string | null) {
     const otp = defaultOpt || (await this.getOtp());
 
     this.logger.log(`Generated OTP ${otp} for phone number ${number}`);
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (!this.isProduction) {
       this.logger.log(`[DEV] OTP for ${number}: ${otp}`);
       return { otp };
     }
 
+    await this.deliverSms(number, `${message} ${otp}`);
+    return { otp };
+  }
+
+  // Sends one OTP per request, sequentially. Reuses the OTP stored for the phone, else generates one.
+  // A failure for one phone is recorded and does not stop the rest.
+  async sendBulkOtp(requests: { phoneNumber: string; amount: string }[]) {
+    this.logger.log(`Starting bulk OTP send for ${requests.length} requests`);
+
+    const stored = await this.prisma.otp.findMany({
+      where: { phoneNumber: { in: requests.map((r) => r.phoneNumber) } },
+      select: { phoneNumber: true, otp: true },
+    });
+    const storedOtp = new Map(stored.map((o) => [o.phoneNumber, o.otp]));
+
+    const results: {
+      phoneNumber: string;
+      success: boolean;
+      otp?: string;
+      error?: string;
+    }[] = [];
+
+    for (const { phoneNumber, amount } of requests) {
+      try {
+        const otp = storedOtp.get(phoneNumber) || (await this.getOtp());
+
+        if (this.isProduction) {
+          await this.deliverSms(
+            phoneNumber,
+            this.buildBulkOtpMessage(otp, amount)
+          );
+        } else {
+          this.logger.log(`[DEV] OTP for ${phoneNumber}: ${otp}`);
+        }
+        results.push({ phoneNumber, success: true, otp });
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to send OTP to ${phoneNumber}: ${error.message}`
+        );
+        results.push({ phoneNumber, success: false, error: error.message });
+      }
+    }
+
+    const success = results.filter((r) => r.success).length;
+    this.logger.log(
+      `Bulk OTP send completed. Success: ${success}, Failed: ${results.length - success}`
+    );
+    return {
+      total: results.length,
+      success,
+      failed: results.length - success,
+      results,
+    };
+  }
+
+  private async deliverSms(number: string, message: string) {
     this.logger.log(`Sending SMS to ${number} with message: ${message}`);
     try {
       const data = await this.commsClient.listTransports();
@@ -45,16 +106,9 @@ export class OtpService {
         });
       }
 
-      const finalMessage = `${message} ${otp}`;
       const sms = await this.loadSmsModule('prabhu');
-
-      await sms(number, finalMessage, {
-        transportId,
-        appId,
-        url,
-      });
-      this.logger.log(`OTP Sent to phone number: ${number}`);
-      return { otp };
+      await sms(number, message, { transportId, appId, url });
+      this.logger.log(`SMS sent to phone number: ${number}`);
     } catch (error) {
       this.logger.error(`Error sending SMS: ${(error as any).message}`);
       throw new RpcException({
@@ -62,6 +116,12 @@ export class OtpService {
         code: 'FAILED_TO_SEND_SMS',
       });
     }
+  }
+
+  private buildBulkOtpMessage(otp: string, amount: string) {
+    const toNepali = (v: string) =>
+      v.replace(/\d/g, (d) => '०१२३४५६७८९'[+d]);
+    return `नमस्ते, तपाईंको राहत पिन${toNepali(otp)} हो र तपाईंलाई प्राप्त हुने रकम रू. ${toNepali(amount)} हो। धन्यवाद - राहत`;
   }
 
   async sendEmail(email: string, subject: string, message: string, defaultOtp?: string | null) {
