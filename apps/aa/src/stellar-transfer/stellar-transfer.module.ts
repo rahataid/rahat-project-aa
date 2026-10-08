@@ -1,9 +1,9 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { SettingsModule, SettingsService } from '@rumsan/settings';
-import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
-import { BQUEUE, CORE_MODULE, STELLAR_CLIENT } from '../constants';
+import { SettingsModule } from '@rumsan/settings';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { StellarClientProvider } from '../stellar-sponsor/stellar-client.provider';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StellarTransferService } from './stellar-transfer.service';
 import { StellarTransferProcessor } from './stellar-transfer.processor';
@@ -32,19 +32,7 @@ import { StellarTransferBatchProcessor } from './stellar-transfer-batch.processo
     StellarTransferService,
     StellarTransferProcessor,
     StellarTransferBatchProcessor,
-    {
-      provide: STELLAR_CLIENT,
-      useFactory: async (settingsService: SettingsService) => {
-        try {
-          const settings = await settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-          if (!settings?.value) return null;
-          return new StellarClient(settings.value as unknown as StellarClientConfig);
-        } catch {
-          return null;
-        }
-      },
-      inject: [SettingsService],
-    },
+    StellarClientProvider,
   ],
   exports: [StellarTransferService],
 })

@@ -3,9 +3,8 @@ import { BullModule } from '@nestjs/bull';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaModule } from '@rumsan/prisma';
 import { SettingsModule } from '@rumsan/settings';
-import { SettingsService } from '@rumsan/settings';
-import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
-import { BQUEUE, CORE_MODULE, STELLAR_CLIENT } from '../constants';
+import { BQUEUE, CORE_MODULE } from '../constants';
+import { StellarClientProvider } from './stellar-client.provider';
 import { StellarSponsorService } from './stellar-sponsor.service';
 import { StellarSponsorProcessor } from './stellar-sponsor.processor';
 
@@ -29,19 +28,7 @@ import { StellarSponsorProcessor } from './stellar-sponsor.processor';
   providers: [
     StellarSponsorService,
     StellarSponsorProcessor,
-    {
-      provide: STELLAR_CLIENT,
-      useFactory: async (settingsService: SettingsService) => {
-        try {
-          const settings = await settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-          if (!settings?.value) return null;
-          return new StellarClient(settings.value as unknown as StellarClientConfig);
-        } catch {
-          return null;
-        }
-      },
-      inject: [SettingsService],
-    },
+    StellarClientProvider,
   ],
 })
 export class StellarSponsorModule {}

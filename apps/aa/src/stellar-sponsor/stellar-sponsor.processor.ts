@@ -6,7 +6,8 @@ import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { PrismaService } from '@rumsan/prisma';
 import { StellarClient } from '@rahataid/stellar';
-import { BQUEUE, CORE_MODULE, JOBS, STELLAR_CLIENT } from '../constants';
+import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { StellarClientProvider } from './stellar-client.provider';
 
 interface SponsorBatchJobData {
   groupUuid: string;
@@ -21,7 +22,7 @@ export class StellarSponsorProcessor {
   private readonly logger = new Logger(StellarSponsorProcessor.name);
 
   constructor(
-    @Inject(STELLAR_CLIENT) private readonly stellarClient: StellarClient,
+    private readonly stellarClients: StellarClientProvider,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly prisma: PrismaService
   ) {}
@@ -40,7 +41,7 @@ export class StellarSponsorProcessor {
     this.logger.log(`${logPrefix} Submitting sponsored account creation for ${keypairs.length} keypair(s)`);
     let result: Awaited<ReturnType<StellarClient['createSponsoredAccountsBatch']>>;
     try {
-      result = await this.stellarClient.createSponsoredAccountsBatch(keypairs);
+      result = await (await this.stellarClients.get()).createSponsoredAccountsBatch(keypairs);
     } catch (error) {
       await this.markBeneficiariesFailed(logPrefix, resolved, error, 'stellarSponsorError', 'stellarSponsorFailedAt');
       throw error;
@@ -81,7 +82,7 @@ export class StellarSponsorProcessor {
 
     let result: Awaited<ReturnType<StellarClient['mergeSponsoredAccountsBatch']>>;
     try {
-      result = await this.stellarClient.mergeSponsoredAccountsBatch(keypairs);
+      result = await (await this.stellarClients.get()).mergeSponsoredAccountsBatch(keypairs);
     } catch (error) {
       await this.markBeneficiariesFailed(logPrefix, resolved, error, 'stellarSponsorRevokeError', 'stellarSponsorRevokeFailedAt');
       throw error;

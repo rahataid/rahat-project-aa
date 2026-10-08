@@ -3,7 +3,6 @@ import { STELLAR } from 'libs/stellar-sdk/src/constants/routes';
 export const NAMESPACE = 'rahat.projects';
 
 export const CORE_MODULE = 'RAHAT_CORE_PROJECT_CLIENT';
-export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 // Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
 export const STELLAR_TRANSFER_BATCH_SIZE = 6;

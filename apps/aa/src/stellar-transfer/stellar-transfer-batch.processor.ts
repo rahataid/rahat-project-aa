@@ -3,10 +3,10 @@ import { InjectQueue, Process, Processor } from '@nestjs/bull';
 import { Job, Queue } from 'bull';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
-import { BQUEUE, CORE_MODULE, JOBS, STELLAR_CLIENT } from '../constants';
+import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
+import { StellarClientProvider } from '../stellar-sponsor/stellar-client.provider';
 import { FSPPayoutDetails, StellarTransferBatchPayload } from '../processors/types';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { StellarClient } from '@rahataid/stellar';
 import { BeneficiaryRedeem, Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.STELLAR_TRANSFER_BATCH)
@@ -15,7 +15,7 @@ export class StellarTransferBatchProcessor {
   private readonly logger = new Logger(StellarTransferBatchProcessor.name);
 
   constructor(
-    @Inject(STELLAR_CLIENT) private readonly stellarClient: StellarClient,
+    private readonly stellarClients: StellarClientProvider,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly beneficiaryService: BeneficiaryService,
     @InjectQueue(BQUEUE.OFFRAMP) private readonly offrampQueue: Queue
@@ -119,7 +119,7 @@ export class StellarTransferBatchProcessor {
           return;
         }
 
-        const balanceStr = await this.stellarClient.getBalance(item.payload.beneficiaryWalletAddress);
+        const balanceStr = await (await this.stellarClients.get()).getBalance(item.payload.beneficiaryWalletAddress);
         const balance = Math.floor(parseFloat(balanceStr ?? '0'));
         this.logger.debug(
           `[Job ${job.id}] [Redeem ${item.log.uuid}] Wallet ${item.payload.beneficiaryWalletAddress} balance: ${balance}`
@@ -155,7 +155,7 @@ export class StellarTransferBatchProcessor {
         `[Job ${job.id}] Batch destinations: ${validated.map((item) => `${item.payload.beneficiaryWalletAddress}->${item.payload.offrampWalletAddress}:${item.payload.amount}`).join(', ')}`
       );
 
-      const result = await this.stellarClient.sendFromSponsoredBatch(
+      const result = await (await this.stellarClients.get()).sendFromSponsoredBatch(
         validated.map((item) => ({
           secret: item.secret,
           destination: item.payload.offrampWalletAddress,
