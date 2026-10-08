@@ -1392,9 +1392,13 @@ export class PayoutsService {
 
   async triggerOneFailedPayoutRequest(payload: {
     beneficiaryRedeemUuid: string;
-    // payoutUUID: string;
+    user?: any;
+    otp?: string;
   }): Promise<any> {
     const { beneficiaryRedeemUuid } = payload;
+
+    // Verify OTP before retrying the failed payout request
+    await this.verifyOtp(payload.user?.email, payload.otp);
 
     this.logger.log(
       `Triggering payout for failed request with UUID: ${beneficiaryRedeemUuid}`
@@ -1477,9 +1481,16 @@ export class PayoutsService {
    * @param payload - The payload containing the payout UUID
    * @returns { message: string } - The result of the trigger
    */
-  async triggerFailedPayoutRequest(payload: { payoutUUID: string }) {
+  async triggerFailedPayoutRequest(payload: {
+    payoutUUID: string;
+    user?: any;
+    otp?: string;
+  }) {
     try {
       const { payoutUUID } = payload;
+
+      // Verify OTP before retrying the failed payout requests
+      await this.verifyOtp(payload.user?.email, payload.otp);
 
       if (!payoutUUID) {
         throw new RpcException({
