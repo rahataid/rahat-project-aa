@@ -145,6 +145,7 @@ export const JOBS = {
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
     REVOKE_SPONSORSHIP_BATCH: 'aa.jobs.stellar.revokeSponsorshipBatch',
+    SPONSOR_VENDOR: 'aa.jobs.stellar.sponsorVendor',
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
@@ -458,6 +459,7 @@ export const BQUEUE = {
   NOTIFICATION: `NOTIFICATION_${process.env.PROJECT_ID}`,
   QR_PDF: `QR_PDF_${process.env.PROJECT_ID}`,
   STELLAR_SPONSOR: `STELLAR_SPONSOR_${process.env.PROJECT_ID}`,
+  STELLAR_VENDOR_SPONSOR: `STELLAR_VENDOR_SPONSOR_${process.env.PROJECT_ID}`,
   STELLAR_SDP: `STELLAR_SDP_${process.env.PROJECT_ID}`,
   STELLAR_DISBURSE: `STELLAR_DISBURSE_${process.env.PROJECT_ID}`,
   STELLAR_TRANSFER: `STELLAR_TRANSFER_${process.env.PROJECT_ID}`,
