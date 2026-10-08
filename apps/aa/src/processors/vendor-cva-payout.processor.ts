@@ -443,25 +443,32 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            const otpHash = getOtpHash(`${result.otp}`);
-            // Store OTP in DB
-            await this.prismaService.otp.upsert({
+            // Keep an existing OTP row untouched (hash, amount, expiry): sendBulkOtp reuses its code.
+            // expiresAt is required by the schema, so it is only set when the row is created.
+            let otpRow = await this.prismaService.otp.findUnique({
               where: { phoneNumber: request.phoneNumber },
-              update: {
-                otpHash,
-                amount: parseInt(request.amount),
-                expiresAt: expiryDate,
-                isVerified: false,
-                updatedAt: new Date(),
-              },
-              create: {
-                phoneNumber: request.phoneNumber,
-                otpHash,
-                amount: parseInt(request.amount),
-                expiresAt: expiryDate,
-                isVerified: false,
-              },
             });
+            if (otpRow && !otpRow.otp) {
+              // plain code unknown, so sendBulkOtp generated a new one: only the code and its hash change
+              otpRow = await this.prismaService.otp.update({
+                where: { phoneNumber: request.phoneNumber },
+                data: {
+                  otp: `${result.otp}`,
+                  otpHash: getOtpHash(`${result.otp}`),
+                },
+              });
+            } else if (!otpRow) {
+              otpRow = await this.prismaService.otp.create({
+                data: {
+                  phoneNumber: request.phoneNumber,
+                  otp: `${result.otp}`,
+                  otpHash: getOtpHash(`${result.otp}`),
+                  amount: parseInt(request.amount),
+                  expiresAt: expiryDate,
+                },
+              });
+            }
+            const otpHash = otpRow.otpHash;
             // Find or create beneficiaryRedeem record
             let redeemRecord =
               await this.prismaService.beneficiaryRedeem.findFirst({
