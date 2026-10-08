@@ -4,7 +4,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PrismaModule } from '@rumsan/prisma';
 import { SettingsModule } from '@rumsan/settings';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { StellarClientProvider } from './stellar-client.provider';
+import { StellarClientProvider, stellarClientCompatProvider } from './stellar-client.provider';
 import { StellarSponsorService } from './stellar-sponsor.service';
 import { StellarSponsorProcessor } from './stellar-sponsor.processor';
 
@@ -29,6 +29,7 @@ import { StellarSponsorProcessor } from './stellar-sponsor.processor';
     StellarSponsorService,
     StellarSponsorProcessor,
     StellarClientProvider,
+    stellarClientCompatProvider,
   ],
 })
 export class StellarSponsorModule {}

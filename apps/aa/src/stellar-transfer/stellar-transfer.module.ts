@@ -3,7 +3,7 @@ import { BullModule } from '@nestjs/bull';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { SettingsModule } from '@rumsan/settings';
 import { BQUEUE, CORE_MODULE } from '../constants';
-import { StellarClientProvider } from '../stellar-sponsor/stellar-client.provider';
+import { StellarClientProvider, stellarClientCompatProvider } from '../stellar-sponsor/stellar-client.provider';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 import { StellarTransferService } from './stellar-transfer.service';
 import { StellarTransferProcessor } from './stellar-transfer.processor';
@@ -33,6 +33,7 @@ import { StellarTransferBatchProcessor } from './stellar-transfer-batch.processo
     StellarTransferProcessor,
     StellarTransferBatchProcessor,
     StellarClientProvider,
+    stellarClientCompatProvider,
   ],
   exports: [StellarTransferService],
 })
