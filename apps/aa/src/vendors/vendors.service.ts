@@ -768,10 +768,13 @@ export class VendorsService {
         };
       }
 
-      const isValidOtp = await verifyOtpHash(
-        otpData.otpHash,
-        `${payload.otp}:${otpData.amount}`
-      );
+      // OTPs issued before the amount was dropped from the hash were hashed as `otp:amount`
+      const isValidOtp =
+        (await verifyOtpHash(otpData.otpHash, `${payload.otp}`)) ||
+        (await verifyOtpHash(
+          otpData.otpHash,
+          `${payload.otp}:${otpData.amount}`
+        ));
 
       if (!isValidOtp) {
         return {

@@ -448,10 +448,7 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            // Offline vendor app verifies `otp:amount` on the device, so the amount stays in this hash
-            const otpHash = getOtpHash(
-              `${result.otp}:${request.amount}`
-            );
+            const otpHash = getOtpHash(`${result.otp}`);
             // Store OTP in DB
             await this.prismaService.otp.upsert({
               where: { phoneNumber: request.phoneNumber },
