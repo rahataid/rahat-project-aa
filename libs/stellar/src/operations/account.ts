@@ -41,6 +41,27 @@ export async function planAccountAction(ctx: AccountOpContext, publicKey: string
   return accountHasTrustline(account, ctx.asset.getCode(), ctx.asset.getIssuer()) ? 'already-sponsored' : 'trustline-only';
 }
 
+/**
+ * Adds a trustline for the configured asset to the sponsor account itself (it pays its own
+ * reserve). Returns false without submitting anything when the trustline already exists.
+ */
+export async function ensureSponsorTrustline(ctx: AccountOpContext): Promise<boolean> {
+  const sponsorAccount = await ctx.server.loadAccount(ctx.sponsorKeypair.publicKey());
+  if (accountHasTrustline(sponsorAccount, ctx.asset.getCode(), ctx.asset.getIssuer())) return false;
+
+  const tx = new TransactionBuilder(sponsorAccount, { fee: BASE_FEE, networkPassphrase: ctx.networkPassphrase })
+    .addOperation(Operation.changeTrust({ asset: ctx.asset }))
+    .setTimeout(100)
+    .build();
+  tx.sign(ctx.sponsorKeypair);
+
+  const result = await submitTransaction(ctx.server, tx);
+  if (result.successful === false) {
+    throw new StellarOperationError('Stellar reported the sponsor trustline transaction as unsuccessful', { raw: result });
+  }
+  return true;
+}
+
 export interface AccountOpContext {
   server: Horizon.Server;
   networkPassphrase: string;

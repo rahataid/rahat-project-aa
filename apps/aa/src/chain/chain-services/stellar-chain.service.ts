@@ -85,10 +85,26 @@ export class StellarChainService implements IChainService, OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.ensureSponsorTrustline().catch((err) =>
+      this.logger.warn(`Could not verify sponsor trustline at startup: ${err.message}`)
+    );
     await this.initializeInkindClient().catch((err) =>
       this.logger.warn(
         `STELLAR_INKIND_SETTINGS not ready at startup, will retry lazily on first redeemInkind: ${err.message}`
       )
+    );
+  }
+
+  /** Makes sure the sponsor wallet itself trusts the STELLAR_SPONSOR_SETTINGS asset; no-op if it already does. */
+  private async ensureSponsorTrustline(): Promise<void> {
+    const settings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
+    if (!settings) return;
+    const client = new StellarClient(settings as unknown as StellarClientConfig);
+    const added = await client.ensureSponsorTrustline();
+    this.logger.log(
+      added
+        ? `Added ${client.asset.getCode()} trustline to sponsor wallet ${client.sponsorPublicKey}`
+        : `Sponsor wallet ${client.sponsorPublicKey} already has ${client.asset.getCode()} trustline`
     );
   }
 
