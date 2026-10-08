@@ -7,6 +7,9 @@ export const STELLAR_CLIENT = 'STELLAR_CLIENT';
 export const STELLAR_SPONSOR_BATCH_SIZE = 12;
 // Keep in sync with MAX_TRANSFERS_PER_BATCH in libs/stellar/src/operations/payment.ts
 export const STELLAR_TRANSFER_BATCH_SIZE = 6;
+// QR PDF card layout is fixed (4 cards/page), so the number of dynamic
+// extra fields printed per card is capped to keep the card from overflowing.
+export const QR_PDF_MAX_FIELDS = 5;
 export const TRIGGGERS_MODULE = 'RAHAT_TRIGGERS_CLIENT';
 export const CHAIN_SERVICE = 'CHAIN_SERVICE';
 
@@ -80,6 +83,9 @@ export const JOBS = {
     GET_ALL_GROUPS_BY_UUIDS: 'aa.jobs.beneficiary.getAllGroupsByUuids',
     GET_ONE_GROUP: 'aa.jobs.beneficiary.getOneGroup',
     ADD_GROUP_TO_PROJECT: 'rahat.jobs.beneficiary.add_group_to_project',
+    CREATE_BENF_ADD_GROUP_TO_PROJECT:
+      'rahat.jobs.beneficiary.create_benf_add_group_to_project',
+    GROUP_ASSIGN_SYNC_RESULT: 'rahat.jobs.beneficiary.group_assign_sync_result',
     SPONSOR_BENEFICIARY_GROUP: 'aa.jobs.beneficiary.sponsorBeneficiaryGroup',
     GET_ALL_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getAllTokenReservation',
     GET_ONE_TOKEN_RESERVATION: 'aa.jobs.beneficiary.getOneTokenReservation',
@@ -89,12 +95,17 @@ export const JOBS = {
     GET_BALANCE: 'aa.jobs.beneficiary.getBalance',
     CREATE_BENEFICIARY_WITH_DB_TRANSACTION:
       'aa.jobs.beneficiary.create_beneficiary_with_db_transaction',
+    CREATE_BENEFICIARIES_IN_BATCHES:
+      'aa.jobs.beneficiary.create_beneficiaries_in_batches',
     GET_TOKEN_DETAILS: 'aa.jobs.beneficiary.getTokenDetails',
     GENERATE_QR_PDF: 'aa.jobs.beneficiary.generateQrPdf',
+    REGENERATE_QR_PDF: 'aa.jobs.beneficiary.regenerateQrPdf',
     GET_QR_PDF: 'aa.jobs.beneficiary.getQrPdf',
     EXPORT_GROUP_EXCEL: 'aa.jobs.beneficiary.exportGroupExcel',
     SYNC_IMPORTED_GROUP_BENEFICIARIES:
       'rahat.jobs.beneficiary.sync_imported_group_beneficiaries',
+    SYNC_GROUP_BENEFICIARIES_TO_PROJECT_COMPLETED:
+      'rahat.jobs.beneficiary.sync_group_beneficiaries_to_project_completed',
     REVOKE_SPONSORSHIP_FOR_GROUP:
       'aa.jobs.beneficiary.revokeSponsorshipForGroup',
     GET_SPONSORSHIP_STATUS_FOR_GROUP:
@@ -107,6 +118,7 @@ export const JOBS = {
     DISBURSEMENT_QUEUE: `aa.jobs.stellar.disburse`,
     SEND_OTP: 'aa.jobs.stellar.sendOtp',
     SEND_ASSET_TO_VENDOR: 'aa.jobs.stellar.sendAssetToVendor',
+    RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
     REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
@@ -174,6 +186,7 @@ export const JOBS = {
     EXPORT_PAYOUT_LOGS: 'aa.jobs.payout.exportPayoutLogs',
     EXPORT_PAYOUT_LOGS_PDF_FILE: 'aa.jobs.payout.exportPayoutLogsPdfFile',
     VERIFY_MANUAL_PAYOUT: 'aa.jobs.payout.verifyManualPayout',
+    COMPLETE_PAYOUT: 'aa.jobs.payout.complete',
   },
   STAKEHOLDERS: {
     GET_ALL: 'aa.jobs.stakeholders.getAll',
@@ -415,6 +428,7 @@ export const EVENTS = {
   BENEFICIARY_REDEEM_COMPLETED: 'events.beneficiary_redeem_completed',
   BENEFICIARY_GROUP_ADDED_TO_PROJECT:
     'events.beneficiary_group_added_to_project',
+  BENEFICIARY_BATCH_ADDED_TO_GROUP: 'events.beneficiary_batch_added_to_group',
   BENEFICIARY_GROUP_SPONSORSHIP_REVOKE:
     'events.beneficiary_group_sponsorship_revoke',
   NOTIFICATION: {
@@ -426,6 +440,7 @@ export const BQUEUE = {
   SCHEDULE: `SCHEDULE_${process.env.PROJECT_ID}`,
   TRIGGER: `TRIGGER_${process.env.PROJECT_ID}`,
   CONTRACT: `CONTRACT_${process.env.PROJECT_ID}`,
+  BENEFICIARY: `BENEFICIARY_${process.env.PROJECT_ID}`,
   COMMUNICATION: `COMMUNICATION_${process.env.PROJECT_ID}`,
   STELLAR: `STELLAR_${process.env.PROJECT_ID}`,
   STELLAR_SEND_ASSET: `STELLAR_SEND_ASSET_${process.env.PROJECT_ID}`,

@@ -1,6 +1,6 @@
 {
   "name": "@rahat-project/aa",
-  "version": "v1.0.0",
+  "version": "v5.1.1",
   "license": "MIT",
   "scripts": {
     "build:all": "npx nx run-many --target=build --all",

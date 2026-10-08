@@ -14,7 +14,7 @@ import {
 // TODO: STELLAR DETACH - re-enable once stellar module is rewritten and exposes
 // equivalent OTP verification / asset transfer methods.
 // import { StellarService } from '../stellar/stellar.service';
-import bcrypt from 'bcryptjs';
+import { getOtpHash } from '../utils/hash';
 import { Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.VENDOR_CVA)
@@ -448,10 +448,7 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            const otpHash = await bcrypt.hash(
-              `${result.otp}:${request.amount}`,
-              10
-            );
+            const otpHash = getOtpHash(`${result.otp}`);
             // Store OTP in DB
             await this.prismaService.otp.upsert({
               where: { phoneNumber: request.phoneNumber },
@@ -477,6 +474,8 @@ export class VendorOfflinePayoutProcessor {
                   vendorUid: vendorUuid,
                   beneficiaryWalletAddress: beneficiary.walletAddress,
                   transactionType: 'VENDOR_REIMBURSEMENT',
+                  // scope to this payout so rows of an earlier (e.g. skipped) payout are never re-pointed
+                  payoutId: payoutUuid,
                 },
                 orderBy: { createdAt: 'desc' },
               });

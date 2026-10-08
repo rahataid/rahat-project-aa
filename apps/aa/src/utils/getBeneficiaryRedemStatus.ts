@@ -1,6 +1,11 @@
 import { Payouts } from '@prisma/client';
 
-export type RedeemStatus = 'FAILED' | 'COMPLETED' | 'NOT_STARTED' | 'PENDING';
+export type RedeemStatus =
+  | 'FAILED'
+  | 'PARTIALLY_COMPLETED'
+  | 'COMPLETED'
+  | 'NOT_STARTED'
+  | 'PENDING';
 
 // a beneficiaryRedeem status that marks one leg (fiat/token) of a redemption as done —
 // used to decide whether a payout-completion check needs to run after a status write
@@ -9,6 +14,9 @@ export const REDEEM_COMPLETED_STATUSES = [
   'FIAT_TRANSACTION_COMPLETED',
   'TOKEN_TRANSACTION_COMPLETED',
 ];
+
+// final leg only: the beneficiary actually received money (FSP token leg alone doesn't count)
+export const REDEEM_PAID_STATUSES = ['COMPLETED', 'FIAT_TRANSACTION_COMPLETED'];
 
 export type PayoutWithRelations = Payouts & {
   beneficiaryGroupToken?: {
@@ -33,6 +41,8 @@ export function calculatePayoutStatus(
     'FAILED',
     'FIAT_TRANSACTION_FAILED',
     'TOKEN_TRANSACTION_FAILED',
+    // redeem cancelled by a skipped payout (double fund assignment); the payout still renders as failed
+    'CANCELLED',
   ];
   const COMPLETED_STATUSES = REDEEM_COMPLETED_STATUSES;
   const PENDING_STATUSES = [
@@ -50,7 +60,13 @@ export function calculatePayoutStatus(
     payout.type === 'FSP' && payout.payoutProcessorId !== 'manual-bank-transfer' ? beneficiariesCount * 2 : beneficiariesCount;
 
   if (redeemCount === 0) return 'NOT_STARTED';
-  if (redeemStatuses.some((s) => FAILED_STATUSES.includes(s))) return 'FAILED';
+  if (redeemStatuses.some((s) => FAILED_STATUSES.includes(s))) {
+    // final leg only: FSP token leg (TOKEN_TRANSACTION_COMPLETED) alone means no money reached the beneficiary
+    const anyPaid = redeemStatuses.some((s) =>
+      REDEEM_PAID_STATUSES.includes(s)
+    );
+    return anyPaid ? 'PARTIALLY_COMPLETED' : 'FAILED';
+  }
 
   if (redeemCount === expectedCount) {
     if (redeemStatuses.every((s) => COMPLETED_STATUSES.includes(s)))

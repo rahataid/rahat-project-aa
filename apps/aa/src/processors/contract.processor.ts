@@ -890,4 +890,5 @@ export class ContractProcessor {
     const result = await tx.wait();
     return result;
   }
+
 }

@@ -52,6 +52,9 @@ export interface AddTokenToGroup {
   title: string;
   user?: any;
   isPayoutIntegrated: boolean;
+  // Stellar only: close the group's open payout (CANCELLED redeems), return remaining
+  // beneficiary tokens to the distribution wallet, then reserve again.
+  skipOldPayoutForRemaining?: boolean;
   params?: {
     type: PayoutType;
     mode: PayoutMode;
@@ -86,4 +89,23 @@ export class CreateBulkBeneficiaryDto {
   @ValidateNested({ each: true })
   @Type(() => CreateBeneficiaryDto)
   beneficiaries: CreateBeneficiaryDto[];
+}
+
+export interface CreateBenfAddGroupToProjectDto {
+  beneficiaryGroupId: string;
+  beneficiaryGroupName: string;
+  groupPurpose: GroupPurpose;
+  projectId: string;
+  beneficiaries: Array<{
+    uuid: string;
+    walletAddress: string;
+    phone: string | null;
+    extras: Record<string, any> | null;
+    isVerified: boolean;
+    type: string;
+    beneficiaryGroupId: string;
+    gender?: Enums.Gender;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }

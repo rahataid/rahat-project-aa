@@ -20,9 +20,11 @@ import {
   MergeSponsoredAccountsBatchResult,
   PaymentResult,
   SendFromSponsoredBatchResult,
+  SponsorAccountInfo,
   SponsoredBatchTransferItem,
   StellarClientConfig,
 } from './types';
+import { xlmToStroops } from './utils/sponsor';
 
 /**
  * Core Stellar client for sponsored-account operations. Construct once with
@@ -54,7 +56,6 @@ export class StellarClient {
       ? Keypair.fromSecret(config.distributionWalletSecret)
       : undefined;
     this.maxBatchTransfers = config.maxBatchTransfers || MAX_TRANSFERS_PER_BATCH;
-    console.log('StellarClient initialized with config:', config);
   }
 
   get sponsorPublicKey(): string {
@@ -68,6 +69,44 @@ export class StellarClient {
       sponsorKeypair: this.sponsorKeypair,
       // designatedKeypair: this.designatedKeypair,
       asset: this.asset,
+    };
+  }
+
+  /** Native balance and reserve counters of the sponsor account, for checking it can cover new sponsorships. */
+  async getSponsorAccountInfo(): Promise<SponsorAccountInfo> {
+    const publicKey = this.sponsorPublicKey;
+    let account: Horizon.AccountResponse;
+    try {
+      account = await this.server.loadAccount(publicKey);
+    } catch (error) {
+      if ((error as { response?: { status?: number } })?.response?.status === 404) {
+        return {
+          publicKey,
+          balanceStroops: 0,
+          sellingLiabilitiesStroops: 0,
+          subentryCount: 0,
+          numSponsoring: 0,
+          numSponsored: 0,
+        };
+      }
+      throw error;
+    }
+
+    const native = account.balances.find(
+      (b): b is Horizon.HorizonApi.BalanceLineNative => b.asset_type === 'native'
+    );
+    // Horizon returns the sponsorship counters; the SDK's AccountResponse type omits them.
+    const { num_sponsoring, num_sponsored } = account as Horizon.AccountResponse & {
+      num_sponsoring: number;
+      num_sponsored: number;
+    };
+    return {
+      publicKey,
+      balanceStroops: xlmToStroops(native?.balance),
+      sellingLiabilitiesStroops: xlmToStroops(native?.selling_liabilities),
+      subentryCount: account.subentry_count,
+      numSponsoring: num_sponsoring ?? 0,
+      numSponsored: num_sponsored ?? 0,
     };
   }
 

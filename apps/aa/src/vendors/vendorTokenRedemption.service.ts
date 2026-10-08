@@ -221,7 +221,7 @@ export class VendorTokenRedemptionService {
           where: { uuid: dto.uuid },
           data: {
             redemptionStatus: 'APPROVED',
-            approvedBy: dto.approvedBy,
+            approvedBy: dto.user?.name,
             approvedAt: new Date(),
             transactionHash: txHash,
           },
