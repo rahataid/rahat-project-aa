@@ -3,7 +3,7 @@ import { resolveNetwork } from './utils/network';
 import * as accountUtils from './utils/account';
 import {
   createSponsoredAccount,
-  createSponsoredAccountsBatch, mergeSponsoredAccountsBatch,
+  createSponsoredAccountsBatch, mergeSponsoredAccountsBatch, ensureSponsorTrustline,
 } from './operations/account';
 import {
   MAX_TRANSFERS_PER_BATCH,
@@ -108,6 +108,11 @@ export class StellarClient {
       numSponsoring: num_sponsoring ?? 0,
       numSponsored: num_sponsored ?? 0,
     };
+  }
+
+  /** Ensures the sponsor account holds a trustline for the configured asset; true if one was added. */
+  async ensureSponsorTrustline(): Promise<boolean> {
+    return ensureSponsorTrustline(this.opContext);
   }
 
   /** Creates a new account with 0 XLM and a trustline, fully sponsored. */
