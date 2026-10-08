@@ -8,12 +8,14 @@ import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
 import { BQUEUE, CORE_MODULE, STELLAR_CLIENT } from '../constants';
 import { StellarSponsorService } from './stellar-sponsor.service';
 import { StellarSponsorProcessor } from './stellar-sponsor.processor';
+import { StellarVendorSponsorProcessor } from './stellar-vendor-sponsor.processor';
 
 @Module({
   imports: [
     SettingsModule,
     PrismaModule,
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SPONSOR }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_VENDOR_SPONSOR }),
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -29,6 +31,7 @@ import { StellarSponsorProcessor } from './stellar-sponsor.processor';
   providers: [
     StellarSponsorService,
     StellarSponsorProcessor,
+    StellarVendorSponsorProcessor,
     {
       provide: STELLAR_CLIENT,
       useFactory: async (settingsService: SettingsService) => {

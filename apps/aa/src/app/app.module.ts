@@ -92,6 +92,7 @@ import { RedisModule } from '../redis/redis.module';
     BullModule.registerQueue({ name: BQUEUE.EVM_QUERY }),
     BullModule.registerQueue({ name: BQUEUE.QR_PDF }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SPONSOR }),
+    BullModule.registerQueue({ name: BQUEUE.STELLAR_VENDOR_SPONSOR }),
     ProcessorsModule,
     StellarSponsorModule,
     BeneficiaryModule,

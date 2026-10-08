@@ -13,6 +13,7 @@ import {
 } from '@rahataid/stellar';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
+import { CVA_EVENTS } from '@rahat-project/cva';
 import { BQUEUE, EVENTS, JOBS, STELLAR_SPONSOR_BATCH_SIZE } from '../constants';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class StellarSponsorService implements OnApplicationBootstrap {
 
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SPONSOR) private readonly queue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_VENDOR_SPONSOR) private readonly vendorQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService
   ) {}
@@ -46,6 +48,32 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     } catch (err: any) {
       this.logger.warn(`Failed to load settings during bootstrap: ${err?.message}`);
     }
+  }
+
+  /**
+   * Vendor assigned to a project: queue sponsored account creation + trustline + 0.1 XLM fee float.
+   * Queued (not run inline) so concurrent assignments are processed one at a time off the shared
+   * sponsor account — parallel submits from one source account would collide on sequence numbers.
+   */
+  @OnEvent(CVA_EVENTS.VENDOR.CREATED)
+  async sponsorVendor(event: { walletAddress: string }) {
+    if (!event?.walletAddress) return;
+    const client = await this.loadSponsorClient();
+    if (!client) {
+      this.logger.warn('STELLAR_SPONSOR_SETTINGS not configured — skipping vendor sponsorship');
+      return;
+    }
+    await this.vendorQueue.add(
+      JOBS.STELLAR.SPONSOR_VENDOR,
+      { walletAddress: event.walletAddress },
+      {
+        jobId: `sponsor-vendor-${event.walletAddress}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 3000 },
+        removeOnComplete: true,
+      }
+    );
+    this.logger.log(`Queued vendor sponsorship for ${event.walletAddress}`);
   }
 
   @OnEvent(EVENTS.BENEFICIARY_GROUP_ADDED_TO_PROJECT)
