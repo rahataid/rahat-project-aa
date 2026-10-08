@@ -29,7 +29,7 @@ interface AlertState {
 @Injectable()
 export class HealthService implements OnModuleInit {
   private readonly CACHE_KEY = `${process.env.PROJECT_ID}:project_health_status`;
-  private readonly CACHE_TTL = 300;
+  private readonly CACHE_TTL = 600;
   private readonly _logger = new Logger(HealthService.name);
   private serverIp: string = '';
 
