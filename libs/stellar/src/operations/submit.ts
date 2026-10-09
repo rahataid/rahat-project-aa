@@ -13,6 +13,17 @@ export async function submitTransaction(
   try {
     return await server.submitTransaction(tx);
   } catch (error) {
+    // No result_codes (e.g. 504/timeout) = outcome unknown: the tx may have landed anyway.
+    // Resubmitting a new tx could double-pay, so look the (deterministic) hash up first.
+    if (!(error as { response?: { data?: { extras?: { result_codes?: unknown } } } })?.response?.data?.extras?.result_codes) {
+      try {
+        const found = await server.transactions().transaction(tx.hash().toString('hex')).call();
+        return found as unknown as Horizon.HorizonApi.SubmitTransactionResponse;
+      } catch {
+        // Not found. This does NOT prove the tx failed: it may still be pending and valid until
+        // its timebound expires. Callers that retry must account for a late landing (double-pay).
+      }
+    }
     const response = (error as { response?: { data?: { extras?: { result_codes?: unknown }; [key: string]: unknown } } })
       ?.response;
     const resultCodes = response?.data?.extras?.result_codes;
