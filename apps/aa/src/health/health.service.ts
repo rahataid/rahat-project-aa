@@ -29,7 +29,7 @@ interface AlertState {
 @Injectable()
 export class HealthService implements OnModuleInit {
   private readonly CACHE_KEY = `${process.env.PROJECT_ID}:project_health_status`;
-  private readonly CACHE_TTL = 300;
+  private readonly CACHE_TTL = 600;
   private readonly _logger = new Logger(HealthService.name);
   private serverIp: string = '';
 
@@ -77,10 +77,12 @@ export class HealthService implements OnModuleInit {
 
   async checkHealthStatus(): Promise<HealthStatus> {
     // this._logger.log('Check the health status of all  used services');
+    const previous = await this.getHealthStatusFromCache();
     const result = await updateHealthStatus(
       this.prisma,
       this.rahatQueue,
-      this.triggerClient
+      this.triggerClient,
+      previous?.services
     );
     await this.setCache(result);
     await this.handleAlertTransitions(result);
