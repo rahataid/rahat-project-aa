@@ -33,6 +33,7 @@ import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { chunkArray } from '../../utils/utility';
 import { getOtpHash, verifyOtpHash } from '../../utils/hash';
+import { OtpService } from '../../otp/otp.service';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
 import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
@@ -81,7 +82,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly otpService: OtpService
   ) {}
 
   async onModuleInit() {
@@ -1846,6 +1848,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
         },
       });
     }
+
+    await this.otpService.sendStoredOtp(data.phoneNumber, res.otp);
 
     const { otpHash: _, ...safeRes } = res;
     return safeRes;

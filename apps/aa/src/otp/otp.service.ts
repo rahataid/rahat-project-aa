@@ -6,6 +6,7 @@ import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import prabhu from './prabhu';
 import { CommsService } from '../comms/comms.service';
+import { getOtpHash } from '../utils/hash';
 
 @Injectable()
 export class OtpService {
@@ -36,6 +37,26 @@ export class OtpService {
     }
 
     await this.deliverSms(number, `${message} ${otp}`);
+    return { otp };
+  }
+
+  // Sends the code already stored on the caller's OTP row, so its hash stays valid for verification.
+  // Only a row without a plain code gets the freshly generated one written back.
+  async sendStoredOtp(phoneNumber: string, storedOtp?: string | null) {
+    const otp = storedOtp || (await this.getOtp());
+
+    if (this.isProduction) {
+      await this.deliverSms(phoneNumber, this.buildPinMessage(otp));
+    } else {
+      this.logger.log(`[DEV] OTP for ${phoneNumber}: ${otp}`);
+    }
+
+    if (!storedOtp) {
+      await this.prisma.otp.update({
+        where: { phoneNumber },
+        data: { otp: `${otp}`, otpHash: getOtpHash(`${otp}`) },
+      });
+    }
     return { otp };
   }
 
@@ -118,9 +139,16 @@ export class OtpService {
     }
   }
 
+  private toNepali(v: string) {
+    return v.replace(/\d/g, (d) => '०१२३४५६७८९'[+d]);
+  }
+
+  private buildPinMessage(otp: string) {
+    return `नमस्ते तपाईको राहत पिन नम्बर ${this.toNepali(otp)} हो।`;
+  }
+
   private buildBulkOtpMessage(otp: string, amount: string) {
-    const toNepali = (v: string) =>
-      v.replace(/\d/g, (d) => '०१२३४५६७८९'[+d]);
+    const toNepali = (v: string) => this.toNepali(v);
     return `नमस्ते, तपाईंको राहत पिन${toNepali(otp)} हो र तपाईंलाई प्राप्त हुने रकम रू. ${toNepali(amount)} हो। धन्यवाद - राहत`;
   }
 
