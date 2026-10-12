@@ -72,6 +72,7 @@ export class BeneficiaryService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
+    // target queue for RECEIVER_PHONE_SYNC jobs enqueued from syncBeneficiaryGroupData
     @InjectQueue(BQUEUE.STELLAR_SDP) private readonly stellarSdpQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
@@ -2510,6 +2511,10 @@ export class BeneficiaryService {
       devHash = getOtpHash('1234');
     }
 
+    // Only beneficiaries disbursed via SDP get a mapping row — checked once up
+    // front since it's the same for the whole batch. In DIRECT mode, or for an
+    // EVM-chain beneficiary, there's no SDP receiver at all, so this whole block
+    // is skipped below (phoneChanged && disbursementMode === 'SDP' guards it).
     const disbursementMode = await this.getStellarDisbursementMode();
     // Beneficiaries whose phone actually changed and who already have an SDP
     // receiver (tbl_beneficiary_sdp_receivers row) — need a phone-sync job after
@@ -2518,15 +2523,20 @@ export class BeneficiaryService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const benf of beneficiariesData) {
+        // fetched pre-upsert so we still have the OLD phone to diff against below
         const existingBeneficiary = await tx.beneficiary.findUnique({
           where: { uuid: benf.uuid },
         });
 
+        // existingBeneficiary is null for a brand-new beneficiary (nothing to diff);
+        // otherwise true only when the incoming phone actually differs from the stored one
         const phoneChanged =
           !!existingBeneficiary &&
           existingBeneficiary.phone !== (benf.phone || null);
 
         if (phoneChanged && disbursementMode === 'SDP') {
+          // this row can legitimately be null/absent — DIRECT mode or an EVM-chain
+          // beneficiary never gets an SDP receiver created in the first place
           const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
             where: { beneficiaryId: benf.uuid },
           });
@@ -2534,6 +2544,8 @@ export class BeneficiaryService {
           // disbursement will create the receiver fresh with the current phone,
           // nothing to sync.
           if (sdpReceiver) {
+            // mark pending atomically with the phone write below; actual PATCH
+            // job gets queued after this transaction commits (see loop further down)
             await tx.beneficiarySdpReceiver.update({
               where: { beneficiaryId: benf.uuid },
               data: { syncStatus: 'PENDING' },
@@ -2604,11 +2616,13 @@ export class BeneficiaryService {
       }
     });
 
+    // Enqueued after the transaction commits, not inside it — see plan doc §3 for
+    // why, and §5 for the pre-disbursement guard that covers the resulting gap.
     for (const beneficiaryId of beneficiariesNeedingPhoneSync) {
       await this.asyncQueueService.enqueue({
         jobName: JOBS.STELLAR_SDP.RECEIVER_PHONE_SYNC,
-        queue: this.stellarSdpQueue,
-        jobTypeData: { beneficiaryId },
+        queue: this.stellarSdpQueue, // handled by SdpStellarProcessor.handleReceiverPhoneSync
+        jobTypeData: { beneficiaryId }, // only the id — processor re-fetches current phone itself
       });
     }
 

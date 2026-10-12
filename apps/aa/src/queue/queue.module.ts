@@ -9,6 +9,7 @@ import { AsyncQueueService } from './async-queue.service';
 @Module({
   imports: [
     BullModule.registerQueue({ name: BQUEUE.BENEFICIARY }),
+    // needed here too so this module can inject it below to register recovery
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
   ],
   providers: [PrismaService, AsyncQueueService, AsyncQueueRecoveryService],
@@ -18,6 +19,7 @@ export class QueueModule implements OnModuleInit {
   constructor(
     private readonly asyncQueueRecoveryService: AsyncQueueRecoveryService,
     @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
+    // used only to hand the queue instance to asyncQueueRecoveryService.register() below
     @InjectQueue(BQUEUE.STELLAR_SDP) private readonly stellarSdpQueue: Queue
   ) {}
 
