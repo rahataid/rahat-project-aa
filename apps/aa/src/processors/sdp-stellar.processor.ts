@@ -5,10 +5,12 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { StellarChainService } from '../chain/chain-services/stellar-chain.service';
+import { StellarChainService, BeneficiaryCsvData } from '../chain/chain-services/stellar-chain.service';
 import { BQUEUE, EVENTS, JOBS } from '../constants';
+import { AsyncQueueService } from '../queue/async-queue.service';
 
 // SDP usually completes within seconds, so poll early and back off (15s, 30s, 60s, 2m, then 3m).
 const FIRST_STATUS_CHECK_DELAY_MS = 15 * 1000;
@@ -28,8 +30,23 @@ export class SdpStellarProcessor {
     private readonly beneficiaryService: BeneficiaryService,
     private readonly stellarChainService: StellarChainService,
     private readonly settingsService: SettingsService,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
+    private readonly asyncQueueService: AsyncQueueService
   ) {}
+
+  /**
+   * Mirrors StellarChainService's private getDisbursementSettings() mode check
+   * (chain-services/stellar-chain.service.ts:1849-1868). Defaults to 'SDP' when
+   * unconfigured, same as the chain service.
+   */
+  private async getStellarDisbursementMode(): Promise<'SDP' | 'DIRECT'> {
+    const settings = await this.settingsService.getPublic(
+      'STELLAR_DISBURSEMENT_SETTINGS'
+    );
+    const value = (settings?.value as Record<string, unknown>) || {};
+    return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+  }
 
   private async getSdpClient(): Promise<SdpClient> {
     if (this.sdpClient) return this.sdpClient;
@@ -68,6 +85,14 @@ export class SdpStellarProcessor {
       `Processing SDP disbursement for group ${groupUuid}: ${dName}`
     );
 
+    const disbursementMode = await this.getStellarDisbursementMode();
+    if (disbursementMode !== 'SDP') {
+      this.logger.warn(
+        `STELLAR_DISBURSMENT_MODE is '${disbursementMode}', not 'SDP' — skipping SDP disbursement for group ${groupUuid}`
+      );
+      return;
+    }
+
     try {
       const groupToken =
         await this.beneficiaryService.getOneTokenReservationByGroupId(
@@ -79,12 +104,25 @@ export class SdpStellarProcessor {
         return;
       }
 
-      const benData = await this.stellarChainService.getBeneficiaryTokenBalance(
+      let benData = await this.stellarChainService.getBeneficiaryTokenBalance(
         [groupUuid]
       );
 
       if (!benData.length) {
         this.logger.warn(`No beneficiaries found for group ${groupUuid}`);
+        return;
+      }
+
+      // Pre-disbursement staleness guard (docs/sdp/sdp-beneficiary-phone-sync-plan.md §5):
+      // a beneficiary whose phone changed since their SDP receiver was last synced
+      // must not be disbursed to under the stale SDP-side phone number. Retry the
+      // sync inline, once; on failure, drop only that beneficiary from this batch.
+      benData = await this.reconcileStalePhoneSyncs(benData);
+
+      if (!benData.length) {
+        this.logger.warn(
+          `All beneficiaries in group ${groupUuid} were excluded by the pre-disbursement phone-sync guard`
+        );
         return;
       }
 
@@ -117,6 +155,12 @@ export class SdpStellarProcessor {
       this.logger.log(
         `SDP disbursement created: ${disbursement.id} for group ${groupUuid}`
       );
+
+      // Capture each new receiver's SDP id right away (docs/sdp/sdp-beneficiary-phone-sync-plan.md
+      // §2) — SDP creates receivers synchronously while processing the uploaded CSV, so they
+      // already exist by the time disbursements.create() resolves. This is the only place
+      // tbl_beneficiary_sdp_receivers rows get created.
+      await this.captureSdpReceiverIds(disbursement.id, benData);
 
       await sdpClient.disbursements.updateStatus(disbursement.id, {
         status: 'STARTED',
@@ -177,6 +221,211 @@ export class SdpStellarProcessor {
         },
       });
 
+      throw error;
+    }
+  }
+
+  /**
+   * Pre-disbursement staleness guard — docs/sdp/sdp-beneficiary-phone-sync-plan.md §5.
+   * For any beneficiary whose tbl_beneficiary_sdp_receivers row is not SYNCED, retry
+   * the PATCH /receivers/{id} once, inline. Drop (log + exclude) only that beneficiary
+   * from this batch on failure — never abort the whole group over one stuck record.
+   */
+  private async reconcileStalePhoneSyncs(
+    benData: BeneficiaryCsvData[]
+  ): Promise<BeneficiaryCsvData[]> {
+    const staleRows = await this.prisma.beneficiarySdpReceiver.findMany({
+      where: {
+        beneficiaryId: { in: benData.map((ben) => ben.id) },
+        syncStatus: { not: 'SYNCED' },
+      },
+    });
+
+    if (!staleRows.length) return benData;
+
+    const excludedBeneficiaryIds = new Set<string>();
+    const sdpClient = await this.getSdpClient();
+
+    for (const row of staleRows) {
+      const ben = benData.find((b) => b.id === row.beneficiaryId);
+      if (!ben) continue; // not part of this batch
+
+      try {
+        await sdpClient.receivers.update(row.sdpReceiverId, {
+          phone_number: ben.phone,
+        });
+        await this.prisma.beneficiarySdpReceiver.update({
+          where: { beneficiaryId: row.beneficiaryId },
+          data: {
+            syncStatus: 'SYNCED',
+            lastSyncedPhone: ben.phone,
+            lastSyncError: null,
+          },
+        });
+        this.logger.log(
+          `Pre-disbursement phone sync succeeded for beneficiary ${row.beneficiaryId}`
+        );
+      } catch (error: any) {
+        excludedBeneficiaryIds.add(row.beneficiaryId);
+        await this.prisma.beneficiarySdpReceiver
+          .update({
+            where: { beneficiaryId: row.beneficiaryId },
+            data: { syncStatus: 'FAILED', lastSyncError: error.message },
+          })
+          .catch(() => undefined);
+        this.logger.error(
+          `Pre-disbursement phone sync failed for beneficiary ${row.beneficiaryId}, excluding from this disbursement: ${error.message}`
+        );
+      }
+    }
+
+    return benData.filter((ben) => !excludedBeneficiaryIds.has(ben.id));
+  }
+
+  /**
+   * Capture each receiver's SDP id right after instructions upload — docs/sdp/
+   * sdp-beneficiary-phone-sync-plan.md §2. Scoped to this one disbursement via
+   * GET /disbursements/{id}/receivers (listReceivers), not a tenant-wide sweep.
+   *
+   * NOTE: the exact shape of SDP's receivers-per-disbursement response isn't
+   * pinned down to the field level in docs/sdp/sdp-beneficiary-mapping-research.md
+   * (only that the endpoint exists) — handled defensively below for both a nested
+   * `{ receiver: {...} }` shape and a flat `{ id, external_id, ... }` shape.
+   */
+  private async captureSdpReceiverIds(
+    disbursementId: string,
+    benData: BeneficiaryCsvData[]
+  ): Promise<void> {
+    try {
+      const sdpClient = await this.getSdpClient();
+      const { data: entries } = await sdpClient.disbursements.listReceivers(
+        disbursementId
+      );
+
+      const benIdsByUuid = new Set(benData.map((ben) => ben.id));
+
+      for (const entry of entries as Record<string, unknown>[]) {
+        const receiver =
+          (entry.receiver as Record<string, unknown>) || entry;
+        const receiverId = receiver.id as string | undefined;
+        const externalId = receiver.external_id as string | undefined;
+        const phone = receiver.phone_number as string | undefined;
+
+        // AA sends `RECEIVER_<uuid>` as the CSV `id` column (external_id on SDP's side).
+        const beneficiaryId = externalId?.replace(/^RECEIVER_/, '');
+
+        if (!receiverId || !beneficiaryId || !benIdsByUuid.has(beneficiaryId)) {
+          continue;
+        }
+
+        await this.prisma.beneficiarySdpReceiver.upsert({
+          where: { beneficiaryId },
+          update: {
+            sdpReceiverId: receiverId,
+            lastSyncedPhone: phone,
+            syncStatus: 'SYNCED',
+            lastSyncError: null,
+          },
+          create: {
+            beneficiaryId,
+            sdpReceiverId: receiverId,
+            lastSyncedPhone: phone,
+            syncStatus: 'SYNCED',
+          },
+        });
+      }
+    } catch (error: any) {
+      // Non-fatal: the disbursement itself already succeeded. A missing mapping
+      // row just means the next phone edit for this beneficiary has nothing to
+      // sync yet — it self-heals on the following disbursement's capture pass.
+      this.logger.error(
+        `Failed to capture SDP receiver ids for disbursement ${disbursementId}: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  @Process({ name: JOBS.STELLAR_SDP.RECEIVER_PHONE_SYNC, concurrency: 5 })
+  async handleReceiverPhoneSync(
+    job: Job<{ beneficiaryId: string; _asyncJobId?: string }>
+  ): Promise<void> {
+    const { beneficiaryId, _asyncJobId } = job.data;
+
+    if (_asyncJobId) {
+      const stillTracked = await this.asyncQueueService.markProcessing(
+        _asyncJobId
+      );
+      if (!stillTracked) return; // job row was cleaned up/cancelled
+    }
+
+    try {
+      const mode = await this.getStellarDisbursementMode();
+      if (mode !== 'SDP') {
+        if (_asyncJobId) await this.asyncQueueService.complete(_asyncJobId);
+        return;
+      }
+
+      const [beneficiary, mapRow] = await Promise.all([
+        this.prisma.beneficiary.findUnique({ where: { uuid: beneficiaryId } }),
+        this.prisma.beneficiarySdpReceiver.findUnique({
+          where: { beneficiaryId },
+        }),
+      ]);
+
+      if (!beneficiary || !mapRow) {
+        if (_asyncJobId) await this.asyncQueueService.complete(_asyncJobId);
+        return;
+      }
+
+      // Re-fetch current phone rather than trusting the job payload (docs/sdp/
+      // sdp-beneficiary-phone-sync-plan.md §4) — a later edit may have landed
+      // since this job was enqueued; this always syncs the latest value.
+      const currentPhone = beneficiary.phone;
+
+      if (currentPhone === mapRow.lastSyncedPhone) {
+        await this.prisma.beneficiarySdpReceiver.update({
+          where: { beneficiaryId },
+          data: { syncStatus: 'SYNCED' },
+        });
+        if (_asyncJobId) await this.asyncQueueService.complete(_asyncJobId);
+        return;
+      }
+
+      const sdpClient = await this.getSdpClient();
+      await sdpClient.receivers.update(mapRow.sdpReceiverId, {
+        phone_number: currentPhone,
+      });
+
+      await this.prisma.beneficiarySdpReceiver.update({
+        where: { beneficiaryId },
+        data: {
+          syncStatus: 'SYNCED',
+          lastSyncedPhone: currentPhone,
+          lastSyncError: null,
+        },
+      });
+
+      if (_asyncJobId) await this.asyncQueueService.complete(_asyncJobId);
+    } catch (error: any) {
+      // Covers both SDP 409 cases (payment in flight, or phone already taken by
+      // another receiver) and anything else — left FAILED either way; Bull's own
+      // `attempts` retries this a few times, and AsyncQueueRecoveryService's boot
+      // sweep (registered in queue.module.ts) retries it again later.
+      await this.prisma.beneficiarySdpReceiver
+        .update({
+          where: { beneficiaryId },
+          data: { syncStatus: 'FAILED', lastSyncError: error.message },
+        })
+        .catch(() => undefined);
+
+      if (_asyncJobId) {
+        await this.asyncQueueService.fail(_asyncJobId, error.message);
+      }
+
+      this.logger.error(
+        `SDP receiver phone sync failed for beneficiary ${beneficiaryId}: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }

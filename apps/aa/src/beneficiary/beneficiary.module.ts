@@ -47,6 +47,9 @@ import { QueueModule } from '../queue/queue.module';
     BullModule.registerQueue({
       name: BQUEUE.QR_PDF,
     }),
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_SDP,
+    }),
   ],
   controllers: [BeneficiaryController],
   providers: [

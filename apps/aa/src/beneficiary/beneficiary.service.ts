@@ -72,6 +72,7 @@ export class BeneficiaryService {
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     @InjectQueue(BQUEUE.CONTRACT) private readonly contractQueue: Queue,
     @InjectQueue(BQUEUE.BENEFICIARY) private readonly beneficiaryQueue: Queue,
+    @InjectQueue(BQUEUE.STELLAR_SDP) private readonly stellarSdpQueue: Queue,
     private eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => PayoutsService))
     private readonly payoutService: PayoutsService,
@@ -1530,6 +1531,20 @@ export class BeneficiaryService {
     }
   }
 
+  /**
+   * Mirrors StellarChainService's private getDisbursementSettings() mode check
+   * (chain-services/stellar-chain.service.ts:1849-1868) — kept local here to avoid
+   * a cross-module dependency for a single settings read. Defaults to 'SDP' when
+   * unconfigured, same as the chain service.
+   */
+  private async getStellarDisbursementMode(): Promise<'SDP' | 'DIRECT'> {
+    const settings = await this.settingsService.getPublic(
+      'STELLAR_DISBURSEMENT_SETTINGS'
+    );
+    const value = (settings?.value as Record<string, unknown>) || {};
+    return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+  }
+
   private async getSdpClient(): Promise<SdpClient> {
     if (this.sdpClient) return this.sdpClient;
 
@@ -2495,11 +2510,37 @@ export class BeneficiaryService {
       devHash = getOtpHash('1234');
     }
 
+    const disbursementMode = await this.getStellarDisbursementMode();
+    // Beneficiaries whose phone actually changed and who already have an SDP
+    // receiver (tbl_beneficiary_sdp_receivers row) — need a phone-sync job after
+    // this transaction commits. See docs/sdp/sdp-beneficiary-phone-sync-plan.md §3.
+    const beneficiariesNeedingPhoneSync: string[] = [];
+
     await this.prisma.$transaction(async (tx) => {
       for (const benf of beneficiariesData) {
         const existingBeneficiary = await tx.beneficiary.findUnique({
           where: { uuid: benf.uuid },
         });
+
+        const phoneChanged =
+          !!existingBeneficiary &&
+          existingBeneficiary.phone !== (benf.phone || null);
+
+        if (phoneChanged && disbursementMode === 'SDP') {
+          const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
+            where: { beneficiaryId: benf.uuid },
+          });
+          // No SDP receiver yet → beneficiary never disbursed via SDP; the next
+          // disbursement will create the receiver fresh with the current phone,
+          // nothing to sync.
+          if (sdpReceiver) {
+            await tx.beneficiarySdpReceiver.update({
+              where: { beneficiaryId: benf.uuid },
+              data: { syncStatus: 'PENDING' },
+            });
+            beneficiariesNeedingPhoneSync.push(benf.uuid);
+          }
+        }
 
         const existingExtras = existingBeneficiary?.extras as any;
         const extras =
@@ -2562,6 +2603,14 @@ export class BeneficiaryService {
         }
       }
     });
+
+    for (const beneficiaryId of beneficiariesNeedingPhoneSync) {
+      await this.asyncQueueService.enqueue({
+        jobName: JOBS.STELLAR_SDP.RECEIVER_PHONE_SYNC,
+        queue: this.stellarSdpQueue,
+        jobTypeData: { beneficiaryId },
+      });
+    }
 
     this.logger.log(`Beneficiary group data synced successfully: ${groupUuid}`);
 
