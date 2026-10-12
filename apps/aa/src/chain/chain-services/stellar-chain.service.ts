@@ -33,6 +33,7 @@ import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { chunkArray } from '../../utils/utility';
 import { getOtpHash, verifyOtpHash } from '../../utils/hash';
+import { OtpService } from '../../otp/otp.service';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
 import { InkindTxStatus } from '../../inkinds/dto/inkind.dto';
@@ -81,7 +82,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
     private readonly settingsService: SettingsService,
     @Inject(CORE_MODULE) private readonly client: ClientProxy,
     private readonly moduleRef: ModuleRef,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly otpService: OtpService
   ) {}
 
   async onModuleInit() {
@@ -916,31 +918,47 @@ export class StellarChainService implements IChainService, OnModuleInit {
       stellarSettings as unknown as StellarClientConfig
     );
 
-    const results: OfflineTransferResult[] = [];
-    for (const item of items) {
+    // Results keyed by beneficiary wallet; every input item ends up with exactly one entry
+    // (either a txHash or an error) so the processor can read results by input index.
+    const byWallet = new Map<string, OfflineTransferResult>();
+    // Wallets without a secret can't sign: fail them individually and keep them out of the
+    // batch tx, otherwise one missing secret would fail the whole chunk.
+    const sendable = items.filter((item) => {
+      if (secretByWallet.has(item.beneficiaryWalletAddress)) return true;
+      byWallet.set(item.beneficiaryWalletAddress, {
+        beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+        error: `No secret found for wallet ${item.beneficiaryWalletAddress}`,
+      });
+      return false;
+    });
+
+    // Chunks must stay serial: every tx is sourced from the one sponsor account, so parallel
+    // chunks would load the same sequence number (tx_bad_seq). One tx per chunk, not per item.
+    for (const chunk of chunkArray(sendable, MAX_TRANSFERS_PER_BATCH)) {
+      // A batch tx is atomic: all items in the chunk share one outcome (same txHash on
+      // success, same error on failure). The processor retries failed items via Bull attempts.
+      let outcome: { txHash: string } | { error: string };
       try {
-        const secret = secretByWallet.get(item.beneficiaryWalletAddress);
-        if (!secret)
-          throw new Error(
-            `No secret found for wallet ${item.beneficiaryWalletAddress}`
-          );
-        const result = await stellarClient.sendFromSponsored(
-          secret,
-          item.vendorWalletAddress,
-          item.amount.toString()
+        const res = await stellarClient.sendFromSponsoredBatch(
+          chunk.map((item) => ({
+            secret: secretByWallet.get(item.beneficiaryWalletAddress)!,
+            destination: item.vendorWalletAddress,
+            amount: item.amount.toString(),
+          }))
         );
-        results.push({
-          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
-          txHash: result.hash,
-        });
+        outcome = { txHash: res.hash };
       } catch (err: any) {
-        results.push({
-          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
-          error: err?.message,
-        });
+        outcome = { error: err?.message ?? 'Transfer failed' };
       }
+      chunk.forEach((item) =>
+        byWallet.set(item.beneficiaryWalletAddress, {
+          beneficiaryWalletAddress: item.beneficiaryWalletAddress,
+          ...outcome,
+        })
+      );
     }
-    return results;
+    // processor reads results by input index
+    return items.map((i) => byWallet.get(i.beneficiaryWalletAddress)!);
   }
 
   /**
@@ -1830,6 +1848,8 @@ export class StellarChainService implements IChainService, OnModuleInit {
         },
       });
     }
+
+    await this.otpService.sendStoredOtp(data.phoneNumber, res.otp);
 
     const { otpHash: _, ...safeRes } = res;
     return safeRes;
