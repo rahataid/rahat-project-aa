@@ -150,6 +150,7 @@ export const JOBS = {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
     DISBURSEMENT_STATUS_UPDATE:
       'aa.jobs.stellar_sdp.disbursement_status_update',
+    RECEIVER_PHONE_SYNC: 'aa.jobs.stellar_sdp.receiver_phone_sync', // PATCH a beneficiary's new phone to their SDP receiver
   },
   STELLAR_DIRECT: {
     DISBURSE: 'aa.jobs.stellar_direct.disburse',

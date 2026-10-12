@@ -47,6 +47,10 @@ import { QueueModule } from '../queue/queue.module';
     BullModule.registerQueue({
       name: BQUEUE.QR_PDF,
     }),
+    // BeneficiaryService enqueues RECEIVER_PHONE_SYNC jobs onto this queue on phone edits.
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_SDP,
+    }),
   ],
   controllers: [BeneficiaryController],
   providers: [
