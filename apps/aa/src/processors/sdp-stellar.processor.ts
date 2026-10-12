@@ -146,19 +146,23 @@ export class SdpStellarProcessor {
         verification_field: sdpSettings.verificationField,
         filename: `${dName}_instructions.csv`,
       });
-      const disbursement = await sdpClient.disbursements.create({
-        name: dName,
-        wallet_id: sdpSettings.walletId,
-        asset_id: sdpSettings.assetId,
-        registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
-        verification_field: sdpSettings.verificationField,
-        receiver_registration_message_template: '',
-        file: csvBuffer,
-        filename: `${dName}_instructions.csv`,
-      });
+
+      // Idempotent against Bull's own retry (attempts: 3 on this job, see
+      // stellar-chain.service.ts::queueGroupDisbursement): dName is fixed across
+      // retries, so if create() already succeeded on a prior attempt and only a
+      // LATER step (updateStatus below) threw, a naive retry would call create()
+      // again with the same name and SDP rejects it with "disbursement already
+      // exists" — leaving the first attempt's disbursement orphaned at DRAFT
+      // forever. Reuse the existing one instead of creating a duplicate.
+      const disbursement = await this.findOrCreateDisbursement(
+        dName,
+        sdpClient,
+        sdpSettings,
+        csvBuffer
+      );
 
       this.logger.log(
-        `SDP disbursement created: ${disbursement.id} for group ${groupUuid}`
+        `SDP disbursement ready: ${disbursement.id} for group ${groupUuid}`
       );
 
       // Capture each new receiver's SDP id right away (docs/sdp/sdp-beneficiary-phone-sync-plan.md
@@ -228,6 +232,59 @@ export class SdpStellarProcessor {
 
       throw error;
     }
+  }
+
+  /**
+   * Finds an existing disbursement by exact name before creating a new one —
+   * makes handleDisburse safe to retry (see the call site's comment for why
+   * this matters: Bull retries the whole job with the same dName on failure).
+   * Falls back to create()'s own "already exists" error as a second safety
+   * net, in case the list lookup above doesn't see a just-created disbursement
+   * (e.g. SDP-side search indexing lag) — if even that happens, look it up
+   * once more rather than giving up.
+   */
+  private async findOrCreateDisbursement(
+    dName: string,
+    sdpClient: SdpClient,
+    sdpSettings: Record<string, string>,
+    csvBuffer: Buffer
+  ) {
+    const existing = await this.findDisbursementByName(sdpClient, dName);
+    if (existing) {
+      this.logger.log(
+        `Disbursement '${dName}' already exists (id ${existing.id}) — reusing it instead of creating a duplicate`
+      );
+      return existing;
+    }
+
+    try {
+      return await sdpClient.disbursements.create({
+        name: dName,
+        wallet_id: sdpSettings.walletId,
+        asset_id: sdpSettings.assetId,
+        registration_contact_type: 'PHONE_NUMBER_AND_WALLET_ADDRESS',
+        verification_field: sdpSettings.verificationField,
+        receiver_registration_message_template: '',
+        file: csvBuffer,
+        filename: `${dName}_instructions.csv`,
+      });
+    } catch (error: any) {
+      if (!/already exists/i.test(error.message || '')) throw error;
+
+      this.logger.warn(
+        `create() reported '${dName}' already exists but the prior list lookup missed it — looking up again`
+      );
+      const retryFound = await this.findDisbursementByName(sdpClient, dName);
+      if (!retryFound) throw error; // genuinely can't find it — surface the original error
+      return retryFound;
+    }
+  }
+
+  private async findDisbursementByName(sdpClient: SdpClient, dName: string) {
+    const { data } = await sdpClient.disbursements.list({ q: dName });
+    // `q` is a free-text search on SDP's side — match the exact name ourselves,
+    // not just whatever it fuzzy-matched.
+    return data.find((d) => d.name === dName) ?? null;
   }
 
   /**
