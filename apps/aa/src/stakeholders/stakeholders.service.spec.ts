@@ -47,6 +47,7 @@ describe('StakeholdersService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn((cb) => cb(mockPrismaService)),
   };
 
@@ -798,6 +799,32 @@ describe('StakeholdersService', () => {
         contains: 'Kathmandu',
         mode: 'insensitive',
       });
+    });
+
+    it('should strip whitespace from phone filter without raw query', async () => {
+      mockPaginateFn.mockResolvedValue({ data: [], meta: {} });
+
+      await service.getAll({ ...baseGetAll, phone: '00 00' });
+
+      const query = mockPaginateFn.mock.calls[0][1];
+      expect(query.where.phone).toEqual({
+        contains: '0000',
+        mode: 'insensitive',
+      });
+      expect(query.where.uuid).toBeUndefined();
+    });
+
+    it('should match name whitespace-insensitively via uuid lookup', async () => {
+      mockPaginateFn.mockResolvedValue({ data: [], meta: {} });
+      (mockPrismaService.$queryRaw as jest.Mock).mockResolvedValueOnce([
+        { uuid: 'uuid-1' },
+      ]);
+
+      await service.getAll({ ...baseGetAll, name: 'Mi lan' });
+
+      const query = mockPaginateFn.mock.calls[0][1];
+      expect(query.where.name).toBeUndefined();
+      expect(query.where.uuid).toEqual({ in: ['uuid-1'] });
     });
 
     it('should add supportArea filter when supportArea is provided', async () => {
