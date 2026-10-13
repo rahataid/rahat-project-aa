@@ -723,9 +723,29 @@ export class StellarChainService implements IChainService, OnModuleInit {
   }
 
   async sendAssetToVendor(data: SendAssetDto): Promise<any> {
+    const tag = `[sendAsset ${data.phoneNumber}]`;
+    this.logger.log(
+      `${tag} START receiver=${data.receiverAddress} amount=${data.amount} skipOtp=${!!data.skipOtpVerification} payloadKeys=${Object.keys(data).join(',')}`
+    );
+    try {
+      return await this.sendAssetToVendorInner(data, tag);
+    } catch (err) {
+      this.logger.error(
+        `${tag} FAILED before queueing: ${err?.message ?? JSON.stringify(err)} code=${err?.error?.code ?? err?.code ?? 'n/a'}`,
+        err?.stack
+      );
+      throw err;
+    }
+  }
+
+  private async sendAssetToVendorInner(
+    data: SendAssetDto,
+    tag: string
+  ): Promise<any> {
     const vendor = await this.prisma.vendor.findUnique({
       where: { walletAddress: data.receiverAddress },
     });
+    this.logger.log(`${tag} vendor lookup: ${vendor ? vendor.uuid : 'NOT FOUND'}`);
     if (!vendor)
       throw new RpcException({
         message: 'Vendor not found',
@@ -736,12 +756,18 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     if (!data.skipOtpVerification) {
       await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+      this.logger.log(`${tag} OTP verified`);
+    } else {
+      this.logger.log(`${tag} OTP verification skipped`);
     }
 
     const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
       address: string;
       privateKey: string;
     } | null;
+    this.logger.log(
+      `${tag} secret lookup: address=${keys?.address ?? 'n/a'} hasPrivateKey=${!!keys?.privateKey}`
+    );
     if (!keys?.privateKey)
       throw new RpcException({
         message: 'Beneficiary secret not found',
@@ -749,6 +775,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
 
     const media = toMediaItems(data.mediaUrl, data.fileName);
+    this.logger.log(
+      `${tag} media: raw=${typeof data.mediaUrl}${
+        Array.isArray(data.mediaUrl) ? `[${data.mediaUrl.length}]` : ''
+      } parsed=${media.length} value=${JSON.stringify(data.mediaUrl)}`
+    );
 
     if (media.length || data.skipOtpVerification) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
@@ -760,6 +791,13 @@ export class StellarChainService implements IChainService, OnModuleInit {
         },
         orderBy: { createdAt: 'desc' },
       });
+      this.logger.log(
+        `${tag} pending redeem lookup (wallet=${keys.address}): ${
+          existingRedeem
+            ? `${existingRedeem.uuid} info=${JSON.stringify(existingRedeem.info)}`
+            : 'NONE'
+        }`
+      );
 
       if (existingRedeem) {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
@@ -778,10 +816,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
           infoUpdate.otpSkipReason = data.otpSkipReason;
         }
 
-        await this.prisma.beneficiaryRedeem.update({
+        const updated = await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
           data: { info: infoUpdate },
         });
+        this.logger.log(
+          `${tag} info saved on ${updated.uuid}: ${JSON.stringify(updated.info)}`
+        );
+      } else {
+        this.logger.warn(
+          `sendAsset: no PENDING redeem for wallet ${keys.address}; media/otpSkip not saved`
+        );
       }
     }
 
@@ -803,6 +848,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       throw err instanceof RpcException ? err : new RpcException(err.message);
     }
 
+    this.logger.log(`${tag} transfer job queued`);
     return { txHash: null, status: 'PROCESSING' };
   }
 
