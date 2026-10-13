@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { BeneficiaryController } from './beneficiary.controller';
 import { BeneficiaryService } from './beneficiary.service';
 import { StatsModule } from '../stats';
@@ -20,6 +20,7 @@ import { QueueModule } from '../queue/queue.module';
   imports: [
     forwardRef(() => PayoutsModule),
     QueueModule,
+    PrismaModule,
     // StellarModule,
     SettingsModule,
     ClientsModule.register([
@@ -51,7 +52,6 @@ import { QueueModule } from '../queue/queue.module';
   controllers: [BeneficiaryController],
   providers: [
     BeneficiaryService,
-    PrismaService,
     BeneficiaryStatService,
     BeneficiaryMultisigService,
     QrPdfService,

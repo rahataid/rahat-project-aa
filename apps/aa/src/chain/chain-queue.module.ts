@@ -3,7 +3,7 @@ import { BullModule } from '@nestjs/bull';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BQUEUE, CORE_MODULE } from '../constants';
 import { SettingsService } from '@rumsan/settings';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 
 import { ChainQueueService } from './chain-queue.service';
 import { ChainServiceRegistry } from './registries/chain-service.registry';
@@ -12,6 +12,7 @@ import { EvmChainService } from './chain-services/evm-chain.service';
 
 @Module({
   imports: [
+    PrismaModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -30,7 +31,6 @@ import { EvmChainService } from './chain-services/evm-chain.service';
     BullModule.registerQueue({ name: BQUEUE.STELLAR_DISBURSE }),
   ],
   providers: [
-    PrismaService,
     SettingsService,
     ChainQueueService,
     ChainServiceRegistry,

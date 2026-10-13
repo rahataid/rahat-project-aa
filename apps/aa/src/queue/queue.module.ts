@@ -1,14 +1,14 @@
 import { BullModule, InjectQueue } from '@nestjs/bull';
 import { Module, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { AsyncQueueRecoveryService } from './async-queue-recovery.service';
 import { AsyncQueueService } from './async-queue.service';
 
 @Module({
-  imports: [BullModule.registerQueue({ name: BQUEUE.BENEFICIARY })],
-  providers: [PrismaService, AsyncQueueService, AsyncQueueRecoveryService],
+  imports: [PrismaModule, BullModule.registerQueue({ name: BQUEUE.BENEFICIARY })],
+  providers: [AsyncQueueService, AsyncQueueRecoveryService],
   exports: [AsyncQueueService, AsyncQueueRecoveryService],
 })
 export class QueueModule implements OnModuleInit {

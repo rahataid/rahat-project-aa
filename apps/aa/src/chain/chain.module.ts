@@ -9,11 +9,12 @@ import { EvmChainService } from './chain-services/evm-chain.service';
 import { BQUEUE, CHAIN_SERVICE } from '../constants';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
 
 @Module({
   imports: [
+    PrismaModule,
     ClientsModule.register([
       {
         name: CORE_MODULE,
@@ -42,7 +43,6 @@ import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
     ChainServiceRegistry,
     StellarChainService,
     EvmChainService,
-    PrismaService,
   ],
   exports: [ChainService, CHAIN_SERVICE, ChainServiceRegistry, StellarChainService, EvmChainService],
 })
