@@ -134,9 +134,13 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     }
     const fromGroup = uuids.length - alreadySponsored.size;
 
+    // every job on this queue now runs under the single SPONSOR_QUEUE_SERIAL
+    // name (see StellarSponsorProcessor) — the original job TYPE is carried in
+    // job.data.type instead of job.name
     const queuedJobs = await this.queue.getJobs(['waiting', 'active', 'delayed', 'paused']);
     const queued = queuedJobs.reduce(
-      (sum, job) => sum + (job.name === JOBS.STELLAR.SPONSOR_ACCOUNTS_BATCH ? job.data?.beneficiaries?.length ?? 0 : 0),
+      (sum, job) =>
+        sum + (job.data?.type === 'SPONSOR_ACCOUNTS_BATCH' ? job.data?.beneficiaries?.length ?? 0 : 0),
       0
     );
 
@@ -177,7 +181,13 @@ export class StellarSponsorService implements OnApplicationBootstrap {
 
     for (let i = 0; i < beneficiaries.length; i += STELLAR_SPONSOR_BATCH_SIZE) {
       const batch = beneficiaries.slice(i, i + STELLAR_SPONSOR_BATCH_SIZE);
-      await this.queue.add(JOBS.STELLAR.SPONSOR_ACCOUNTS_BATCH, { groupUuid, beneficiaries: batch });
+      // queued under SPONSOR_QUEUE_SERIAL (not SPONSOR_ACCOUNTS_BATCH directly) so
+      // it's serialized against revoke batches and vendor XLM funding too
+      await this.queue.add(JOBS.STELLAR.SPONSOR_QUEUE_SERIAL, {
+        type: 'SPONSOR_ACCOUNTS_BATCH',
+        groupUuid,
+        beneficiaries: batch,
+      });
     }
 
     this.logger.log(
@@ -218,7 +228,13 @@ export class StellarSponsorService implements OnApplicationBootstrap {
 
     for (let i = 0; i < beneficiaries.length; i += STELLAR_SPONSOR_BATCH_SIZE) {
       const batch = beneficiaries.slice(i, i + STELLAR_SPONSOR_BATCH_SIZE);
-      await this.queue.add(JOBS.STELLAR.REVOKE_SPONSORSHIP_BATCH, { groupUuid, beneficiaries: batch });
+      // queued under SPONSOR_QUEUE_SERIAL (not REVOKE_SPONSORSHIP_BATCH directly)
+      // so it's serialized against sponsor batches and vendor XLM funding too
+      await this.queue.add(JOBS.STELLAR.SPONSOR_QUEUE_SERIAL, {
+        type: 'REVOKE_SPONSORSHIP_BATCH',
+        groupUuid,
+        beneficiaries: batch,
+      });
     }
 
     this.logger.log(
