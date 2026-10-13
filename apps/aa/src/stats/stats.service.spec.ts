@@ -14,6 +14,7 @@ describe('StatsService', () => {
   let clientProxy: jest.Mocked<ClientProxy>;
 
   const mockPrismaService = {
+    $transaction: jest.fn(),
     stats: {
       upsert: jest.fn(),
       createMany: jest.fn(),
@@ -109,43 +110,50 @@ describe('StatsService', () => {
   });
 
   describe('saveMany', () => {
-    it('should save multiple stats and delete existing ones by group', async () => {
+    it('should upsert multiple stats by name without deleting existing group data', async () => {
       const stats: StatDto[] = [
         { name: 'gender', data: { male: 100 }, group: 'beneficiary' },
         { name: 'age', data: { young: 50 }, group: 'beneficiary' },
       ];
 
-      const expectedCreateResult = { count: 2 };
-
-      mockPrismaService.stats.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrismaService.stats.createMany.mockResolvedValue(expectedCreateResult);
+      mockPrismaService.stats.upsert.mockResolvedValue({});
+      mockPrismaService.$transaction.mockImplementation((operations) =>
+        Promise.all(operations)
+      );
 
       const result = await service.saveMany(stats);
 
-      expect(prismaService.stats.deleteMany).toHaveBeenCalledWith({
-        where: { group: 'beneficiary' },
+      expect(prismaService.stats.deleteMany).not.toHaveBeenCalled();
+      expect(prismaService.stats.upsert).toHaveBeenNthCalledWith(1, {
+        where: { name: 'GENDER' },
+        create: { name: 'GENDER', data: { male: 100 }, group: 'beneficiary' },
+        update: { data: { male: 100 }, group: 'beneficiary' },
       });
-      expect(prismaService.stats.createMany).toHaveBeenCalledWith({
-        data: [
-          { name: 'GENDER', data: { male: 100 }, group: 'beneficiary' },
-          { name: 'AGE', data: { young: 50 }, group: 'beneficiary' },
-        ],
-        skipDuplicates: true,
+      expect(prismaService.stats.upsert).toHaveBeenNthCalledWith(2, {
+        where: { name: 'AGE' },
+        create: { name: 'AGE', data: { young: 50 }, group: 'beneficiary' },
+        update: { data: { young: 50 }, group: 'beneficiary' },
       });
-      expect(result).toEqual(expectedCreateResult);
+      expect(prismaService.$transaction).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([{}, {}]);
     });
 
-    it('should not delete anything if no group is provided', async () => {
-      const stats: StatDto[] = [
-        { name: 'gender', data: { male: 100 } },
-      ];
+    it('should upsert stats even when no group is provided', async () => {
+      const stats: StatDto[] = [{ name: 'gender', data: { male: 100 } }];
 
-      mockPrismaService.stats.createMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.stats.upsert.mockResolvedValue({});
+      mockPrismaService.$transaction.mockImplementation((operations) =>
+        Promise.all(operations)
+      );
 
       await service.saveMany(stats);
 
       expect(prismaService.stats.deleteMany).not.toHaveBeenCalled();
-      expect(prismaService.stats.createMany).toHaveBeenCalled();
+      expect(prismaService.stats.upsert).toHaveBeenCalledWith({
+        where: { name: 'GENDER' },
+        create: { name: 'GENDER', data: { male: 100 }, group: undefined },
+        update: { data: { male: 100 }, group: undefined },
+      });
     });
   });
 
