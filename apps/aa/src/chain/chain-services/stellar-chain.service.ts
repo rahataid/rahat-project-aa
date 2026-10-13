@@ -884,9 +884,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
       // ponytail: only mark FAILED on the last retry — earlier attempts must leave the record
       // PENDING so the next job attempt still finds it via the status: 'PENDING' filter above.
       if (isLastAttempt) {
+        // merge into a fresh read so evidence/otpSkip already on info isn't wiped
+        const fresh = await this.prisma.beneficiaryRedeem.findUnique({
+          where: { uuid: existingRedeem.uuid },
+          select: { info: true },
+        });
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: { status: 'FAILED', info: { error: err.message } },
+          data: {
+            status: 'FAILED',
+            info: { ...((fresh?.info as object) ?? {}), error: err.message },
+          },
         });
         this.logger.error(
           `sendAssetToVendor FAILED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount}: ${err.message}`,
