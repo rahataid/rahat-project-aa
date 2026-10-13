@@ -13,7 +13,24 @@ interface SponsorBatchJobData {
   beneficiaries: { beneficiaryId: string; walletAddress: string }[];
 }
 
+// job data for FUND_STELLAR_ACCOUNT — one vendor's wallet per job
+interface FundStellarAccountJobData {
+  walletAddress: string;
+}
+
 type BeneficiaryRef = { beneficiaryId: string; walletAddress: string };
+
+// All three operations below share one sponsor account's sequence number, so
+// they're all queued under the single SPONSOR_QUEUE_SERIAL job name (dispatched
+// by `type` here) instead of three separate job names — Bull's `concurrency: 1`
+// is per job NAME, so three different names on the same queue would still run
+// concurrently against each other even though each is individually capped at 1.
+// Literal tags, not the JOBS constants, since JOBS isn't `as const` — its values
+// type as plain `string`, which wouldn't let the switch below narrow the union.
+type SponsorQueueSerialJobData =
+  | ({ type: 'SPONSOR_ACCOUNTS_BATCH' } & SponsorBatchJobData)
+  | ({ type: 'REVOKE_SPONSORSHIP_BATCH' } & SponsorBatchJobData)
+  | ({ type: 'FUND_STELLAR_ACCOUNT' } & FundStellarAccountJobData);
 
 @Processor(BQUEUE.STELLAR_SPONSOR)
 @Injectable()
@@ -26,12 +43,36 @@ export class StellarSponsorProcessor {
     private readonly prisma: PrismaService
   ) {}
 
+  /**
+   * Single entry point for every job on this queue — dispatches by `type` to
+   * one of the three private handlers below. This is what actually serializes
+   * sponsor batches, revoke batches, and vendor XLM funding against each
+   * other: they all hit this one job name, so Bull's `concurrency: 1` here
+   * applies across all three, not just within each one individually.
+   */
+  @Process({ name: JOBS.STELLAR.SPONSOR_QUEUE_SERIAL, concurrency: 1 })
+  async processSponsorQueueSerial(job: Job<SponsorQueueSerialJobData>) {
+    const logPrefix = `[Job ${job.id}]`;
+    switch (job.data.type) {
+      case 'SPONSOR_ACCOUNTS_BATCH':
+        return this.sponsorAccountsBatch(logPrefix, job.data);
+      case 'REVOKE_SPONSORSHIP_BATCH':
+        return this.revokeSponsorshipBatch(logPrefix, job.data);
+      case 'FUND_STELLAR_ACCOUNT':
+        return this.fundStellarAccount(logPrefix, job.data);
+      default: {
+        // exhaustiveness check — a new `type` added to the union without a case here is a compile error
+        const unreachable: never = job.data;
+        return unreachable;
+      }
+    }
+  }
+
   //TODO: once sponsorship is completed tag group as ready for disburseemnt.
   //this only applies when the chain.type in chain settings is set to stellar and the STELLAR_SPONSOR_SETTINGS is configured.
-  @Process({ name: JOBS.STELLAR.SPONSOR_ACCOUNTS_BATCH, concurrency: 1 })
-  async sponsorAccountsBatch(job: Job<SponsorBatchJobData>) {
-    const { groupUuid, beneficiaries } = job.data;
-    const logPrefix = `[Job ${job.id}][group ${groupUuid}]`;
+  private async sponsorAccountsBatch(logPrefix: string, data: SponsorBatchJobData) {
+    const { groupUuid, beneficiaries } = data;
+    logPrefix = `${logPrefix}[group ${groupUuid}]`;
     this.logger.log(`${logPrefix} Processing batch of ${beneficiaries.length} beneficiaries`);
 
     const { resolved, keypairs } = await this.resolveKeypairs(logPrefix, beneficiaries);
@@ -70,10 +111,9 @@ export class StellarSponsorProcessor {
    * merging sidesteps that by deleting the entries instead of reassigning
    * who backs them. One-way door: the account is gone afterward.
    */
-  @Process({ name: JOBS.STELLAR.REVOKE_SPONSORSHIP_BATCH, concurrency: 1 })
-  async revokeSponsorshipBatch(job: Job<SponsorBatchJobData>) {
-    const { groupUuid, beneficiaries } = job.data;
-    const logPrefix = `[Job ${job.id}][group ${groupUuid}]`;
+  private async revokeSponsorshipBatch(logPrefix: string, data: SponsorBatchJobData) {
+    const { groupUuid, beneficiaries } = data;
+    logPrefix = `${logPrefix}[group ${groupUuid}]`;
     this.logger.log(`${logPrefix} Closing out ${beneficiaries.length} beneficiaries (merge to sponsor)`);
 
     const { resolved, keypairs } = await this.resolveKeypairs(logPrefix, beneficiaries);
@@ -279,11 +319,41 @@ export class StellarSponsorProcessor {
     });
   }
 
+  /**
+   * Funds a vendor's wallet with XLM on vendor assignment (moved here from
+   * ListernersService.handleVendorAssignment). Same sponsor account as the
+   * sponsor/revoke batches above — firing fundAccountWithXlm directly from the
+   * event handler raced the sponsor account's sequence number whenever
+   * multiple vendors were assigned close together (or a sponsor/revoke batch
+   * ran at the same time), causing a Stellar nonce error. Dispatched through
+   * processSponsorQueueSerial above, so it's now serialized against those too.
+   */
+  private async fundStellarAccount(logPrefix: string, data: FundStellarAccountJobData) {
+    const { walletAddress } = data;
+    logPrefix = `${logPrefix}[wallet ${walletAddress}]`;
+
+    if (!this.stellarClient) {
+      this.logger.warn(
+        `${logPrefix} STELLAR_SPONSOR_SETTINGS not configured (or chain is not Stellar) — skipping XLM funding`
+      );
+      return;
+    }
+
+    this.logger.log(`${logPrefix} Funding wallet with XLM`);
+    const result = await this.stellarClient.fundAccountWithXlm(walletAddress, '2');
+    this.logger.log(`${logPrefix} Funded with 2 XLM, tx: ${result.hash}`);
+  }
+
   @OnQueueFailed()
-  onFailed(job: Job<SponsorBatchJobData>, error: Error) {
+  onFailed(job: Job<SponsorQueueSerialJobData>, error: Error) {
     const isLastAttempt = job.attemptsMade >= (job.opts.attempts ?? 1);
+    // all jobs share the one SPONSOR_QUEUE_SERIAL name now, so job.data.type is
+    // the useful label here, not job.name; FUND_STELLAR_ACCOUNT carries a
+    // walletAddress instead of a groupUuid
+    const subject =
+      'groupUuid' in job.data ? `group ${job.data.groupUuid}` : `wallet ${job.data.walletAddress}`;
     this.logger.error(
-      `[Job ${job.id}][group ${job.data.groupUuid}] ${job.name} attempt ${job.attemptsMade}/${job.opts.attempts ?? 1} FAILED${isLastAttempt ? ' (no retries left)' : ''}: ${error.message}`,
+      `[Job ${job.id}][${subject}] ${job.data.type} attempt ${job.attemptsMade}/${job.opts.attempts ?? 1} FAILED${isLastAttempt ? ' (no retries left)' : ''}: ${error.message}`,
       error.stack
     );
   }

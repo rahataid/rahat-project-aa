@@ -11,6 +11,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CORE_MODULE } from '../constants';
 import { PrismaModule } from '@rumsan/prisma';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
+import { OtpModule } from '../otp/otp.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SEND_ASSET }),
     BullModule.registerQueue({ name: BQUEUE.STELLAR_INKIND_REDEEM }),
     forwardRef(() => BeneficiaryModule),
+    OtpModule,
   ],
   controllers: [ChainController],
   providers: [
