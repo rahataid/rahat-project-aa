@@ -11,6 +11,8 @@ import {
   SendAssetDto,
   TransferTokensDto,
   VerifyOtpDto,
+  CheckOtpDto,
+  AddCvaEvidenceDto,
   AddTriggerDto,
   UpdateTriggerDto,
   RedeemInkindDto,
@@ -176,6 +178,23 @@ export class ChainQueueService {
       chainType
     );
     return chainService.verifyOtp(data);
+  }
+
+  async checkOtp(data: CheckOtpDto, chainType?: ChainType): Promise<boolean> {
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.checkOtp(data);
+  }
+
+  async addCvaEvidence(
+    data: AddCvaEvidenceDto,
+    chainType?: ChainType
+  ): Promise<any> {
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+    return chainService.addCvaEvidence(data);
   }
 
   async addTrigger(data: AddTriggerDto, chainType?: ChainType): Promise<any> {

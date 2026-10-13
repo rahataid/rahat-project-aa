@@ -1,9 +1,12 @@
+import type { MediaItem } from '../../utils/evidence';
+
 export class SendAssetDto {
   amount: string | number;
   phoneNumber: string;
   receiverAddress: string;
   otp: string;
-  mediaUrl?: string;
+  /** Legacy: single URL string (paired with fileName). New: [{ mediaUrl, filename }]. */
+  mediaUrl?: string | MediaItem[];
   fileName?: string;
   skipOtpVerification?: boolean;
   otpSkipReason?: string;
@@ -33,6 +36,11 @@ export interface IChainService {
 
   // Authentication operations
   verifyOtp(data: VerifyOtpDto): Promise<any>;
+  /** Side-effect-free OTP check: true/false, never throws on mismatch. */
+  checkOtp(data: CheckOtpDto): Promise<boolean>;
+
+  // CVA evidence: append media to the beneficiary's latest redeem record
+  addCvaEvidence(data: AddCvaEvidenceDto): Promise<any>;
 
   // Trigger operations (optional for chains that support it)
   addTrigger?(data: AddTriggerDto): Promise<any>;
@@ -104,6 +112,16 @@ export interface VerifyOtpDto {
   phoneNumber: string;
   otp: string;
   transactionData: any;
+}
+
+export interface CheckOtpDto {
+  otp: string;
+  phoneNum: string;
+}
+
+export interface AddCvaEvidenceDto {
+  phoneNumber: string;
+  evidence: MediaItem[];
 }
 
 export interface AddTriggerDto {

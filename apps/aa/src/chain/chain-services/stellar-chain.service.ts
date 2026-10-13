@@ -15,6 +15,8 @@ import {
   SendAssetDto,
   TransferTokensDto,
   VerifyOtpDto,
+  CheckOtpDto,
+  AddCvaEvidenceDto,
   AddTriggerDto,
   UpdateTriggerDto,
   RedeemInkindDto,
@@ -33,6 +35,7 @@ import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { chunkArray } from '../../utils/utility';
 import { getOtpHash, verifyOtpHash } from '../../utils/hash';
+import { getInfoMedia, toMediaItems } from '../../utils/evidence';
 import { OtpService } from '../../otp/otp.service';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
@@ -729,7 +732,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
         code: 'BENEFICIARY_SECRET_NOT_FOUND',
       });
 
-    if (data.mediaUrl || data.skipOtpVerification) {
+    const media = toMediaItems(data.mediaUrl, data.fileName);
+
+    if (media.length || data.skipOtpVerification) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
         where: {
           beneficiaryWalletAddress: keys.address,
@@ -744,12 +749,12 @@ export class StellarChainService implements IChainService, OnModuleInit {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
         const infoUpdate: Record<string, any> = { ...info };
 
-        if (data.mediaUrl) {
+        if (media.length) {
           this.logger.log(
-            `Updating mediaUrl for redeem record ${existingRedeem.uuid} to ${data.mediaUrl}`
+            `Updating media (${media.length}) for redeem record ${existingRedeem.uuid}`
           );
-          infoUpdate.mediaUrl = data.mediaUrl;
-          infoUpdate.fileName = data.fileName;
+          infoUpdate.mediaUrl = media;
+          delete infoUpdate.fileName;
         }
 
         if (data.skipOtpVerification) {
@@ -1374,6 +1379,48 @@ export class StellarChainService implements IChainService, OnModuleInit {
       message: 'Not supported on Stellar SDP chain',
       code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
     });
+  }
+
+  async checkOtp({ otp, phoneNum }: CheckOtpDto): Promise<boolean> {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber: phoneNum },
+    });
+    if (!record) return false;
+    return verifyOtpHash(record.otpHash, `${otp}`);
+  }
+
+  async addCvaEvidence(data: AddCvaEvidenceDto): Promise<any> {
+    const evidence = toMediaItems(data.evidence);
+    if (!evidence.length)
+      throw new RpcException({
+        message: 'No evidence provided',
+        code: 'CVA_EVIDENCE_EMPTY',
+      });
+
+    const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
+      address: string;
+    } | null;
+    const redeem = keys?.address
+      ? await this.prisma.beneficiaryRedeem.findFirst({
+          where: { beneficiaryWalletAddress: keys.address },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    if (!redeem)
+      throw new RpcException({
+        message: 'No BeneficiaryRedeem record found',
+        code: 'NO_BENEFICIARY_REDEEM_FOUND',
+      });
+
+    const info = { ...((redeem.info as Record<string, any>) ?? {}) };
+    info.mediaUrl = [...getInfoMedia(info), ...evidence];
+    delete info.fileName;
+
+    await this.prisma.beneficiaryRedeem.update({
+      where: { uuid: redeem.uuid },
+      data: { info },
+    });
+    return { redeemUuid: redeem.uuid, mediaUrl: info.mediaUrl };
   }
 
   async getDisbursementStatus(_id: string): Promise<any> {
