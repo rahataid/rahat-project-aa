@@ -2656,7 +2656,7 @@ export class PayoutsService {
 
         const municipality = extras?.municipality || '';
         const district = extras?.district || extras?.location || '';
-        const ward = extras?.ward || '';
+        const ward = extras?.ward || extras?.ward_number || '';
         const tole = extras?.tole || '';
         const governmentIdType = extras?.governmentIdType || '';
         const governmentIdNumber = extras?.govtIDNumber || '';
@@ -2930,6 +2930,45 @@ export class PayoutsService {
     };
   }
   /**
+   * Normalize every supported photo-evidence shape in
+   * BeneficiaryRedeem.info into a deduped URL list.
+   */
+  private extractPhotoUrls(info: any): string[] {
+    try {
+      if (!info || typeof info !== 'object') return [];
+      const out: string[] = [];
+      const push = (v: unknown) => {
+        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+      };
+      const media = (info as Record<string, unknown>).mediaUrl;
+      if (typeof media === 'string') {
+        // legacy single
+        push(media);
+      } else if (Array.isArray(media)) {
+        // new multi: [{ filename, mediaUrl }, ...] (also tolerates plain strings)
+        for (const item of media) {
+          if (typeof item === 'string') push(item);
+          else if (item && typeof item === 'object') {
+            const o = item as Record<string, unknown>;
+            push(o['mediaUrl']);
+            push(o['mediaURL']);
+            push(o['url']);
+            push(o['src']);
+          }
+        }
+      }
+      // tolerate alternate keys just in case
+      push((info as Record<string, unknown>).mediaURL);
+      push((info as Record<string, unknown>).photoUrl);
+      const alt = (info as Record<string, unknown>).mediaUrls;
+      if (Array.isArray(alt)) alt.forEach(push);
+      return [...new Set(out)];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
    * note. Returns undefined when there is nothing meaningful to show.
    * Never throws.
@@ -2952,10 +2991,13 @@ export class PayoutsService {
       if (typeof info.error === 'string' && info.error.trim()) {
         parts.push(info.error.trim());
       }
+      // Only show File: fallback when there is no photo URL at all
+
+      const hasAnyPhotoUrl = this.extractPhotoUrls(info).length > 0;
       if (
+        !hasAnyPhotoUrl &&
         typeof info.fileName === 'string' &&
-        info.fileName.trim() &&
-        !getInfoMedia(info).length
+        info.fileName.trim()
       ) {
         parts.push(`File: ${info.fileName.trim()}`);
       }
@@ -3050,7 +3092,8 @@ export class PayoutsService {
           `${firstName} ${lastName}`.trim() || fallbackName || '';
         const beneficiaryPhone =
           extras?.phone || redeemLog.Beneficiary?.phone || '';
-        const photoUrl = getInfoMedia(info)[0]?.mediaUrl ?? null;
+        const photoUrls = this.extractPhotoUrls(info);
+        const photoUrl = photoUrls[0] ?? null;
         const infoNote = this.buildPayoutInfoNote(info);
 
         return {
@@ -3060,11 +3103,12 @@ export class PayoutsService {
           'Phone number': beneficiaryPhone,
           'Amount Disbursed': amountDisbursed,
           photoUrl,
+          photoUrls,
           beneficiaryName,
           beneficiaryPhone,
           municipality: extras?.municipality,
           district: extras?.district || extras?.location,
-          ward: extras?.ward,
+          ward: extras?.ward || extras?.ward_number,
           tole: extras?.tole,
           governmentIdNumber: extras?.govtIDNumber,
           infoNote,
