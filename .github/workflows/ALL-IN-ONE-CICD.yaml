@@ -184,7 +184,7 @@ on:
           - 'main | Tag: main | AA Main'
           - 'dev-aa | Tag: aa-dev | AA Development'
           - 'dev-qa | Tag: aa-dev-qa | AA QA Development'
-          - 'dev-stellar | Tag: dev-stellar | AA Stellar Development'
+          - 'dev-stellar | Tag: aa-stellar | AA Stellar Development'
           - 'dev-unicef | Tag: aa-dev-unicef | UNICEF Development'
           - 'dev-crm | Tag: dev-crm | CRM Development'
           - 'dev-aidlink | Tag: dev-aidlink | AidLink Development'
