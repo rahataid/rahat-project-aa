@@ -6,6 +6,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
 import { getOtpHash, verifyOtpHash } from '../../utils/hash';
+import { getInfoMedia, toMediaItems } from '../../utils/evidence';
 import { Queue } from 'bull';
 import { ethers } from 'ethers';
 import { lastValueFrom } from 'rxjs';
@@ -26,6 +27,8 @@ import {
   SendOtpDto,
   TransferTokensDto,
   VerifyOtpDto,
+  CheckOtpDto,
+  AddCvaEvidenceDto,
   OfflineTransferItem,
   OfflineTransferResult,
 } from '../interfaces/chain-service.interface';
@@ -1012,6 +1015,11 @@ export class EvmChainService implements IChainService, OnModuleInit {
         info.otpSkip = true;
         info.otpSkipReason = verifyOtpDto.otpSkipReason;
       }
+      const media = toMediaItems(verifyOtpDto.mediaUrl, verifyOtpDto.fileName);
+      if (media.length) {
+        info.mediaUrl = media;
+        delete info.fileName;
+      }
 
       // Update the BeneficiaryRedeem record with transaction details
       await this.prisma.beneficiaryRedeem.update({
@@ -1185,6 +1193,48 @@ export class EvmChainService implements IChainService, OnModuleInit {
         code: 'STELLAR_ERR_OTP_VERIFY_FAILED',
       });
     }
+  }
+
+  async checkOtp({ otp, phoneNum }: CheckOtpDto): Promise<boolean> {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber: phoneNum },
+    });
+    if (!record) return false;
+    return verifyOtpHash(record.otpHash, `${otp}`);
+  }
+
+  async addCvaEvidence(data: AddCvaEvidenceDto): Promise<any> {
+    const evidence = toMediaItems(data.evidence);
+    if (!evidence.length) {
+      throw new RpcException({
+        message: 'No evidence provided',
+        code: 'CVA_EVIDENCE_EMPTY',
+      });
+    }
+
+    const keys = await this.getSecretByPhone(data.phoneNumber);
+    const redeem = keys?.address
+      ? await this.prisma.beneficiaryRedeem.findFirst({
+          where: { beneficiaryWalletAddress: keys.address },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    if (!redeem) {
+      throw new RpcException({
+        message: 'No BeneficiaryRedeem record found',
+        code: 'NO_BENEFICIARY_REDEEM_FOUND',
+      });
+    }
+
+    const info = { ...((redeem.info as Record<string, any>) ?? {}) };
+    info.mediaUrl = [...getInfoMedia(info), ...evidence];
+    delete info.fileName;
+
+    await this.prisma.beneficiaryRedeem.update({
+      where: { uuid: redeem.uuid },
+      data: { info },
+    });
+    return { redeemUuid: redeem.uuid, mediaUrl: info.mediaUrl };
   }
 
   validateAddress(address: string): boolean {

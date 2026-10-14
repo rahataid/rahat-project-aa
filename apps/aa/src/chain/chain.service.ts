@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ChainQueueService } from './chain-queue.service';
+import {
+  AddCvaEvidenceDto,
+  CheckOtpDto,
+} from './interfaces/chain-service.interface';
 
 @Injectable()
 export class ChainService {
@@ -19,6 +23,14 @@ export class ChainService {
 
   sendAssetToVendor(sendAssetDto: any) {
     return this.chainQueueService.sendAssetToVendor(sendAssetDto);
+  }
+
+  checkOtp(data: CheckOtpDto) {
+    return this.chainQueueService.checkOtp(data);
+  }
+
+  addCvaEvidence(data: AddCvaEvidenceDto) {
+    return this.chainQueueService.addCvaEvidence(data);
   }
 
   getWalletBalance(data: { address: string }) {

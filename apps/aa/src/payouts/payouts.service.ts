@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { getInfoMedia } from '../utils/evidence';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import {
@@ -2954,7 +2955,7 @@ export class PayoutsService {
       if (
         typeof info.fileName === 'string' &&
         info.fileName.trim() &&
-        !info.mediaUrl
+        !getInfoMedia(info).length
       ) {
         parts.push(`File: ${info.fileName.trim()}`);
       }
@@ -3049,10 +3050,7 @@ export class PayoutsService {
           `${firstName} ${lastName}`.trim() || fallbackName || '';
         const beneficiaryPhone =
           extras?.phone || redeemLog.Beneficiary?.phone || '';
-        const photoUrl =
-          typeof info?.mediaUrl === 'string' && info.mediaUrl.trim()
-            ? info.mediaUrl
-            : null;
+        const photoUrl = getInfoMedia(info)[0]?.mediaUrl ?? null;
         const infoNote = this.buildPayoutInfoNote(info);
 
         return {
