@@ -46,8 +46,13 @@ export class VendorOfflineSyncItem {
   @IsString()
   beneficiaryUuid: string;
 
+  @IsOptional()
   @IsString()
-  otp: string; // OTP provided by beneficiary
+  otp?: string; // OTP provided by beneficiary
+
+  @IsOptional()
+  @IsString()
+  otpSkipReason?: string; // reason when OTP was skipped
 }
 
 export class VendorOfflineSyncDto {

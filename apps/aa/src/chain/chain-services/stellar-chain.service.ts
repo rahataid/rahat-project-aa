@@ -15,6 +15,8 @@ import {
   SendAssetDto,
   TransferTokensDto,
   VerifyOtpDto,
+  CheckOtpDto,
+  AddCvaEvidenceDto,
   AddTriggerDto,
   UpdateTriggerDto,
   RedeemInkindDto,
@@ -33,6 +35,7 @@ import { Keypair, MAX_TRANSFERS_PER_BATCH } from '@rahataid/stellar';
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { chunkArray } from '../../utils/utility';
 import { getOtpHash, verifyOtpHash } from '../../utils/hash';
+import { getInfoMedia, toMediaItems } from '../../utils/evidence';
 import { OtpService } from '../../otp/otp.service';
 import { InkindsService } from '../../inkinds/inkinds.service';
 import { ModuleRef } from '@nestjs/core';
@@ -720,9 +723,29 @@ export class StellarChainService implements IChainService, OnModuleInit {
   }
 
   async sendAssetToVendor(data: SendAssetDto): Promise<any> {
+    const tag = `[sendAsset ${data.phoneNumber}]`;
+    this.logger.log(
+      `${tag} START receiver=${data.receiverAddress} amount=${data.amount} skipOtp=${!!data.skipOtpVerification} payloadKeys=${Object.keys(data).join(',')}`
+    );
+    try {
+      return await this.sendAssetToVendorInner(data, tag);
+    } catch (err) {
+      this.logger.error(
+        `${tag} FAILED before queueing: ${err?.message ?? JSON.stringify(err)} code=${err?.error?.code ?? err?.code ?? 'n/a'}`,
+        err?.stack
+      );
+      throw err;
+    }
+  }
+
+  private async sendAssetToVendorInner(
+    data: SendAssetDto,
+    tag: string
+  ): Promise<any> {
     const vendor = await this.prisma.vendor.findUnique({
       where: { walletAddress: data.receiverAddress },
     });
+    this.logger.log(`${tag} vendor lookup: ${vendor ? vendor.uuid : 'NOT FOUND'}`);
     if (!vendor)
       throw new RpcException({
         message: 'Vendor not found',
@@ -733,19 +756,32 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     if (!data.skipOtpVerification) {
       await this.verifyOTP(data.otp, data.phoneNumber, amount as number);
+      this.logger.log(`${tag} OTP verified`);
+    } else {
+      this.logger.log(`${tag} OTP verification skipped`);
     }
 
     const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
       address: string;
       privateKey: string;
     } | null;
+    this.logger.log(
+      `${tag} secret lookup: address=${keys?.address ?? 'n/a'} hasPrivateKey=${!!keys?.privateKey}`
+    );
     if (!keys?.privateKey)
       throw new RpcException({
         message: 'Beneficiary secret not found',
         code: 'BENEFICIARY_SECRET_NOT_FOUND',
       });
 
-    if (data.mediaUrl || data.skipOtpVerification) {
+    const media = toMediaItems(data.mediaUrl, data.fileName);
+    this.logger.log(
+      `${tag} media: raw=${typeof data.mediaUrl}${
+        Array.isArray(data.mediaUrl) ? `[${data.mediaUrl.length}]` : ''
+      } parsed=${media.length} value=${JSON.stringify(data.mediaUrl)}`
+    );
+
+    if (media.length || data.skipOtpVerification) {
       const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
         where: {
           beneficiaryWalletAddress: keys.address,
@@ -755,17 +791,24 @@ export class StellarChainService implements IChainService, OnModuleInit {
         },
         orderBy: { createdAt: 'desc' },
       });
+      this.logger.log(
+        `${tag} pending redeem lookup (wallet=${keys.address}): ${
+          existingRedeem
+            ? `${existingRedeem.uuid} info=${JSON.stringify(existingRedeem.info)}`
+            : 'NONE'
+        }`
+      );
 
       if (existingRedeem) {
         const info = (existingRedeem.info as Record<string, any>) ?? {};
         const infoUpdate: Record<string, any> = { ...info };
 
-        if (data.mediaUrl) {
+        if (media.length) {
           this.logger.log(
-            `Updating mediaUrl for redeem record ${existingRedeem.uuid} to ${data.mediaUrl}`
+            `Updating media (${media.length}) for redeem record ${existingRedeem.uuid}`
           );
-          infoUpdate.mediaUrl = data.mediaUrl;
-          infoUpdate.fileName = data.fileName;
+          infoUpdate.mediaUrl = media;
+          delete infoUpdate.fileName;
         }
 
         if (data.skipOtpVerification) {
@@ -773,10 +816,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
           infoUpdate.otpSkipReason = data.otpSkipReason;
         }
 
-        await this.prisma.beneficiaryRedeem.update({
+        const updated = await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
           data: { info: infoUpdate },
         });
+        this.logger.log(
+          `${tag} info saved on ${updated.uuid}: ${JSON.stringify(updated.info)}`
+        );
+      } else {
+        this.logger.warn(
+          `sendAsset: no PENDING redeem for wallet ${keys.address}; media/otpSkip not saved`
+        );
       }
     }
 
@@ -798,6 +848,7 @@ export class StellarChainService implements IChainService, OnModuleInit {
       throw err instanceof RpcException ? err : new RpcException(err.message);
     }
 
+    this.logger.log(`${tag} transfer job queued`);
     return { txHash: null, status: 'PROCESSING' };
   }
 
@@ -895,9 +946,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
       // ponytail: only mark FAILED on the last retry — earlier attempts must leave the record
       // PENDING so the next job attempt still finds it via the status: 'PENDING' filter above.
       if (isLastAttempt) {
+        // merge into a fresh read so evidence/otpSkip already on info isn't wiped
+        const fresh = await this.prisma.beneficiaryRedeem.findUnique({
+          where: { uuid: existingRedeem.uuid },
+          select: { info: true },
+        });
         await this.prisma.beneficiaryRedeem.update({
           where: { uuid: existingRedeem.uuid },
-          data: { status: 'FAILED', info: { error: err.message } },
+          data: {
+            status: 'FAILED',
+            info: { ...((fresh?.info as object) ?? {}), error: err.message },
+          },
         });
         this.logger.error(
           `sendAssetToVendor FAILED redeem=${existingRedeem.uuid} vendor=${vendorUuid} amount=${amount}: ${err.message}`,
@@ -1390,6 +1449,48 @@ export class StellarChainService implements IChainService, OnModuleInit {
       message: 'Not supported on Stellar SDP chain',
       code: 'NOT_SUPPORTED_ON_STELLAR_SDP',
     });
+  }
+
+  async checkOtp({ otp, phoneNum }: CheckOtpDto): Promise<boolean> {
+    const record = await this.prisma.otp.findUnique({
+      where: { phoneNumber: phoneNum },
+    });
+    if (!record) return false;
+    return verifyOtpHash(record.otpHash, `${otp}`);
+  }
+
+  async addCvaEvidence(data: AddCvaEvidenceDto): Promise<any> {
+    const evidence = toMediaItems(data.evidence);
+    if (!evidence.length)
+      throw new RpcException({
+        message: 'No evidence provided',
+        code: 'CVA_EVIDENCE_EMPTY',
+      });
+
+    const keys = (await this.getSecretByPhone(data.phoneNumber)) as {
+      address: string;
+    } | null;
+    const redeem = keys?.address
+      ? await this.prisma.beneficiaryRedeem.findFirst({
+          where: { beneficiaryWalletAddress: keys.address },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    if (!redeem)
+      throw new RpcException({
+        message: 'No BeneficiaryRedeem record found',
+        code: 'NO_BENEFICIARY_REDEEM_FOUND',
+      });
+
+    const info = { ...((redeem.info as Record<string, any>) ?? {}) };
+    info.mediaUrl = [...getInfoMedia(info), ...evidence];
+    delete info.fileName;
+
+    await this.prisma.beneficiaryRedeem.update({
+      where: { uuid: redeem.uuid },
+      data: { info },
+    });
+    return { redeemUuid: redeem.uuid, mediaUrl: info.mediaUrl };
   }
 
   async getDisbursementStatus(_id: string): Promise<any> {
