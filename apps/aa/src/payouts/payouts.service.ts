@@ -2931,10 +2931,6 @@ export class PayoutsService {
   /**
    * Normalize every supported photo-evidence shape in
    * BeneficiaryRedeem.info into a deduped URL list.
-   * Supports:
-   *  - legacy single: { mediaUrl: "https://...", fileName: "..." }
-   *  - new multi: { mediaUrl: [{ filename, mediaUrl }, ...] }
-   * Never throws.
    */
   private extractPhotoUrls(info: any): string[] {
     try {
@@ -2995,7 +2991,7 @@ export class PayoutsService {
         parts.push(info.error.trim());
       }
       // Only show File: fallback when there is no photo URL at all
-      // (covers both legacy string and new array shapes).
+
       const hasAnyPhotoUrl = this.extractPhotoUrls(info).length > 0;
       if (
         !hasAnyPhotoUrl &&
