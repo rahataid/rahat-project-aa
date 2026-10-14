@@ -103,8 +103,30 @@ model Beneficiary {
   BeneficiaryToGroup           BeneficiaryToGroup[]
   DisbursementLogs             DisbursementLogs[]
   beneficiaryInkindRedemptions BeneficiaryInkindRedemption[]
+  sdpReceiver                  BeneficiarySdpReceiver? // back-relation, one row per beneficiary once disbursed via SDP
 
   @@map("tbl_beneficiaries")
+}
+
+// Maps an AA beneficiary 1:1 to its SDP receiver, so phone-number updates can be
+// propagated via PATCH /receivers/{id} instead of relying on SDP's phone-based
+// matching (which silently creates a duplicate receiver on a phone change).
+// See docs/sdp/sdp-beneficiary-phone-sync-plan.md.
+model BeneficiarySdpReceiver {
+  id            Int         @id @default(autoincrement()) @db.Integer() // local PK
+  uuid          String      @unique @default(uuid()) // external-facing id, matches other mapping tables' convention
+  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [uuid]) // FK relation to the AA beneficiary
+  beneficiaryId String      @unique @db.Uuid() // @unique enforces the 1:1 — row existing at all means "has an SDP receiver"
+
+  sdpReceiverId   String // SDP's own receiver.id — the value PATCH /receivers/{id} needs
+  lastSyncedPhone String? // phone last confirmed written to SDP; compared against AA's current phone to detect drift
+  syncStatus      String  @default("SYNCED") // SYNCED | PENDING | FAILED
+  lastSyncError   String? // last PATCH failure message, for FAILED rows
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt()
+
+  @@map("tbl_beneficiary_sdp_receivers")
 }
 
 model BeneficiaryGroups {
@@ -1058,4 +1080,5 @@ model AsyncQueueJob {
   @@index([createdAt]) // FIFO replay ordering
   @@map("tbl_async_queue_jobs")
 }
+
 // ============== End Async Queue Jobs SCHEMAS ================
