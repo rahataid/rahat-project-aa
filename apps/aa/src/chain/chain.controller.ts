@@ -1,7 +1,11 @@
 import { Controller } from '@nestjs/common';
 import { ChainService } from './chain.service';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { RedeemInkindDto } from './interfaces/chain-service.interface';
+import {
+  AddCvaEvidenceDto,
+  CheckOtpDto,
+  RedeemInkindDto,
+} from './interfaces/chain-service.interface';
 import { JOBS } from '../constants';
 
 @Controller('chain')
@@ -30,6 +34,22 @@ export class ChainController {
   })
   sendAssetToVendor(data: any) {
     return this.chainService.sendAssetToVendor(data);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.checkOtp',
+    uuid: process.env.PROJECT_ID,
+  })
+  checkOtp(data: CheckOtpDto) {
+    return this.chainService.checkOtp(data);
+  }
+
+  @MessagePattern({
+    cmd: 'aa.jobs.chain.addCvaEvidence',
+    uuid: process.env.PROJECT_ID,
+  })
+  addCvaEvidence(data: AddCvaEvidenceDto) {
+    return this.chainService.addCvaEvidence(data);
   }
 
   @MessagePattern({

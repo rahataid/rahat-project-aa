@@ -9,7 +9,6 @@ import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { ChainService } from '../chain/chain.service';
 import { PayoutsService } from '../payouts/payouts.service';
 import { SettingsService } from '@rumsan/settings';
-import { StellarClient, StellarClientConfig } from '@rahataid/stellar';
 
 @Injectable()
 export class ListernersService {
@@ -20,6 +19,8 @@ export class ListernersService {
     private readonly stakeholderStats: StakeholdersService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
+    // vendor XLM funding goes here — processed one at a time by StellarSponsorProcessor
+    @InjectQueue(BQUEUE.STELLAR_SPONSOR) private readonly stellarSponsorQueue: Queue,
     @Inject(forwardRef(() => CvaDisbursementService))
     private disbService: CvaDisbursementService,
     private readonly settingsService: SettingsService,
@@ -122,19 +123,26 @@ export class ListernersService {
     }
   }
 
+  // Queues the XLM funding instead of calling StellarClient directly — multiple
+  // vendors assigned close together all share the one sponsor account, and
+  // firing fundAccountWithXlm concurrently raced its sequence number (Stellar
+  // nonce error), same account the sponsor/revoke batches use too. Queued under
+  // SPONSOR_QUEUE_SERIAL (not FUND_STELLAR_ACCOUNT directly) so
+  // StellarSponsorProcessor's concurrency: 1 serializes this against sponsor
+  // and revoke batches as well, not just against other vendor-funding jobs.
   @OnEvent(CVA_EVENTS.VENDOR.CREATED)
   async handleVendorAssignment(event: { walletAddress: string }) {
     this.logger.log(`[VENDOR CREATION EVENT]✅ Vendor assignment event emitted with walletAddress: ${event.walletAddress}`);
-    try {
-      const settings = await this.settingsService.getPublic('STELLAR_SPONSOR_SETTINGS');
-      if (!settings?.value) {
-        this.logger.warn('STELLAR_SPONSOR_SETTINGS not configured — skipping XLM send');
-        return;
+    await this.stellarSponsorQueue.add(
+      JOBS.STELLAR.SPONSOR_QUEUE_SERIAL,
+      { type: 'FUND_STELLAR_ACCOUNT', walletAddress: event.walletAddress },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: true,
+        removeOnFail: false,
       }
-      const result = await new StellarClient(settings.value as unknown as StellarClientConfig).fundAccountWithXlm(event.walletAddress, '2');
-      this.logger.log(`[VENDOR CREATION EVENT] Sent 5 XLM to ${event.walletAddress}, tx: ${result.hash}`);
-    } catch (err) {
-      this.logger.error(`[VENDOR CREATION EVENT] Failed to send 5 XLM to ${event.walletAddress}`, err);
-    }
+    );
+    this.logger.log(`[VENDOR CREATION EVENT] Queued XLM funding for ${event.walletAddress}`);
   }
 }
