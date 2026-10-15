@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { CvaGroupController } from './group.controller';
 import { CvaGroupService } from './group.service';
 
-const PROVIDERS = [CvaGroupService, PrismaService];
+const PROVIDERS = [CvaGroupService];
 
 @Module({
-  imports: [],
+  imports: [PrismaModule],
   controllers: [CvaGroupController],
   providers: [...PROVIDERS],
 })

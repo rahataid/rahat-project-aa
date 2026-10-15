@@ -1,6 +1,6 @@
 import { BullModule, InjectQueue } from '@nestjs/bull';
 import { Module, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { Queue } from 'bull';
 import { BQUEUE, JOBS } from '../constants';
 import { AsyncQueueRecoveryService } from './async-queue-recovery.service';
@@ -8,11 +8,12 @@ import { AsyncQueueService } from './async-queue.service';
 
 @Module({
   imports: [
+    PrismaModule,
     BullModule.registerQueue({ name: BQUEUE.BENEFICIARY }),
     // needed here too so this module can inject it below to register recovery
     BullModule.registerQueue({ name: BQUEUE.STELLAR_SDP }),
   ],
-  providers: [PrismaService, AsyncQueueService, AsyncQueueRecoveryService],
+  providers: [AsyncQueueService, AsyncQueueRecoveryService],
   exports: [AsyncQueueService, AsyncQueueRecoveryService],
 })
 export class QueueModule implements OnModuleInit {
