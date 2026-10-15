@@ -6,6 +6,7 @@ import {
   AddStakeholdersGroups,
   BulkAddStakeholdersPayload,
   CreateStakeholderDto,
+  ExportStakeholdersGroup,
   FindStakeholdersGroup,
   GetAllGroups,
   getGroupByUuidDto,
@@ -372,18 +373,26 @@ export class StakeholdersService {
       supportArea,
     } = payload;
 
+    const sanitizedName = name?.trim() || undefined;
+    const sanitizedPhone = phone?.trim().replace(/[\s\-]+/g, '') || undefined;
+    const sanitizedDesignation = designation?.trim() || undefined;
+    const sanitizedDistrict = district?.trim() || undefined;
+    const sanitizedMunicipality = municipality?.trim() || undefined;
+    const sanitizedOrganization = organization?.trim() || undefined;
+    const sanitizedSupportArea = supportArea?.trim() || undefined;
+
     this.logger.log(
-      `Fetching stakeholders with filters - name: ${name}, phone: ${phone}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
+      `Fetching stakeholders with filters - name: ${sanitizedName}, phone: ${sanitizedPhone}, designation: ${sanitizedDesignation}, district: ${sanitizedDistrict}, municipality: ${sanitizedMunicipality}, organization: ${sanitizedOrganization}, supportArea: ${sanitizedSupportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
     );
 
     // Case-insensitive array search via raw SQL — Prisma hasSome is case-sensitive
     let supportAreaUuids: string[] | null = null;
-    if (supportArea) {
+    if (sanitizedSupportArea) {
       const matches = await this.prisma.$queryRaw<{ uuid: string }[]>`
       SELECT uuid FROM tbl_stakeholders
       WHERE EXISTS (
         SELECT 1 FROM unnest("supportArea") AS s
-        WHERE s ILIKE ${'%' + supportArea + '%'}
+        WHERE s ILIKE ${'%' + sanitizedSupportArea + '%'}
       )
       AND "isDeleted" = false
     `;
@@ -393,19 +402,29 @@ export class StakeholdersService {
     const query = {
       where: {
         isDeleted: false,
-        ...(name && { name: { contains: name, mode: 'insensitive' } }),
-        ...(phone && { phone: { contains: phone, mode: 'insensitive' } }),
-        ...(designation && {
-          designation: { contains: designation, mode: 'insensitive' },
+        ...(sanitizedName && {
+          name: { contains: sanitizedName, mode: 'insensitive' },
         }),
-        ...(district && {
-          district: { contains: district, mode: 'insensitive' },
+        ...(sanitizedPhone && {
+          phone: { contains: sanitizedPhone, mode: 'insensitive' },
         }),
-        ...(municipality && {
-          municipality: { contains: municipality, mode: 'insensitive' },
+        ...(sanitizedDesignation && {
+          designation: { contains: sanitizedDesignation, mode: 'insensitive' },
         }),
-        ...(organization && {
-          organization: { contains: organization, mode: 'insensitive' },
+        ...(sanitizedDistrict && {
+          district: { contains: sanitizedDistrict, mode: 'insensitive' },
+        }),
+        ...(sanitizedMunicipality && {
+          municipality: {
+            contains: sanitizedMunicipality,
+            mode: 'insensitive',
+          },
+        }),
+        ...(sanitizedOrganization && {
+          organization: {
+            contains: sanitizedOrganization,
+            mode: 'insensitive',
+          },
         }),
         ...(supportAreaUuids && { uuid: { in: supportAreaUuids } }),
       },
@@ -605,13 +624,14 @@ export class StakeholdersService {
 
   async getAllGroups(payload: GetAllGroups) {
     const { page, perPage, order, search, sort } = payload;
+    const sanitizedSearch = search?.trim() || undefined;
 
     if (!page || !perPage) {
       const result = await this.prisma.stakeholdersGroups.findMany({
         where: {
           isDeleted: false,
-          ...(search && {
-            name: { contains: search, mode: 'insensitive' },
+          ...(sanitizedSearch && {
+            name: { contains: sanitizedSearch, mode: 'insensitive' },
           }),
         },
         orderBy: {
@@ -641,8 +661,8 @@ export class StakeholdersService {
     const query = {
       where: {
         isDeleted: false,
-        ...(search && {
-          name: { contains: search, mode: 'insensitive' },
+        ...(sanitizedSearch && {
+          name: { contains: sanitizedSearch, mode: 'insensitive' },
         }),
       },
       orderBy: {
@@ -749,6 +769,48 @@ export class StakeholdersService {
         },
       },
     });
+  }
+
+  async exportGroup(
+    payload: ExportStakeholdersGroup
+  ): Promise<Record<string, any>[]> {
+    const { groupUuid } = payload;
+    if (!groupUuid) {
+      throw new RpcException({
+        message: 'Group uuid is required for export',
+        code: 'GROUP_UUID_REQUIRED_FOR_EXPORT',
+      });
+    }
+
+    const group = await this.prisma.stakeholdersGroups.findUnique({
+      where: { uuid: groupUuid },
+      select: {
+        uuid: true,
+        name: true,
+        isDeleted: true,
+        stakeholders: {
+          where: { isDeleted: false },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+    if (!group || group.isDeleted) {
+      throw new RpcException({
+        message: 'Stakeholder group not found',
+        code: 'GROUP_NOT_FOUND',
+      });
+    }
+
+    return (group.stakeholders ?? []).map((s) => ({
+      name: s.name ?? '',
+      email: s.email ?? '',
+      phone: s.phone ?? '',
+      designation: s.designation ?? '',
+      organization: s.organization ?? '',
+      district: s.district ?? '',
+      municipality: s.municipality ?? '',
+      supportArea: Array.isArray(s.supportArea) ? s.supportArea.join(', ') : '',
+    }));
   }
 
   async removeGroup(payload: RemoveStakeholdersGroup) {
