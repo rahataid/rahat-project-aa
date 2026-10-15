@@ -1,9 +1,8 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger, Injectable, Inject } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
 import { Job } from 'bull';
-import { BQUEUE, CORE_MODULE, JOBS } from '../constants';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
+import { BQUEUE, JOBS } from '../constants';
+import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@rumsan/prisma';
 import {
   VendorOfflinePayoutDto,
@@ -15,6 +14,7 @@ import {
 // equivalent OTP verification / asset transfer methods.
 // import { StellarService } from '../stellar/stellar.service';
 import { getOtpHash } from '../utils/hash';
+import { OtpService } from '../otp/otp.service';
 import { Prisma } from '@prisma/client';
 
 @Processor(BQUEUE.VENDOR_CVA)
@@ -23,7 +23,7 @@ export class VendorOfflinePayoutProcessor {
   private readonly logger = new Logger(VendorOfflinePayoutProcessor.name);
 
   constructor(
-    @Inject(CORE_MODULE) private readonly client: ClientProxy,
+    private readonly otpService: OtpService,
     private readonly prismaService: PrismaService // TODO: STELLAR DETACH - re-add once stellar module is rewritten. // private readonly stellarService: StellarService,
   ) {}
 
@@ -407,12 +407,7 @@ export class VendorOfflinePayoutProcessor {
     let bulkOtpResult = null;
     try {
       // Send bulk OTP using the bulk OTP service
-      bulkOtpResult = await lastValueFrom(
-        this.client.send(
-          { cmd: 'rahat.jobs.otp.send_bulk_otp' },
-          { requests: bulkOtpRequests }
-        )
-      );
+      bulkOtpResult = await this.otpService.sendBulkOtp(bulkOtpRequests);
       this.logger.log(
         `Bulk OTP sent successfully for ${bulkOtpRequests.length} beneficiaries`,
         VendorOfflinePayoutProcessor.name
@@ -448,25 +443,32 @@ export class VendorOfflinePayoutProcessor {
               );
               continue;
             }
-            const otpHash = getOtpHash(`${result.otp}`);
-            // Store OTP in DB
-            await this.prismaService.otp.upsert({
+            // Keep an existing OTP row untouched (hash, amount, expiry): sendBulkOtp reuses its code.
+            // expiresAt is required by the schema, so it is only set when the row is created.
+            let otpRow = await this.prismaService.otp.findUnique({
               where: { phoneNumber: request.phoneNumber },
-              update: {
-                otpHash,
-                amount: parseInt(request.amount),
-                expiresAt: expiryDate,
-                isVerified: false,
-                updatedAt: new Date(),
-              },
-              create: {
-                phoneNumber: request.phoneNumber,
-                otpHash,
-                amount: parseInt(request.amount),
-                expiresAt: expiryDate,
-                isVerified: false,
-              },
             });
+            if (otpRow && !otpRow.otp) {
+              // plain code unknown, so sendBulkOtp generated a new one: only the code and its hash change
+              otpRow = await this.prismaService.otp.update({
+                where: { phoneNumber: request.phoneNumber },
+                data: {
+                  otp: `${result.otp}`,
+                  otpHash: getOtpHash(`${result.otp}`),
+                },
+              });
+            } else if (!otpRow) {
+              otpRow = await this.prismaService.otp.create({
+                data: {
+                  phoneNumber: request.phoneNumber,
+                  otp: `${result.otp}`,
+                  otpHash: getOtpHash(`${result.otp}`),
+                  amount: parseInt(request.amount),
+                  expiresAt: expiryDate,
+                },
+              });
+            }
+            const otpHash = otpRow.otpHash;
             // Find or create beneficiaryRedeem record
             let redeemRecord =
               await this.prismaService.beneficiaryRedeem.findFirst({

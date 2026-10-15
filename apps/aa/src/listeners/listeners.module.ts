@@ -20,6 +20,11 @@ import { PayoutsModule } from '../payouts/payouts.module';
     BullModule.registerQueue({
       name: BQUEUE.NOTIFICATION,
     }),
+    // vendor XLM funding is enqueued here, processed serially by StellarSponsorProcessor
+    // (same sponsor account as the sponsor/revoke batches — see fundStellarAccount)
+    BullModule.registerQueue({
+      name: BQUEUE.STELLAR_SPONSOR,
+    }),
     ClientsModule.register([
       {
         name: TRIGGGERS_MODULE,

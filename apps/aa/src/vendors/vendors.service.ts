@@ -985,7 +985,7 @@ export class VendorsService {
       }
       // Get verified beneficiary UUIDs + OTP map
       const verifiedMap = new Map(
-        payload.verifiedBeneficiaries.map((b) => [b.beneficiaryUuid, b.otp])
+        payload.verifiedBeneficiaries.map((b) => [b.beneficiaryUuid, b])
       );
 
       // Fetch all pending VENDOR_REIMBURSEMENT for vendor
@@ -1033,8 +1033,26 @@ export class VendorsService {
         beneficiaryWalletAddress: r.beneficiaryWalletAddress,
         vendorWalletAddress: vendor.walletAddress,
         amount: r.amount,
-        otp: verifiedMap.get(r.Beneficiary?.uuid), // ponytail: store OTP in batch for processor validation if needed later
+        otp: verifiedMap.get(r.Beneficiary?.uuid)?.otp, // ponytail: store OTP in batch for processor validation if needed later
       }));
+
+      // Persist OTP skip on redeem info, same shape as online sendAsset
+      await Promise.all(
+        verified.map((r) => {
+          const entry = verifiedMap.get(r.Beneficiary?.uuid);
+          if (entry?.otp) return null;
+          return this.prisma.beneficiaryRedeem.update({
+            where: { uuid: r.uuid },
+            data: {
+              info: {
+                ...((r.info as Record<string, any>) ?? {}),
+                otpSkip: true,
+                otpSkipReason: entry?.otpSkipReason,
+              },
+            },
+          });
+        })
+      );
 
       const batches: (typeof items)[] = [];
       for (let i = 0; i < items.length; i += OFFLINE_REDEEM_BATCH_SIZE) {
