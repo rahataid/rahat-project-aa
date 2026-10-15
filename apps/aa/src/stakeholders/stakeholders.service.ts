@@ -301,6 +301,7 @@ export class StakeholdersService {
   async getAll(payload: GetStakeholdersData) {
     const {
       name,
+      phone,
       designation,
       district,
       municipality,
@@ -313,7 +314,7 @@ export class StakeholdersService {
     } = payload;
 
     this.logger.log(
-      `Fetching stakeholders with filters - name: ${name}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
+      `Fetching stakeholders with filters - name: ${name}, phone: ${phone}, designation: ${designation}, district: ${district}, municipality: ${municipality}, organization: ${organization}, supportArea: ${supportArea}, page: ${page}, perPage: ${perPage}, order: ${order}, sort: ${sort}`
     );
 
     // Case-insensitive array search via raw SQL — Prisma hasSome is case-sensitive
@@ -334,6 +335,7 @@ export class StakeholdersService {
       where: {
         isDeleted: false,
         ...(name && { name: { contains: name, mode: 'insensitive' } }),
+        ...(phone && { phone: { contains: phone, mode: 'insensitive' } }),
         ...(designation && {
           designation: { contains: designation, mode: 'insensitive' },
         }),
