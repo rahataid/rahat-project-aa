@@ -319,7 +319,11 @@ export class HealthService implements OnModuleInit {
     const rows = services
       .map(({ name, message, restored }) => {
         const label = isDown ? 'DOWN' : restored ? 'RESTORED' : 'UP';
-        const time = new Date().toLocaleTimeString();
+        const time = new Date().toLocaleTimeString(undefined, {
+          timeZone:
+            process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timeZoneName: 'short',
+        });
         const color = isDown ? '#d9534f' : restored ? '#f0ad4e' : '#5cb85c';
         return `
         <tr>
@@ -373,7 +377,14 @@ export class HealthService implements OnModuleInit {
       </table>
       </div>
       <div class="foot">
-      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard(${frontendUrl})</a>· ${new Date().toLocaleString()} </p>
+      <p>Automated alert from Rahat AA Project Health Check  for   <p><a href="${frontendUrl}">Dashboard(${frontendUrl})</a>· ${new Date().toLocaleString(
+      undefined,
+      {
+        timeZone:
+          process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timeZoneName: 'short',
+      }
+    )} </p>
       ${projectDetails}
       <span style="margin-left:12px">Server IP: <strong>${
         this.serverIp
