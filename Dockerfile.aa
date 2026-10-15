@@ -1,7 +1,7 @@
 # -----------------------------
 # Dependencies
 # -----------------------------
-FROM public.ecr.aws/docker/library/node:20-alpine3.1 AS deps
+FROM public.ecr.aws/docker/library/node:20-alpine AS deps
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 # -----------------------------
 # Builder
 # -----------------------------
-FROM node:20-alpine FROM public.ecr.aws/docker/library/node:20-alpine3.1 
+FROM node:20-alpine FROM public.ecr.aws/docker/library/node:20-alpine
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@8.14.1 --activate
