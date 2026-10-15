@@ -434,9 +434,14 @@ export class VendorsService {
       }
 
       // Case Online: Get all beneficiary redeem of that vendor with status completed
-      // Case Offline: Get all beneficiaryRedeem of that vendor (don't care for status)
+      // Case Offline: Get all beneficiaryRedeem of that vendor whose payout group's
+      // token disbursement has completed (payout.beneficiaryRedeem.status === 'COMPLETED')
       if (payload.payoutMode === 'ONLINE') {
         redeemWhereClause.status = 'COMPLETED';
+      } else {
+        redeemWhereClause.payout = {
+          beneficiaryRedeem: { some: { status: 'COMPLETED' } },
+        };
       }
 
       const beneficiaryRedeems = await this.prisma.beneficiaryRedeem.findMany({
