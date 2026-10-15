@@ -2537,6 +2537,25 @@ export class PayoutsService {
     fieldOfficerAddress: string,
     tokenAmount: string
   ): Promise<void> {
+    // Manual bank transfer is off-chain fiat: complete redeems DB-only.
+    try {
+      const chainSettings = await this.settingService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      if ((chainSettings?.value as any)?.type === 'stellar') {
+        await this.completeStellarManualPayoutRedeems(
+          matchedRows,
+          fieldOfficerAddress,
+          tokenAmount
+        );
+        return;
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Failed to load CHAIN_SETTINGS, defaulting to EVM batch transfer: ${err?.message}`
+      );
+    }
+
     const transfers = matchedRows.map((row) => ({
       beneficiaryWalletAddress: row.beneficiary!.walletAddress,
       vendorWalletAddress: fieldOfficerAddress,
@@ -2567,6 +2586,121 @@ export class PayoutsService {
       `Successfully queued batch transfer job with ID: ${job.id} ` +
         `for ${transfers.length} token transfers`
     );
+  }
+  //manual bank transfer is off-chain fiat: complete redeems.
+  private async completeStellarManualPayoutRedeems(
+    matchedRows: EnrichedManualPayoutRow[],
+    fieldOfficerAddress: string,
+    tokenAmount: string
+  ): Promise<void> {
+    // Guard 2: Stellar field officer must be G...56; amount must be positive int.
+    if (
+      typeof fieldOfficerAddress !== 'string' ||
+      fieldOfficerAddress.length !== 56 ||
+      !fieldOfficerAddress.startsWith('G')
+    ) {
+      throw new RpcException({
+        message: `Payout verification failed: Invalid Stellar field officer address '${fieldOfficerAddress}'`,
+        code: 'PAYOUT_VERIFY_FIELD_OFFICER_ADDRESS_NOT_CONFIGURED',
+      });
+    }
+    const parsedAmount = parseInt(tokenAmount);
+    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+      throw new RpcException({
+        message: `Payout verification failed: Invalid token amount '${tokenAmount}'`,
+        code: 'PAYOUT_VERIFY_CANNOT_CALCULATE_TOKEN_AMOUNT',
+      });
+    }
+
+    this.logger.log(
+      `Completing ${matchedRows.length} Stellar manual payout redeems DB-only`
+    );
+    for (const row of matchedRows) {
+      const beneficiaryWalletAddress = row.beneficiary!.walletAddress;
+      const payoutId = row.payoutId;
+      try {
+        // Guard 1+4: only INITIATED + incomplete; skip already COMPLETED (idempotent).
+        const alreadyCompleted = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress,
+            payoutId,
+            status: 'FIAT_TRANSACTION_COMPLETED',
+            isCompleted: true,
+          },
+          select: { uuid: true },
+        });
+        if (alreadyCompleted) {
+          this.logger.log(
+            `Skipping ${beneficiaryWalletAddress}: already FIAT_TRANSACTION_COMPLETED`
+          );
+          continue;
+        }
+
+        const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress,
+            payoutId,
+            status: 'FIAT_TRANSACTION_INITIATED',
+            isCompleted: false,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (existingRedeem) {
+          await this.prisma.beneficiaryRedeem.update({
+            where: { uuid: existingRedeem.uuid },
+            data: {
+              isCompleted: true,
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              amount: parsedAmount,
+              info: {
+                ...((typeof existingRedeem.info === 'object' &&
+                existingRedeem.info !== null
+                  ? existingRedeem.info
+                  : {}) as object),
+                offrampWalletAddress: fieldOfficerAddress,
+                date: row['Date'],
+                approvalDate: row['Approval Date'],
+                message:
+                  'Fiat transfer to field officer completed successfully',
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+          if (existingRedeem.payoutId) {
+            await this.checkAndCompletePayout(existingRedeem.payoutId);
+          }
+        } else {
+          const created = await this.prisma.beneficiaryRedeem.create({
+            data: {
+              beneficiaryWalletAddress,
+              amount: parsedAmount,
+              transactionType: 'FIAT_TRANSFER',
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              isCompleted: true,
+              payoutId,
+              info: {
+                offrampWalletAddress: fieldOfficerAddress,
+                date: row['Date'],
+                approvalDate: row['Approval Date'],
+                message:
+                  'Fiat transfer to field officer completed successfully',
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+          if (created.payoutId) {
+            await this.checkAndCompletePayout(created.payoutId);
+          }
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to complete Stellar manual redeem for ${beneficiaryWalletAddress}: ${error.message}`,
+          error.stack
+        );
+        // Continue with next beneficiary; do not block whole batch.
+      }
+    }
   }
 
   /**
