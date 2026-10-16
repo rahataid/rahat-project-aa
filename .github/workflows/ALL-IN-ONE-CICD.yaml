@@ -37,7 +37,7 @@
 #         run: |
 #           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 #           echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
-          
+
 #       #Import vault Secrets
 #       - name: Import Secrets from Vault
 #         id: vault
@@ -170,9 +170,8 @@
 #       image_tag: esatya/${{ inputs.image_name }}:${{ inputs.tag_prefix }}-${{ steps.vars.outputs.sha_short }}
 #       digest: ${{ steps.build-push.outputs.digest }}
 
-
 name: 'ALL DEV CI/CD · AA Build & Push'
-run-name: "🚀 ${{ inputs.environment }} · ${{ inputs.custom_branch || github.ref_name }} · @${{ github.actor }}"
+run-name: '🚀 ${{ inputs.environment }} · ${{ inputs.custom_branch || github.ref_name }} · @${{ github.actor }}'
 
 on:
   workflow_dispatch:
@@ -183,9 +182,9 @@ on:
         type: choice
         options:
           - 'main | Tag: main | AA Main'
-          - 'dev-aa | Tag: aa-dev | AA Development'
-          - 'dev-qa | Tag: aa-dev-qa | AA QA Development'
-          - 'dev-stellar | Tag: aa-dev-stellar | AA Stellar Development'
+          - 'dev-aa | Tag: dev | AA Development'
+          - 'dev-qa | Tag: dev-qa | AA QA Development'
+          - 'dev-stellar | Tag: aa-stellar | AA Stellar Development'
           - 'dev-unicef | Tag: aa-dev-unicef | UNICEF Development'
           - 'dev-crm | Tag: dev-crm | CRM Development'
           - 'dev-aidlink | Tag: dev-aidlink | AidLink Development'

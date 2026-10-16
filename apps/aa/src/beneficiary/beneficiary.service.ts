@@ -11,7 +11,7 @@ import {
   AssignBenfGroupToProject,
   CreateBeneficiaryDto,
   CreateBulkBeneficiaryDto,
-  CreateBenfAddGroupToProjectDto
+  CreateBenfAddGroupToProjectDto,
 } from './dto/create-beneficiary.dto';
 import { GetBenfGroupDto, getGroupByUuidDto } from './dto/get-group.dto';
 import { UpdateBeneficiaryDto } from './dto/update-beneficiary.dto';
@@ -329,23 +329,23 @@ export class BeneficiaryService {
           ...(tokenAssigned === true
             ? { tokensReserved: { some: { isDisbursed: true } } }
             : tokenAssigned === false
-              ? {
+            ? {
                 OR: [
                   { tokensReserved: { none: {} } },
                   { tokensReserved: { some: { isDisbursed: true } } },
                 ],
                 groupPurpose: { not: GroupPurpose.COMMUNICATION },
               }
-              : {}),
+            : {}),
         },
         {
           ...(hasPayout === true
             ? { tokensReserved: { some: { payoutId: { not: null } } } }
             : hasPayout === false
-              ? {
+            ? {
                 tokensReserved: { some: { payoutId: null, isDisbursed: true } },
               }
-              : {}),
+            : {}),
         },
         {
           ...(search && {
@@ -424,7 +424,8 @@ export class BeneficiaryService {
     this.logger.log('Fetching all beneficiary group by group uuids');
     const { uuids, selectField } = payload;
     this.logger.debug(
-      `Group uuids: ${uuids.length}, selectFields: ${selectField?.join(',') ?? 'all'
+      `Group uuids: ${uuids.length}, selectFields: ${
+        selectField?.join(',') ?? 'all'
       }`
     );
     try {
@@ -627,19 +628,30 @@ export class BeneficiaryService {
   async createBenfAndAddGroupToProject(dto: CreateBenfAddGroupToProjectDto) {
     const { beneficiaries, beneficiaryGroupId } = dto;
 
-    this.logger.debug(`Creating bulk beneficiaries, count: ${beneficiaries.length}`);
+    this.logger.debug(
+      `Creating bulk beneficiaries, count: ${beneficiaries.length}`
+    );
 
-    const processedBeneficiaries: Prisma.BeneficiaryCreateManyInput[] = beneficiaries.map(
-      ({ uuid, walletAddress, phone, extras, gender, createdAt, updatedAt }) => ({
-        uuid,
-        walletAddress,
-        phone,
-        extras,
-        gender,
-        createdAt,
-        updatedAt
-      })
-    )
+    const processedBeneficiaries: Prisma.BeneficiaryCreateManyInput[] =
+      beneficiaries.map(
+        ({
+          uuid,
+          walletAddress,
+          phone,
+          extras,
+          gender,
+          createdAt,
+          updatedAt,
+        }) => ({
+          uuid,
+          walletAddress,
+          phone,
+          extras,
+          gender,
+          createdAt,
+          updatedAt,
+        })
+      );
 
     try {
       const { group, groupedBeneficiaries } = await this.prisma.$transaction(
@@ -680,16 +692,13 @@ export class BeneficiaryService {
       });
 
       return { group, groupedBeneficiaries };
-    }
-    catch (err) {
+    } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Error in group creation and addition: ${msg}`, err);
 
       throw new RpcException(`Error in group creation and addition: ${msg}`);
     }
   }
-
-
 
   async addGroupToProject(payload: AssignBenfGroupToProject) {
     const { beneficiaryGroupData } = payload;
@@ -955,7 +964,7 @@ export class BeneficiaryService {
           break;
         }
 
-        if (payout.status === 'COMPLETED') {
+        if (payout.status === 'COMPLETED' || payout.status === 'CANCELLED') {
           // this cycle is fully done — benf is eligible for a new assignment
           continue;
         }
@@ -1284,18 +1293,6 @@ export class BeneficiaryService {
       );
     }
 
-    // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
-    // start disbursing immediately and the return would otherwise claw back new tokens.
-    if (skipOldPayoutForRemaining) {
-      this.logger.log(
-        `[SkipOldPayout] group=${beneficiaryGroupId} START requested by ${user?.name} (new reservation: ${totalTokensReserved} tokens, payoutIntegrated=${isPayoutIntegrated})`
-      );
-      await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
-      this.logger.log(
-        `[SkipOldPayout] group=${beneficiaryGroupId} DONE -> continuing with assignment check and new reservation`
-      );
-    }
-
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
       beneficiaryGroupId as UUID
     );
@@ -1498,10 +1495,10 @@ export class BeneficiaryService {
       const status = isDisbursed
         ? 'DISBURSED'
         : sdpStatus === 'FAILED' || sdpStatus === 'ERROR'
-          ? 'FAILED'
-          : sdpStatus === 'STARTED'
-            ? 'STARTED'
-            : tokenReservation['status'];
+        ? 'FAILED'
+        : sdpStatus === 'STARTED'
+        ? 'STARTED'
+        : tokenReservation['status'];
 
       if (status === tokenReservation['status']) return null;
 
@@ -1660,7 +1657,9 @@ export class BeneficiaryService {
     }
 
     if (!(await this.isQueueReady(this.contractQueue))) {
-      throw new RpcException('Contract queue is not available. Aborting token assignment.');
+      throw new RpcException(
+        'Contract queue is not available. Aborting token assignment.'
+      );
     }
 
     try {
@@ -1679,7 +1678,11 @@ export class BeneficiaryService {
       this.logger.log(`Queued ${batches.length} token assignment batches`);
     } catch (error) {
       this.logger.error('Failed to queue token assignment batches', error);
-      throw new RpcException(`Failed to queue token assignment: ${error instanceof Error ? error.message : String(error)}`);
+      throw new RpcException(
+        `Failed to queue token assignment: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -1841,9 +1844,7 @@ export class BeneficiaryService {
           const otp = isDev
             ? '1234'
             : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev
-            ? devHash!
-            : getOtpHash(otp);
+          const otpHash = isDev ? devHash! : getOtpHash(otp);
           return {
             phoneNumber: b.phone!,
             ...(b.walletAddress ? { walletAddress: b.walletAddress } : {}),
@@ -2594,9 +2595,7 @@ export class BeneficiaryService {
           const otp = isDev
             ? '1234'
             : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev
-            ? devHash!
-            : getOtpHash(otp);
+          const otpHash = isDev ? devHash! : getOtpHash(otp);
 
           await tx.otp.upsert({
             where: { walletAddress: benf.walletAddress },
@@ -2646,12 +2645,17 @@ export class BeneficiaryService {
    */
   async createBeneficiariesInBatches(
     dto: CreateBenfAddGroupToProjectDto
-  ): Promise<{ status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED'; jobIds?: string[] }> {
+  ): Promise<{
+    status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED';
+    jobIds?: string[];
+  }> {
     const { beneficiaryGroupId, beneficiaryGroupName, groupPurpose } = dto;
     const beneficiaries = dto.beneficiaries ?? [];
 
     if (!beneficiaryGroupId || !beneficiaryGroupName) {
-      throw new RpcException('beneficiaryGroupId and beneficiaryGroupName are required.');
+      throw new RpcException(
+        'beneficiaryGroupId and beneficiaryGroupName are required.'
+      );
     }
 
     const existingGroup = await this.prisma.beneficiaryGroups.findUnique({
@@ -2670,10 +2674,14 @@ export class BeneficiaryService {
     await this.assertNoWalletConflicts(beneficiaries);
 
     if (!(await this.isQueueReady(this.beneficiaryQueue))) {
-      throw new RpcException('Beneficiary queue is not available. Aborting before any data is persisted.');
+      throw new RpcException(
+        'Beneficiary queue is not available. Aborting before any data is persisted.'
+      );
     }
 
-    this.logger.debug(`Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`);
+    this.logger.debug(
+      `Creating beneficiary group ${beneficiaryGroupId} upfront for batched processing`
+    );
     await this.prisma.beneficiaryGroups.create({
       data: {
         uuid: beneficiaryGroupId,
@@ -2692,7 +2700,9 @@ export class BeneficiaryService {
       batches.push({ batch, index: Math.floor(i / BENEFICIARY_BATCH_SIZE) });
     }
 
-    this.logger.log(`Queuing ${beneficiaries.length} beneficiaries in ${batches.length} batch(es) of ${BENEFICIARY_BATCH_SIZE}`);
+    this.logger.log(
+      `Queuing ${beneficiaries.length} beneficiaries in ${batches.length} batch(es) of ${BENEFICIARY_BATCH_SIZE}`
+    );
 
     const jobIds: string[] = [];
 
@@ -2723,7 +2733,11 @@ export class BeneficiaryService {
         });
 
         jobIds.push(uuid);
-        this.logger.debug(`Queued batch ${index + 1}/${batches.length} with ${batch.length} beneficiaries (jobId: ${uuid})`);
+        this.logger.debug(
+          `Queued batch ${index + 1}/${batches.length} with ${
+            batch.length
+          } beneficiaries (jobId: ${uuid})`
+        );
       }
     } catch (error) {
       this.logger.error(
@@ -2731,9 +2745,16 @@ export class BeneficiaryService {
         error
       );
       await this.removeGroupImport(beneficiaryGroupId).catch((cleanupError) =>
-        this.logger.error(`Rollback of group ${beneficiaryGroupId} failed`, cleanupError)
+        this.logger.error(
+          `Rollback of group ${beneficiaryGroupId} failed`,
+          cleanupError
+        )
       );
-      throw new RpcException(`Failed to queue beneficiary batches: ${error instanceof Error ? error.message : String(error)}`);
+      throw new RpcException(
+        `Failed to queue beneficiary batches: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
 
     return { status: 'QUEUED', jobIds };
@@ -2757,11 +2778,16 @@ export class BeneficiaryService {
 
   /** Called when a batch exhausts its retries: drops the group so the user can assign again. */
   async failGroupImport(beneficiaryGroupId: string, error: string) {
-    this.logger.error(`Group import failed for ${beneficiaryGroupId}: ${error}`);
+    this.logger.error(
+      `Group import failed for ${beneficiaryGroupId}: ${error}`
+    );
     try {
       await this.removeGroupImport(beneficiaryGroupId);
     } catch (cleanupError) {
-      this.logger.error(`Cleanup of failed group ${beneficiaryGroupId} failed`, cleanupError);
+      this.logger.error(
+        `Cleanup of failed group ${beneficiaryGroupId} failed`,
+        cleanupError
+      );
     }
     // Beneficiaries from finished batches are kept, so stats still change
     this.eventEmitter.emit(EVENTS.BENEFICIARY_CREATED);
@@ -2783,7 +2809,9 @@ export class BeneficiaryService {
     ]);
   }
 
-  private groupImportJobsWhere(beneficiaryGroupId: string): Prisma.AsyncQueueJobWhereInput {
+  private groupImportJobsWhere(
+    beneficiaryGroupId: string
+  ): Prisma.AsyncQueueJobWhereInput {
     return {
       jobName: JOBS.BENEFICIARY.CREATE_BENEFICIARIES_IN_BATCHES,
       jobTypeData: { path: ['beneficiaryGroupId'], equals: beneficiaryGroupId },
@@ -2801,7 +2829,9 @@ export class BeneficiaryService {
     beneficiaries: CreateBenfAddGroupToProjectDto['beneficiaries']
   ) {
     const uuidByWallet = new Map(
-      beneficiaries.filter((b) => b.walletAddress).map((b) => [b.walletAddress, b.uuid])
+      beneficiaries
+        .filter((b) => b.walletAddress)
+        .map((b) => [b.walletAddress, b.uuid])
     );
     if (!uuidByWallet.size) return;
 
@@ -2809,7 +2839,9 @@ export class BeneficiaryService {
       where: { walletAddress: { in: [...uuidByWallet.keys()] } },
       select: { uuid: true, walletAddress: true },
     });
-    const conflicts = existing.filter((b) => uuidByWallet.get(b.walletAddress) !== b.uuid);
+    const conflicts = existing.filter(
+      (b) => uuidByWallet.get(b.walletAddress) !== b.uuid
+    );
     if (!conflicts.length) return;
 
     throw new RpcException({
@@ -2830,7 +2862,12 @@ export class BeneficiaryService {
         this.client
           .send(
             { cmd: JOBS.BENEFICIARY.GROUP_ASSIGN_SYNC_RESULT },
-            { projectId: process.env.PROJECT_ID, beneficiaryGroupId, status, error }
+            {
+              projectId: process.env.PROJECT_ID,
+              beneficiaryGroupId,
+              status,
+              error,
+            }
           )
           .pipe(timeout(10000))
       );

@@ -12,19 +12,19 @@
     },
     "dev-aa": {
       "description": "AA Development",
-      "tag": "aa-dev",
+      "tag": "dev",
       "urls": {},
       "notes": []
     },
     "dev-qa": {
       "description": "AA QA Development",
-      "tag": "aa-dev-qa",
+      "tag": "dev-qa",
       "urls": {},
       "notes": []
     },
     "dev-stellar": {
       "description": "AA Stellar Development",
-      "tag": "aa-dev-stellar",
+      "tag": "aa-stellar",
       "urls": {},
       "notes": []
     },
