@@ -55,7 +55,7 @@ export class AppController {
   }
 
   // Returns the AA service version.
-  @MessagePattern({ cmd: JOBS.VERSION.GET })
+  @MessagePattern({ cmd: JOBS.VERSION.GET, uuid: process.env.PROJECT_ID })
   getVersion() {
     return this.appService.getVersion();
   }
