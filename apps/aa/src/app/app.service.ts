@@ -28,9 +28,9 @@ export class AppService {
   }
 
   // Returns the current app version and runtime environment.
-  async getVersion(): Promise<{ version: string; env: string | null }> {
+  async getVersion(): Promise<{ version: string; env: string | null; projectId?: string }> {
     const version = await getVersionFromPackageJson();
-    return { version, env: process.env.NODE_ENV || null };
+    return { version, env: process.env.NODE_ENV || null, projectId: process.env.PROJECT_ID };
   }
 
   async addSettings(dto: any) {
