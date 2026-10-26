@@ -4,6 +4,8 @@ Anticipatory Action (AA) service — a microservice in the Rahat ecosystem. Conn
 
 Stack: NestJS, Prisma/PostgreSQL, Redis, BullMQ, Nx monorepo. Dual blockchain: EVM + Stellar Soroban.
 
+**New to this repo?** Read, in order: this file top-to-bottom → [coding-patterns.md](./docs/agent/coding-patterns.md) → [trigger-pipeline.md](./docs/agent/trigger-pipeline.md) (the project is "anticipatory **action**" — the trigger flow is the thing that makes it that, and it has real gaps worth knowing up front) → whichever other `docs/agent/*.md` matches the area you're touching, from the index below.
+
 ## Before any larger feature change
 
 Run the `grill-with-docs` skill (mattpocock) first — it grills requirements, surfaces edge cases, and checks what's touched against existing docs before any code gets written. Use it for anything that isn't a small/mechanical change (new module, new chain operation, new payout/redemption path, schema change with behavioral impact, etc).
@@ -103,6 +105,7 @@ When adding a new chain: implement `IChainService`, register it in `chain-servic
 | [cash-tracker.md](./docs/agent/cash-tracker.md) | UNICEF smart-address treasury flow — separate from the main chain abstraction |
 | [transport-and-multitenancy.md](./docs/agent/transport-and-multitenancy.md) | Redis-RPC transport, `PROJECT_ID` multi-tenancy, `CORE_MODULE` client pattern |
 | [settings-reference.md](./docs/agent/settings-reference.md) | Every `SettingsService` key, what it holds, who reads it, sanitizer coverage |
+| [trigger-pipeline.md](./docs/agent/trigger-pipeline.md) | **Start here for anticipatory-action triggers** — traces the real flow end to end, including the unimplemented stubs |
 
 ### EVM contracts (`apps/contracts/`)
 
