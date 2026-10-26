@@ -42,6 +42,12 @@ Built manually (graphify's own pip-based installer was declined for this session
    live," it is not here — check rahat-platform next.
 ```
 
+**Cross-repo correction — found the real home of this pipeline.** `rahat-platform`'s `apps/rahat/src/projects/actions/aa.action.ts` has an `AAJobs.TRIGGERS.*` / `AAJobs.RIVER_STATIONS.*` / `AAJobs.WATER_LEVELS.*` family (cmd strings `aa.jobs.triggers.*` etc, from `libs/sdk/src/aa/aa.events.ts`) that targets *this* repo and, confirmed by grep, has **no listener anywhere in `rahat-project-aa`** — that part of the earlier analysis stands: it's dead/legacy wiring on the AA side.
+
+But the live, actually-used trigger/phase/forecast system is **a separate repo entirely: `rahat-project-triggers`** (package name `triggers`, a pure Redis microservice like this one — `apps/triggers/src/{trigger,phases,source,sources-data,activity,category,daily-monitoring,comms,library}/`). The frontend reaches it through a *second* action family in `rahat-platform` — `msTriggerActions` (`apps/rahat/src/projects/actions/ms.trigger.action.ts`), dispatching `ms.jobs.*` cmds **without** the `uuid`/`PROJECT_ID` routing pattern this repo uses (it scopes by `appId` in the payload instead). **This repo (`rahat-project-aa`) is itself a client of that service** — `chain/chain-services/stellar-chain.service.ts` and `payouts/payouts.service.ts` both call `this.client.send({cmd: 'ms.jobs.phases.getAll'}, {activeYear, riverBasin})` over the shared Redis (via the same `CORE_MODULE`-labeled `ClientProxy` used for core — the token name is misleading here, since Redis cmd routing isn't service-scoped).
+
+So: the anticipatory-action trigger pipeline is **real and implemented**, just not in this repo or in core — it's in `rahat-project-triggers`. The `addTrigger`/`addTriggerOnChain` stubs and `apps/aa/src/triggers/` in *this* repo predate or never got wired to that service, and the `aaActions.TRIGGERS.*` cmds in `rahat-platform` are a dead parallel path to this repo rather than to the triggers service. See `rahat-platform`'s `docs/agent/action-dispatch.md` for the full three-repo picture.
+
 ## Chain-service trigger methods: confirmed stubs
 
 `IChainService` declares `addTrigger?`, `addTriggerOnChain?`, `updateTrigger?` (optional — see `chain/interfaces/chain-service.interface.ts`). Both implementations exist but neither does anything:
