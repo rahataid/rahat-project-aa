@@ -1,0 +1,158 @@
+{
+  "defaults": {
+    "image_name": "rahat-project-aa",
+    "dockerfile_path": "Dockerfile.aa"
+  },
+  "environments": {
+    "main": {
+      "description": "AA Main",
+      "tag": "main",
+      "urls": {},
+      "notes": []
+    },
+    "dev-aa": {
+      "description": "AA Development",
+      "tag": "dev",
+      "urls": {},
+      "notes": []
+    },
+    "dev-qa": {
+      "description": "AA QA Development",
+      "tag": "dev-qa",
+      "urls": {},
+      "notes": []
+    },
+    "dev-stellar": {
+      "description": "AA Stellar Development",
+      "tag": "aa-stellar",
+      "urls": {},
+      "notes": []
+    },
+    "dev-unicef": {
+      "description": "UNICEF Development",
+      "tag": "aa-dev-unicef",
+      "urls": {},
+      "notes": []
+    },
+    "dev-crm": {
+      "description": "CRM Development",
+      "tag": "dev-crm",
+      "urls": {},
+      "notes": []
+    },
+    "dev-aidlink": {
+      "description": "AidLink Development",
+      "tag": "dev-aidlink",
+      "urls": {},
+      "notes": []
+    },
+    "demo-stellar": {
+      "description": "AA Stellar Demo",
+      "tag": "aa-demo-stellar",
+      "urls": {},
+      "notes": []
+    },
+    "train-mcn": {
+      "description": "MCN Training",
+      "tag": "mcn-training",
+      "urls": {},
+      "notes": []
+    },
+    "train-nrcs": {
+      "description": "NRCS Training",
+      "tag": "nrcs-training",
+      "urls": {},
+      "notes": []
+    },
+    "demo-mcn": {
+      "description": "MCN Demo",
+      "tag": "demo-mcn",
+      "urls": {},
+      "notes": []
+    },
+    "demo-nrcs": {
+      "description": "NRCS Demo",
+      "tag": "demo-nrcs",
+      "urls": {},
+      "notes": []
+    },
+    "demo-redcross": {
+      "description": "Red Cross Demo",
+      "tag": "demo-redcross",
+      "urls": {},
+      "notes": []
+    },
+    "test-load": {
+      "description": "Load Testing",
+      "tag": "test-load",
+      "urls": {},
+      "notes": []
+    },
+    "demo-unicef": {
+      "description": "UNICEF Demo",
+      "tag": "demo-unicef",
+      "urls": {},
+      "notes": []
+    },
+    "demo-aidlink": {
+      "description": "AidLink Demo",
+      "tag": "demo-aidlink",
+      "urls": {},
+      "notes": []
+    },
+    "demo-xcapita": {
+      "description": "C2C Xcapita Demo",
+      "tag": "demo-xcapita",
+      "urls": {},
+      "notes": []
+    },
+    "dry-run-pin": {
+      "description": "DRY RUN PIN",
+      "tag": "dry-run-pin",
+      "urls": {},
+      "notes": []
+    },
+    "demo-gsma": {
+      "description": "GSMA Demo",
+      "tag": "demo-gsma",
+      "urls": {},
+      "notes": []
+    },
+    "mcn-demo-2026": {
+      "description": "MCN Demo 2026",
+      "tag": "mcn-demo-2026",
+      "urls": {},
+      "notes": []
+    },
+    "main-geruwa": {
+      "description": "Geruwa Main",
+      "tag": "main-geruwa",
+      "urls": {},
+      "notes": []
+    },
+    "main-geruwarm": {
+      "description": "Geruwa RM Main",
+      "tag": "main-geruwarm",
+      "urls": {},
+      "notes": []
+    },
+    "main-mcn": {
+      "description": "AA MCN Main",
+      "tag": "aa-mcn-main",
+      "urls": {},
+      "notes": []
+    },
+    "main-cam-ken": {
+      "description": "Cam-Ken Merge Main",
+      "tag": "main-cam-ken",
+      "urls": {},
+      "notes": []
+    },
+    "prod-aa-demo": {
+      "description": "AA Demo v2 (prod folder)",
+      "tag": "aa-demo-v2",
+      "urls": {},
+      "notes": []
+    }
+  }
+}

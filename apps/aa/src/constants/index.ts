@@ -121,6 +121,9 @@ export const JOBS = {
     RETURN_TOKENS: 'aa.jobs.stellar.returnTokens',
     REDEEM_INKIND: 'aa.jobs.stellar.redeemInkind',
     SEND_ASSET_TO_VENDOR_BY_WALLET: `aa.jobs.stellar.sendAssetWithAddress`,
+    // No longer used as a Bull job name directly — queued under
+    // SPONSOR_QUEUE_SERIAL (see below) with 'FUND_STELLAR_ACCOUNT' as the
+    // `type` tag in job data instead. Kept as documentation/history.
     FUND_STELLAR_ACCOUNT: 'aa.jobs.stellar.fundStellarAccount',
     CHECK_TRUSTLINE: 'aa.jobs.stellar.checkTrustline',
     CHECK_BULK_TRUSTLINE: 'aa.jobs.stellar.checkBulkTrustline',
@@ -143,13 +146,23 @@ export const JOBS = {
     TRANSFER_TO_OFFRAMP_BATCH: `aa.jobs.stellar.transferToOfframpBatch`,
     GET_REDEMPTION_REQUEST: 'aa.jobs.stellar.getRedemptionRequest',
     RAHAT_FAUCET: 'aa.jobs.stellar.rahatFaucet',
+    // No longer used as actual Bull job names — all three route through
+    // SPONSOR_QUEUE_SERIAL below, with one of these as the `type` tag in job
+    // data instead (see StellarSponsorProcessor). Kept as documentation/history.
     SPONSOR_ACCOUNTS_BATCH: 'aa.jobs.stellar.sponsorAccountsBatch',
     REVOKE_SPONSORSHIP_BATCH: 'aa.jobs.stellar.revokeSponsorshipBatch',
+    // Single Bull job name all three sponsor-account operations (sponsor batch,
+    // revoke batch, fund-vendor-XLM) are queued under, so Bull's per-job-name
+    // `concurrency: 1` serializes all of them against each other — they share
+    // one sponsor account's sequence number, so different job NAMES on the same
+    // queue would otherwise still run concurrently against each other.
+    SPONSOR_QUEUE_SERIAL: 'aa.jobs.stellar.sponsorQueueSerial',
   },
   STELLAR_SDP: {
     DISBURSE: 'aa.jobs.stellar_sdp.disburse',
     DISBURSEMENT_STATUS_UPDATE:
       'aa.jobs.stellar_sdp.disbursement_status_update',
+    RECEIVER_PHONE_SYNC: 'aa.jobs.stellar_sdp.receiver_phone_sync', // PATCH a beneficiary's new phone to their SDP receiver
   },
   STELLAR_DIRECT: {
     DISBURSE: 'aa.jobs.stellar_direct.disburse',
@@ -203,6 +216,7 @@ export const JOBS = {
     ADD_GROUP: 'aa.jobs.stakeholders.addGroup',
     UPDATE_GROUP: 'aa.jobs.stakeholders.updateGroup',
     DELETE_GROUP: 'aa.jobs.stakeholders.deleteGroup',
+    EXPORT_GROUP: 'aa.jobs.stakeholders.exportGroup',
   },
   ACTIVITIES: {
     GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
