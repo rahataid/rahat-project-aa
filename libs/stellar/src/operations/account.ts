@@ -1,4 +1,4 @@
-import { Asset, BASE_FEE, Horizon, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Asset, BASE_FEE, Horizon, Keypair, Operation, Transaction, TransactionBuilder } from '@stellar/stellar-sdk';
 import {
   CreateSponsoredAccountResult,
   CreateSponsoredAccountsBatchResult,
@@ -70,6 +70,16 @@ export interface AccountOpContext {
 }
 
 /**
+ * An account other than the tx source that backs the reserves (the Core Sponsor). It signs
+ * remotely, so the tx source (the project sponsor) keeps paying fees and supplying the sequence.
+ */
+export interface ReservePayer {
+  publicKey: string;
+  /** Returns the tx with the reserve payer's signature added. */
+  sign(tx: Transaction): Promise<Transaction>;
+}
+
+/**
  * Stellar caps a transaction at 100 operations and 20 signatures. Each
  * sponsored account needs 6 operations (create account + trustline, each
  * wrapped in begin/endSponsoringFutureReserves) and 1 signature, plus the
@@ -131,7 +141,8 @@ const OPS_PER_TRUSTLINE_ONLY = 3;
  */
 export async function createSponsoredAccountsBatch(
   ctx: AccountOpContext,
-  keypairs: Keypair[]
+  keypairs: Keypair[],
+  reservePayer?: ReservePayer
 ): Promise<CreateSponsoredAccountsBatchResult> {
   if (keypairs.length < 1 || keypairs.length > MAX_ACCOUNTS_PER_BATCH) {
     throw new RangeError(
@@ -165,25 +176,28 @@ export async function createSponsoredAccountsBatch(
     networkPassphrase: ctx.networkPassphrase,
   });
 
+  // Without a reserve payer the begin op has no source, so the tx source (the sponsor) backs the reserve.
+  const reserveSource = reservePayer?.publicKey;
   for (const { kp, action } of active) {
     if (action === 'create') {
       builder = builder
-        .addOperation(Operation.beginSponsoringFutureReserves({ sponsoredId: kp.publicKey() }))
+        .addOperation(Operation.beginSponsoringFutureReserves({ sponsoredId: kp.publicKey(), source: reserveSource }))
         .addOperation(Operation.createAccount({ destination: kp.publicKey(), startingBalance: '0' }))
         .addOperation(Operation.endSponsoringFutureReserves({ source: kp.publicKey() }));
     }
     builder = builder
-      .addOperation(Operation.beginSponsoringFutureReserves({ sponsoredId: kp.publicKey() }))
+      .addOperation(Operation.beginSponsoringFutureReserves({ sponsoredId: kp.publicKey(), source: reserveSource }))
       .addOperation(Operation.changeTrust({ asset: ctx.asset, source: kp.publicKey() }))
       .addOperation(Operation.endSponsoringFutureReserves({ source: kp.publicKey() }));
   }
 
-  const tx = builder.setTimeout(100).build();
+  let tx = builder.setTimeout(100).build();
 
   tx.sign(ctx.sponsorKeypair);
   for (const { kp } of active) {
     tx.sign(kp);
   }
+  if (reservePayer) tx = await reservePayer.sign(tx);
 
   const result = await submitTransaction(ctx.server, tx);
 
@@ -282,7 +296,8 @@ export const MAX_ACCOUNTS_PER_MERGE_BATCH = 19;
  */
 export async function mergeSponsoredAccountsBatch(
   ctx: AccountOpContext,
-  keypairs: Keypair[]
+  keypairs: Keypair[],
+  destination: string = ctx.sponsorKeypair.publicKey()
 ): Promise<MergeSponsoredAccountsBatchResult> {
   if (keypairs.length < 1 || keypairs.length > MAX_ACCOUNTS_PER_MERGE_BATCH) {
     throw new RangeError(
@@ -314,7 +329,7 @@ export async function mergeSponsoredAccountsBatch(
       builder = builder.addOperation(Operation.changeTrust({ asset: ctx.asset, limit: '0', source: kp.publicKey() }));
     }
     builder = builder.addOperation(
-      Operation.accountMerge({ destination: ctx.sponsorKeypair.publicKey(), source: kp.publicKey() })
+      Operation.accountMerge({ destination, source: kp.publicKey() })
     );
   }
 
