@@ -87,6 +87,8 @@ export interface ReservePayer {
  */
 export const MAX_ACCOUNTS_PER_BATCH = 16;
 
+export const SPONSOR_BATCH_TX_TIMEOUT_SECONDS = 30;
+
 const OPS_PER_ACCOUNT = 6;
 
 /**
@@ -191,7 +193,10 @@ export async function createSponsoredAccountsBatch(
       .addOperation(Operation.endSponsoringFutureReserves({ source: kp.publicKey() }));
   }
 
-  let tx = builder.setTimeout(100).build();
+  // Short validity bounds how long a 504'd batch holds the serial sponsor queue (submit polls until
+  // maxTime) and how long platform counts its reserve as pending. 30s still covers the platform
+  // signing round trip plus a ledger close.
+  let tx = builder.setTimeout(SPONSOR_BATCH_TX_TIMEOUT_SECONDS).build();
 
   tx.sign(ctx.sponsorKeypair);
   for (const { kp } of active) {

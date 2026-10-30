@@ -7,6 +7,7 @@ import {
   mergeSponsoredAccountsBatch,
   planAccountAction,
   planMergeAction,
+  SPONSOR_BATCH_TX_TIMEOUT_SECONDS,
 } from './account';
 
 const asset = new Asset('RAHAT', 'GAVSXFHUI5YWS3YI2RFQV7SB3KKVFERKWWY2QSVJNDTROKQZRWEPXLWG');
@@ -178,6 +179,22 @@ describe('createSponsoredAccountsBatch', () => {
     // sponsor + beneficiary signed locally, then the reserve payer
     expect(sign).toHaveBeenCalledWith(expect.objectContaining({ signatures: expect.any(Array) }));
     expect(submittedTx.signatures).toHaveLength(3);
+  });
+
+  it('expires the batch tx within SPONSOR_BATCH_TX_TIMEOUT_SECONDS', async () => {
+    const kp = Keypair.random();
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'txhash', successful: true, ledger: 9 });
+    const loadAccount = jest.fn().mockImplementation((publicKey: string) => {
+      if (publicKey === sponsorKeypair.publicKey()) return Promise.resolve(new Account(publicKey, '5'));
+      return Promise.reject(notFound);
+    });
+    const before = Math.floor(Date.now() / 1000);
+
+    await createSponsoredAccountsBatch(makeCtx({ loadAccount, submitTransaction }), [kp]);
+
+    const maxTime = Number(submitTransaction.mock.calls[0][0].timeBounds.maxTime);
+    expect(maxTime - before).toBeGreaterThanOrEqual(SPONSOR_BATCH_TX_TIMEOUT_SECONDS);
+    expect(maxTime - before).toBeLessThanOrEqual(SPONSOR_BATCH_TX_TIMEOUT_SECONDS + 1);
   });
 
   it('leaves begin ops unsourced without a reserve payer, so the tx source backs reserves', async () => {
