@@ -42,38 +42,66 @@ describe('submitTransaction', () => {
         .addOperation(Operation.bumpSequence({ bumpTo: '2' }))
         .setTimeout(seconds)
         .build();
-    const serverWithLookup = (call: jest.Mock) =>
+    /** `ingestedAt` returns the close time (unix s) of Horizon's newest ingested ledger, per poll. */
+    const serverWithLookup = (call: jest.Mock, ingestedAt: () => number) =>
       ({
         submitTransaction: jest.fn().mockRejectedValue(timeout),
         transactions: () => ({ transaction: () => ({ call }) }),
+        ledgers: () => ({
+          order: () => ({
+            limit: () => ({
+              call: async () => ({ records: [{ closed_at: new Date(ingestedAt() * 1000).toISOString() }] }),
+            }),
+          }),
+        }),
       }) as unknown as Horizon.Server;
+    const now = () => Date.now() / 1000;
 
     afterEach(() => jest.useRealTimers());
 
-    it('keeps looking the hash up until Horizon has ingested the landed tx', async () => {
+    it('keeps polling past the timebound while Horizon lags, until the landed tx shows up', async () => {
       jest.useFakeTimers();
       const landed = { hash: 'abc', successful: true, ledger: 7 };
-      const call = jest.fn().mockRejectedValueOnce(notFound).mockRejectedValueOnce(notFound).mockResolvedValue(landed);
+      // the tx landed, but Horizon only ingests it ~60s later (the 2026-10-30 testnet case)
+      const call = jest.fn().mockRejectedValue(notFound);
+      const tx = txExpiringIn(30);
+      const result = submitTransaction(serverWithLookup(call, () => now() - 120), tx);
 
-      const result = submitTransaction(serverWithLookup(call), txExpiringIn(100));
-      await jest.advanceTimersByTimeAsync(10_000);
+      await jest.advanceTimersByTimeAsync(60_000);
+      call.mockResolvedValue(landed);
+      await jest.advanceTimersByTimeAsync(5_000);
 
       await expect(result).resolves.toEqual(landed);
-      expect(call).toHaveBeenCalledTimes(3);
     });
 
-    it('throws once the timebound has passed and the tx never showed up', async () => {
+    it('fails as soon as Horizon has ingested past the timebound without the tx', async () => {
       jest.useFakeTimers();
       const call = jest.fn().mockRejectedValue(notFound);
-
-      const result = submitTransaction(serverWithLookup(call), txExpiringIn(10));
+      const tx = txExpiringIn(30);
+      // Horizon is caught up to real time
+      const result = submitTransaction(serverWithLookup(call, now), tx);
       const assertion = expect(result).rejects.toThrow(StellarOperationError);
+
       await jest.advanceTimersByTimeAsync(60_000);
 
       await assertion;
-      // 10s timebound + 15s grace at 5s intervals
-      expect(call.mock.calls.length).toBeGreaterThanOrEqual(5);
-      expect(call.mock.calls.length).toBeLessThanOrEqual(6);
+      // ~30s at 5s intervals until a ledger after maxTime is ingested, then the conclusive lookup;
+      // far short of the 300s cap
+      expect(call.mock.calls.length).toBeGreaterThanOrEqual(6);
+      expect(call.mock.calls.length).toBeLessThanOrEqual(8);
+    });
+
+    it('gives up after the cap when Horizon stays behind', async () => {
+      jest.useFakeTimers();
+      const call = jest.fn().mockRejectedValue(notFound);
+      const result = submitTransaction(serverWithLookup(call, () => 0), txExpiringIn(30));
+      const assertion = expect(result).rejects.toThrow(StellarOperationError);
+
+      await jest.advanceTimersByTimeAsync(301_000);
+
+      await assertion;
+      // t = 0, 5, ... 300
+      expect(call.mock.calls.length).toBe(61);
     });
   });
 
