@@ -775,7 +775,7 @@ export class BeneficiaryService {
    * never fix them — they need a wallet address before sponsorship can even
    * be attempted.
    */
-  async retrySponsorshipForGroup(payload: { groupUuid: string }) {
+  async retrySponsorshipForGroup(payload: { groupUuid: string }, { checkFunds = true } = {}) {
     const { groupUuid } = payload;
     this.logger.debug(
       `Received retry-sponsorship request for group ${groupUuid}`
@@ -798,6 +798,18 @@ export class BeneficiaryService {
         queued: false,
         reason: 'No pending or failed beneficiaries to retry',
       };
+    }
+
+    // Same advisory check as group assignment, so a short sponsor is reported now rather than
+    // as batches failing at signing one by one. Already-sponsored beneficiaries are not counted.
+    if (checkFunds) {
+      const members = await this.prisma.beneficiaryToGroup.findMany({
+        where: { groupId: groupUuid },
+        select: { beneficiary: { select: { uuid: true, walletAddress: true } } },
+      });
+      await this.moduleRef
+        .get(StellarSponsorService, { strict: false })
+        .assertSponsorFundsForGroup(members.map((m) => m.beneficiary));
     }
 
     this.logger.log(
@@ -2897,7 +2909,9 @@ export class BeneficiaryService {
     });
     this.logger.log(`Cleared PDF generation jobs for group ${groupUuid}`);
 
-    const retryResult = await this.retrySponsorshipForGroup({ groupUuid });
+    // No funds check: the assignment just checked, and its batches still in the queue would be
+    // counted on top of the same unsponsored beneficiaries, failing a fully funded group.
+    const retryResult = await this.retrySponsorshipForGroup({ groupUuid }, { checkFunds: false });
 
     return { pdfJobsCleared: true, ...retryResult };
   }
