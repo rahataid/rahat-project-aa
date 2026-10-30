@@ -149,3 +149,12 @@ Quick summary (see the doc for canonical file references and code):
 - **Settings via `SettingsService.getPublic(key)`** — never hardcoded or ad-hoc env reads for runtime-tunable values. Full key catalog: [settings-reference.md](./docs/agent/settings-reference.md). **Before adding a settings key that holds any credential/secret/private key, read `apps/aa/src/app/settings-sanitizer.ts` and add it to `SENSITIVE_SETTINGS_FIELDS`** — that file's coverage currently has real gaps (see settings-reference.md), don't assume an existing secret-bearing key is already handled.
 - **DTOs for all boundaries** — `class-validator` DTOs, Prisma enums reused via `@prisma/client`, never re-declared.
 - Spec files (`*.spec.ts`) sit next to the file they test.
+
+## Commits and pull requests
+
+Commits and PRs in this repo are authored by the developer. When writing them:
+
+- Do not add `Co-Authored-By` trailers or "Generated with ..." lines for any AI agent or tool.
+- Do not name or mention an AI agent, assistant, or model in commit messages, PR titles, or PR descriptions.
+- Commit as the configured git user; never set the author or committer to an agent identity.
+- Describe the change itself, in the developer's voice.
