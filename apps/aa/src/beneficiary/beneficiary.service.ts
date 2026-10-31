@@ -1534,13 +1534,43 @@ export class BeneficiaryService {
    * (chain-services/stellar-chain.service.ts:1849-1868) — kept local here to avoid
    * a cross-module dependency for a single settings read. Defaults to 'SDP' when
    * unconfigured, same as the chain service.
+   *
+   * EVM projects never create SDP receivers, so they report 'DIRECT' without
+   * reading the Stellar setting. A missing CHAIN_SETTINGS counts as EVM, the
+   * same default as ChainServiceRegistry.detectChainFromSettings().
    */
   private async getStellarDisbursementMode(): Promise<'SDP' | 'DIRECT'> {
-    const settings = await this.settingsService.getPublic(
-      'STELLAR_DISBURSEMENT_SETTINGS'
-    );
-    const value = (settings?.value as Record<string, unknown>) || {};
-    return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+    try {
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      const chainType = (chainSettings?.value as any)?.type;
+      if (!chainType || String(chainType).toLowerCase() === 'evm') {
+        return 'DIRECT';
+      }
+    } catch (error) {
+      this.logger.warn(
+        `CHAIN_SETTINGS not readable, treating chain as evm: ${
+          (error as Error)?.message
+        }`
+      );
+      return 'DIRECT';
+    }
+
+    try {
+      const settings = await this.settingsService.getPublic(
+        'STELLAR_DISBURSEMENT_SETTINGS'
+      );
+      const value = (settings?.value as Record<string, unknown>) || {};
+      return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+    } catch (error) {
+      this.logger.warn(
+        `STELLAR_DISBURSEMENT_SETTINGS not readable, defaulting to SDP: ${
+          (error as Error)?.message
+        }`
+      );
+      return 'SDP';
+    }
   }
 
   private async getSdpClient(): Promise<SdpClient> {
