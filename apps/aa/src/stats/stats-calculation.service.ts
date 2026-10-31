@@ -4,6 +4,7 @@ import { SettingsService } from '@rumsan/settings';
 import { StatDto } from './dto/stat.dto';
 import { StatsService } from './stats.service';
 import {
+  FLOOD_2026_REPORT_CALCULATORS,
   resolveCalculators,
   StatCalcContext,
   UnknownStatTypeError,
@@ -36,6 +37,20 @@ export class StatsCalculationService {
     }
   }
 
+  // PROJECTINFO says PROJECT_TYPE FLOOD and ACTIVE_YEAR 2026 (either key
+  // casing, year as string or number).
+  async isFlood2026Project(): Promise<boolean> {
+    try {
+      const projectInfo = await this.settingsService.getPublic('PROJECTINFO');
+      const info = (projectInfo?.value ?? {}) as Record<string, unknown>;
+      const type = String(info.PROJECT_TYPE ?? info.project_type ?? '');
+      const year = String(info.ACTIVE_YEAR ?? info.active_year ?? '').trim();
+      return type.toUpperCase() === 'FLOOD' && year === '2026';
+    } catch {
+      return false;
+    }
+  }
+
   async runAndSave(statType?: string): Promise<StatDto[]> {
     const type = statType ?? (await this.getStatType());
     if (!type) {
@@ -54,8 +69,14 @@ export class StatsCalculationService {
       throw error;
     }
 
+    // The 2026 flood survey reports are added on top; the regular
+    // calculators for the stat type are unchanged.
+    if (await this.isFlood2026Project()) {
+      calculators = [...calculators, ...FLOOD_2026_REPORT_CALCULATORS];
+    }
+
     const allExtras = await this.prisma.beneficiary.findMany({
-      select: { extras: true },
+      select: { extras: true, deletedAt: true },
     });
     const ctx: StatCalcContext = { prisma: this.prisma, allExtras };
 
