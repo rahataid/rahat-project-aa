@@ -3,6 +3,7 @@ import { StatDto } from '../dto/stat.dto';
 
 export interface BeneficiaryExtrasRecord {
   extras: any;
+  deletedAt?: Date | null;
 }
 
 // Shared, precomputed data every calculator gets access to so the overall
