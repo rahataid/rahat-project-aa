@@ -2522,98 +2522,102 @@ export class BeneficiaryService {
     // this transaction commits. See docs/sdp/sdp-beneficiary-phone-sync-plan.md §3.
     const beneficiariesNeedingPhoneSync: string[] = [];
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const benf of beneficiariesData) {
-        // fetched pre-upsert so we still have the OLD phone to diff against below
-        const existingBeneficiary = await tx.beneficiary.findUnique({
-          where: { uuid: benf.uuid },
-        });
-
-        // existingBeneficiary is null for a brand-new beneficiary (nothing to diff);
-        // otherwise true only when the incoming phone actually differs from the stored one
-        const phoneChanged =
-          !!existingBeneficiary &&
-          existingBeneficiary.phone !== (benf.phone || null);
-
-        if (phoneChanged && disbursementMode === 'SDP') {
-          // this row can legitimately be null/absent — DIRECT mode or an EVM-chain
-          // beneficiary never gets an SDP receiver created in the first place
-          const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
-            where: { beneficiaryId: benf.uuid },
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const benf of beneficiariesData) {
+          // fetched pre-upsert so we still have the OLD phone to diff against below
+          const existingBeneficiary = await tx.beneficiary.findUnique({
+            where: { uuid: benf.uuid },
           });
-          // No SDP receiver yet → beneficiary never disbursed via SDP; the next
-          // disbursement will create the receiver fresh with the current phone,
-          // nothing to sync.
-          if (sdpReceiver) {
-            // mark pending atomically with the phone write below; actual PATCH
-            // job gets queued after this transaction commits (see loop further down)
-            await tx.beneficiarySdpReceiver.update({
+
+          // existingBeneficiary is null for a brand-new beneficiary (nothing to diff);
+          // otherwise true only when the incoming phone actually differs from the stored one
+          const phoneChanged =
+            !!existingBeneficiary &&
+            existingBeneficiary.phone !== (benf.phone || null);
+
+          if (phoneChanged && disbursementMode === 'SDP') {
+            // this row can legitimately be null/absent — DIRECT mode or an EVM-chain
+            // beneficiary never gets an SDP receiver created in the first place
+            const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
               where: { beneficiaryId: benf.uuid },
-              data: { syncStatus: 'PENDING' },
             });
-            beneficiariesNeedingPhoneSync.push(benf.uuid);
+            // No SDP receiver yet → beneficiary never disbursed via SDP; the next
+            // disbursement will create the receiver fresh with the current phone,
+            // nothing to sync.
+            if (sdpReceiver) {
+              // mark pending atomically with the phone write below; actual PATCH
+              // job gets queued after this transaction commits (see loop further down)
+              await tx.beneficiarySdpReceiver.update({
+                where: { beneficiaryId: benf.uuid },
+                data: { syncStatus: 'PENDING' },
+              });
+              beneficiariesNeedingPhoneSync.push(benf.uuid);
+            }
           }
-        }
 
-        const existingExtras = existingBeneficiary?.extras as any;
-        const extras =
-          existingExtras?.stellarSponsored === true
-            ? { ...benf.extras, stellarSponsored: true }
-            : benf.extras;
+          const existingExtras = existingBeneficiary?.extras as any;
+          const extras =
+            existingExtras?.stellarSponsored === true
+              ? { ...benf.extras, stellarSponsored: true }
+              : benf.extras;
 
-        await tx.beneficiary.upsert({
-          where: { uuid: benf.uuid },
-          update: {
-            walletAddress: benf.walletAddress,
-            gender: (benf.gender as any) || 'UNKNOWN',
-            isVerified: benf.isVerified ?? false,
-            extras,
-            phone: benf.phone || null,
-          },
-          create: {
-            uuid: benf.uuid,
-            walletAddress: benf.walletAddress,
-            gender: (benf.gender as any) || 'UNKNOWN',
-            isVerified: benf.isVerified ?? false,
-            extras,
-            phone: benf.phone || null,
-          },
-        });
-
-        await tx.beneficiaryToGroup.upsert({
-          where: {
-            beneficiaryId_groupId: {
-              beneficiaryId: benf.uuid,
-              groupId: groupUuid,
-            },
-          },
-          update: {},
-          create: { beneficiaryId: benf.uuid, groupId: groupUuid },
-        });
-
-        if (benf.phone && benf.walletAddress) {
-          const otp = isDev
-            ? '1234'
-            : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev ? devHash! : getOtpHash(otp);
-
-          await tx.otp.upsert({
-            where: { walletAddress: benf.walletAddress },
+          await tx.beneficiary.upsert({
+            where: { uuid: benf.uuid },
             update: {
-              phoneNumber: benf.phone,
+              walletAddress: benf.walletAddress,
+              gender: (benf.gender as any) || 'UNKNOWN',
+              isVerified: benf.isVerified ?? false,
+              extras,
+              phone: benf.phone || null,
             },
             create: {
-              phoneNumber: benf.phone,
+              uuid: benf.uuid,
               walletAddress: benf.walletAddress,
-              otp,
-              otpHash,
-              amount: 0,
-              expiresAt,
+              gender: (benf.gender as any) || 'UNKNOWN',
+              isVerified: benf.isVerified ?? false,
+              extras,
+              phone: benf.phone || null,
             },
           });
+
+          await tx.beneficiaryToGroup.upsert({
+            where: {
+              beneficiaryId_groupId: {
+                beneficiaryId: benf.uuid,
+                groupId: groupUuid,
+              },
+            },
+            update: {},
+            create: { beneficiaryId: benf.uuid, groupId: groupUuid },
+          });
+
+          if (benf.phone && benf.walletAddress) {
+            const otp = isDev
+              ? '1234'
+              : Math.floor(1000 + Math.random() * 9000).toString();
+            const otpHash = isDev ? devHash! : getOtpHash(otp);
+
+            await tx.otp.upsert({
+              where: { walletAddress: benf.walletAddress },
+              update: {
+                phoneNumber: benf.phone,
+              },
+              create: {
+                phoneNumber: benf.phone,
+                walletAddress: benf.walletAddress,
+                otp,
+                otpHash,
+                amount: 0,
+                expiresAt,
+              },
+            });
+          }
         }
-      }
-    });
+        // default 5s isn't enough for ~100 beneficiaries × 4-5 sequential queries in prod
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     // Enqueued after the transaction commits, not inside it — see plan doc §3 for
     // why, and §5 for the pre-disbursement guard that covers the resulting gap.
