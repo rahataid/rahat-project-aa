@@ -47,6 +47,7 @@ describe('StakeholdersService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn((cb) => cb(mockPrismaService)),
   };
 
@@ -563,9 +564,10 @@ describe('StakeholdersService', () => {
           }),
         })
       );
-      // only 2 findMany calls: fetchExistingByPhone + checkEmailConflicts
-      // (no 3rd call because update path doesn't need newly-created uuids)
-      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(2);
+      // 3 findMany calls: fetchExistingByPhone + checkEmailConflicts
+      // + phone->uuid lookup to skip already-members of the target group
+      // (no 4th call because update path doesn't need newly-created uuids)
+      expect(mockPrismaService.stakeholders.findMany).toHaveBeenCalledTimes(3);
     });
 
     it('should NOT connect group when isGroupCreate is false', async () => {
@@ -586,6 +588,133 @@ describe('StakeholdersService', () => {
       ).not.toHaveBeenCalled();
       expect(
         mockPrismaService.stakeholdersGroups.create
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should throw GROUP_NOT_FOUND when groupUuid does not match an active group', async () => {
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.bulkAdd({
+          data: [validRow],
+          isGroupCreate: false,
+          groupUuid: 'missing-group-uuid',
+        })
+      ).rejects.toThrow(RpcException);
+
+      expect(
+        mockPrismaService.stakeholdersGroups.create
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should connect new stakeholders to an existing group via groupUuid', async () => {
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue({
+        uuid: 'group-uuid-1',
+      });
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        stakeholders: [],
+      });
+      // validation: all new; then tx newlyCreated lookup
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([]) // fetchExistingByPhone
+        .mockResolvedValueOnce([]) // checkEmailConflicts
+        .mockResolvedValueOnce([
+          { uuid: 'new-uuid-1', phone: '+9779841000000' },
+        ]); // newlyCreated
+      mockPrismaService.stakeholdersGroups.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd({
+        data: [validRow],
+        isGroupCreate: false,
+        groupUuid: 'group-uuid-1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toEqual(
+        expect.objectContaining({ createdCount: 1, groupUuid: 'group-uuid-1' })
+      );
+      expect(
+        mockPrismaService.stakeholdersGroups.create
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.stakeholdersGroups.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { uuid: 'group-uuid-1' },
+          data: { stakeholders: { connect: [{ uuid: 'new-uuid-1' }] } },
+        })
+      );
+    });
+
+    it('should connect updated stakeholder to existing group via groupUuid when not already a member', async () => {
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue({
+        uuid: 'group-uuid-1',
+      });
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        stakeholders: [],
+      });
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ]) // fetchExistingByPhone
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]) // checkEmailConflicts
+        .mockResolvedValueOnce([
+          { uuid: 'uuid-1', phone: '+9779841000000' },
+        ]); // phone->uuid membership lookup
+      mockPrismaService.stakeholders.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd({
+        data: [validRow],
+        isGroupCreate: false,
+        groupUuid: 'group-uuid-1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toEqual(
+        expect.objectContaining({ updatedCount: 1, groupUuid: 'group-uuid-1' })
+      );
+      const updateCall = mockPrismaService.stakeholders.update.mock.calls[0][0];
+      expect(updateCall.data.stakeholdersGroups).toEqual({
+        connect: { uuid: 'group-uuid-1' },
+      });
+    });
+
+    it('should skip group connect for stakeholders already in the existing group', async () => {
+      mockPrismaService.stakeholdersGroups.findFirst.mockResolvedValue({
+        uuid: 'group-uuid-1',
+      });
+      // uuid-1 is already a member of the target group
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        stakeholders: [{ uuid: 'uuid-1' }],
+      });
+      mockPrismaService.stakeholders.findMany
+        .mockResolvedValueOnce([
+          { phone: '+9779841000000', email: 'john@test.com', uuid: 'uuid-1' },
+        ]) // fetchExistingByPhone
+        .mockResolvedValueOnce([
+          { email: 'john@test.com', uuid: 'uuid-1', phone: '+9779841000000' },
+        ]) // checkEmailConflicts
+        .mockResolvedValueOnce([
+          { uuid: 'uuid-1', phone: '+9779841000000' },
+        ]); // phone->uuid membership lookup
+      mockPrismaService.stakeholders.update.mockResolvedValue({});
+
+      const result = await service.bulkAdd({
+        data: [validRow],
+        isGroupCreate: false,
+        groupUuid: 'group-uuid-1',
+      });
+
+      expect(result.success).toBe(true);
+      // data refresh still happens, but no duplicate connect
+      const updateCall = mockPrismaService.stakeholders.update.mock.calls[0][0];
+      expect(updateCall.data.stakeholdersGroups).toBeUndefined();
+      expect(
+        mockPrismaService.stakeholdersGroups.update
       ).not.toHaveBeenCalled();
     });
 
@@ -672,6 +801,32 @@ describe('StakeholdersService', () => {
       });
     });
 
+    it('should strip whitespace from phone filter without raw query', async () => {
+      mockPaginateFn.mockResolvedValue({ data: [], meta: {} });
+
+      await service.getAll({ ...baseGetAll, phone: '00 00' });
+
+      const query = mockPaginateFn.mock.calls[0][1];
+      expect(query.where.phone).toEqual({
+        contains: '0000',
+        mode: 'insensitive',
+      });
+      expect(query.where.uuid).toBeUndefined();
+    });
+
+    it('should match name whitespace-insensitively via uuid lookup', async () => {
+      mockPaginateFn.mockResolvedValue({ data: [], meta: {} });
+      (mockPrismaService.$queryRaw as jest.Mock).mockResolvedValueOnce([
+        { uuid: 'uuid-1' },
+      ]);
+
+      await service.getAll({ ...baseGetAll, name: 'Mi lan' });
+
+      const query = mockPaginateFn.mock.calls[0][1];
+      expect(query.where.name).toBeUndefined();
+      expect(query.where.uuid).toEqual({ in: ['uuid-1'] });
+    });
+
     it('should add supportArea filter when supportArea is provided', async () => {
       mockPaginateFn.mockResolvedValue({ data: [], meta: {} });
 
@@ -713,6 +868,105 @@ describe('StakeholdersService', () => {
       const result = await service.getOne({ uuid: 'nonexistent' });
 
       expect(result).toBeNull();
+    });
+  });
+
+  // ==================== exportGroup() ====================
+  describe('exportGroup', () => {
+    it('should return all group members as flat rows', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Group A',
+        isDeleted: false,
+        stakeholders: [
+          {
+            name: 'John Doe',
+            email: 'john@test.com',
+            phone: '+9779841000000',
+            designation: 'Engineer',
+            organization: 'Test Org',
+            district: 'Kathmandu',
+            municipality: 'Metro',
+            supportArea: ['Health', 'Education'],
+          },
+          {
+            name: 'Jane Doe',
+            email: null,
+            phone: null,
+            designation: 'Analyst',
+            organization: 'Org B',
+            district: 'Lalitpur',
+            municipality: 'Metro',
+            supportArea: [],
+          },
+        ],
+      });
+
+      const result = await service.exportGroup({ groupUuid: 'group-uuid-1' });
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        name: 'John Doe',
+        email: 'john@test.com',
+        phone: '+9779841000000',
+        designation: 'Engineer',
+        organization: 'Test Org',
+        district: 'Kathmandu',
+        municipality: 'Metro',
+        supportArea: 'Health, Education',
+      });
+      expect(result[1]).toEqual(
+        expect.objectContaining({ email: '', phone: '', supportArea: '' })
+      );
+    });
+
+    it('should query without pagination and exclude deleted stakeholders', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Group A',
+        isDeleted: false,
+        stakeholders: [],
+      });
+
+      const result = await service.exportGroup({ groupUuid: 'group-uuid-1' });
+
+      expect(result).toEqual([]);
+      const query =
+        mockPrismaService.stakeholdersGroups.findUnique.mock.calls[0][0];
+      expect(query.where).toEqual({ uuid: 'group-uuid-1' });
+      expect(query.select.stakeholders.where).toEqual({ isDeleted: false });
+      expect(query.select.stakeholders).not.toHaveProperty('take');
+      expect(query.select.stakeholders).not.toHaveProperty('skip');
+    });
+
+    it('should throw when groupUuid is missing', async () => {
+      await expect(service.exportGroup({} as any)).rejects.toThrow(
+        RpcException
+      );
+      expect(
+        mockPrismaService.stakeholdersGroups.findUnique
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should throw GROUP_NOT_FOUND when group does not exist', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.exportGroup({ groupUuid: 'missing-group' })
+      ).rejects.toThrow(new RpcException('Stakeholder group not found'));
+    });
+
+    it('should throw GROUP_NOT_FOUND when group is soft deleted', async () => {
+      mockPrismaService.stakeholdersGroups.findUnique.mockResolvedValue({
+        uuid: 'group-uuid-1',
+        name: 'Old Group',
+        isDeleted: true,
+        stakeholders: [],
+      });
+
+      await expect(
+        service.exportGroup({ groupUuid: 'group-uuid-1' })
+      ).rejects.toThrow(new RpcException('Stakeholder group not found'));
     });
   });
 

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { CvaDisbursementService } from './disbursement.service';
 import { CvaDisbursementController } from './disbursement.controller';
 
-const PROVIDERS = [CvaDisbursementService, PrismaService];
+const PROVIDERS = [CvaDisbursementService];
 
 @Module({
-  imports: [],
+  imports: [PrismaModule],
   controllers: [CvaDisbursementController],
   providers: [...PROVIDERS],
 })
