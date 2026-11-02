@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
 import { BQUEUE, CORE_MODULE } from '../constants';
@@ -16,6 +16,7 @@ import { MicroserviceAuthModule } from '@rumsan/user';
 
 @Module({
   imports: [
+    PrismaModule,
     VendorsModule,
     HttpModule,
     forwardRef(() => BeneficiaryModule),
@@ -55,7 +56,7 @@ import { MicroserviceAuthModule } from '@rumsan/user';
     MicroserviceAuthModule,
   ],
   controllers: [PayoutsController],
-  providers: [PayoutsService, PrismaService, AppService, OfframpService],
-  exports: [PayoutsService, OfframpService, AppService, PrismaService],
+  providers: [PayoutsService, AppService, OfframpService],
+  exports: [PayoutsService, OfframpService, AppService],
 })
 export class PayoutsModule {}

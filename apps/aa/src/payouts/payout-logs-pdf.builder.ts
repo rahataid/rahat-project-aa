@@ -55,6 +55,9 @@ const GRID_COLOR = '#B9C6D2';
 const ZEBRA_COLOR = '#F2F7FC';
 
 const PHOTO_SIZE = 84;
+const PHOTO_GRID_SIZE = 64;
+const PHOTO_GRID_GAP = 4;
+const PHOTO_GRID_COLS = 2;
 const PHOTO_MIN_ROW_HEIGHT = 96;
 const TEXT_MIN_ROW_HEIGHT = 26;
 const TABLE_HEAD_HEIGHT = 22;
@@ -145,7 +148,19 @@ async function fetchPhoto(url: string): Promise<Buffer | null> {
 async function fetchAllPhotos(
   rows: DownloadPayoutLogsPdfType[]
 ): Promise<Map<string, Buffer>> {
-  const urls = [...new Set(rows.map((r) => r.photoUrl).filter(Boolean))];
+  const urls = [
+    ...new Set(
+      rows.flatMap((r) =>
+        Array.isArray((r as { photoUrls?: unknown }).photoUrls)
+          ? ((r as { photoUrls: unknown[] }).photoUrls.filter(
+              (u): u is string => typeof u === 'string' && !!u
+            ) as string[])
+          : r.photoUrl
+            ? [r.photoUrl]
+            : []
+      )
+    ),
+  ];
   const cache = new Map<string, Buffer>();
   for (let i = 0; i < urls.length; i += PHOTO_FETCH_CONCURRENCY) {
     const batch = urls.slice(i, i + PHOTO_FETCH_CONCURRENCY);
@@ -211,22 +226,38 @@ function noteHeight(doc: PdfDoc, note: CellLine[]): number {
   return blockHeight(doc, note, COLUMNS[PHOTO_COL].width - 6);
 }
 
+/** Back-compat: prefer photoUrls array, fall back to legacy single photoUrl. */
+function rowPhotoUrls(row: DownloadPayoutLogsPdfType): string[] {
+  if (Array.isArray((row as { photoUrls?: unknown }).photoUrls)) {
+    const urls = ((row as { photoUrls: unknown[] }).photoUrls.filter(
+      (u): u is string => typeof u === 'string' && !!u.trim()
+    ) as string[]).map((u) => u.trim());
+    if (urls.length > 0) return [...new Set(urls)];
+  }
+  return row.photoUrl ? [row.photoUrl] : [];
+}
+
 function measureRowHeight(
   doc: PdfDoc,
   cells: CellLine[][],
-  hasPhoto: boolean
+  photoCount: number
 ): number {
   doc.font(REPORT_FONT).fontSize(7);
-  if (hasPhoto) {
+  if (photoCount > 0) {
     let maxOther = 0;
     cells.forEach((lines, i) => {
       if (i === PHOTO_COL) return;
       const h = blockHeight(doc, lines, COLUMNS[i].width - 6);
       if (h > maxOther) maxOther = h;
     });
-    // Photo cell stacks thumbnail + note (imgY = y + 3, note at imgY + size + 2).
+    // Photo cell stacks a dynamic thumbnail grid (2 cols, N rows) + note.
     const h = noteHeight(doc, cells[PHOTO_COL]);
-    const photoNeeded = 3 + PHOTO_SIZE + 4 + (h > 0 ? 2 + h : 0);
+    const gridRows = Math.ceil(photoCount / PHOTO_GRID_COLS);
+    const gridHeight =
+      photoCount === 1
+        ? PHOTO_SIZE
+        : gridRows * PHOTO_GRID_SIZE + (gridRows - 1) * PHOTO_GRID_GAP;
+    const photoNeeded = 3 + gridHeight + 4 + (h > 0 ? 2 + h : 0);
     return Math.max(PHOTO_MIN_ROW_HEIGHT, maxOther + ROW_PADDING, photoNeeded);
   }
   let max = 0;
@@ -268,16 +299,14 @@ function drawTextCells(doc: PdfDoc, cells: CellLine[][], y: number) {
 
 function drawPhotoCell(
   doc: PdfDoc,
-  row: DownloadPayoutLogsPdfType,
   note: CellLine[],
-  photo: Buffer | undefined,
+  photoUrls: string[],
+  photos: Map<string, Buffer>,
   y: number,
   rowHeight: number
 ) {
   const photoX = COLUMN_X[PHOTO_COL];
   const photoW = COLUMNS[PHOTO_COL].width;
-  const imgX = photoX + (photoW - PHOTO_SIZE) / 2;
-  const imgY = y + 3;
 
   const drawNote = (startY: number) => {
     if (note.length === 0) return;
@@ -285,34 +314,72 @@ function drawPhotoCell(
     drawLines(doc, note, photoX + 3, startY, photoW - 6, 'center');
   };
 
-  if (photo) {
-    try {
-      doc.image(photo, imgX, imgY, {
-        fit: [PHOTO_SIZE, PHOTO_SIZE],
-        align: 'center',
-        valign: 'center',
-      });
-      drawNote(imgY + PHOTO_SIZE + 2);
-    } catch {
-      drawNote(imgY); // corrupt image: note only, never fail
-    }
-  } else {
+  if (photoUrls.length === 0) {
     drawNote(y + 4);
+    return;
   }
-  if (row.photoUrl) doc.link(photoX, y, photoW, rowHeight, row.photoUrl);
+
+  const bufs = photoUrls.map((u) => ({ url: u, buf: photos.get(u) }));
+
+  if (photoUrls.length === 1) {
+    const imgX = photoX + (photoW - PHOTO_SIZE) / 2;
+    const imgY = y + 3;
+    const { buf } = bufs[0];
+    if (buf) {
+      try {
+        doc.image(buf, imgX, imgY, {
+          fit: [PHOTO_SIZE, PHOTO_SIZE],
+          align: 'center',
+          valign: 'center',
+        });
+      } catch {
+        // corrupt image: fall through to note only, never fail
+      }
+    }
+    drawNote(imgY + PHOTO_SIZE + 2);
+    doc.link(photoX, y, photoW, rowHeight, photoUrls[0]);
+    return;
+  }
+
+  // Dynamic grid: 2 columns, ceil(N/2) rows — grows with the array.
+  const totalGridW =
+    PHOTO_GRID_COLS * PHOTO_GRID_SIZE +
+    (PHOTO_GRID_COLS - 1) * PHOTO_GRID_GAP;
+  const gridX = photoX + (photoW - totalGridW) / 2;
+  const gridY = y + 3;
+  bufs.forEach(({ url, buf }, idx) => {
+    const col = idx % PHOTO_GRID_COLS;
+    const r = Math.floor(idx / PHOTO_GRID_COLS);
+    const x = gridX + col * (PHOTO_GRID_SIZE + PHOTO_GRID_GAP);
+    const yy = gridY + r * (PHOTO_GRID_SIZE + PHOTO_GRID_GAP);
+    if (buf) {
+      try {
+        doc.image(buf, x, yy, {
+          fit: [PHOTO_GRID_SIZE, PHOTO_GRID_SIZE],
+        });
+      } catch {
+        // corrupt thumbnail: leave blank, never fail
+      }
+    }
+    doc.link(x, yy, PHOTO_GRID_SIZE, PHOTO_GRID_SIZE, url);
+  });
+  const gridRows = Math.ceil(bufs.length / PHOTO_GRID_COLS);
+  const afterY =
+    gridY + gridRows * PHOTO_GRID_SIZE + (gridRows - 1) * PHOTO_GRID_GAP + 2;
+  drawNote(afterY);
 }
 
 function drawRow(
   doc: PdfDoc,
-  row: DownloadPayoutLogsPdfType,
   cells: CellLine[][],
-  photo: Buffer | undefined,
+  photoUrls: string[],
+  photos: Map<string, Buffer>,
   y: number,
   rowHeight: number
 ) {
   setStyle(doc, REPORT_FONT, 7, '#111111');
   drawTextCells(doc, cells, y);
-  drawPhotoCell(doc, row, cells[PHOTO_COL], photo, y, rowHeight);
+  drawPhotoCell(doc, cells[PHOTO_COL], photoUrls, photos, y, rowHeight);
   doc
     .moveTo(MARGIN, y + rowHeight)
     .lineTo(MARGIN + TABLE_WIDTH, y + rowHeight)
@@ -347,9 +414,10 @@ function drawZebra(doc: PdfDoc, y: number, rowHeight: number) {
 
 /**
  * CVA payout logs PDF: S.N., Name, Phone, Amount, Municipality, Gov ID,
- * Location, Photo Evidence — one row per payout log. Photo and info note
- * (e.g. OTP skip reason) stack in the last cell; neither, either, or both
- * render without failing.
+ * Location, Photo Evidence — one row per payout log. Photo cell renders a
+ * dynamic grid (1 large, N>1 in 2 columns x ceil(N/2) rows, note below);
+ * every URL in the array renders. Missing/corrupt images never fail
+ * generation.
  */
 export async function buildPayoutLogsPdf(
   rows: DownloadPayoutLogsPdfType[]
@@ -390,8 +458,8 @@ export async function buildPayoutLogsPdf(
 
       rows.forEach((row, idx) => {
         const cells = buildRowCells(row, idx);
-        const photo = row.photoUrl ? photos.get(row.photoUrl) : undefined;
-        const rowHeight = measureRowHeight(doc, cells, !!photo);
+        const urls = rowPhotoUrls(row);
+        const rowHeight = measureRowHeight(doc, cells, urls.length);
         if (
           tableTop === 0 ||
           y + rowHeight > pageHeight - MARGIN - FOOTER_RESERVE
@@ -404,7 +472,7 @@ export async function buildPayoutLogsPdf(
           openTable();
         }
         if (idx % 2 === 1) drawZebra(doc, y, rowHeight);
-        drawRow(doc, row, cells, photo, y, rowHeight);
+        drawRow(doc, cells, urls, photos, y, rowHeight);
         y += rowHeight;
       });
 

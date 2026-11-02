@@ -3,7 +3,7 @@
 import { BullModule } from '@nestjs/bull';
 import { Global, Logger, Module } from '@nestjs/common';
 import { BQUEUE } from '../constants';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { MS_TRIGGER_CLIENTS } from '@rahat-project/cva';
@@ -12,6 +12,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 @Global()
 @Module({
   imports: [
+    PrismaModule,
     BullModule.registerQueue({ name: BQUEUE.COMMUNICATION }),
     ClientsModule.register([
       {
@@ -28,7 +29,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     ]),
   ],
   controllers: [HealthController],
-  providers: [HealthService, PrismaService, Logger],
+  providers: [HealthService, Logger],
   exports: [HealthService],
 })
 export class HealthModule {}

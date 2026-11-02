@@ -964,7 +964,7 @@ export class BeneficiaryService {
           break;
         }
 
-        if (payout.status === 'COMPLETED') {
+        if (payout.status === 'COMPLETED' || payout.status === 'CANCELLED') {
           // this cycle is fully done — benf is eligible for a new assignment
           continue;
         }
@@ -1293,18 +1293,6 @@ export class BeneficiaryService {
       );
     }
 
-    // Must finish before the new reservation: GROUP_TOKEN_RESERVED_FOR_DISBURSE can
-    // start disbursing immediately and the return would otherwise claw back new tokens.
-    if (skipOldPayoutForRemaining) {
-      this.logger.log(
-        `[SkipOldPayout] group=${beneficiaryGroupId} START requested by ${user?.name} (new reservation: ${totalTokensReserved} tokens, payoutIntegrated=${isPayoutIntegrated})`
-      );
-      await this.skipOldPayoutForRemaining(beneficiaryGroupId, user);
-      this.logger.log(
-        `[SkipOldPayout] group=${beneficiaryGroupId} DONE -> continuing with assignment check and new reservation`
-      );
-    }
-
     const tokenAssignmentCheck = await this.checkIsTokenAlreadyAssigned(
       beneficiaryGroupId as UUID
     );
@@ -1546,13 +1534,43 @@ export class BeneficiaryService {
    * (chain-services/stellar-chain.service.ts:1849-1868) — kept local here to avoid
    * a cross-module dependency for a single settings read. Defaults to 'SDP' when
    * unconfigured, same as the chain service.
+   *
+   * EVM projects never create SDP receivers, so they report 'DIRECT' without
+   * reading the Stellar setting. A missing CHAIN_SETTINGS counts as EVM, the
+   * same default as ChainServiceRegistry.detectChainFromSettings().
    */
   private async getStellarDisbursementMode(): Promise<'SDP' | 'DIRECT'> {
-    const settings = await this.settingsService.getPublic(
-      'STELLAR_DISBURSEMENT_SETTINGS'
-    );
-    const value = (settings?.value as Record<string, unknown>) || {};
-    return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+    try {
+      const chainSettings = await this.settingsService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      const chainType = (chainSettings?.value as any)?.type;
+      if (!chainType || String(chainType).toLowerCase() === 'evm') {
+        return 'DIRECT';
+      }
+    } catch (error) {
+      this.logger.warn(
+        `CHAIN_SETTINGS not readable, treating chain as evm: ${
+          (error as Error)?.message
+        }`
+      );
+      return 'DIRECT';
+    }
+
+    try {
+      const settings = await this.settingsService.getPublic(
+        'STELLAR_DISBURSEMENT_SETTINGS'
+      );
+      const value = (settings?.value as Record<string, unknown>) || {};
+      return value.STELLAR_DISBURSMENT_MODE === 'DIRECT' ? 'DIRECT' : 'SDP';
+    } catch (error) {
+      this.logger.warn(
+        `STELLAR_DISBURSEMENT_SETTINGS not readable, defaulting to SDP: ${
+          (error as Error)?.message
+        }`
+      );
+      return 'SDP';
+    }
   }
 
   private async getSdpClient(): Promise<SdpClient> {
@@ -2542,98 +2560,102 @@ export class BeneficiaryService {
     // this transaction commits. See docs/sdp/sdp-beneficiary-phone-sync-plan.md §3.
     const beneficiariesNeedingPhoneSync: string[] = [];
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const benf of beneficiariesData) {
-        // fetched pre-upsert so we still have the OLD phone to diff against below
-        const existingBeneficiary = await tx.beneficiary.findUnique({
-          where: { uuid: benf.uuid },
-        });
-
-        // existingBeneficiary is null for a brand-new beneficiary (nothing to diff);
-        // otherwise true only when the incoming phone actually differs from the stored one
-        const phoneChanged =
-          !!existingBeneficiary &&
-          existingBeneficiary.phone !== (benf.phone || null);
-
-        if (phoneChanged && disbursementMode === 'SDP') {
-          // this row can legitimately be null/absent — DIRECT mode or an EVM-chain
-          // beneficiary never gets an SDP receiver created in the first place
-          const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
-            where: { beneficiaryId: benf.uuid },
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const benf of beneficiariesData) {
+          // fetched pre-upsert so we still have the OLD phone to diff against below
+          const existingBeneficiary = await tx.beneficiary.findUnique({
+            where: { uuid: benf.uuid },
           });
-          // No SDP receiver yet → beneficiary never disbursed via SDP; the next
-          // disbursement will create the receiver fresh with the current phone,
-          // nothing to sync.
-          if (sdpReceiver) {
-            // mark pending atomically with the phone write below; actual PATCH
-            // job gets queued after this transaction commits (see loop further down)
-            await tx.beneficiarySdpReceiver.update({
+
+          // existingBeneficiary is null for a brand-new beneficiary (nothing to diff);
+          // otherwise true only when the incoming phone actually differs from the stored one
+          const phoneChanged =
+            !!existingBeneficiary &&
+            existingBeneficiary.phone !== (benf.phone || null);
+
+          if (phoneChanged && disbursementMode === 'SDP') {
+            // this row can legitimately be null/absent — DIRECT mode or an EVM-chain
+            // beneficiary never gets an SDP receiver created in the first place
+            const sdpReceiver = await tx.beneficiarySdpReceiver.findUnique({
               where: { beneficiaryId: benf.uuid },
-              data: { syncStatus: 'PENDING' },
             });
-            beneficiariesNeedingPhoneSync.push(benf.uuid);
+            // No SDP receiver yet → beneficiary never disbursed via SDP; the next
+            // disbursement will create the receiver fresh with the current phone,
+            // nothing to sync.
+            if (sdpReceiver) {
+              // mark pending atomically with the phone write below; actual PATCH
+              // job gets queued after this transaction commits (see loop further down)
+              await tx.beneficiarySdpReceiver.update({
+                where: { beneficiaryId: benf.uuid },
+                data: { syncStatus: 'PENDING' },
+              });
+              beneficiariesNeedingPhoneSync.push(benf.uuid);
+            }
           }
-        }
 
-        const existingExtras = existingBeneficiary?.extras as any;
-        const extras =
-          existingExtras?.stellarSponsored === true
-            ? { ...benf.extras, stellarSponsored: true }
-            : benf.extras;
+          const existingExtras = existingBeneficiary?.extras as any;
+          const extras =
+            existingExtras?.stellarSponsored === true
+              ? { ...benf.extras, stellarSponsored: true }
+              : benf.extras;
 
-        await tx.beneficiary.upsert({
-          where: { uuid: benf.uuid },
-          update: {
-            walletAddress: benf.walletAddress,
-            gender: (benf.gender as any) || 'UNKNOWN',
-            isVerified: benf.isVerified ?? false,
-            extras,
-            phone: benf.phone || null,
-          },
-          create: {
-            uuid: benf.uuid,
-            walletAddress: benf.walletAddress,
-            gender: (benf.gender as any) || 'UNKNOWN',
-            isVerified: benf.isVerified ?? false,
-            extras,
-            phone: benf.phone || null,
-          },
-        });
-
-        await tx.beneficiaryToGroup.upsert({
-          where: {
-            beneficiaryId_groupId: {
-              beneficiaryId: benf.uuid,
-              groupId: groupUuid,
-            },
-          },
-          update: {},
-          create: { beneficiaryId: benf.uuid, groupId: groupUuid },
-        });
-
-        if (benf.phone && benf.walletAddress) {
-          const otp = isDev
-            ? '1234'
-            : Math.floor(1000 + Math.random() * 9000).toString();
-          const otpHash = isDev ? devHash! : getOtpHash(otp);
-
-          await tx.otp.upsert({
-            where: { walletAddress: benf.walletAddress },
+          await tx.beneficiary.upsert({
+            where: { uuid: benf.uuid },
             update: {
-              phoneNumber: benf.phone,
+              walletAddress: benf.walletAddress,
+              gender: (benf.gender as any) || 'UNKNOWN',
+              isVerified: benf.isVerified ?? false,
+              extras,
+              phone: benf.phone || null,
             },
             create: {
-              phoneNumber: benf.phone,
+              uuid: benf.uuid,
               walletAddress: benf.walletAddress,
-              otp,
-              otpHash,
-              amount: 0,
-              expiresAt,
+              gender: (benf.gender as any) || 'UNKNOWN',
+              isVerified: benf.isVerified ?? false,
+              extras,
+              phone: benf.phone || null,
             },
           });
+
+          await tx.beneficiaryToGroup.upsert({
+            where: {
+              beneficiaryId_groupId: {
+                beneficiaryId: benf.uuid,
+                groupId: groupUuid,
+              },
+            },
+            update: {},
+            create: { beneficiaryId: benf.uuid, groupId: groupUuid },
+          });
+
+          if (benf.phone && benf.walletAddress) {
+            const otp = isDev
+              ? '1234'
+              : Math.floor(1000 + Math.random() * 9000).toString();
+            const otpHash = isDev ? devHash! : getOtpHash(otp);
+
+            await tx.otp.upsert({
+              where: { walletAddress: benf.walletAddress },
+              update: {
+                phoneNumber: benf.phone,
+              },
+              create: {
+                phoneNumber: benf.phone,
+                walletAddress: benf.walletAddress,
+                otp,
+                otpHash,
+                amount: 0,
+                expiresAt,
+              },
+            });
+          }
         }
-      }
-    });
+        // default 5s isn't enough for ~100 beneficiaries × 4-5 sequential queries in prod
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     // Enqueued after the transaction commits, not inside it — see plan doc §3 for
     // why, and §5 for the pre-disbursement guard that covers the resulting gap.

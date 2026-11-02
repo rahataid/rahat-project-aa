@@ -1393,9 +1393,13 @@ export class PayoutsService {
 
   async triggerOneFailedPayoutRequest(payload: {
     beneficiaryRedeemUuid: string;
-    // payoutUUID: string;
+    user?: any;
+    otp?: string;
   }): Promise<any> {
     const { beneficiaryRedeemUuid } = payload;
+
+    // Verify OTP before retrying the failed payout request
+    await this.verifyOtp(payload.user?.email, payload.otp);
 
     this.logger.log(
       `Triggering payout for failed request with UUID: ${beneficiaryRedeemUuid}`
@@ -1478,9 +1482,16 @@ export class PayoutsService {
    * @param payload - The payload containing the payout UUID
    * @returns { message: string } - The result of the trigger
    */
-  async triggerFailedPayoutRequest(payload: { payoutUUID: string }) {
+  async triggerFailedPayoutRequest(payload: {
+    payoutUUID: string;
+    user?: any;
+    otp?: string;
+  }) {
     try {
       const { payoutUUID } = payload;
+
+      // Verify OTP before retrying the failed payout requests
+      await this.verifyOtp(payload.user?.email, payload.otp);
 
       if (!payoutUUID) {
         throw new RpcException({
@@ -2537,6 +2548,25 @@ export class PayoutsService {
     fieldOfficerAddress: string,
     tokenAmount: string
   ): Promise<void> {
+    // Manual bank transfer is off-chain fiat: complete redeems DB-only.
+    try {
+      const chainSettings = await this.settingService.getPublic(
+        'CHAIN_SETTINGS'
+      );
+      if ((chainSettings?.value as any)?.type === 'stellar') {
+        await this.completeStellarManualPayoutRedeems(
+          matchedRows,
+          fieldOfficerAddress,
+          tokenAmount
+        );
+        return;
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Failed to load CHAIN_SETTINGS, defaulting to EVM batch transfer: ${err?.message}`
+      );
+    }
+
     const transfers = matchedRows.map((row) => ({
       beneficiaryWalletAddress: row.beneficiary!.walletAddress,
       vendorWalletAddress: fieldOfficerAddress,
@@ -2567,6 +2597,121 @@ export class PayoutsService {
       `Successfully queued batch transfer job with ID: ${job.id} ` +
         `for ${transfers.length} token transfers`
     );
+  }
+  //manual bank transfer is off-chain fiat: complete redeems.
+  private async completeStellarManualPayoutRedeems(
+    matchedRows: EnrichedManualPayoutRow[],
+    fieldOfficerAddress: string,
+    tokenAmount: string
+  ): Promise<void> {
+    // Guard 2: Stellar field officer must be G...56; amount must be positive int.
+    if (
+      typeof fieldOfficerAddress !== 'string' ||
+      fieldOfficerAddress.length !== 56 ||
+      !fieldOfficerAddress.startsWith('G')
+    ) {
+      throw new RpcException({
+        message: `Payout verification failed: Invalid Stellar field officer address '${fieldOfficerAddress}'`,
+        code: 'PAYOUT_VERIFY_FIELD_OFFICER_ADDRESS_NOT_CONFIGURED',
+      });
+    }
+    const parsedAmount = parseInt(tokenAmount);
+    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+      throw new RpcException({
+        message: `Payout verification failed: Invalid token amount '${tokenAmount}'`,
+        code: 'PAYOUT_VERIFY_CANNOT_CALCULATE_TOKEN_AMOUNT',
+      });
+    }
+
+    this.logger.log(
+      `Completing ${matchedRows.length} Stellar manual payout redeems DB-only`
+    );
+    for (const row of matchedRows) {
+      const beneficiaryWalletAddress = row.beneficiary!.walletAddress;
+      const payoutId = row.payoutId;
+      try {
+        // Guard 1+4: only INITIATED + incomplete; skip already COMPLETED (idempotent).
+        const alreadyCompleted = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress,
+            payoutId,
+            status: 'FIAT_TRANSACTION_COMPLETED',
+            isCompleted: true,
+          },
+          select: { uuid: true },
+        });
+        if (alreadyCompleted) {
+          this.logger.log(
+            `Skipping ${beneficiaryWalletAddress}: already FIAT_TRANSACTION_COMPLETED`
+          );
+          continue;
+        }
+
+        const existingRedeem = await this.prisma.beneficiaryRedeem.findFirst({
+          where: {
+            beneficiaryWalletAddress,
+            payoutId,
+            status: 'FIAT_TRANSACTION_INITIATED',
+            isCompleted: false,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (existingRedeem) {
+          await this.prisma.beneficiaryRedeem.update({
+            where: { uuid: existingRedeem.uuid },
+            data: {
+              isCompleted: true,
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              amount: parsedAmount,
+              info: {
+                ...((typeof existingRedeem.info === 'object' &&
+                existingRedeem.info !== null
+                  ? existingRedeem.info
+                  : {}) as object),
+                offrampWalletAddress: fieldOfficerAddress,
+                date: row['Date'],
+                approvalDate: row['Approval Date'],
+                message:
+                  'Fiat transfer to field officer completed successfully',
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+          if (existingRedeem.payoutId) {
+            await this.checkAndCompletePayout(existingRedeem.payoutId);
+          }
+        } else {
+          const created = await this.prisma.beneficiaryRedeem.create({
+            data: {
+              beneficiaryWalletAddress,
+              amount: parsedAmount,
+              transactionType: 'FIAT_TRANSFER',
+              status: 'FIAT_TRANSACTION_COMPLETED',
+              isCompleted: true,
+              payoutId,
+              info: {
+                offrampWalletAddress: fieldOfficerAddress,
+                date: row['Date'],
+                approvalDate: row['Approval Date'],
+                message:
+                  'Fiat transfer to field officer completed successfully',
+                mode: 'MANUAL_BANK_TRANSFER',
+              },
+            },
+          });
+          if (created.payoutId) {
+            await this.checkAndCompletePayout(created.payoutId);
+          }
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to complete Stellar manual redeem for ${beneficiaryWalletAddress}: ${error.message}`,
+          error.stack
+        );
+        // Continue with next beneficiary; do not block whole batch.
+      }
+    }
   }
 
   /**
@@ -2656,7 +2801,7 @@ export class PayoutsService {
 
         const municipality = extras?.municipality || '';
         const district = extras?.district || extras?.location || '';
-        const ward = extras?.ward || '';
+        const ward = extras?.ward || extras?.ward_number || '';
         const tole = extras?.tole || '';
         const governmentIdType = extras?.governmentIdType || '';
         const governmentIdNumber = extras?.govtIDNumber || '';
@@ -2930,6 +3075,45 @@ export class PayoutsService {
     };
   }
   /**
+   * Normalize every supported photo-evidence shape in
+   * BeneficiaryRedeem.info into a deduped URL list.
+   */
+  private extractPhotoUrls(info: any): string[] {
+    try {
+      if (!info || typeof info !== 'object') return [];
+      const out: string[] = [];
+      const push = (v: unknown) => {
+        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+      };
+      const media = (info as Record<string, unknown>).mediaUrl;
+      if (typeof media === 'string') {
+        // legacy single
+        push(media);
+      } else if (Array.isArray(media)) {
+        // new multi: [{ filename, mediaUrl }, ...] (also tolerates plain strings)
+        for (const item of media) {
+          if (typeof item === 'string') push(item);
+          else if (item && typeof item === 'object') {
+            const o = item as Record<string, unknown>;
+            push(o['mediaUrl']);
+            push(o['mediaURL']);
+            push(o['url']);
+            push(o['src']);
+          }
+        }
+      }
+      // tolerate alternate keys just in case
+      push((info as Record<string, unknown>).mediaURL);
+      push((info as Record<string, unknown>).photoUrl);
+      const alt = (info as Record<string, unknown>).mediaUrls;
+      if (Array.isArray(alt)) alt.forEach(push);
+      return [...new Set(out)];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Summarize non-photo BeneficiaryRedeem.info keys into a short display
    * note. Returns undefined when there is nothing meaningful to show.
    * Never throws.
@@ -2952,10 +3136,13 @@ export class PayoutsService {
       if (typeof info.error === 'string' && info.error.trim()) {
         parts.push(info.error.trim());
       }
+      // Only show File: fallback when there is no photo URL at all
+
+      const hasAnyPhotoUrl = this.extractPhotoUrls(info).length > 0;
       if (
+        !hasAnyPhotoUrl &&
         typeof info.fileName === 'string' &&
-        info.fileName.trim() &&
-        !getInfoMedia(info).length
+        info.fileName.trim()
       ) {
         parts.push(`File: ${info.fileName.trim()}`);
       }
@@ -3050,7 +3237,8 @@ export class PayoutsService {
           `${firstName} ${lastName}`.trim() || fallbackName || '';
         const beneficiaryPhone =
           extras?.phone || redeemLog.Beneficiary?.phone || '';
-        const photoUrl = getInfoMedia(info)[0]?.mediaUrl ?? null;
+        const photoUrls = this.extractPhotoUrls(info);
+        const photoUrl = photoUrls[0] ?? null;
         const infoNote = this.buildPayoutInfoNote(info);
 
         return {
@@ -3060,11 +3248,12 @@ export class PayoutsService {
           'Phone number': beneficiaryPhone,
           'Amount Disbursed': amountDisbursed,
           photoUrl,
+          photoUrls,
           beneficiaryName,
           beneficiaryPhone,
           municipality: extras?.municipality,
           district: extras?.district || extras?.location,
-          ward: extras?.ward,
+          ward: extras?.ward || extras?.ward_number,
           tole: extras?.tole,
           governmentIdNumber: extras?.govtIDNumber,
           infoNote,

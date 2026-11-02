@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { ConnectCommunicationService } from './connect.communication';
 import { CvaCommunicationService } from './communication.service';
 import { CvaCommunicationController } from './communication.controller';
@@ -8,14 +8,10 @@ import { MS_TRIGGER_CLIENTS } from '../constants';
 import { BullModule } from '@nestjs/bull';
 import { ProjectContants } from '@rahataid/sdk';
 
-const PROVIDERS = [
-  ConnectCommunicationService,
-  CvaCommunicationService,
-  PrismaService,
-];
+const PROVIDERS = [ConnectCommunicationService, CvaCommunicationService];
 
 @Module({
-  imports: [],
+  imports: [PrismaModule],
   controllers: [CvaCommunicationController],
   providers: [
     ...PROVIDERS,

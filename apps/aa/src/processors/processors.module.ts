@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { BeneficiaryModule } from '../beneficiary/beneficiary.module';
-import { PrismaService } from '@rumsan/prisma';
+import { PrismaModule } from '@rumsan/prisma';
 import { ContractProcessor } from './contract.processor';
 import { StatsProcessor } from './stats.processor';
 import { SdpStellarProcessor } from './sdp-stellar.processor';
@@ -29,6 +29,7 @@ import { BeneficiaryProcessor } from './beneficiary.processor';
 
 @Module({
   imports: [
+    PrismaModule,
     BeneficiaryModule,
     QueueModule,
     forwardRef(() => InkindsModule),
@@ -84,7 +85,6 @@ import { BeneficiaryProcessor } from './beneficiary.processor';
     OtpModule,
   ],
   providers: [
-    PrismaService,
     ContractProcessor,
     BeneficiaryProcessor,
     InkindProcessor,

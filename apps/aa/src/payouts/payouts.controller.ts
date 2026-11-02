@@ -76,7 +76,8 @@ export class PayoutsController {
   })
   @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
   triggerOneFailedPayoutRequest(
-    @Payload() payload: { beneficiaryRedeemUuid: string }
+    @Payload()
+    payload: { beneficiaryRedeemUuid: string; user?: any; otp?: string }
   ) {
     return this.payoutsService.triggerOneFailedPayoutRequest(payload);
   }
@@ -86,7 +87,9 @@ export class PayoutsController {
     uuid: process.env.PROJECT_ID,
   })
   @RequireAbility(ACTIONS.ACTIVATE, SUBJECTS.PAYOUT)
-  triggerFailedPayoutRequest(@Payload() payload: { payoutUUID: string }) {
+  triggerFailedPayoutRequest(
+    @Payload() payload: { payoutUUID: string; user?: any; otp?: string }
+  ) {
     return this.payoutsService.triggerFailedPayoutRequest(payload);
   }
 

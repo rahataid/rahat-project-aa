@@ -132,6 +132,7 @@ export type DownloadPayoutLogsPdfType = {
   'Phone number': string;
   'Amount Disbursed': number;
   photoUrl: string | null;
+  photoUrls: string[];
   beneficiaryName: string;
   beneficiaryPhone: string;
   municipality?: string;
