@@ -28,9 +28,17 @@ export class AppService {
   }
 
   // Returns the current app version and runtime environment.
-  async getVersion(): Promise<{ version: string; env: string | null; projectId?: string }> {
+  async getVersion(): Promise<{
+    version: string;
+    env: string | null;
+    projectId?: string;
+  }> {
     const version = await getVersionFromPackageJson();
-    return { version, env: process.env.NODE_ENV || null, projectId: process.env.PROJECT_ID };
+    return {
+      version,
+      env: process.env.NODE_ENV || null,
+      projectId: process.env.PROJECT_ID,
+    };
   }
 
   async addSettings(dto: any) {
@@ -39,7 +47,9 @@ export class AppService {
 
   async listSettings() {
     const res = await this.settingService.listAll();
-    const sanitized = res.map((setting: any) => ({
+    // Only expose non-private settings: isPrivate:true rows must never reach the client
+    const publicSettings = res.filter((setting: any) => !setting.isPrivate);
+    const sanitized = publicSettings.map((setting: any) => ({
       ...setting,
       value: sanitizeSettingValue(setting.name, setting.value),
     }));

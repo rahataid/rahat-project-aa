@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppService } from './app.service';
 import { SettingsService } from '@rumsan/settings';
+import { PrismaService } from '@rumsan/prisma';
 
 jest.mock('./settings.config', () => ({
   setSettings: jest.fn(),
@@ -26,6 +27,10 @@ describe('AppService', () => {
         {
           provide: SettingsService,
           useValue: mockSettingsService,
+        },
+        {
+          provide: PrismaService,
+          useValue: {},
         },
       ],
     }).compile();
@@ -62,13 +67,25 @@ describe('AppService', () => {
 
   describe('listSettings', () => {
     it('should return lowercase settings list', async () => {
-      const mockSettings = [{ NAME: 'TEST', VALUE: 'VALUE' }];
+      const mockSettings = [{ name: 'TEST', value: 'VALUE' }];
       mockSettingsService.listAll.mockResolvedValue(mockSettings);
       
       const result = await service.listSettings();
       
       expect(settingsService.listAll).toHaveBeenCalled();
       expect(result).toEqual([{ name: 'TEST', value: 'VALUE' }]);
+    });
+
+    it('should exclude private settings from the list', async () => {
+      const mockSettings = [
+        { name: 'PUBLIC_SETTING', value: { a: 1 }, isPrivate: false },
+        { name: 'SECRET_SETTING', value: { b: 2 }, isPrivate: true },
+      ];
+      mockSettingsService.listAll.mockResolvedValue(mockSettings);
+
+      const result = await service.listSettings();
+
+      expect(result).toEqual([{ name: 'PUBLIC_SETTING', value: { a: 1 }, isprivate: false }]);
     });
   });
 
