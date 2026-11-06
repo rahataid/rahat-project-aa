@@ -7,6 +7,7 @@ import {
   mergeSponsoredAccountsBatch,
   planAccountAction,
   planMergeAction,
+  SPONSOR_BATCH_TX_TIMEOUT_SECONDS,
 } from './account';
 
 const asset = new Asset('RAHAT', 'GAVSXFHUI5YWS3YI2RFQV7SB3KKVFERKWWY2QSVJNDTROKQZRWEPXLWG');
@@ -155,6 +156,61 @@ describe('createSponsoredAccountsBatch', () => {
 
     await expect(createSponsoredAccountsBatch(runCtx, [kp])).rejects.toMatchObject({ name: 'StellarOperationError' });
   });
+
+  it('backs reserves with the reserve payer and submits the tx it signed', async () => {
+    const kp = Keypair.random();
+    const core = Keypair.random();
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'txhash', successful: true, ledger: 9 });
+    const loadAccount = jest.fn().mockImplementation((publicKey: string) => {
+      if (publicKey === sponsorKeypair.publicKey()) return Promise.resolve(new Account(publicKey, '5'));
+      return Promise.reject(notFound);
+    });
+    const sign = jest.fn().mockImplementation(async (tx) => {
+      tx.sign(core);
+      return tx;
+    });
+
+    await createSponsoredAccountsBatch(makeCtx({ loadAccount, submitTransaction }), [kp], { publicKey: core.publicKey(), sign });
+
+    const submittedTx = submitTransaction.mock.calls[0][0];
+    expect(submittedTx.source).toBe(sponsorKeypair.publicKey());
+    const begins = submittedTx.operations.filter((op: { type: string }) => op.type === 'beginSponsoringFutureReserves');
+    expect(begins.map((op: { source: string }) => op.source)).toEqual([core.publicKey(), core.publicKey()]);
+    // sponsor + beneficiary signed locally, then the reserve payer
+    expect(sign).toHaveBeenCalledWith(expect.objectContaining({ signatures: expect.any(Array) }));
+    expect(submittedTx.signatures).toHaveLength(3);
+  });
+
+  it('expires the batch tx within SPONSOR_BATCH_TX_TIMEOUT_SECONDS', async () => {
+    const kp = Keypair.random();
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'txhash', successful: true, ledger: 9 });
+    const loadAccount = jest.fn().mockImplementation((publicKey: string) => {
+      if (publicKey === sponsorKeypair.publicKey()) return Promise.resolve(new Account(publicKey, '5'));
+      return Promise.reject(notFound);
+    });
+    const before = Math.floor(Date.now() / 1000);
+
+    await createSponsoredAccountsBatch(makeCtx({ loadAccount, submitTransaction }), [kp]);
+
+    const maxTime = Number(submitTransaction.mock.calls[0][0].timeBounds.maxTime);
+    expect(maxTime - before).toBeGreaterThanOrEqual(SPONSOR_BATCH_TX_TIMEOUT_SECONDS);
+    expect(maxTime - before).toBeLessThanOrEqual(SPONSOR_BATCH_TX_TIMEOUT_SECONDS + 1);
+  });
+
+  it('leaves begin ops unsourced without a reserve payer, so the tx source backs reserves', async () => {
+    const kp = Keypair.random();
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'txhash', successful: true, ledger: 9 });
+    const loadAccount = jest.fn().mockImplementation((publicKey: string) => {
+      if (publicKey === sponsorKeypair.publicKey()) return Promise.resolve(new Account(publicKey, '5'));
+      return Promise.reject(notFound);
+    });
+
+    await createSponsoredAccountsBatch(makeCtx({ loadAccount, submitTransaction }), [kp]);
+
+    const submittedTx = submitTransaction.mock.calls[0][0];
+    const begins = submittedTx.operations.filter((op: { type: string }) => op.type === 'beginSponsoringFutureReserves');
+    expect(begins.every((op: { source?: string }) => op.source === undefined)).toBe(true);
+  });
 });
 
 describe('planMergeAction', () => {
@@ -256,6 +312,22 @@ describe('mergeSponsoredAccountsBatch', () => {
 
     const submittedTx = submitTransaction.mock.calls[0][0];
     expect(submittedTx.operations.map((op: { type: string }) => op.type)).toEqual(['accountMerge']);
+  });
+
+  it('merges into the given destination instead of the sponsor', async () => {
+    const kp = Keypair.random();
+    const core = Keypair.random().publicKey();
+    const submitTransaction = jest.fn().mockResolvedValue({ hash: 'txhash', successful: true, ledger: 3 });
+    const loadAccount = jest.fn().mockImplementation((publicKey: string) => {
+      if (publicKey === sponsorKeypair.publicKey()) return Promise.resolve(new Account(publicKey, '5'));
+      return Promise.resolve(accountWithBalances(publicKey, []));
+    });
+
+    await mergeSponsoredAccountsBatch(makeCtx({ loadAccount, submitTransaction }), [kp], core);
+
+    const submittedTx = submitTransaction.mock.calls[0][0];
+    expect(submittedTx.source).toBe(sponsorKeypair.publicKey());
+    expect(submittedTx.operations[0]).toMatchObject({ type: 'accountMerge', destination: core });
   });
 
   it('skips an account with a nonzero trustline balance instead of force-closing it, within a mixed batch', async () => {

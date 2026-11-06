@@ -4,6 +4,7 @@ import * as accountUtils from './utils/account';
 import {
   createSponsoredAccount,
   createSponsoredAccountsBatch, mergeSponsoredAccountsBatch, ensureSponsorTrustline,
+  ReservePayer,
 } from './operations/account';
 import {
   MAX_TRANSFERS_PER_BATCH,
@@ -122,9 +123,10 @@ export class StellarClient {
 
   /** Creates up to MAX_ACCOUNTS_PER_BATCH sponsored accounts in a single transaction. */
   async createSponsoredAccountsBatch(
-    keypairs: Keypair[]
+    keypairs: Keypair[],
+    reservePayer?: ReservePayer
   ): Promise<CreateSponsoredAccountsBatchResult> {
-    return createSponsoredAccountsBatch(this.opContext, keypairs);
+    return createSponsoredAccountsBatch(this.opContext, keypairs, reservePayer);
   }
 
   /**
@@ -134,8 +136,8 @@ export class StellarClient {
    * keypair, since they must co-sign. See mergeSponsoredAccountsBatch's
    * doc comment in operations/account.ts for the full rationale.
    */
-  async mergeSponsoredAccountsBatch(keypairs: Keypair[]): Promise<MergeSponsoredAccountsBatchResult> {
-    return mergeSponsoredAccountsBatch(this.opContext, keypairs);
+  async mergeSponsoredAccountsBatch(keypairs: Keypair[], destination?: string): Promise<MergeSponsoredAccountsBatchResult> {
+    return mergeSponsoredAccountsBatch(this.opContext, keypairs, destination);
   }
 
   /** Sponsor sends the configured asset to a sponsored account. */

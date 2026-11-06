@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 import { Prisma } from '@prisma/client';
 import {
   sponsorFreeStroops,
@@ -13,7 +14,7 @@ import {
 } from '@rahataid/stellar';
 import { PrismaService } from '@rumsan/prisma';
 import { SettingsService } from '@rumsan/settings';
-import { BQUEUE, EVENTS, JOBS, STELLAR_SPONSOR_BATCH_SIZE } from '../constants';
+import { BQUEUE, CORE_MODULE, EVENTS, JOBS, STELLAR_SPONSOR_BATCH_SIZE } from '../constants';
 
 @Injectable()
 export class StellarSponsorService implements OnApplicationBootstrap {
@@ -23,7 +24,8 @@ export class StellarSponsorService implements OnApplicationBootstrap {
   constructor(
     @InjectQueue(BQUEUE.STELLAR_SPONSOR) private readonly queue: Queue,
     private readonly prisma: PrismaService,
-    private readonly settingsService: SettingsService
+    private readonly settingsService: SettingsService,
+    @Inject(CORE_MODULE) private readonly coreClient: ClientProxy
   ) {}
 
   async onApplicationBootstrap() {
@@ -80,26 +82,36 @@ export class StellarSponsorService implements OnApplicationBootstrap {
     const demand = await this.countBeneficiariesNeedingSponsorship(beneficiaries);
     if (demand === 0) return;
 
-    const info = await client.getSponsorAccountInfo();
-    const free = sponsorFreeStroops(info);
+    // With a Core Sponsor on platform it backs the reserves, so its free XLM is what counts.
+    const { publicKey, free } = await this.reserveSponsorFunds(client);
     const required = sponsorRequiredStroops(demand);
     if (free >= required) return;
 
     this.logger.warn(
-      `Sponsor ${info.publicKey} has ${free / STROOPS_PER_XLM} XLM free, ${required / STROOPS_PER_XLM} XLM needed for ${demand} beneficiaries`
+      `Sponsor ${publicKey} has ${free / STROOPS_PER_XLM} XLM free, ${required / STROOPS_PER_XLM} XLM needed for ${demand} beneficiaries`
     );
     throw new RpcException({
       message:
         '[INSUFFICIENT_SPONSOR_FUNDS] Not enough funds in the sponsor wallet to complete sponsorship. Please fund it before assigning.',
       code: 'INSUFFICIENT_SPONSOR_FUNDS',
       params: {
-        sponsorWallet: info.publicKey,
+        sponsorWallet: publicKey,
         beneficiaries: demand,
         requiredXlm: required / STROOPS_PER_XLM,
         availableXlm: free / STROOPS_PER_XLM,
         shortfallXlm: (required - free) / STROOPS_PER_XLM,
       },
     });
+  }
+
+  // Advisory only: platform re-checks the Core Sponsor's funds when it signs each batch.
+  private async reserveSponsorFunds(client: StellarClient): Promise<{ publicKey: string; free: number }> {
+    const core: { publicKey: string; freeStroops: number } | null = await lastValueFrom(
+      this.coreClient.send({ cmd: JOBS.WALLET.GET_CORE_SPONSOR_STATUS }, {})
+    );
+    if (core) return { publicKey: core.publicKey, free: core.freeStroops };
+    const info = await client.getSponsorAccountInfo();
+    return { publicKey: info.publicKey, free: sponsorFreeStroops(info) };
   }
 
   // Null unless the chain is Stellar and a sponsor is configured; nothing else is checked then.

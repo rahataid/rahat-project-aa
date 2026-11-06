@@ -170,6 +170,8 @@ export const JOBS = {
   WALLET: {
     GET_SECRET_BY_WALLET: 'rahat.jobs.wallet.getSecretByWallet',
     GET_BULK_SECRET_BY_WALLET: 'rahat.jobs.wallet.getBulkSecretByWallet',
+    GET_CORE_SPONSOR_STATUS: 'rahat.jobs.wallet.getCoreSponsorStatus',
+    SIGN_SPONSORSHIP_TX: 'rahat.jobs.wallet.signSponsorshipTx',
   },
   OFFRAMP: {
     CREATE_OFFRAMP: 'aa.jobs.offramp.createOfframp',

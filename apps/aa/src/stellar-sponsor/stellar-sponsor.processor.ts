@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnQueueFailed, Process, Processor } from '@nestjs/bull';
 import { Job } from 'bull';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, Transaction, TransactionBuilder } from '@stellar/stellar-sdk';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { PrismaService } from '@rumsan/prisma';
-import { StellarClient } from '@rahataid/stellar';
+import { ReservePayer, StellarClient } from '@rahataid/stellar';
 import { BQUEUE, CORE_MODULE, JOBS, STELLAR_CLIENT } from '../constants';
 
 interface SponsorBatchJobData {
@@ -19,6 +19,9 @@ interface FundStellarAccountJobData {
 }
 
 type BeneficiaryRef = { beneficiaryId: string; walletAddress: string };
+
+/** Platform's Core Sponsor, as returned by rahat.jobs.wallet.getCoreSponsorStatus. */
+type CoreSponsorStatus = { publicKey: string; networkPassphrase: string; freeStroops: number } | null;
 
 // All three operations below share one sponsor account's sequence number, so
 // they're all queued under the single SPONSOR_QUEUE_SERIAL job name (dispatched
@@ -81,7 +84,8 @@ export class StellarSponsorProcessor {
     this.logger.log(`${logPrefix} Submitting sponsored account creation for ${keypairs.length} keypair(s)`);
     let result: Awaited<ReturnType<StellarClient['createSponsoredAccountsBatch']>>;
     try {
-      result = await this.stellarClient.createSponsoredAccountsBatch(keypairs);
+      const core = await this.getCoreSponsor();
+      result = await this.stellarClient.createSponsoredAccountsBatch(keypairs, core ? this.coreReservePayer(core) : undefined);
     } catch (error) {
       await this.markBeneficiariesFailed(logPrefix, resolved, error, 'stellarSponsorError', 'stellarSponsorFailedAt');
       throw error;
@@ -121,7 +125,10 @@ export class StellarSponsorProcessor {
 
     let result: Awaited<ReturnType<StellarClient['mergeSponsoredAccountsBatch']>>;
     try {
-      result = await this.stellarClient.mergeSponsoredAccountsBatch(keypairs);
+      // Merging releases each reserve to whichever sponsor held it (core or, for legacy accounts,
+      // this project's sponsor) without that sponsor signing, so only the swept XLM needs a home.
+      const core = await this.getCoreSponsor();
+      result = await this.stellarClient.mergeSponsoredAccountsBatch(keypairs, core?.publicKey);
     } catch (error) {
       await this.markBeneficiariesFailed(logPrefix, resolved, error, 'stellarSponsorRevokeError', 'stellarSponsorRevokeFailedAt');
       throw error;
@@ -141,6 +148,47 @@ export class StellarSponsorProcessor {
     await this.markBeneficiariesMerged(logPrefix, resolved, result.accounts);
 
     this.logger.log(`${logPrefix} Close-out batch complete for ${beneficiaries.length} beneficiary/ies (tx ${result.hash ?? 'none'})`);
+  }
+
+  /**
+   * Platform's Core Sponsor, or null when none is configured, in which case this project's own
+   * sponsor backs reserves as before. A failed call throws rather than falling back, so reserves
+   * never silently land on the project sponsor while a Core Sponsor exists.
+   */
+  private async getCoreSponsor(): Promise<CoreSponsorStatus> {
+    const core: CoreSponsorStatus = await lastValueFrom(
+      this.client.send({ cmd: JOBS.WALLET.GET_CORE_SPONSOR_STATUS }, {})
+    );
+    if (core && core.networkPassphrase !== this.stellarClient.networkPassphrase) {
+      throw new Error(
+        `Core sponsor is on "${core.networkPassphrase}" but this project is on "${this.stellarClient.networkPassphrase}"`
+      );
+    }
+    return core;
+  }
+
+  /** Signs through platform, which validates the tx and the core's free XLM before adding its signature. */
+  private coreReservePayer(core: NonNullable<CoreSponsorStatus>): ReservePayer {
+    return {
+      publicKey: core.publicKey,
+      sign: async (tx) => {
+        let signed: { xdr: string };
+        try {
+          signed = await lastValueFrom(
+            this.client.send(
+              { cmd: JOBS.WALLET.SIGN_SPONSORSHIP_TX },
+              { projectUuid: process.env.PROJECT_ID, xdr: tx.toXDR() }
+            )
+          );
+        } catch (error: any) {
+          // RpcExceptions arrive as plain objects; keep code/params (e.g. INSUFFICIENT_SPONSOR_FUNDS shortfall)
+          throw Object.assign(new Error(error?.message ?? String(error)), { code: error?.code, params: error?.params });
+        }
+        const signedTx = TransactionBuilder.fromXDR(signed.xdr, this.stellarClient.networkPassphrase) as Transaction;
+        if (!signedTx.hash().equals(tx.hash())) throw new Error('Platform returned a different transaction than it was asked to sign');
+        return signedTx;
+      },
+    };
   }
 
   /** Fetches wallet secrets for a batch and derives keypairs, shared by both the sponsor and merge/revoke flows. Logs and rethrows on RPC failure, warns on unresolved wallets, and returns an empty result (already logged) if nothing resolved. */
