@@ -183,6 +183,7 @@ on:
         options:
           - 'main | Tag: main | AA Main'
           - 'dev-aa | Tag: dev | AA Development'
+          - 'dev-v2 | Tag: dev-v2 | AA Development V2'
           - 'dev-qa | Tag: dev-qa | AA QA Development'
           - 'dev-stellar | Tag: aa-stellar | AA Stellar Development'
           - 'dev-unicef | Tag: aa-dev-unicef | UNICEF Development'
