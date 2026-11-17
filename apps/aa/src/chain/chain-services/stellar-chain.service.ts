@@ -91,7 +91,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
   async onModuleInit() {
     await this.ensureSponsorTrustline().catch((err) =>
-      this.logger.warn(`Could not verify sponsor trustline at startup: ${err.message}`)
+      this.logger.warn(
+        `Could not verify sponsor trustline at startup: ${err.message}`
+      )
     );
     await this.initializeInkindClient().catch((err) =>
       this.logger.warn(
@@ -104,12 +106,18 @@ export class StellarChainService implements IChainService, OnModuleInit {
   private async ensureSponsorTrustline(): Promise<void> {
     const settings = await this.getFromSettings('STELLAR_SPONSOR_SETTINGS');
     if (!settings) return;
-    const client = new StellarClient(settings as unknown as StellarClientConfig);
+    const client = new StellarClient(
+      settings as unknown as StellarClientConfig
+    );
     const added = await client.ensureSponsorTrustline();
     this.logger.log(
       added
-        ? `Added ${client.asset.getCode()} trustline to sponsor wallet ${client.sponsorPublicKey}`
-        : `Sponsor wallet ${client.sponsorPublicKey} already has ${client.asset.getCode()} trustline`
+        ? `Added ${client.asset.getCode()} trustline to sponsor wallet ${
+            client.sponsorPublicKey
+          }`
+        : `Sponsor wallet ${
+            client.sponsorPublicKey
+          } already has ${client.asset.getCode()} trustline`
     );
   }
 
@@ -725,13 +733,19 @@ export class StellarChainService implements IChainService, OnModuleInit {
   async sendAssetToVendor(data: SendAssetDto): Promise<any> {
     const tag = `[sendAsset ${data.phoneNumber}]`;
     this.logger.log(
-      `${tag} START receiver=${data.receiverAddress} amount=${data.amount} skipOtp=${!!data.skipOtpVerification} payloadKeys=${Object.keys(data).join(',')}`
+      `${tag} START receiver=${data.receiverAddress} amount=${
+        data.amount
+      } skipOtp=${!!data.skipOtpVerification} payloadKeys=${Object.keys(
+        data
+      ).join(',')}`
     );
     try {
       return await this.sendAssetToVendorInner(data, tag);
     } catch (err) {
       this.logger.error(
-        `${tag} FAILED before queueing: ${err?.message ?? JSON.stringify(err)} code=${err?.error?.code ?? err?.code ?? 'n/a'}`,
+        `${tag} FAILED before queueing: ${
+          err?.message ?? JSON.stringify(err)
+        } code=${err?.error?.code ?? err?.code ?? 'n/a'}`,
         err?.stack
       );
       throw err;
@@ -745,7 +759,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const vendor = await this.prisma.vendor.findUnique({
       where: { walletAddress: data.receiverAddress },
     });
-    this.logger.log(`${tag} vendor lookup: ${vendor ? vendor.uuid : 'NOT FOUND'}`);
+    this.logger.log(
+      `${tag} vendor lookup: ${vendor ? vendor.uuid : 'NOT FOUND'}`
+    );
     if (!vendor)
       throw new RpcException({
         message: 'Vendor not found',
@@ -766,7 +782,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
       privateKey: string;
     } | null;
     this.logger.log(
-      `${tag} secret lookup: address=${keys?.address ?? 'n/a'} hasPrivateKey=${!!keys?.privateKey}`
+      `${tag} secret lookup: address=${
+        keys?.address ?? 'n/a'
+      } hasPrivateKey=${!!keys?.privateKey}`
     );
     if (!keys?.privateKey)
       throw new RpcException({
@@ -794,7 +812,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
       this.logger.log(
         `${tag} pending redeem lookup (wallet=${keys.address}): ${
           existingRedeem
-            ? `${existingRedeem.uuid} info=${JSON.stringify(existingRedeem.info)}`
+            ? `${existingRedeem.uuid} info=${JSON.stringify(
+                existingRedeem.info
+              )}`
             : 'NONE'
         }`
       );
@@ -821,7 +841,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
           data: { info: infoUpdate },
         });
         this.logger.log(
-          `${tag} info saved on ${updated.uuid}: ${JSON.stringify(updated.info)}`
+          `${tag} info saved on ${updated.uuid}: ${JSON.stringify(
+            updated.info
+          )}`
         );
       } else {
         this.logger.warn(
@@ -1086,7 +1108,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
       }))
     );
     this.logger.log(
-      `[ReturnTokens] payout=${payoutUuid} QUEUED ${chunks.length} job(s) in ${Date.now() - queuedAt}ms (queue STELLAR_SEND_ASSET, concurrency 1, 3 attempts each)`
+      `[ReturnTokens] payout=${payoutUuid} QUEUED ${chunks.length} job(s) in ${
+        Date.now() - queuedAt
+      }ms (queue STELLAR_SEND_ASSET, concurrency 1, 3 attempts each)`
     );
   }
 
@@ -1108,12 +1132,17 @@ export class StellarChainService implements IChainService, OnModuleInit {
       select: { uuid: true },
     });
     if (!payout) {
-      this.logger.warn(`returnTokens: payout ${payoutUuid} not found, skipping`);
+      this.logger.warn(
+        `returnTokens: payout ${payoutUuid} not found, skipping`
+      );
       return;
     }
 
     const rows = await this.prisma.beneficiaryRedeem.findMany({
-      where: { payoutId: payoutUuid, beneficiaryWalletAddress: { in: wallets } },
+      where: {
+        payoutId: payoutUuid,
+        beneficiaryWalletAddress: { in: wallets },
+      },
       select: { uuid: true, beneficiaryWalletAddress: true, info: true },
     });
     const done = new Set(
@@ -1124,7 +1153,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
     const pending = wallets.filter((w) => !done.has(w));
     const chunkStartedAt = Date.now();
     this.logger.debug(
-      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} START ${pending.length} to return, ${done.size} already returned, lastAttempt=${isLastAttempt}`
+      `[ReturnTokens] payout=${payoutUuid} chunk=${
+        chunkIndex + 1
+      }/${totalChunks} START ${pending.length} to return, ${
+        done.size
+      } already returned, lastAttempt=${isLastAttempt}`
     );
 
     let error: string | undefined;
@@ -1175,14 +1208,20 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     if (error) {
       this.logger.error(
-        `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} ${
-          isLastAttempt ? 'FAILED (no more retries)' : 'attempt failed, will retry'
+        `[ReturnTokens] payout=${payoutUuid} chunk=${
+          chunkIndex + 1
+        }/${totalChunks} ${
+          isLastAttempt
+            ? 'FAILED (no more retries)'
+            : 'attempt failed, will retry'
         } after ${Date.now() - chunkStartedAt}ms: ${error}`
       );
       throw new Error(error);
     }
     this.logger.log(
-      `[ReturnTokens] payout=${payoutUuid} chunk=${chunkIndex + 1}/${totalChunks} COMPLETED in ${Date.now() - chunkStartedAt}ms`
+      `[ReturnTokens] payout=${payoutUuid} chunk=${
+        chunkIndex + 1
+      }/${totalChunks} COMPLETED in ${Date.now() - chunkStartedAt}ms`
     );
   }
 
@@ -1198,7 +1237,10 @@ export class StellarChainService implements IChainService, OnModuleInit {
       where: { uuid: payoutUuid },
       select: { extras: true },
     });
-    const prev = ((fresh?.extras as any)?.tokenReturn ?? {}) as Record<string, any>;
+    const prev = ((fresh?.extras as any)?.tokenReturn ?? {}) as Record<
+      string,
+      any
+    >;
     const completed = new Set<number>(prev.completedChunks ?? []);
     const failed = new Set<number>(prev.failedChunks ?? []);
     if (outcome === 'completed') {
@@ -1209,7 +1251,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
     }
     const finished = completed.size + failed.size >= totalChunks;
     this.logger[finished ? 'log' : 'debug'](
-      `[ReturnTokens] payout=${payoutUuid} PROGRESS ${completed.size}/${totalChunks} chunks done, ${failed.size} failed${
+      `[ReturnTokens] payout=${payoutUuid} PROGRESS ${
+        completed.size
+      }/${totalChunks} chunks done, ${failed.size} failed${
         finished ? ` -> ${failed.size ? 'FAILED' : 'COMPLETED'}` : ''
       }`
     );
@@ -1290,7 +1334,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     const client = new StellarClient(clientConfig);
     this.logger.debug(
-      `[ReturnTokens] TRANSFER mode=${disbursementSettings.STELLAR_DISBURSMENT_MODE} to=${destination} feePayer=${client.sponsorPublicKey} wallets=${walletAddresses.length} cap=${maxAmountPerWallet ?? 'none'}`
+      `[ReturnTokens] TRANSFER mode=${
+        disbursementSettings.STELLAR_DISBURSMENT_MODE
+      } to=${destination} feePayer=${client.sponsorPublicKey} wallets=${
+        walletAddresses.length
+      } cap=${maxAmountPerWallet ?? 'none'}`
     );
 
     const secrets: { address: string; privateKey: string }[] =
@@ -1315,33 +1363,34 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
     await Promise.all(
       walletAddresses.map(async (walletAddress) => {
-      try {
-        const secret = secretByWallet.get(walletAddress);
-        if (!secret) throw new Error(`No secret found for wallet ${walletAddress}`);
-        // the payment is sourced from the secret's account, not from walletAddress: make sure
-        // they match and that we never send from the destination itself
-        const sourcePublicKey = Keypair.fromSecret(secret).publicKey();
-        if (sourcePublicKey !== walletAddress) {
-          throw new Error(
-            `Secret for wallet ${walletAddress} belongs to ${sourcePublicKey}; refusing to send`
-          );
+        try {
+          const secret = secretByWallet.get(walletAddress);
+          if (!secret)
+            throw new Error(`No secret found for wallet ${walletAddress}`);
+          // the payment is sourced from the secret's account, not from walletAddress: make sure
+          // they match and that we never send from the destination itself
+          const sourcePublicKey = Keypair.fromSecret(secret).publicKey();
+          if (sourcePublicKey !== walletAddress) {
+            throw new Error(
+              `Secret for wallet ${walletAddress} belongs to ${sourcePublicKey}; refusing to send`
+            );
+          }
+          if (sourcePublicKey === destination) {
+            throw new Error(
+              `Wallet ${walletAddress} is the destination account; refusing to send`
+            );
+          }
+          const balance = parseFloat(await client.getBalance(walletAddress));
+          const sendable =
+            maxAmountPerWallet === undefined
+              ? balance
+              : Math.min(balance, maxAmountPerWallet);
+          if (sendable > 0)
+            toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
+          else results.push({ walletAddress, amount: '0' });
+        } catch (err: any) {
+          results.push({ walletAddress, amount: '0', error: err?.message });
         }
-        if (sourcePublicKey === destination) {
-          throw new Error(
-            `Wallet ${walletAddress} is the destination account; refusing to send`
-          );
-        }
-        const balance = parseFloat(await client.getBalance(walletAddress));
-        const sendable =
-          maxAmountPerWallet === undefined
-            ? balance
-            : Math.min(balance, maxAmountPerWallet);
-        if (sendable > 0)
-          toSend.push({ walletAddress, secret, amount: sendable.toFixed(7) });
-        else results.push({ walletAddress, amount: '0' });
-      } catch (err: any) {
-        results.push({ walletAddress, amount: '0', error: err?.message });
-      }
       })
     );
 
@@ -1355,7 +1404,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
           }))
         );
         this.logger.debug(
-          `[ReturnTokens] batch OK ${chunk.length} wallet(s) -> ${destination}, txHash=${res.hash}, from=${chunk
+          `[ReturnTokens] batch OK ${
+            chunk.length
+          } wallet(s) -> ${destination}, txHash=${res.hash}, from=${chunk
             .map((c) => c.walletAddress)
             .join(',')}`
         );
@@ -1413,11 +1464,12 @@ export class StellarChainService implements IChainService, OnModuleInit {
     // /balances is Circle-tenant only (HTTP 400 otherwise), so the address comes from /organization.
     const org = (await sdp.organization.get()) as Record<string, any>;
     const account: string | undefined =
-      org?.distribution_account?.address ?? org?.distribution_account_public_key;
+      org?.distribution_account?.address ??
+      org?.distribution_account_public_key;
     this.logger.debug(
-      `[ReturnTokens] SDP distribution account from /organization: ${account ?? 'not present'} (type=${
-        org?.distribution_account?.type ?? 'unknown'
-      })`
+      `[ReturnTokens] SDP distribution account from /organization: ${
+        account ?? 'not present'
+      } (type=${org?.distribution_account?.type ?? 'unknown'})`
     );
     if (!account || !this.validateAddress(account)) {
       throw new RpcException({
@@ -1694,7 +1746,11 @@ export class StellarChainService implements IChainService, OnModuleInit {
 
       group.groupedBeneficiaries.forEach(({ Beneficiary }) => {
         const phone = Beneficiary.pii?.phone || Beneficiary.phone || '';
-        const walletAddress = Beneficiary.walletAddress;
+        const walletAddress =
+          Beneficiary.walletAddressDetails?.find(
+            (w: { address: string; chainType: string }) =>
+              w.chainType?.toLowerCase() === 'stellar'
+          )?.address ?? Beneficiary.walletAddress;
         const name = Beneficiary.pii?.name || Beneficiary.name || walletAddress;
         const amount = tokenPerBeneficiary;
 
@@ -1827,7 +1883,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
     // rejecting outright.
     const beneficiaryGroups = await this.prisma.beneficiaryGroups.findMany({
       where: {
-        uuid: { in: payoutEligibleGroups.map((g: any) => g.beneficiaryGroupId) },
+        uuid: {
+          in: payoutEligibleGroups.map((g: any) => g.beneficiaryGroupId),
+        },
       },
       include: { tokensReserved: { include: { payout: true } } },
     });
@@ -1850,7 +1908,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
     );
 
     this.logger.debug(
-      `[SendOtp] phone=${phone}: ${payoutEligibleGroups.length} eligible group(s), ${candidates.length} active token(s) [${candidates
+      `[SendOtp] phone=${phone}: ${
+        payoutEligibleGroups.length
+      } eligible group(s), ${candidates.length} active token(s) [${candidates
         .map((c) => `${c.group.uuid}/${c.token.uuid}`)
         .join(', ')}]`
     );
@@ -1925,9 +1985,9 @@ export class StellarChainService implements IChainService, OnModuleInit {
       });
 
     const res = await this.prisma.otp.findFirst({
-      where: { phoneNumber: data.phoneNumber }
+      where: { phoneNumber: data.phoneNumber },
     });
-    if(!res) {
+    if (!res) {
       throw new RpcException({
         message: 'OTP record not found for phone number',
         code: 'OTP_RECORD_NOT_FOUND_FOR_PHONE',
