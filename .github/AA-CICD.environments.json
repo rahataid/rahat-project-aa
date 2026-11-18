@@ -28,6 +28,12 @@
       "urls": {},
       "notes": []
     },
+    "NRCS-Simulation": {
+      "description": "NRCS-Simulation",
+      "tag": "nrcs-simulation",
+      "urls": {},
+      "notes": []
+    },
     "dev-unicef": {
       "description": "UNICEF Development",
       "tag": "aa-dev-unicef",
