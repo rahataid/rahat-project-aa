@@ -1503,18 +1503,24 @@ export class BeneficiaryService {
       if (status === tokenReservation['status']) return null;
 
       const groupUuid = tokenReservation['groupId'];
-      const updatePayload = {
-        groupUuid,
-        status,
-        isDisbursed,
-        info: {
-          ...(tokenReservation['info'] as any),
-          disbursement,
-          ...(isDisbursed && { completedAt: new Date().toISOString() }),
-        },
+      const info = {
+        ...(tokenReservation['info'] as any),
+        disbursement,
+        ...(isDisbursed && { completedAt: new Date().toISOString() }),
       };
 
-      this.updateGroupToken(updatePayload).catch((error) =>
+      // COMPLETED goes through markGroupTokenDisbursed so TOKEN_DISBURSED fires
+      // exactly once, even when concurrent list requests (or the SDP
+      // status-update job) race on the same token.
+      const persist = isDisbursed
+        ? this.markGroupTokenDisbursed({
+            beneficiaryGroupTokenUuid: tokenReservation['uuid'],
+            groupUuid,
+            info,
+          })
+        : this.updateGroupToken({ groupUuid, status, isDisbursed, info });
+
+      persist.catch((error) =>
         this.logger.error(
           `Failed to persist synced disbursement status for group ${groupUuid}: ${error}`
         )
@@ -1751,6 +1757,54 @@ export class BeneficiaryService {
       this.logger.error(`Error updating group token: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Marks one specific group token reservation as DISBURSED and emits
+   * EVENTS.TOKEN_DISBURSED — exactly once per token.
+   *
+   * The update is conditional (`isDisbursed: false` in the WHERE clause), so
+   * Postgres applies it for only one caller even when several race on the same
+   * token (concurrent list-page SDP syncs, the SDP status-update job, Bull
+   * retries). Only the caller whose update actually flipped the row gets
+   * `true` and emits; everyone else is a silent no-op. Payout status will be
+   * driven off this event, so a duplicate emit must never happen.
+   *
+   * Targets the reservation by its own uuid (not "latest undisbursed for the
+   * group" like updateGroupToken) so a group with multiple reservations can't
+   * have the wrong row marked.
+   *
+   * @returns true if this call transitioned the token to DISBURSED (and emitted).
+   */
+  async markGroupTokenDisbursed(params: {
+    beneficiaryGroupTokenUuid: string;
+    groupUuid: string;
+    info?: Prisma.InputJsonValue;
+  }): Promise<boolean> {
+    const { beneficiaryGroupTokenUuid, groupUuid, info } = params;
+
+    const { count } = await this.prisma.beneficiaryGroupTokens.updateMany({
+      where: { uuid: beneficiaryGroupTokenUuid, isDisbursed: false },
+      data: {
+        status: 'DISBURSED',
+        isDisbursed: true,
+        ...(info !== undefined && { info }),
+        updatedAt: new Date(),
+      },
+    });
+
+    if (count !== 1) {
+      this.logger.log(
+        `Group token ${beneficiaryGroupTokenUuid} (group ${groupUuid}) already DISBURSED — skipping ${EVENTS.TOKEN_DISBURSED}`
+      );
+      return false;
+    }
+
+    this.logger.log(
+      `Group token ${beneficiaryGroupTokenUuid} (group ${groupUuid}) marked DISBURSED — emitting ${EVENTS.TOKEN_DISBURSED}`
+    );
+    this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
+    return true;
   }
 
   /**

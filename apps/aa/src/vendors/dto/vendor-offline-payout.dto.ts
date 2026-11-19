@@ -59,6 +59,12 @@ export class VendorOfflinePayoutDto {
   @IsString()
   @IsOptional()
   disbursementStatus?: string;
+
+  // Exact token reservation the payout belongs to. When set, the processor
+  // looks the reservation up by uuid instead of groupId + status.
+  @IsString()
+  @IsOptional()
+  beneficiaryGroupTokenUuid?: string;
 }
 
 export class VendorOnlinePayoutDto extends VendorOfflinePayoutDto {}
