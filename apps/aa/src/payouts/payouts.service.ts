@@ -2804,8 +2804,7 @@ export class PayoutsService {
         const ward = extras?.ward || extras?.ward_number || '';
         const tole = extras?.tole || '';
         const governmentIdType = extras?.governmentIdType || '';
-        const governmentIdNumber =
-          extras?.govtIDNumber || extras?.governmentId || '';
+        const governmentIdNumber = extras?.govtIDNumber || '';
 
         const transaction = info?.cipsResponseData?.transaction;
         const offrampRequest = info?.cipsResponseData?.offrampRequest;
@@ -2842,9 +2841,8 @@ export class PayoutsService {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
           'Beneficiary Name': beneficiaryName,
           'Phone number': extras?.phone || '',
-          // txHash is the canonical value written by both the token and the
-          // fiat legs; info.transactionHash is a duplicate of it.
-          'Transaction Hash': redeemLog.txHash || '',
+          'Transaction Wallet ID': redeemLog.txHash || '',
+          'Transaction Hash': info?.transactionHash || '',
           'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
           'Updated At': redeemLog.updatedAt,
@@ -3231,8 +3229,6 @@ export class PayoutsService {
             ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
             : 0;
 
-        // Name and phone come only from the beneficiary extras synced from
-        // the project; absent values render as '-' in the PDF.
         const firstName = extras?.firstName || '';
         const lastName = extras?.lastName || '';
         const fallbackName =
@@ -3259,7 +3255,7 @@ export class PayoutsService {
           district: extras?.district || extras?.location,
           ward: extras?.ward || extras?.ward_number,
           tole: extras?.tole,
-          governmentIdNumber: extras?.governmentId,
+          governmentIdNumber: extras?.govtIDNumber,
           infoNote,
         };
       });

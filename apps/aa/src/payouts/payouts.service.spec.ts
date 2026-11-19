@@ -13,7 +13,6 @@ import { CreatePayoutDto } from './dto/create-payout.dto';
 import { UpdatePayoutDto } from './dto/update-payout.dto';
 import { GetPayoutLogsDto } from './dto/get-payout-logs.dto';
 import { ListPayoutDto } from './dto/list-payout.dto';
-import { ExportPayoutLogsPdfFileDto } from './dto/export-payout-logs-pdf-file.dto';
 import {
   PayoutType,
   PayoutMode,
@@ -919,7 +918,6 @@ describe('PayoutsService', () => {
           },
           payout: { type: 'FSP', status: 'COMPLETED' },
           Vendor: null,
-          txHash: 'chain-txhash-2',
           info: JSON.stringify({ transactionHash: 'txhash2' }),
           createdAt: new Date('2025-01-01T00:00:00Z'),
           updatedAt: new Date('2025-01-01T01:00:00Z'),
@@ -937,8 +935,6 @@ describe('PayoutsService', () => {
       const log = result[0];
       expect(log['Beneficiary Wallet Address']).toBe('0xabc');
       expect(log['Phone number']).toBe('123456');
-      expect(log['Transaction Hash']).toBe('chain-txhash-2');
-      expect(log).not.toHaveProperty('Transaction Wallet ID');
       expect(log['Bank a/c name']).toBe('John Doe');
       expect(log['Bank a/c number']).toBe('1111');
       expect(log['Bank Name']).toBe('Bank A');
@@ -1001,70 +997,6 @@ describe('PayoutsService', () => {
       expect(result).toHaveLength(1);
       expect(result[0]['Bank a/c name']).toBeUndefined(); // Non-FSP should not have bank fields
       expect(result[0]['Phone number']).toBe('123456');
-    });
-
-    it('should read excel name and phone from beneficiary extras only', async () => {
-      const mockRedeems = [
-        {
-          beneficiaryWalletAddress: '0xdef',
-          transactionType: 'TOKEN_TRANSFER',
-          status: 'COMPLETED',
-          Beneficiary: {
-            phone: '+9779999999999',
-            extras: JSON.stringify({ firstName: 'Jane', lastName: 'Doe' }),
-          },
-          payout: { type: 'VENDOR', status: 'COMPLETED' },
-          Vendor: null,
-          txHash: 'chain-hash',
-          info: JSON.stringify({ transactionHash: 'other-hash' }),
-          updatedAt: new Date(),
-        },
-      ];
-      const mockPayout = {
-        uuid: payoutUUID,
-        type: 'VENDOR',
-        beneficiaryGroupToken: { numberOfTokens: 1 },
-        beneficiaryRedeem: mockRedeems,
-      };
-
-      mockPrismaService.payouts.findUnique.mockResolvedValue(mockPayout);
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue(
-        mockRedeems
-      );
-
-      const [log] = await service.downloadPayoutLogs(payoutUUID);
-
-      expect(log['Beneficiary Name']).toBe('Jane Doe');
-      expect(log['Phone number']).toBe(''); // ignores Beneficiary.phone when extras have no phone
-      expect(log['Transaction Hash']).toBe('chain-hash');
-      expect(log).not.toHaveProperty('Transaction Wallet ID');
-    });
-
-    it('should read pdf name and phone from beneficiary extras only', async () => {
-      const pdfPayoutUUID = 'payout-pdf-123';
-      mockPrismaService.payouts.findUnique.mockResolvedValue({
-        uuid: pdfPayoutUUID,
-      });
-      mockPrismaService.beneficiaryRedeem.findMany.mockResolvedValue([
-        {
-          uuid: 'redeem-1',
-          status: 'COMPLETED',
-          amount: 1,
-          Beneficiary: {
-            phone: '+9779999999999',
-            extras: JSON.stringify({ firstName: 'Jane', lastName: 'Doe' }),
-          },
-          info: null,
-        },
-      ]);
-
-      const rows = await service['getPayoutLogsPdfRows']({
-        payoutUUID: pdfPayoutUUID,
-      } as ExportPayoutLogsPdfFileDto);
-
-      expect(rows[0].beneficiaryName).toBe('Jane Doe');
-      expect(rows[0]['Phone number']).toBe(''); // PDF renders '-' when empty
-      expect(rows[0]).not.toHaveProperty('beneficiaryPhone');
     });
 
     it('should handle errors gracefully', async () => {

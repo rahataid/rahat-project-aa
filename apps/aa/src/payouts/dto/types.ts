@@ -112,6 +112,7 @@ export type DownloadPayoutLogsType = {
   'Beneficiary Wallet Address': string;
   'Beneficiary Name': string;
   'Phone number': string;
+  'Transaction Wallet ID': string;
   'Transaction Hash': string;
   'Payout Status': string;
   'Transaction Type': string;
