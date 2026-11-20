@@ -456,8 +456,6 @@ export class VendorsService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: payload.perPage || 20,
-        skip: ((payload.page || 1) - 1) * (payload.perPage || 20),
       });
 
       if (!beneficiaryRedeems.length) {
@@ -468,40 +466,44 @@ export class VendorsService {
         );
       }
 
-      // Extract unique beneficiaries (remove duplicates based on UUID)
-      const uniqueBeneficiaries = beneficiaryRedeems
-        .map((redeem) => ({
-          uuid: redeem.Beneficiary.uuid,
-          walletAddress: redeem.Beneficiary.walletAddress,
-          phone: redeem.Beneficiary.phone,
-          gender: redeem.Beneficiary.gender,
-          isVerified: redeem.Beneficiary.isVerified,
-          createdAt: redeem.Beneficiary.createdAt,
-          // Use the individual redeem amount instead of total benTokens
-          benTokens: redeem.amount,
-          txHash: redeem.txHash,
-          status: redeem.status,
-          info: redeem.info,
-        }))
-        .filter(
-          (beneficiary, index, self) =>
-            index === self.findIndex((b) => b.uuid === beneficiary.uuid)
-        );
-
-      // Get beneficiary UUIDs for enrichment
-      const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
-      let benResponse = [];
-      if (beneficiaryUuids.length) {
-        benResponse = await lastValueFrom(
-          this.client.send(
-            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
-            beneficiaryUuids
-          )
-        );
+      // Group redeems by beneficiary wallet address; already desc by createdAt
+      const redeemsByBen = new Map<string, typeof beneficiaryRedeems>();
+      for (const redeem of beneficiaryRedeems) {
+        if (!redeem.Beneficiary) continue;
+        const key = redeem.Beneficiary.walletAddress;
+        if (!redeemsByBen.has(key)) redeemsByBen.set(key, []);
+        redeemsByBen.get(key)!.push(redeem);
       }
 
+      // Pick latest redeem per beneficiary; attach older ones as redeemStatus
+      const groupedBeneficiaries = Array.from(redeemsByBen.values()).map(
+        (redeems) => {
+          const [latest, ...older] = redeems; // already sorted desc
+          return {
+            uuid: latest.Beneficiary.uuid,
+            walletAddress: latest.Beneficiary.walletAddress,
+            phone: latest.Beneficiary.phone,
+            gender: latest.Beneficiary.gender,
+            isVerified: latest.Beneficiary.isVerified,
+            createdAt: latest.Beneficiary.createdAt,
+            benTokens: latest.amount,
+            txHash: latest.txHash,
+            status: latest.status,
+            info: latest.info,
+            ...(older.length && {
+              redeemStatus: older.map((r) => ({
+                amount: r.amount,
+                status: r.status,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt ?? undefined,
+              })),
+            }),
+          };
+        }
+      );
+
       // Filter based on mode
-      const filteredBeneficiaries = uniqueBeneficiaries.filter((ben) => {
+      const filteredBeneficiaries = groupedBeneficiaries.filter((ben) => {
         const info = ben.info;
         const hasOfflineMode =
           info &&
@@ -511,13 +513,23 @@ export class VendorsService {
           info.mode === 'OFFLINE';
 
         if (payload.payoutMode === 'ONLINE') {
-          // Remove beneficiaries which have mode: offline in info
           return !hasOfflineMode;
         } else {
-          // Only return beneficiaries which have mode: offline in info
           return hasOfflineMode;
         }
       });
+
+      // Get beneficiary UUIDs for enrichment (only filtered set)
+      const beneficiaryUuids = filteredBeneficiaries.map((ben) => ben.uuid);
+      let benResponse = [];
+      if (beneficiaryUuids.length) {
+        benResponse = await lastValueFrom(
+          this.client.send(
+            { cmd: 'rahat.jobs.beneficiary.find_phone_by_uuid' },
+            beneficiaryUuids
+          )
+        );
+      }
 
       // Attach beneficiary name to each beneficiary
       const enrichedBeneficiaries = filteredBeneficiaries.map((ben) => {
