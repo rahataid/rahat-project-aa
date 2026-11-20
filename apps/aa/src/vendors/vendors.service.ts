@@ -552,6 +552,7 @@ export class VendorsService {
       await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.ONLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
+        beneficiaryGroupTokenUuid: payload.beneficiaryGroupTokenUuid,
       });
 
       this.logger.log(
@@ -580,6 +581,7 @@ export class VendorsService {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
         disbursementStatus: payload?.disbursementStatus,
+        beneficiaryGroupTokenUuid: payload?.beneficiaryGroupTokenUuid,
       });
 
       this.logger.log(
