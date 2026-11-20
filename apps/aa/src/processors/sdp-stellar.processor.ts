@@ -83,6 +83,7 @@ export class SdpStellarProcessor {
   ): Promise<void> {
     const { dName, groups, skipStatusUpdate } = job.data;
     const groupUuid = groups[0];
+    let disbursement;
 
     this.logger.log(
       `Processing SDP disbursement for group ${groupUuid}: ${dName}`
@@ -157,7 +158,7 @@ export class SdpStellarProcessor {
       // again with the same name and SDP rejects it with "disbursement already
       // exists" — leaving the first attempt's disbursement orphaned at DRAFT
       // forever. Reuse the existing one instead of creating a duplicate.
-      const disbursement = await this.findOrCreateDisbursement(
+      disbursement = await this.findOrCreateDisbursement(
         dName,
         sdpClient,
         sdpSettings,
@@ -230,6 +231,7 @@ export class SdpStellarProcessor {
         info: {
           error: error.message,
           failedAt: new Date().toISOString(),
+          disbursementId: disbursement?.id,
         },
       });
 
