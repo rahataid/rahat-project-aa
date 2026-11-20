@@ -15,6 +15,7 @@ import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import {
   GetVendorOfflineBeneficiariesDto,
   OfflineBeneficiaryDetail,
+  RedeemStatusEntry,
   VerifyVendorOfflineOtpDto,
   OtpVerificationResult,
   VendorOfflineSyncDto,
@@ -890,11 +891,24 @@ export class VendorsService {
         );
       }
 
-      // For each redeem, get the OTP hash from the OTP table
-      const beneficiaries: OfflineBeneficiaryDetail[] = [];
+      // Group redeems by beneficiary wallet address; pick latest per beneficiary
+      const redeemsByBen = new Map<string, typeof offlineRedeems>();
       for (const redeem of offlineRedeems) {
-        const beneficiary = redeem.Beneficiary;
-        if (!beneficiary) continue;
+        if (!redeem.Beneficiary) continue;
+        const key = redeem.Beneficiary.walletAddress;
+        if (!redeemsByBen.has(key)) redeemsByBen.set(key, []);
+        redeemsByBen.get(key)!.push(redeem);
+      }
+
+      const beneficiaries: OfflineBeneficiaryDetail[] = [];
+      for (const [, redeems] of redeemsByBen) {
+        // Sort descending by createdAt — latest first
+        redeems.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const [latest, ...older] = redeems;
+        const beneficiary = latest.Beneficiary;
 
         // Find beneficiary info from API response
         const benInfo = benResponse.find(
@@ -908,15 +922,23 @@ export class VendorsService {
           where: { phoneNumber },
         });
 
+        const redeemStatus: RedeemStatusEntry[] = older.map((r) => ({
+          amount: r.amount,
+          status: r.status,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt ?? undefined,
+        }));
+
         beneficiaries.push({
-          uuid: redeem.uuid,
+          uuid: latest.uuid,
           beneficiaryUuid: beneficiary.uuid,
           beneficiaryName,
           phoneNumber,
           otpHash: otpData?.otpHash || '',
-          amount: redeem.amount,
-          status: redeem.status,
+          amount: latest.amount,
+          status: latest.status,
           walletAddress: beneficiary.walletAddress,
+          ...(redeemStatus.length && { redeemStatus }),
         });
       }
 
