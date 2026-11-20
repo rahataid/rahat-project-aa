@@ -1545,6 +1545,44 @@ export class StellarChainService implements IChainService, OnModuleInit {
     return { redeemUuid: redeem.uuid, mediaUrl: info.mediaUrl };
   }
 
+  async syncDisburse(): Promise<any> {
+    const sdpSettings = await this.getFromSettings('SDP_SETTINGS');
+    if (!sdpSettings) {
+      throw new RpcException({
+        message:
+          'SDP_SETTINGS not found. Configure SDP settings before syncing disbursements.',
+        code: 'SDP_SETTINGS_NOT_FOUND',
+      });
+    }
+
+    const pendingTokens = await this.prisma.beneficiaryGroupTokens.findMany({
+      where: { isDisbursed: false },
+      select: { uuid: true, groupId: true, info: true },
+    });
+
+    const toSync = pendingTokens.filter(
+      (t) => (t.info as any)?.disbursement?.id
+    );
+
+    if (!toSync.length) {
+      return { message: 'No pending SDP disbursements to sync', synced: 0 };
+    }
+
+    for (const token of toSync) {
+      const disbursementId = (token.info as any).disbursement.id as string;
+      await this.queueDisbursementStatusUpdate(disbursementId, token.groupId);
+    }
+
+    this.logger.log(
+      `syncDisburse: queued status-update jobs for ${toSync.length} pending SDP disbursement(s)`
+    );
+
+    return {
+      message: `Queued sync for ${toSync.length} pending SDP disbursement(s)`,
+      synced: toSync.length,
+    };
+  }
+
   async getDisbursementStatus(_id: string): Promise<any> {
     throw new RpcException({
       message: 'Not supported on Stellar SDP chain',

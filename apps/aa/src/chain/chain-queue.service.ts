@@ -25,7 +25,10 @@ export class ChainQueueService {
 
   constructor(private chainServiceRegistry: ChainServiceRegistry) {}
 
-  async disbursementStats(chainType?: ChainType, payload?: { startDate?: string; endDate?: string }): Promise<any> {
+  async disbursementStats(
+    chainType?: ChainType,
+    payload?: { startDate?: string; endDate?: string }
+  ): Promise<any> {
     this.logger.log(`disbursment Stats`);
     const chainService = await this.chainServiceRegistry.getChainService(
       chainType
@@ -302,6 +305,21 @@ export class ChainQueueService {
       amount,
     };
     return this.transferTokens(data, chainType);
+  }
+
+  async syncDisburse(chainType?: ChainType): Promise<any> {
+    const chainService = await this.chainServiceRegistry.getChainService(
+      chainType
+    );
+
+    if (!chainService.syncDisburse) {
+      throw new RpcException({
+        message: `syncDisburse not supported for ${chainService.getChainType()} chain`,
+        code: 'CHAIN_SYNC_DISBURSE_UNSUPPORTED',
+        params: { chainType: chainService.getChainType() },
+      });
+    }
+    return chainService.syncDisburse();
   }
 
   async redeemInkind(

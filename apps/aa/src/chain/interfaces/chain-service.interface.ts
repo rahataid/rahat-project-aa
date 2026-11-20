@@ -57,6 +57,9 @@ export interface IChainService {
     redeemVendorInkindDto: RedeemInkindTokenForCashDto
   ): Promise<any>;
 
+  // Sync disbursement status from external provider (e.g. SDP)
+  syncDisburse?(): Promise<any>;
+
   // Offline redemption (batched, no OTP)
   transferOfflineRedemptionBatch(
     items: OfflineTransferItem[]

@@ -45,6 +45,10 @@ export class ChainService {
     return this.chainQueueService.getDisbursementStats(payload);
   }
 
+  syncDisburse() {
+    return this.chainQueueService.syncDisburse();
+  }
+
   redeemInkind(redeemDto: any) {
     return this.chainQueueService.redeemInkind(redeemDto);
   }

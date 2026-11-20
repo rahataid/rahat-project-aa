@@ -79,6 +79,14 @@ export class ChainController {
   }
 
   @MessagePattern({
+    cmd: JOBS.CHAIN.SYNC_DISBURSE,
+    uuid: process.env.PROJECT_ID,
+  })
+  syncDisburse() {
+    return this.chainService.syncDisburse();
+  }
+
+  @MessagePattern({
     cmd: JOBS.CHAIN.REDEEM_INKIND,
     uuid: process.env.PROJECT_ID,
   })

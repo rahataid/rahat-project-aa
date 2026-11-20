@@ -417,6 +417,7 @@ export const JOBS = {
   CHAIN: {
     REDEEM_INKIND: 'aa.jobs.chain.redeemInkind',
     REDEEM_VENDOR_INKIND_TOKENS: 'aa.jobs.chain.redeemVendorInkindTokens',
+    SYNC_DISBURSE: 'aa.jobs.chain.syncDisburse',
   },
   FUND_MANAGEMENT: {
     ADD_FUND: 'aa.jobs.fundManagement.add',

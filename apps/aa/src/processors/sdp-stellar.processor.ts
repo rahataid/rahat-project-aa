@@ -8,7 +8,10 @@ import { SettingsService } from '@rumsan/settings';
 import { PrismaService } from '@rumsan/prisma'; // for BeneficiarySdpReceiver + Beneficiary reads/writes below
 import { SdpClient } from '@rahataid/stellar-sdp';
 import { BeneficiaryService } from '../beneficiary/beneficiary.service';
-import { StellarChainService, BeneficiaryCsvData } from '../chain/chain-services/stellar-chain.service'; // BeneficiaryCsvData used by the new phone-sync helpers
+import {
+  StellarChainService,
+  BeneficiaryCsvData,
+} from '../chain/chain-services/stellar-chain.service'; // BeneficiaryCsvData used by the new phone-sync helpers
 import { BQUEUE, EVENTS, JOBS } from '../constants';
 import { AsyncQueueService } from '../queue/async-queue.service'; // outbox tracking for RECEIVER_PHONE_SYNC jobs
 
@@ -109,9 +112,9 @@ export class SdpStellarProcessor {
 
       // was `const` before the phone-sync fix — now reassigned below after filtering
       // out beneficiaries whose stale-phone retry failed
-      let benData = await this.stellarChainService.getBeneficiaryTokenBalance(
-        [groupUuid]
-      );
+      let benData = await this.stellarChainService.getBeneficiaryTokenBalance([
+        groupUuid,
+      ]);
 
       if (!benData.length) {
         this.logger.warn(`No beneficiaries found for group ${groupUuid}`);
@@ -375,8 +378,7 @@ export class SdpStellarProcessor {
 
       for (const entry of entries as Record<string, unknown>[]) {
         // defensive: accept either `{ receiver: {...} }` or a flat receiver object
-        const receiver =
-          (entry.receiver as Record<string, unknown>) || entry;
+        const receiver = (entry.receiver as Record<string, unknown>) || entry;
         const receiverId = receiver.id as string | undefined;
         const externalId = receiver.external_id as string | undefined;
         const phone = receiver.phone_number as string | undefined;
@@ -535,9 +537,10 @@ export class SdpStellarProcessor {
       // Duplicate/stale jobs are expected (explicit disburse queues an immediate check on top of
       // the delayed one, and an old cycle's job can outlive it). They must be no-ops, not errors:
       // updateGroupToken only finds an undisbursed token and would throw and burn all retries.
-      const token = await this.beneficiaryService.getOneTokenReservationByGroupId(
-        groupUuid
-      );
+      const token =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
       const tokenDisbursementId = (token?.info as any)?.disbursement?.id;
       if (!token) {
         this.logger.warn(`${tag} no token reservation found, dropping check`);
@@ -612,7 +615,9 @@ export class SdpStellarProcessor {
       // Still in progress — re-queue if within timeout
       const elapsed = Date.now() - startedAt;
       if (elapsed > STATUS_CHECK_TIMEOUT_MS) {
-        this.logger.error(`${tag} timed out after 24h -> token ${token.uuid} FAILED`);
+        this.logger.error(
+          `${tag} timed out after 24h -> token ${token.uuid} FAILED`
+        );
 
         await this.beneficiaryService.updateGroupToken({
           groupUuid,
@@ -630,9 +635,9 @@ export class SdpStellarProcessor {
 
       const delay = nextCheckDelay(poll + 1);
       this.logger.log(
-        `${tag} still ${status}, re-checking in ${delay / 1000}s (elapsed ${Math.round(
-          elapsed / 1000
-        )}s)`
+        `${tag} still ${status}, re-checking in ${
+          delay / 1000
+        }s (elapsed ${Math.round(elapsed / 1000)}s)`
       );
 
       await this.stellarSdpQueue.add(
@@ -647,8 +652,8 @@ export class SdpStellarProcessor {
       );
     } catch (error) {
       this.logger.error(
-        `${tag} error checking status: ${error.message}`,
-        error.stack
+        `${tag} error checking status: ${error?.response?.data?.error}`,
+        error.status
       );
       throw error;
     }
