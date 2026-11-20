@@ -3259,7 +3259,10 @@ export class PayoutsService {
           district: extras?.district || extras?.location,
           ward: extras?.ward || extras?.ward_number,
           tole: extras?.tole,
-          governmentIdNumber: extras?.governmentId,
+          governmentIdNumber:
+            extras?.govtIDNumber || extras?.governmentId
+              ? String(extras.govtIDNumber || extras.governmentId)
+              : '',
           infoNote,
         };
       });
