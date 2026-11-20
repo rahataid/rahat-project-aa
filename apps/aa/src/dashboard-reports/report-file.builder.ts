@@ -13,6 +13,15 @@ export type ReportRow = {
   value: string | number;
 };
 
+export type ReportCell = string | number;
+
+export type ReportTable = {
+  /** Optional block heading, used as the Excel sheet name and PDF subheading. */
+  title?: string;
+  columns: string[];
+  rows: ReportCell[][];
+};
+
 export type BucketOptions = {
   hideZeroBuckets?: boolean;
   hiddenIds?: string[];
@@ -428,28 +437,62 @@ export const toReportFile = (
   base64: buffer.toString('base64'),
 });
 
+const excelColumnWidth = (tables: ReportTable[], column: number): number => {
+  const values = tables.flatMap((table) => [
+    table.columns[column] ?? '',
+    ...table.rows.map((row) => row[column] ?? ''),
+  ]);
+  const longest = Math.max(...values.map((value) => String(value).length));
+  return Math.min(60, Math.max(12, longest + 2));
+};
+
 export const buildExcel = (
   title: string,
   projectName: string,
-  rows: ReportRow[],
+  inputTables: ReportTable[],
 ): Buffer => {
-  const headerRow = ['Section', 'Category', 'Value'];
+  const tables = inputTables.length
+    ? inputTables
+    : [{ columns: ['Result'], rows: [['No data available for this report.']] }];
+  const maxColumns = Math.max(...tables.map((table) => table.columns.length));
+
+  // One worksheet with clearly separated blocks: some spreadsheet viewers
+  // only open the first sheet, so multi-sheet workbooks hid every table but
+  // the first one for those users.
   const data: any[][] = [
     [title],
     ['Project', projectName || '-'],
     ['Generated', formatGeneratedAt()],
     [],
-    headerRow,
-    ...rows.map((row) => [row.section, row.category, row.value]),
   ];
+  const headerRows: Array<{ row: number; columns: number }> = [];
+
+  tables.forEach((table) => {
+    if (table.title) data.push([table.title]);
+    headerRows.push({ row: data.length, columns: table.columns.length });
+    data.push(table.columns);
+    table.rows.forEach((row) =>
+      data.push(table.columns.map((_, column) => row[column] ?? '')),
+    );
+    data.push([]);
+  });
 
   const sheet = XLSX.utils.aoa_to_sheet(data);
-  headerRow.forEach((_, column) => {
-    const address = XLSX.utils.encode_cell({ r: 4, c: column });
-    if (sheet[address]) sheet[address].s = { font: { bold: true } };
+  headerRows.forEach(({ row, columns }) => {
+    for (let column = 0; column < columns; column++) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column });
+      if (sheet[address]) sheet[address].s = { font: { bold: true } };
+    }
   });
-  sheet['!cols'] = [{ wch: 36 }, { wch: 42 }, { wch: 16 }];
-  sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+  sheet['!cols'] = Array.from({ length: maxColumns }, (_, column) => ({
+    wch: excelColumnWidth(tables, column),
+  }));
+  sheet['!merges'] = [
+    {
+      s: { r: 0, c: 0 },
+      e: { r: 0, c: Math.max(maxColumns - 1, 0) },
+    },
+  ];
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, 'Report');
@@ -460,7 +503,7 @@ export const buildExcel = (
 export const buildPdf = (
   title: string,
   projectName: string,
-  rows: ReportRow[],
+  inputTables: ReportTable[],
 ): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -477,28 +520,64 @@ export const buildPdf = (
 
     const margin = 40;
     const pageWidth = doc.page.width - margin * 2;
-    const columns = [
-      { key: 'section' as const, width: Math.round(pageWidth * 0.36) },
-      { key: 'category' as const, width: Math.round(pageWidth * 0.42) },
-      { key: 'value' as const, width: Math.round(pageWidth * 0.22) },
-    ];
-    const textWidth = (index: number) => columns[index].width - 10;
-    const headerHeight = 26;
-    const rowPadding = 8;
+    const headerHeight = 24;
+    const rowPadding = 7;
+    const tableGap = 24;
 
-    const drawHeader = (y: number) => {
+    const tables = inputTables.length
+      ? inputTables
+      : [{ columns: ['Result'], rows: [['No data available for this report.']] }];
+
+    const widthsFor = (table: ReportTable): number[] => {
+      const raw = table.columns.map((header, column) => {
+        const longest = Math.max(
+          String(header ?? '').length,
+          ...table.rows.map((row) => String(row[column] ?? '').length),
+        );
+        return Math.min(pageWidth * 0.42, Math.max(50, longest * 4.2 + 14));
+      });
+      const scale = pageWidth / raw.reduce((sum, width) => sum + width, 0);
+      const widths = raw.map((width) => Math.max(42, Math.round(width * scale)));
+      widths[widths.length - 1] +=
+        pageWidth - widths.reduce((sum, width) => sum + width, 0);
+      return widths;
+    };
+
+    const drawTableTitle = (y: number, table: ReportTable) => {
+      if (!table.title) return y;
+      doc
+        .fillColor('#111827')
+        .font('Helvetica-Bold')
+        .fontSize(10)
+        .text(table.title, margin, y, { width: pageWidth });
+      return y + 16;
+    };
+
+    const drawHeader = (
+      y: number,
+      table: ReportTable,
+      widths: number[],
+    ): number => {
       doc.rect(margin, y, pageWidth, headerHeight).fill('#E9EEF5');
-      doc.fillColor('#1F2937').font('Helvetica-Bold').fontSize(9);
+      doc.fillColor('#1F2937').font('Helvetica-Bold').fontSize(8.5);
       let x = margin + 5;
-      ['Section', 'Category', 'Value'].forEach((label, index) => {
-        doc.text(label, x, y + 8, { width: textWidth(index) });
-        x += columns[index].width;
+      table.columns.forEach((label, column) => {
+        doc.text(String(label), x, y + 6, {
+          width: widths[column] - 10,
+          height: headerHeight - 8,
+          ellipsis: true,
+        });
+        x += widths[column];
       });
       return y + headerHeight;
     };
 
     const drawTitle = () => {
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(16).text(title, margin, margin);
+      doc
+        .fillColor('#111827')
+        .font('Helvetica-Bold')
+        .fontSize(16)
+        .text(title, margin, margin, { width: pageWidth });
       doc
         .fillColor('#4B5563')
         .font('Helvetica')
@@ -507,24 +586,31 @@ export const buildPdf = (
         .text(`Generated: ${formatGeneratedAt()}`, margin, margin + 37);
     };
 
-    try {
-      drawTitle();
-      let y = margin + 62;
-      y = drawHeader(y);
+    const drawTable = (startY: number, table: ReportTable): number => {
+      const widths = widthsFor(table);
+      let y = drawTableTitle(startY, table);
+      y = drawHeader(y, table, widths);
 
-      doc.font('Helvetica').fontSize(8);
-      rows.forEach((row, index) => {
-        const heights = columns.map((column, columnIndex) =>
-          doc.heightOfString(String(row[column.key] ?? ''), {
-            width: textWidth(columnIndex),
+      if (!table.rows.length) {
+        doc.fillColor('#6B7280').font('Helvetica').fontSize(9);
+        doc.text('No data available for this table.', margin, y + 10);
+        return y + 30;
+      }
+
+      table.rows.forEach((row, index) => {
+        doc.font('Helvetica').fontSize(8);
+        const heights = widths.map((width, column) =>
+          doc.heightOfString(String(row[column] ?? ''), {
+            width: width - 10,
           }),
         );
         const height = Math.max(...heights, 10) + rowPadding;
 
         if (y + height > doc.page.height - margin - 20) {
           doc.addPage();
-          y = drawHeader(margin);
-          doc.fillColor('#111827').font('Helvetica').fontSize(8);
+          y = drawTableTitle(margin, table);
+          y = drawHeader(y, table, widths);
+          doc.fillColor('#1F2937').font('Helvetica').fontSize(8);
         }
 
         if (index % 2 === 1) {
@@ -533,19 +619,24 @@ export const buildPdf = (
 
         doc.fillColor('#1F2937').font('Helvetica').fontSize(8);
         let x = margin + 5;
-        columns.forEach((column, columnIndex) => {
-          doc.text(String(row[column.key] ?? ''), x, y + rowPadding / 2, {
-            width: textWidth(columnIndex),
+        widths.forEach((width, column) => {
+          doc.text(String(row[column] ?? ''), x, y + rowPadding / 2, {
+            width: width - 10,
           });
-          x += column.width;
+          x += width;
         });
         y += height;
       });
 
-      if (!rows.length) {
-        doc.fillColor('#6B7280').font('Helvetica').fontSize(9);
-        doc.text('No data available for this report.', margin, y + 12);
-      }
+      return y + tableGap;
+    };
+
+    try {
+      drawTitle();
+      let y = margin + 62;
+      tables.forEach((table) => {
+        y = drawTable(y, table);
+      });
 
       const range = doc.bufferedPageRange();
       for (let page = 0; page < range.count; page++) {

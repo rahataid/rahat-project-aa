@@ -11,6 +11,15 @@ export type StatSelection = {
   prefixes?: string[];
 };
 
+export type ReportLayout =
+  | 'generic'
+  | 'overview'
+  | 'beneficiary'
+  | 'floodSurvey'
+  | 'access'
+  | 'communication'
+  | 'flood26';
+
 export type ReportDefinition = {
   id: string;
   /** Matching DASHBOARD_TAB_CONFIG value; '' means always available. */
@@ -18,6 +27,8 @@ export type ReportDefinition = {
   title: string;
   formats: ReportFormat[];
   selections: StatSelection[];
+  /** Chooses the backend row/header shaping used by Excel and PDF. */
+  layout: ReportLayout;
   requiresFlood2026?: boolean;
 };
 
@@ -37,6 +48,7 @@ const flood2026 = (
   configKey: id,
   title,
   formats: ['xlsx', 'pdf'],
+  layout: 'flood26',
   requiresFlood2026: true,
   selections: [{ source: 'benefStats', names }],
 });
@@ -47,6 +59,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: '',
     title: 'Project Overview',
     formats: ['xlsx', 'pdf'],
+    layout: 'overview',
     selections: [{ source: 'triggeersStats', prefixes: ['ACTIVITIES_'] }],
   },
   {
@@ -54,6 +67,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'beneficiaryDemographics',
     title: 'Beneficiary Demographics',
     formats: ['xlsx', 'pdf'],
+    layout: 'beneficiary',
     selections: [
       {
         source: 'benefStats',
@@ -73,6 +87,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'floodSurveyData',
     title: 'Flood Survey Data',
     formats: ['xlsx', 'pdf'],
+    layout: 'floodSurvey',
     selections: [
       {
         source: 'benefStats',
@@ -89,6 +104,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'heatwaveSurveyData',
     title: 'Heatwave Survey Data',
     formats: ['xlsx', 'pdf'],
+    layout: 'generic',
     selections: [
       {
         source: 'benefStats',
@@ -108,6 +124,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'tokenStats',
     title: 'Token Stats',
     formats: ['xlsx', 'pdf'],
+    layout: 'generic',
     selections: [{ source: 'tokenStats' }],
   },
   {
@@ -115,6 +132,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'accessInclusion',
     title: 'Access & Inclusion',
     formats: ['xlsx', 'pdf'],
+    layout: 'access',
     selections: [
       {
         source: 'benefStats',
@@ -135,6 +153,7 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     configKey: 'communicationOutreach',
     title: 'Communication & Outreach',
     formats: ['xlsx', 'pdf'],
+    layout: 'communication',
     selections: [
       { source: 'benefStats', names: ['STAKEHOLDERS_TOTAL'] },
       {
@@ -187,6 +206,128 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     'FLOOD26_RESPONSE_SKILLS',
   ]),
 ];
+
+/** Chart titles shown in the Flood 2026 tabs (mirror `FLOOD_REPORT` messages). */
+export const FLOOD_CHART_LABELS: Record<string, string> = {
+  FLOOD26_HOUSEHOLD_KPIS: 'Population covered',
+  FLOOD26_HOUSEHOLD_SIZE: 'Household size',
+  FLOOD26_POPULATION_BY_GENDER: 'Population by gender',
+  FLOOD26_POPULATION_BY_AGE_GENDER: 'Population by age and gender',
+  FLOOD26_HOUSEHOLD_LEADERSHIP: 'Household leadership',
+  FLOOD26_DISABILITY_AND_ILLNESS: 'Disability and chronic illness',
+  FLOOD26_PREGNANCY_AND_MATERNAL: 'Pregnant and maternal mothers',
+  FLOOD26_ANNUAL_INCOME: 'Annual income',
+  FLOOD26_INCOME_SOURCES: 'Primary source of income',
+  FLOOD26_PRIVATE_LAND: 'Private agricultural land',
+  FLOOD26_LEASED_LAND: 'Leased / sharecropped land',
+  FLOOD26_SOCIAL_PROTECTION: 'Social protection coverage',
+  FLOOD26_ELIGIBLE_NOT_RECEIVING_SS:
+    'Eligible but not receiving social security',
+  FLOOD26_ROOF_TYPE: 'Roof material',
+  FLOOD26_WALL_TYPE: 'Wall material',
+  FLOOD26_FLOOR_TYPE: 'Floor material',
+  FLOOD26_FRAME_STRUCTURE: 'Frame structure',
+  FLOOD26_FOUNDATION: 'Foundation',
+  FLOOD26_HOUSE_OWNERSHIP: 'House ownership',
+  FLOOD26_HAZARD_EXPOSURE: 'Exposure by hazard',
+  FLOOD26_FLOOD_EXPOSURE_VS_IMPACT: 'Flood exposure vs historical impact',
+  FLOOD26_FLOOD_DAMAGE_TYPES: 'Flood damage types',
+  FLOOD26_RECEIVES_WARNING: 'Households receiving weather warnings',
+  FLOOD26_SAFE_EVACUATION_LOCATION: 'Safe evacuation location',
+  FLOOD26_WARNING_CHANNELS: 'Warning channels used',
+  FLOOD26_EVACUATION_THRESHOLD: 'When the family evacuates',
+  FLOOD26_RESPONSE_SKILLS: 'Swimming and response training',
+};
+
+/** Labels for bucket/series ids, mirroring the dashboard translations. */
+export const VALUE_LABELS: Record<string, string> = {
+  YES: 'Yes',
+  NO: 'No',
+  UNKNOWN: 'Unknown',
+  OTHERS: 'Others',
+  OTHER: 'Other',
+  MALE: 'Male',
+  FEMALE: 'Female',
+  OTHER_INCOME: 'Other income',
+  HOUSEHOLDS: 'Households',
+  PEOPLE: 'People',
+  PREPAREDNESS: 'Preparedness',
+  READINESS: 'Readiness',
+  ACTIVATION: 'Activation',
+  RESPONSE: 'Response',
+  MITIGATION: 'Mitigation',
+  RECOVERY: 'Recovery',
+  PLANNING: 'Planning',
+  '0-2': '0–2 yrs',
+  '2-5': '2–5 yrs',
+  '6-18': '6–18 yrs',
+  '19-59': '19–59 yrs',
+  above_60: '60+ yrs',
+  ABOVE_60: '60+ yrs',
+  CHILDREN_UNDER_5: 'Children under 5',
+  CHILDREN_6_18: 'Children 6–18',
+  OLDER_60_PLUS: 'Older people 60+',
+  DISABILITY: 'Member with disability',
+  CHRONIC_ILLNESS: 'Chronic illness / NCDs',
+  PREGNANT_WOMEN: 'Pregnant women',
+  MATERNAL_MOTHER: 'Maternal mothers',
+  AGRICULTURE_LIVESTOCK: 'Agriculture / livestock',
+  DAILY_WAGE_LABOR: 'Daily wage labour',
+  BUSINESS: 'Business',
+  SERVICE_JOB: 'Service / job',
+  FOREIGN_EMPLOYMENT: 'Foreign employment',
+  NO_PROGRAM: 'No programme',
+  HEALTH_INSURANCE: 'Health insurance',
+  GOVERNMENT_PENSION: 'Government pension',
+  SCHOOL_SCHOLARSHIP: 'School scholarship',
+  SAFE_MOTHERHOOD: 'Safe motherhood programme',
+  PM_EMPLOYMENT: 'PM employment programme',
+  AGRICULTURE_FOOD_SUPPORT: 'Agriculture / food support',
+  SOCIAL_SECURITY_FUND: 'Social security fund',
+  OTHER_PROGRAM: 'Other programme',
+  FLOOD: 'Flood',
+  FIRE: 'Fire',
+  EARTHQUAKE: 'Earthquake',
+  COLD_WAVE: 'Cold wave',
+  WINDSTORM: 'Windstorm',
+  EPIDEMIC: 'Epidemic',
+  ANIMAL_ATTACK: 'Animal attack',
+  OTHER_HAZARD: 'Other hazard',
+  CROP_DAMAGE: 'Crop damage',
+  PROPERTY_DAMAGE: 'Property damage',
+  LIVESTOCK_DAMAGE: 'Livestock damage',
+  HUMAN_LOSS: 'Human loss',
+  OTHER_DAMAGE: 'Other damage',
+  FLOOD_EXPOSURE: 'Exposed to floods yearly',
+  FLOOD_AFFECTED_20_YEARS: 'Flood-affected in last 20 years',
+  FM_RADIO: 'FM Radio',
+  FmRadio: 'FM Radio',
+  SOCIAL_MEDIA: 'Social Media',
+  SocialMedia: 'Social Media',
+  COMMUNITY_SIREN: 'Community siren',
+  MOBILE_PHONE_SMS: 'Mobile Phone SMS',
+  MobilePhoneSms: 'Mobile Phone SMS',
+  BADGHAR_CHIRAKI: 'Badghar / chiraki',
+  LOCAL_REPRESENTATIVE: 'Local representative',
+  PeopleRepresentatives: "People's Representatives",
+  NEWSPAPERS_MAGAZINES: 'Newspapers / magazines',
+  RED_CROSS_VOLUNTEERS: 'Red Cross volunteers',
+  OTHER_CHANNEL: 'Other channel',
+  SWIMMING: 'Swimming skills',
+  TRAINED_VOLUNTEER: 'Trained flood response volunteer',
+  SEARCH_AND_RESCUE: 'Search & rescue training',
+  senior_citizen__70: 'Senior Citizen >70',
+  senior_citizen__60__dalit: 'Senior Citizen Dalit >60',
+  child_nutrition: 'Child Nutrition',
+  single_woman: 'Single Women',
+  widow: 'Widow',
+  red_class: 'Red Card',
+  blue_card: 'Blue Card',
+  indigenous_community: 'Indigenous Community',
+  no_of_pregnant_women: 'Pregnant Female',
+  no_of_lactating_women: 'Lactating Female',
+  no_of_persons_with_disability: 'People with Disabilities',
+};
 
 /** Human-readable titles used in the exported files, keyed by clean stat name. */
 export const STAT_LABELS: Record<string, string> = {

@@ -14,12 +14,12 @@ import {
 import {
   buildExcel,
   buildPdf,
-  buildReportRows,
   DashboardStats,
   reportHasData,
   ReportFile,
   toReportFile,
 } from './report-file.builder';
+import { buildReportTables } from './report-tables';
 
 type ReportContext = {
   definitions: ReportDefinition[];
@@ -85,8 +85,11 @@ export class DashboardReportsService {
       });
     }
 
-    const rows = buildReportRows(definition, context.stats, { projectId: appId });
-    if (!rows.length) {
+    const tables = buildReportTables(definition, context.stats, {
+      projectId: appId,
+    });
+    const rowCount = tables.reduce((total, table) => total + table.rows.length, 0);
+    if (!rowCount) {
       throw new RpcException({
         message: 'No data is currently shown for this report',
         code: 'DASHBOARD_REPORT_NO_DATA',
@@ -95,13 +98,13 @@ export class DashboardReportsService {
     }
 
     this.logger.log(
-      `Generating ${format.toUpperCase()} dashboard report '${reportId}' with ${rows.length} rows (${context.projectName})`,
+      `Generating ${format.toUpperCase()} dashboard report '${reportId}' with ${rowCount} rows across ${tables.length} table(s) (${context.projectName})`,
     );
 
     const buffer =
       format === 'xlsx'
-        ? buildExcel(definition.title, context.projectName, rows)
-        : await buildPdf(definition.title, context.projectName, rows);
+        ? buildExcel(definition.title, context.projectName, tables)
+        : await buildPdf(definition.title, context.projectName, tables);
 
     return toReportFile(buffer, definition.title, format);
   }
