@@ -272,6 +272,10 @@ export const JOBS = {
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
   },
+  DASHBOARD_REPORTS: {
+    LIST_REPORTS: 'aa.jobs.dashboard.listReports',
+    EXPORT_FILE: 'aa.jobs.dashboard.exportReport',
+  },
   VENDOR: {
     REIMBURSE: {
       CREATE: 'rahat.jobs.vendor.reimburse.create',
