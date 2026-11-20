@@ -106,7 +106,7 @@
     "rxjs": "^7.8.1",
     "tslib": "^2.6.2",
     "winston": "^3.17.0",
-    "xlsx": "^0.18.5"
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@nestjs/schematics": "^10.1.1",

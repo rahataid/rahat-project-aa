@@ -1,7 +1,7 @@
 // Pure builders: dashboard stats -> readable rows -> Excel/PDF buffers.
 // No NestJS or database dependencies here so the output logic stays testable.
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { ReportDefinition, STAT_LABELS } from './report.config';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -400,6 +400,18 @@ export const buildReportRows = (
   return rows;
 };
 
+/** e.g. "November 5, 2026 at 2:07:34 PM" in the server's local timezone. */
+export const formatGeneratedAt = (date = new Date()): string =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(date);
+
 const safeFilename = (value: string) =>
   value.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
 
@@ -421,16 +433,21 @@ export const buildExcel = (
   projectName: string,
   rows: ReportRow[],
 ): Buffer => {
+  const headerRow = ['Section', 'Category', 'Value'];
   const data: any[][] = [
     [title],
     ['Project', projectName || '-'],
-    ['Generated', new Date().toLocaleString('en-US', { timeZone: 'UTC' })],
+    ['Generated', formatGeneratedAt()],
     [],
-    ['Section', 'Category', 'Value'],
+    headerRow,
     ...rows.map((row) => [row.section, row.category, row.value]),
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(data);
+  headerRow.forEach((_, column) => {
+    const address = XLSX.utils.encode_cell({ r: 4, c: column });
+    if (sheet[address]) sheet[address].s = { font: { bold: true } };
+  });
   sheet['!cols'] = [{ wch: 36 }, { wch: 42 }, { wch: 16 }];
   sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
 
@@ -487,7 +504,7 @@ export const buildPdf = (
         .font('Helvetica')
         .fontSize(9)
         .text(`Project: ${projectName || '-'}`, margin, margin + 24)
-        .text(`Generated: ${new Date().toLocaleString('en-US', { timeZone: 'UTC' })}`, margin, margin + 37);
+        .text(`Generated: ${formatGeneratedAt()}`, margin, margin + 37);
     };
 
     try {
