@@ -151,4 +151,12 @@ export class CreateGrievanceDto {
   })
   @IsOptional()
   user?: CreatedByUser;
+
+  @ApiProperty({
+    description: 'Documents related to the grievance',
+    example: [{ fileName: 'photo.png', mediaURL: 'https://...' }],
+    required: false,
+  })
+  @IsOptional()
+  grievanceDocuments?: Record<string, any>[];
 }
