@@ -2512,6 +2512,7 @@ export class BeneficiaryService {
   async syncBeneficiaryGroupData(dto: {
     groupUuid: string;
     isLastBatch?: boolean;
+    groupPurpose?: GroupPurpose;
     beneficiariesData: {
       uuid: string;
       walletAddress: string;
@@ -2521,7 +2522,7 @@ export class BeneficiaryService {
       phone?: string;
     }[];
   }) {
-    const { groupUuid, beneficiariesData, isLastBatch } = dto;
+    const { groupUuid, beneficiariesData, isLastBatch, groupPurpose } = dto;
 
     const group = await this.prisma.beneficiaryGroups.findUnique({
       where: { uuid: groupUuid },
@@ -2532,6 +2533,13 @@ export class BeneficiaryService {
         code: 'BENEFICIARY_GROUP_NOT_FOUND_SYNC',
         params: { groupUuid },
       });
+
+    if (groupPurpose && group.groupPurpose !== groupPurpose) {
+      await this.prisma.beneficiaryGroups.update({
+        where: { uuid: groupUuid },
+        data: { groupPurpose },
+      });
+    }
 
     const BCRYPT_ROUNDS = 8;
     const isDev = process.env.NODE_ENV !== 'production';
@@ -2696,6 +2704,12 @@ export class BeneficiaryService {
       where: { uuid: beneficiaryGroupId },
     });
     if (existingGroup) {
+      if (groupPurpose && existingGroup.groupPurpose !== groupPurpose) {
+        await this.prisma.beneficiaryGroups.update({
+          where: { uuid: beneficiaryGroupId },
+          data: { groupPurpose },
+        });
+      }
       const pendingJobs = await this.countGroupImportJobs(beneficiaryGroupId);
       return { status: pendingJobs > 0 ? 'IN_PROGRESS' : 'COMPLETED' };
     }
