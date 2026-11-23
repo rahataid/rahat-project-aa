@@ -315,6 +315,107 @@ const communicationTables = (
   ];
 };
 
+const OVERVIEW_STATUS_COLUMNS: Array<[string, string]> = [
+  ['COMPLETED', 'Completed'],
+  ['WORK_IN_PROGRESS', 'In Progress'],
+  ['NOT_STARTED', 'Not Started'],
+  ['DELAYED', 'Delayed'],
+];
+
+const nameOf = (value: any): string => String(value?.name ?? value ?? '');
+
+const hasItems = (value: unknown): boolean =>
+  Array.isArray(value)
+    ? value.length > 0
+    : !!value && typeof value === 'object' && Object.keys(value).length > 0;
+
+/** Mirrors the Activity Overview tab's client-side computeActivityStats. */
+const activitiesOverviewTables = (stats: DashboardStats): ReportTable[] => {
+  const activities = stats.activities ?? [];
+  const statusCounts: Record<string, number> = Object.fromEntries(
+    OVERVIEW_STATUS_COLUMNS.map(([status]) => [status, 0]),
+  );
+  const phaseCounts = new Map<string, Record<string, number>>();
+  const categoryCounts = new Map<string, Record<string, number>>();
+  let automated = 0;
+  let withCommunication = 0;
+
+  for (const activity of activities) {
+    const rawStatus = String(activity?.status ?? 'NOT_STARTED');
+    const status = OVERVIEW_STATUS_COLUMNS.some(([key]) => key === rawStatus)
+      ? rawStatus
+      : 'NOT_STARTED';
+    statusCounts[status] += 1;
+
+    const phase = nameOf(activity?.phase) || 'UNKNOWN';
+    const phaseRow = phaseCounts.get(phase) ?? {};
+    phaseRow[status] = (phaseRow[status] ?? 0) + 1;
+    phaseCounts.set(phase, phaseRow);
+
+    const category = nameOf(activity?.category) || 'UNKNOWN';
+    const categoryRow = categoryCounts.get(category) ?? {};
+    categoryRow[status] = (categoryRow[status] ?? 0) + 1;
+    categoryCounts.set(category, categoryRow);
+
+    if (activity?.isAutomated) automated += 1;
+    if (hasItems(activity?.activityCommunication)) withCommunication += 1;
+  }
+
+  const statusHeaders = OVERVIEW_STATUS_COLUMNS.map(([, heading]) => heading);
+  const overallStatusCounts = Object.fromEntries(
+    OVERVIEW_STATUS_COLUMNS.map(([status]) => [status, statusCounts[status]]),
+  );
+  const countRow = (name: string, counts: Record<string, number>): ReportCell[] => [
+    name,
+    ...OVERVIEW_STATUS_COLUMNS.map(([status]) => num(counts[status])),
+    Object.values(counts).reduce((sum, count) => sum + count, 0),
+  ];
+
+  const summary: ReportCell[][] = [
+    ['Total Activities', activities.length],
+    ['Completed', statusCounts.COMPLETED],
+    ['In Progress', statusCounts.WORK_IN_PROGRESS],
+    ['Not Started', statusCounts.NOT_STARTED],
+    ['Delayed', statusCounts.DELAYED],
+    ['Automated', automated],
+    ['Manual', activities.length - automated],
+    ['With Communication', withCommunication],
+  ];
+
+  const phaseRows: ReportCell[][] = [
+    ...[...phaseCounts.entries()].map(([name, counts]) =>
+      countRow(label(name), counts),
+    ),
+    countRow('TOTAL', overallStatusCounts),
+  ];
+
+  const categoryRows: ReportCell[][] = [
+    ...[...categoryCounts.entries()]
+      .map(([name, counts]) => ({
+        name,
+        counts,
+        total: Object.values(counts).reduce((sum, count) => sum + count, 0),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .map(({ name, counts }) => countRow(label(name), counts)),
+    countRow('TOTAL', overallStatusCounts),
+  ];
+
+  return [
+    ...makeTable('Summary', ['Metric', 'Value'], summary),
+    ...makeTable(
+      'Activity Status by Phase',
+      ['Phase', ...statusHeaders, 'Total'],
+      phaseRows,
+    ),
+    ...makeTable(
+      'Activity Status by Category',
+      ['Category', ...statusHeaders, 'Total'],
+      categoryRows,
+    ),
+  ];
+};
+
 const flood26Tables = (
   definition: ReportDefinition,
   stats: DashboardStats,
@@ -398,6 +499,8 @@ export const buildReportTables = (
       return accessTables(stats);
     case 'communication':
       return communicationTables(stats, options.projectId);
+    case 'activitiesOverview':
+      return activitiesOverviewTables(stats);
     case 'flood26':
       return flood26Tables(definition, stats);
     default:

@@ -219,6 +219,7 @@ export const JOBS = {
     EXPORT_GROUP: 'aa.jobs.stakeholders.exportGroup',
   },
   ACTIVITIES: {
+    GET_ALL: 'ms.jobs.activities.getAll',
     GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
   },
   SETTINGS: {

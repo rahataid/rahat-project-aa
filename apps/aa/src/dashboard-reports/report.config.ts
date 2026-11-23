@@ -18,6 +18,7 @@ export type ReportLayout =
   | 'floodSurvey'
   | 'access'
   | 'communication'
+  | 'activitiesOverview'
   | 'flood26';
 
 export type ReportDefinition = {
@@ -61,6 +62,15 @@ export const DASHBOARD_REPORT_DEFINITIONS: ReportDefinition[] = [
     formats: ['xlsx', 'pdf'],
     layout: 'overview',
     selections: [{ source: 'triggeersStats', prefixes: ['ACTIVITIES_'] }],
+  },
+  {
+    // Rows come from live activities in the triggers service, not AA stats.
+    id: 'activity-overview',
+    configKey: 'activitiesOverview',
+    title: 'Activity Overview',
+    formats: ['xlsx', 'pdf'],
+    layout: 'activitiesOverview',
+    selections: [],
   },
   {
     id: 'beneficiary-demographics',

@@ -42,6 +42,7 @@ export type DashboardStats = {
   benefStats: any[];
   triggeersStats: any[];
   tokenStats: Record<string, any>;
+  activities?: any[];
 };
 
 const UUID_RE =
@@ -87,7 +88,7 @@ const addFloodRows = (
   section: string,
   data: any,
   rows: ReportRow[],
-  options: BucketOptions = {},
+  options: BucketOptions = {}
 ) => {
   const before = rows.length;
   const hidden = (options.hiddenIds ?? []).map((id) => id.toUpperCase());
@@ -129,7 +130,7 @@ const addObjectRows = (
   object: Record<string, any>,
   prefix: string,
   rows: ReportRow[],
-  options: BucketOptions = {},
+  options: BucketOptions = {}
 ) => {
   Object.entries(object).forEach(([key, value]) => {
     const category = prefix ? `${prefix} / ${humanize(key)}` : humanize(key);
@@ -143,7 +144,13 @@ const addObjectRows = (
     if (Array.isArray(value)) {
       value.forEach((item, index) => {
         if (item && typeof item === 'object') {
-          addObjectRows(section, item, `${category} ${index + 1}`, rows, options);
+          addObjectRows(
+            section,
+            item,
+            `${category} ${index + 1}`,
+            rows,
+            options
+          );
         } else {
           rows.push({
             section,
@@ -163,7 +170,7 @@ const addStatRows = (
   section: string,
   data: any,
   rows: ReportRow[],
-  options: BucketOptions = {},
+  options: BucketOptions = {}
 ) => {
   if (data === null || data === undefined) return;
 
@@ -183,10 +190,7 @@ const addStatRows = (
           item.phase?.name ??
           `Item ${index + 1}`;
         const count =
-          item.count ??
-          item.value ??
-          item.completedPercentage ??
-          item.total;
+          item.count ?? item.value ?? item.completedPercentage ?? item.total;
         if (count === undefined) {
           addObjectRows(section, item, humanize(raw), rows, options);
         } else {
@@ -226,12 +230,16 @@ const floodStatHasData = (data: any): boolean => {
 export const reportHasData = (
   definition: ReportDefinition,
   stats: DashboardStats,
-  options: BuildReportRowsOptions = {},
-): boolean =>
-  definition.selections.some((selection) => {
+  options: BuildReportRowsOptions = {}
+): boolean => {
+  if (definition.layout === 'activitiesOverview') {
+    return (stats.activities ?? []).length > 0;
+  }
+
+  return definition.selections.some((selection) => {
     if (selection.source === 'tokenStats') {
       return Object.values(stats.tokenStats ?? {}).some(
-        (value) => value !== null && value !== undefined && value !== '',
+        (value) => value !== null && value !== undefined && value !== ''
       );
     }
     const source =
@@ -244,7 +252,9 @@ export const reportHasData = (
       if (selection.prefixes) {
         if (selection.prefixes.includes('ACTIVITIES_') && options.projectId) {
           if (
-            !stat.name.startsWith(`ACTIVITIES_${options.projectId.toUpperCase()}`)
+            !stat.name.startsWith(
+              `ACTIVITIES_${options.projectId.toUpperCase()}`
+            )
           ) {
             return false;
           }
@@ -258,6 +268,7 @@ export const reportHasData = (
       return stat.data !== null && stat.data !== undefined;
     });
   });
+};
 
 const tokenRows = (stats: DashboardStats): ReportRow[] =>
   [
@@ -274,30 +285,30 @@ const tokenRows = (stats: DashboardStats): ReportRow[] =>
 /** Mirrors the dashboard's CommunicationAnalytics view model. */
 const communicationRows = (
   stats: DashboardStats,
-  projectId?: string,
+  projectId?: string
 ): ReportRow[] => {
   const triggerData = (name: string) =>
     stats.triggeersStats?.find((item) => item?.name?.includes(name))?.data;
 
   const activitiesWithComm = Number(
-    triggerData('ACTIVITIES_WITH_COMM')?.count ?? 0,
+    triggerData('ACTIVITIES_WITH_COMM')?.count ?? 0
   );
   const activitiesAutomated = Number(
-    triggerData('ACTIVITIES_AUTOMATED')?.count ?? 0,
+    triggerData('ACTIVITIES_AUTOMATED')?.count ?? 0
   );
   const commsStats = triggerData('COMMS_STATS') ?? {};
   const stakeholders = commsStats.stakeholder ?? {};
   const beneficiaries = commsStats.beneficiary ?? {};
   const suffix = projectId?.toUpperCase() ?? '';
   const stakeholderSessions = Number(
-    triggerData(`STAKEHOLDERS_${suffix}`)?.sessionCount ?? 0,
+    triggerData(`STAKEHOLDERS_${suffix}`)?.sessionCount ?? 0
   );
   const beneficiarySessions = Number(
-    triggerData(`BENEFICIARY_${suffix}`)?.sessionCount ?? 0,
+    triggerData(`BENEFICIARY_${suffix}`)?.sessionCount ?? 0
   );
   const totalStakeholders = Number(
     stats.benefStats?.find((stat) => stat?.name === 'STAKEHOLDERS_TOTAL')?.data
-      ?.count ?? 0,
+      ?.count ?? 0
   );
 
   const rows: ReportRow[] = [
@@ -316,7 +327,7 @@ const communicationRows = (
   const addGroup = (
     group: string,
     total: number,
-    metrics: Array<[string, string | number]>,
+    metrics: Array<[string, string | number]>
   ) => {
     rows.push({
       section: `${group} / Total Communication Sent`,
@@ -324,7 +335,7 @@ const communicationRows = (
       value: total,
     });
     metrics.forEach(([category, value]) =>
-      rows.push({ section: group, category, value }),
+      rows.push({ section: group, category, value })
     );
   };
 
@@ -359,7 +370,7 @@ const sectionName = (definition: ReportDefinition, stat: any): string => {
 export const buildReportRows = (
   definition: ReportDefinition,
   stats: DashboardStats,
-  options: BuildReportRowsOptions = {},
+  options: BuildReportRowsOptions = {}
 ): ReportRow[] => {
   if (definition.id === 'token-stats') return tokenRows(stats);
   if (definition.id === 'communication-outreach') {
@@ -383,7 +394,9 @@ export const buildReportRows = (
         // The dashboard main tab only shows ACTIVITIES_<current project id>.
         if (selection.prefixes.includes('ACTIVITIES_') && options.projectId) {
           if (
-            !stat.name.startsWith(`ACTIVITIES_${options.projectId.toUpperCase()}`)
+            !stat.name.startsWith(
+              `ACTIVITIES_${options.projectId.toUpperCase()}`
+            )
           ) {
             return;
           }
@@ -399,10 +412,15 @@ export const buildReportRows = (
         definition.id === 'flood-survey-data'
           ? { hideZeroBuckets: true }
           : definition.requiresFlood2026
-            ? { hiddenIds: ['GENDER_AND_SEXUAL_MINORITY'] }
-            : {};
+          ? { hiddenIds: ['GENDER_AND_SEXUAL_MINORITY'] }
+          : {};
 
-      addStatRows(sectionName(definition, stat), stat.data, rows, bucketOptions);
+      addStatRows(
+        sectionName(definition, stat),
+        stat.data,
+        rows,
+        bucketOptions
+      );
     });
   });
 
@@ -422,14 +440,19 @@ export const formatGeneratedAt = (date = new Date()): string =>
   }).format(date);
 
 const safeFilename = (value: string) =>
-  value.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+  value
+    .replace(/[^a-z0-9-]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
 
 export const toReportFile = (
   buffer: Buffer,
   title: string,
-  extension: 'xlsx' | 'pdf',
+  extension: 'xlsx' | 'pdf'
 ): ReportFile => ({
-  filename: `${safeFilename(title)}-${new Date().toISOString().slice(0, 10)}.${extension}`,
+  filename: `${safeFilename(title)}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.${extension}`,
   mimeType:
     extension === 'xlsx'
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -449,7 +472,7 @@ const excelColumnWidth = (tables: ReportTable[], column: number): number => {
 export const buildExcel = (
   title: string,
   projectName: string,
-  inputTables: ReportTable[],
+  inputTables: ReportTable[]
 ): Buffer => {
   const tables = inputTables.length
     ? inputTables
@@ -472,7 +495,7 @@ export const buildExcel = (
     headerRows.push({ row: data.length, columns: table.columns.length });
     data.push(table.columns);
     table.rows.forEach((row) =>
-      data.push(table.columns.map((_, column) => row[column] ?? '')),
+      data.push(table.columns.map((_, column) => row[column] ?? ''))
     );
     data.push([]);
   });
@@ -503,7 +526,7 @@ export const buildExcel = (
 export const buildPdf = (
   title: string,
   projectName: string,
-  inputTables: ReportTable[],
+  inputTables: ReportTable[]
 ): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -526,18 +549,25 @@ export const buildPdf = (
 
     const tables = inputTables.length
       ? inputTables
-      : [{ columns: ['Result'], rows: [['No data available for this report.']] }];
+      : [
+          {
+            columns: ['Result'],
+            rows: [['No data available for this report.']],
+          },
+        ];
 
     const widthsFor = (table: ReportTable): number[] => {
       const raw = table.columns.map((header, column) => {
         const longest = Math.max(
           String(header ?? '').length,
-          ...table.rows.map((row) => String(row[column] ?? '').length),
+          ...table.rows.map((row) => String(row[column] ?? '').length)
         );
         return Math.min(pageWidth * 0.42, Math.max(50, longest * 4.2 + 14));
       });
       const scale = pageWidth / raw.reduce((sum, width) => sum + width, 0);
-      const widths = raw.map((width) => Math.max(42, Math.round(width * scale)));
+      const widths = raw.map((width) =>
+        Math.max(42, Math.round(width * scale))
+      );
       widths[widths.length - 1] +=
         pageWidth - widths.reduce((sum, width) => sum + width, 0);
       return widths;
@@ -556,7 +586,7 @@ export const buildPdf = (
     const drawHeader = (
       y: number,
       table: ReportTable,
-      widths: number[],
+      widths: number[]
     ): number => {
       doc.rect(margin, y, pageWidth, headerHeight).fill('#E9EEF5');
       doc.fillColor('#1F2937').font('Helvetica-Bold').fontSize(8.5);
@@ -602,7 +632,7 @@ export const buildPdf = (
         const heights = widths.map((width, column) =>
           doc.heightOfString(String(row[column] ?? ''), {
             width: width - 10,
-          }),
+          })
         );
         const height = Math.max(...heights, 10) + rowPadding;
 
@@ -646,7 +676,7 @@ export const buildPdf = (
           `Page ${page + 1} of ${range.count}`,
           margin,
           doc.page.height - margin - 12,
-          { width: pageWidth, align: 'right' },
+          { width: pageWidth, align: 'right' }
         );
       }
 

@@ -91,6 +91,34 @@ export class StatsService {
     }
   }
 
+  /**
+   * The Activity Overview tab counts live activities from the triggers service;
+   */
+  async getActivities(payload: {
+    appId?: string;
+    page?: number;
+    perPage?: number;
+    activeYear?: string;
+    riverBasin?: string;
+  }): Promise<any[]> {
+    try {
+      const response = await firstValueFrom(
+        this.client.send(
+          { cmd: JOBS.ACTIVITIES.GET_ALL },
+          { page: 1, perPage: 9999, ...payload }
+        )
+      );
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      this.logger.warn(
+        `Could not load activities for dashboard report: ${
+          (error as Error)?.message
+        }`
+      );
+      return [];
+    }
+  }
+
   async mapLocation(payload) {
     this.logger.log('Received payload for mapLocation:', payload);
     const { ward_no, location } = payload;

@@ -111,11 +111,11 @@ export class DashboardReportsService {
 
   /** Load everything needed to decide which reports are available. */
   private async loadReportContext(appId?: string): Promise<ReportContext> {
-    const [enabledTabs, projectInfo, stats] = await Promise.all([
+    const [enabledTabs, projectInfo] = await Promise.all([
       this.getEnabledTabs(),
       this.getProjectInfo(),
-      this.loadStats(appId),
     ]);
+    const stats = await this.loadStats(appId, projectInfo);
 
     const definitions = stats
       ? DASHBOARD_REPORT_DEFINITIONS.filter(
@@ -132,13 +132,29 @@ export class DashboardReportsService {
     };
   }
 
-  private async loadStats(appId?: string): Promise<DashboardStats | undefined> {
+  private async loadStats(
+    appId?: string,
+    projectInfo: Record<string, any> = {},
+  ): Promise<DashboardStats | undefined> {
     try {
-      return (await this.statsService.findAll({
-        appId: (appId || process.env.PROJECT_ID) as Parameters<
-          StatsService['findAll']
-        >[0]['appId'],
-      })) as DashboardStats;
+      const routedAppId = (appId || process.env.PROJECT_ID) as Parameters<
+        StatsService['findAll']
+      >[0]['appId'];
+      const [stats, activities] = await Promise.all([
+        this.statsService.findAll({ appId: routedAppId }),
+        // Same appId / active-year / river-basin filters the Activity Overview
+        // tab applies, so the download always matches what the tab shows.
+        this.statsService.getActivities({
+          appId: routedAppId,
+          activeYear: String(
+            projectInfo.ACTIVE_YEAR ?? projectInfo.active_year ?? '',
+          ),
+          riverBasin: String(
+            projectInfo.RIVER_BASIN ?? projectInfo.river_basin ?? '',
+          ),
+        }),
+      ]);
+      return { ...(stats as DashboardStats), activities };
     } catch (error) {
       this.logger.warn(
         `Could not load dashboard statistics: ${(error as Error)?.message}`,
