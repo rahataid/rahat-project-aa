@@ -344,7 +344,7 @@ jobs:
   # -----------------------------
   preview:
     name: Deployment Preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: resolve-config
     steps:
       - name: Show what will be built and pushed
@@ -483,15 +483,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-modules-
 
-      # Cache Nx build cache
-      - name: Cache Nx
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
-            ${{ runner.os }}-nx-
+      # # Cache Nx build cache
+      # - name: Cache Nx
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: .nx/cache
+      #     key: ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
+      #       ${{ runner.os }}-nx-
 
       # Install dependencies with lockfile handling
       - name: Install dependencies
@@ -514,6 +514,9 @@ jobs:
       # Generate Prisma client
       - name: Generate Prisma client
         run: pnpm prisma:generate
+
+      - name: Reset Nx Cache
+        run: pnpm exec nx reset
 
       # Build all apps (Nx will use cache)
       - name: Build applications
