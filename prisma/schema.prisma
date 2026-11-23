@@ -703,6 +703,7 @@ model Grievance {
   createdByUser   Json
   resolvedAt      DateTime?
   closedAt        DateTime?
+  grievanceDocuments Json? @db.JsonB()
 
   @@map("tbl_grievances")
 }
