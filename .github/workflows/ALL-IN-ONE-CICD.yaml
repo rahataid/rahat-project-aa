@@ -515,6 +515,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm prisma:generate
 
+      - name: Reset Nx Cache
+        run: pnpm exec nx reset
+
       # Build all apps (Nx will use cache)
       - name: Build applications
         run: pnpm build:all
