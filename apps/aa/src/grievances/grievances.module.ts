@@ -6,9 +6,11 @@ import { CORE_MODULE } from '../constants';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE } from '@rahataid/sdk';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { MicroserviceAuthModule } from '@rumsan/user/ability/ms-rpc-auth';
 
 @Module({
   imports: [
+    MicroserviceAuthModule,
     EventEmitterModule.forRoot(),
     BullModule.registerQueue({
       name: BQUEUE.RAHAT,

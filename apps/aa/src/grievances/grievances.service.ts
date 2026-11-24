@@ -37,7 +37,7 @@ export class GrievancesService {
 
   async create(data: CreateGrievanceDto) {
     return this.prisma.$transaction(async (tx) => {
-      const { user, ...rest } = data;
+      const { user, appId, ...rest } = data;
       const grievance = await tx.grievance.create({
         data: {
           ...rest,
@@ -114,7 +114,7 @@ export class GrievancesService {
   }
 
   async updateStatus(dto: UpdateGrievanceStatusDto) {
-    const { uuid, user: updatedByUser, ...updateDto } = dto;
+    const { uuid, user: updatedByUser, appId, ...updateDto } = dto;
 
     const existingGrievance = await this.prisma.grievance.findUnique({
       where: { uuid },
@@ -198,7 +198,7 @@ export class GrievancesService {
   }
 
   async update(dto: UpdateGrievanceDto) {
-    const { uuid, user: createdByUser, ...updateDto } = dto;
+    const { uuid, user: createdByUser, appId, ...updateDto } = dto;
 
     const existingGrievance = await this.prisma.grievance.findUnique({
       where: { uuid },

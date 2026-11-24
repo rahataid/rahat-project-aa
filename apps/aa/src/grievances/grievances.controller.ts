@@ -1,6 +1,11 @@
-import { Controller, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { ValidationError } from 'class-validator';
+import {
+  MicroserviceAuthGuard,
+  RequireAbility,
+} from '@rumsan/user/ability/ms-rpc-auth';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 import { JOBS } from '../constants';
 import { CreateGrievanceDto } from './dto/create-grievance.dto';
 import { UpdateGrievanceStatusDto } from './dto/update-grievance-status.dto';
@@ -12,6 +17,7 @@ import { ListGrievanceDto } from './dto/list-grievance.dto';
 import { validationExceptionFactory } from './utils/grievances.controller.utils';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class GrievancesController {
   constructor(private readonly grievancesService: GrievancesService) {}
 
@@ -19,6 +25,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.CREATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.GRIEVANCE)
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -33,6 +40,7 @@ export class GrievancesController {
   }
 
   @MessagePattern({ cmd: JOBS.GRIEVANCES.LIST, uuid: process.env.PROJECT_ID })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GRIEVANCE)
   // @UsePipes(
   //   new ValidationPipe({
   //     transform: true,
@@ -50,6 +58,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.UPDATE_STATUS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GRIEVANCE)
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -67,6 +76,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.UPDATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GRIEVANCE)
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -84,6 +94,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.GET,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GRIEVANCE)
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -101,6 +112,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.REMOVE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.DELETE, SUBJECTS.GRIEVANCE)
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -118,6 +130,7 @@ export class GrievancesController {
     cmd: JOBS.GRIEVANCES.GET_OVERVIEW_STATS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GRIEVANCE)
   getOverviewStats() {
     return this.grievancesService.getOverviewStats();
   }

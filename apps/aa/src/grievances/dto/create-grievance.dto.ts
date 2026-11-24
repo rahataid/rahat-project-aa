@@ -5,6 +5,7 @@ import {
   GrievanceType,
 } from '@prisma/client';
 import {
+  Allow,
   IsArray,
   IsEnum,
   IsNotEmpty,
@@ -151,6 +152,15 @@ export class CreateGrievanceDto {
   })
   @IsOptional()
   user?: CreatedByUser;
+
+  @ApiProperty({
+    description: 'Project id used for the project-scoped ability check',
+    required: false,
+  })
+  @Allow()
+  @IsOptional()
+  @IsString()
+  appId?: string;
 
   @ApiProperty({
     description: 'Documents related to the grievance',
