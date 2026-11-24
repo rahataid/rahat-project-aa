@@ -6,9 +6,12 @@ import {
   DashboardStats,
   humanize,
   ReportCell,
+  ReportChart,
+  ReportRow,
   ReportTable,
 } from './report-file.builder';
 import {
+  FLOOD_CHARTLESS_STATS,
   FLOOD_CHART_LABELS,
   ReportDefinition,
   STAT_LABELS,
@@ -60,11 +63,62 @@ const bucketsOf = (data: any): Array<{ id: string; count: number }> => {
 const pct = (completed: number, total: number): number =>
   total > 0 ? Number(((completed / total) * 100).toFixed(1)) : 0;
 
+const compactCharts = (charts: Array<ReportChart | undefined>): ReportChart[] =>
+  charts.filter((chart): chart is ReportChart => !!chart);
+
+/** One series of label/value pairs — the shape most dashboard cards use. */
+const valueChart = (
+  title: string,
+  categories: Array<string | number>,
+  values: number[],
+): ReportChart => ({
+  kind: 'donut',
+  title,
+  categories: categories.map(String),
+  series: [{ name: 'Count', values }],
+});
+
+/**
+ * Chart straight from a stat's buckets, always as a donut — the report is
+ * requested as pie charts, so even a ten-bucket list (banks, channels) is
+ * drawn as one, with tiny slices folded into "Other" in the PDF builder.
+ */
+const bucketChart = (
+  title: string,
+  data: any,
+  options: { hiddenIds?: string[]; hideZero?: boolean } = {}
+): ReportChart | undefined => {
+  const hidden = (options.hiddenIds ?? []).map((id) => id.toUpperCase());
+  const buckets = bucketsOf(data).filter(
+    (bucket) =>
+      !hidden.includes(bucket.id.toUpperCase()) &&
+      (!options.hideZero || bucket.count > 0)
+  );
+  if (!buckets.length) return undefined;
+
+  return valueChart(
+    title,
+    buckets.map((bucket) => label(bucket.id)),
+    buckets.map((bucket) => bucket.count)
+  );
+};
+
 const makeTable = (
   title: string | undefined,
   columns: string[],
   rows: ReportCell[][],
-): ReportTable[] => (rows.length ? [{ title, columns, rows }] : []);
+  charts?: ReportChart[],
+): ReportTable[] =>
+  rows.length
+    ? [
+        {
+          title,
+          columns,
+          rows,
+          ...(charts?.length ? { charts } : {}),
+        },
+      ]
+    : [];
 
 /** Main tab: progress cards are per phase, so export phase-level totals. */
 const overviewTables = (
@@ -116,6 +170,29 @@ const overviewTables = (
     pct(totals.completed, totals.total),
   ]);
 
+  // Completed vs remaining per phase, the same split the tab's progress cards
+  // show; the TOTAL row is left to the table so it is not counted twice. Two
+  // series per phase means one ring per phase rather than a single pie.
+  const phaseChart: ReportChart = {
+    kind: 'donutGrid',
+    title: 'Activities Status by Phase',
+    categories: items.map((item: any) =>
+      label(item?.phase?.name ?? item?.name ?? item?.id ?? 'UNKNOWN')
+    ),
+    series: [
+      {
+        name: 'Completed',
+        values: items.map((item: any) => num(item?.totalCompletedActivities)),
+      },
+      {
+        name: 'Remaining',
+        values: items.map(
+          (item: any) => num(item?.totalActivities) - num(item?.totalCompletedActivities)
+        ),
+      },
+    ],
+  };
+
   return [
     {
       title: 'Activities Status',
@@ -126,6 +203,7 @@ const overviewTables = (
         'Completion %',
       ],
       rows,
+      ...(items.length ? { charts: [phaseChart] } : {}),
     },
   ];
 };
@@ -146,32 +224,54 @@ const beneficiaryTables = (stats: DashboardStats): ReportTable[] => {
     'no_of_persons_with_disability',
   ].map((key) => [label(key), num(fieldMap[key])]);
 
+  // Same buckets the rows below are built from, so chart and table agree.
+  const gender = bucketsOf(benefData(stats, 'BENEFICIARY_GENDER'));
+  const ageGroups = bucketsOf(benefData(stats, 'BENEFICIARY_AGEGROUPS'));
+  const benefits = bucketsOf(benefData(stats, 'TYPE_OF_SSA'));
+
   return [
+    // Summary mirrors the tab's number cards, which are not charts in the UI.
     ...makeTable('Summary', ['Metric', 'Count'], kpis),
     ...makeTable(
       'Gender Distribution',
       ['Gender', 'Beneficiaries'],
-      bucketsOf(benefData(stats, 'BENEFICIARY_GENDER')).map((bucket) => [
-        label(bucket.id),
-        bucket.count,
-      ]),
+      gender.map((bucket) => [label(bucket.id), bucket.count]),
+      compactCharts([
+        bucketChart('Gender Distribution', benefData(stats, 'BENEFICIARY_GENDER')),
+      ])
     ),
     ...makeTable(
       'Age Groups',
       ['Age Group', 'Beneficiaries'],
-      bucketsOf(benefData(stats, 'BENEFICIARY_AGEGROUPS')).map((bucket) => [
-        label(bucket.id),
-        bucket.count,
-      ]),
+      ageGroups.map((bucket) => [label(bucket.id), bucket.count]),
+      compactCharts([
+        bucketChart('Age Groups', benefData(stats, 'BENEFICIARY_AGEGROUPS')),
+      ])
     ),
-    ...makeTable('Vulnerable Groups', ['Group', 'Members'], vulnerable),
+    ...makeTable(
+      'Vulnerable Groups',
+      ['Group', 'Members'],
+      vulnerable,
+      compactCharts([
+        vulnerable.length
+          ? valueChart(
+              'Vulnerable Groups',
+              vulnerable.map((row) => String(row[0])),
+              vulnerable.map((row) => num(row[1]))
+            )
+          : undefined,
+      ])
+    ),
     ...makeTable(
       'Social Protection Benefits',
       ['SSA Type', 'Households'],
-      bucketsOf(benefData(stats, 'TYPE_OF_SSA')).map((bucket) => [
-        label(bucket.id),
-        bucket.count,
-      ]),
+      benefits.map((bucket) => [label(bucket.id), bucket.count]),
+      compactCharts([
+        bucketChart(
+          'Social Protection Benefits',
+          benefData(stats, 'TYPE_OF_SSA')
+        ),
+      ])
     ),
   ];
 };
@@ -204,10 +304,19 @@ const floodSurveyTables = (stats: DashboardStats): ReportTable[] => {
       });
   });
 
+  const reportCharts = compactCharts(
+    charts.map((chart) =>
+      bucketChart(chart.title, benefData(stats, chart.name), {
+        hideZero: chart.onlyPositive,
+      })
+    )
+  );
+
   return makeTable(
     'Survey Responses',
     ['Survey Question', 'Response / Channel', 'Beneficiaries'],
     rows,
+    reportCharts
   );
 };
 
@@ -236,6 +345,11 @@ const accessTables = (stats: DashboardStats): ReportTable[] => {
       'Access & Inclusion',
       ['Access Dimension', 'Response', 'Beneficiaries'],
       rows,
+      compactCharts(
+        charts.map(([name, title]) =>
+          bucketChart(title, benefData(stats, name))
+        )
+      )
     ),
     ...makeTable(
       'Bank Accounts',
@@ -244,6 +358,9 @@ const accessTables = (stats: DashboardStats): ReportTable[] => {
         bucket.id,
         bucket.count,
       ]),
+      compactCharts([
+        bucketChart('Bank Accounts', benefData(stats, 'BENEFICIARY_COUNTBYBANK')),
+      ])
     ),
   ];
 };
@@ -266,7 +383,7 @@ const communicationTables = (
     ],
   ];
 
-  const stakeholderMetrics: ReportCell[][] = [
+  const stakeholderMetrics: Array<[string, string | number]> = [
     [
       'Total Communication Sent',
       num(triggerData(stats, `STAKEHOLDERS_${suffix}`)?.sessionCount),
@@ -280,7 +397,7 @@ const communicationTables = (
     ['Delivery Failures', num(comms.stakeholder?.VOICE?.FAIL)],
   ];
 
-  const beneficiaryMetrics: ReportCell[][] = [
+  const beneficiaryMetrics: Array<[string, string | number]> = [
     [
       'Total Communication Sent',
       num(triggerData(stats, `BENEFICIARY_${suffix}`)?.sessionCount),
@@ -298,7 +415,24 @@ const communicationTables = (
     ['Unique AVC Recipients', 'N/A'],
   ];
 
+  // Metrics the table renders as N/A have no length to draw, so they are
+  // dropped from the chart rather than shown as a misleading zero bar.
+  const audienceChart = (
+    title: string,
+    metrics: Array<[string, string | number]>
+  ): ReportChart => {
+    const numeric = metrics.filter(
+      ([, value]) => String(value).trim() !== '' && Number.isFinite(Number(value))
+    );
+    return valueChart(
+      title,
+      numeric.map(([metric]) => metric),
+      numeric.map(([, value]) => Number(value))
+    );
+  };
+
   return [
+    // Summary mirrors the tab's number cards, not a chart.
     ...makeTable('Summary', ['Metric', 'Value'], summary),
     ...makeTable(
       'Audience Metrics',
@@ -311,6 +445,10 @@ const communicationTables = (
           ([metric, value]): ReportCell[] => ['Beneficiaries', metric, value],
         ),
       ],
+      [
+        audienceChart('Stakeholders', stakeholderMetrics),
+        audienceChart('Beneficiaries', beneficiaryMetrics),
+      ]
     ),
   ];
 };
@@ -382,38 +520,104 @@ const activitiesOverviewTables = (stats: DashboardStats): ReportTable[] => {
     ['With Communication', withCommunication],
   ];
 
+  const phaseNames = [...phaseCounts.keys()].map(label);
+  const phaseCountsInOrder = [...phaseCounts.values()];
   const phaseRows: ReportCell[][] = [
-    ...[...phaseCounts.entries()].map(([name, counts]) =>
-      countRow(label(name), counts),
-    ),
+    ...phaseCountsInOrder.map((counts, index) => countRow(phaseNames[index], counts)),
     countRow('TOTAL', overallStatusCounts),
   ];
 
+  const sortedCategories = [...categoryCounts.entries()]
+    .map(([name, counts]) => ({
+      name,
+      counts,
+      total: Object.values(counts).reduce((sum, count) => sum + count, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
   const categoryRows: ReportCell[][] = [
-    ...[...categoryCounts.entries()]
-      .map(([name, counts]) => ({
-        name,
-        counts,
-        total: Object.values(counts).reduce((sum, count) => sum + count, 0),
-      }))
-      .sort((a, b) => b.total - a.total)
-      .map(({ name, counts }) => countRow(label(name), counts)),
+    ...sortedCategories.map(({ name, counts }) => countRow(label(name), counts)),
     countRow('TOTAL', overallStatusCounts),
   ];
+
+  // Charts mirror the tab: one status donut, then the per-phase and
+  // per-category ring grid, all counted from the same rows as the tables.
+  const segmentChart = (
+    title: string,
+    categories: string[],
+    counts: Array<Record<string, number>>
+  ): ReportChart => ({
+    kind: 'donutGrid',
+    title,
+    categories,
+    series: OVERVIEW_STATUS_COLUMNS.map(([status, heading]) => ({
+      name: heading,
+      values: counts.map((row) => num(row[status])),
+    })),
+  });
+
+  const statusChart: ReportChart = {
+    kind: 'donut',
+    title: 'Activity Status',
+    categories: statusHeaders,
+    series: [
+      {
+        name: 'Activities',
+        values: OVERVIEW_STATUS_COLUMNS.map(([status]) => statusCounts[status]),
+      },
+    ],
+  };
+  const phaseChart = segmentChart(
+    'Activity Status by Phase',
+    phaseNames,
+    phaseCountsInOrder
+  );
+  const categoryChart = segmentChart(
+    'Activity Status by Category',
+    sortedCategories.map((entry) => label(entry.name)),
+    sortedCategories.map((entry) => entry.counts)
+  );
 
   return [
-    ...makeTable('Summary', ['Metric', 'Value'], summary),
+    ...makeTable('Summary', ['Metric', 'Value'], summary, [statusChart]),
     ...makeTable(
       'Activity Status by Phase',
       ['Phase', ...statusHeaders, 'Total'],
       phaseRows,
+      [phaseChart],
     ),
     ...makeTable(
       'Activity Status by Category',
       ['Category', ...statusHeaders, 'Total'],
       categoryRows,
+      [categoryChart],
     ),
   ];
+};
+
+/**
+ * One chart for a Flood 2026 stat: a stat carrying `categories` + `series`
+ * (age by gender, yes/no per category) becomes a donut grid with one ring per
+ * category, everything else a single donut over its buckets. `kpi` stats are
+ * listed in FLOOD_CHARTLESS_STATS and stay card rows with no chart.
+ */
+const floodChart = (title: string, data: any): ReportChart | undefined => {
+  const series = list(data?.series);
+  const categories = list(data?.categories);
+  if (series.length && categories.length) {
+    return {
+      kind: 'donutGrid',
+      title,
+      categories: categories.map((value) => label(value)),
+      series: series.map((entry: any) => ({
+        name: label(entry?.name),
+        values: list(entry?.data).map(num),
+      })),
+    };
+  }
+
+  return bucketChart(title, data, {
+    hiddenIds: ['GENDER_AND_SEXUAL_MINORITY'],
+  });
 };
 
 const flood26Tables = (
@@ -421,6 +625,7 @@ const flood26Tables = (
   stats: DashboardStats,
 ): ReportTable[] => {
   const rows: ReportCell[][] = [];
+  const charts: ReportChart[] = [];
 
   definition.selections.forEach((selection) => {
     (selection.names ?? []).forEach((name) => {
@@ -429,6 +634,10 @@ const flood26Tables = (
 
       const chart =
         FLOOD_CHART_LABELS[name] ?? STAT_LABELS[name] ?? humanize(name);
+      if (!FLOOD_CHARTLESS_STATS.has(name)) {
+        const built = floodChart(chart, data);
+        if (built) charts.push(built);
+      }
       const total = num(data.total);
       const answered = num(data.answered);
       const multi = data.multi === true ? 'Yes' : 'No';
@@ -466,6 +675,7 @@ const flood26Tables = (
       'Multi',
     ],
     rows,
+    charts,
   );
 };
 
@@ -475,10 +685,35 @@ const genericTables = (
   options: BuildReportTablesOptions,
 ): ReportTable[] => {
   const rows = buildReportRows(definition, stats, options);
+
+  // One chart per section (stat), the same card-per-stat layout the tab uses:
+  // each section becomes its own donut, whatever its slice count.
+  const sections = new Map<string, ReportRow[]>();
+  rows.forEach((row) => {
+    const group = sections.get(row.section) ?? [];
+    group.push(row);
+    sections.set(row.section, group);
+  });
+  const charts = compactCharts(
+    [...sections.entries()].map(([section, items]) => {
+      const numeric = items.filter(
+        (item) =>
+          String(item.value).trim() !== '' && Number.isFinite(Number(item.value))
+      );
+      if (!numeric.length) return undefined;
+      return valueChart(
+        section,
+        numeric.map((item) => item.category),
+        numeric.map((item) => Number(item.value))
+      );
+    })
+  );
+
   return makeTable(
     undefined,
     ['Section', 'Category', 'Value'],
     rows.map((row) => [row.section, row.category, row.value]),
+    charts
   );
 };
 

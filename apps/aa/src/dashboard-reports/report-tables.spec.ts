@@ -4,6 +4,7 @@ import {
   buildPdf,
   DashboardStats,
   formatGeneratedAt,
+  ReportChart,
   reportHasData,
 } from './report-file.builder';
 import { buildReportTables } from './report-tables';
@@ -121,6 +122,28 @@ describe('buildReportTables', () => {
     expect(tables[2].rows[0]).toEqual(['Awareness', 1, 0, 1, 0, 2]);
     expect(tables[2].rows.at(-1)).toEqual(['TOTAL', 1, 0, 1, 1, 3]);
 
+    // PDF charts mirror the tab: a status donut, then a ring per phase/category.
+    expect(tables.map((table) => table.charts?.[0]?.kind)).toEqual([
+      'donut',
+      'donutGrid',
+      'donutGrid',
+    ]);
+    expect(tables[0].charts?.[0]).toMatchObject({
+      title: 'Activity Status',
+      categories: ['Completed', 'In Progress', 'Not Started', 'Delayed'],
+      series: [{ name: 'Activities', values: [1, 0, 1, 1] }],
+    });
+    expect(tables[1].charts?.[0]).toMatchObject({
+      categories: ['Preparedness', 'Response'],
+      series: [
+        { name: 'Completed', values: [1, 0] },
+        { name: 'In Progress', values: [0, 0] },
+        { name: 'Not Started', values: [1, 0] },
+        { name: 'Delayed', values: [0, 1] },
+      ],
+    });
+    expect(tables[2].charts?.[0].categories).toEqual(['Awareness', 'Relief']);
+
     const workbook = XLSX.read(buildExcel('Activity Overview', 'Flood 2026', tables), {
       type: 'buffer',
     });
@@ -132,6 +155,17 @@ describe('buildReportTables', () => {
     expect(rows.some((row) => row[0] === 'Activity Status by Category')).toBe(
       true,
     );
+
+    // Charts are PDF-only: the workbook must be byte-identical without them.
+    const withoutCharts = buildExcel(
+      'Activity Overview',
+      'Flood 2026',
+      tables.map(({ charts, ...table }) => table),
+    );
+    expect(buildExcel('Activity Overview', 'Flood 2026', tables).equals(withoutCharts)).toBe(
+      true,
+    );
+
     expect(
       Buffer.isBuffer(await buildPdf('Activity Overview', 'Flood 2026', tables)),
     ).toBe(true);
@@ -186,6 +220,88 @@ describe('buildReportTables', () => {
       ['Population by age and gender', '0–2 yrs', 'Female', 3, 100, 90, 'No'],
       ['Population by age and gender', '2–5 yrs', 'Female', 6, 100, 90, 'No'],
     ]);
+  });
+
+  it('renders flood 2026 series as donut grids and buckets as donuts', () => {
+    const stats: DashboardStats = {
+      ...emptyStats(),
+      benefStats: [
+        {
+          name: 'FLOOD26_HOUSEHOLD_KPIS',
+          data: {
+            buckets: [{ id: 'HOUSEHOLDS', count: 10 }],
+            total: 10,
+            answered: 10,
+          },
+        },
+        {
+          name: 'FLOOD26_HOUSEHOLD_LEADERSHIP',
+          data: {
+            buckets: [
+              { id: 'MALE', count: 6 },
+              { id: 'FEMALE', count: 4 },
+            ],
+            total: 10,
+            answered: 10,
+          },
+        },
+        {
+          name: 'FLOOD26_POPULATION_BY_AGE_GENDER',
+          data: {
+            categories: ['0-2', '2-5'],
+            series: [
+              { name: 'MALE', data: [1, 2] },
+              { name: 'FEMALE', data: [3, 4] },
+            ],
+            total: 10,
+            answered: 10,
+          },
+        },
+      ],
+    };
+
+    const tables = buildReportTables(definition('flood26Demographics'), stats);
+
+    // The KPI stat is a card row in the UI, so it stays chart-less.
+    expect(tables[0].charts?.map((chart) => `${chart.title} (${chart.kind})`)).toEqual(
+      [
+        'Population by age and gender (donutGrid)',
+        'Household leadership (donut)',
+      ],
+    );
+    expect(tables[0].charts?.[1].series[0].values).toEqual([6, 4]);
+  });
+
+  it('charts every generic section as a donut, whatever its slice count', () => {
+    const stats: DashboardStats = {
+      ...emptyStats(),
+      benefStats: [
+        {
+          name: 'COOLING_APPLIANCES_AVAILABLE_AT_HOME',
+          data: [
+            { id: 'YES', count: 60 },
+            { id: 'NO', count: 40 },
+          ],
+        },
+        {
+          name: 'TYPE_OF_HOUSE',
+          data: [
+            { id: 'PACCA', count: 5 },
+            { id: 'KACCHA', count: 3 },
+            { id: 'TEMPORARY', count: 2 },
+          ],
+        },
+      ],
+    };
+
+    const tables = buildReportTables(definition('heatwave-survey-data'), stats);
+
+    expect(tables[0].charts?.map((chart) => chart.kind)).toEqual(['donut', 'donut']);
+    expect(tables[0].charts?.[0]).toMatchObject({
+      title: 'Cooling Appliances at Home',
+      categories: ['Yes', 'No'],
+      series: [{ name: 'Count', values: [60, 40] }],
+    });
   });
 
   it('renders unavailable communication metrics as N/A', () => {
@@ -248,5 +364,49 @@ describe('report file builders', () => {
     const buffer = await buildPdf('Project Overview', 'Flood 2026', tables);
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
+  });
+
+  it('draws every chart kind in the PDF', async () => {
+    const charts: ReportChart[] = [
+      {
+        kind: 'donut',
+        title: 'Status',
+        categories: ['Yes', 'No'],
+        series: [{ name: 'Count', values: [6, 4] }],
+      },
+      {
+        kind: 'donut',
+        title: 'Banks',
+        categories: ['A', 'B', 'C'],
+        series: [{ name: 'Count', values: [1, 2, 3] }],
+      },
+      {
+        kind: 'donutGrid',
+        title: 'Phase',
+        categories: ['Preparedness', 'Response'],
+        series: [
+          { name: 'Completed', values: [1, 2] },
+          { name: 'Delayed', values: [1, 0] },
+        ],
+      },
+      {
+        kind: 'donutGrid',
+        title: 'Impact',
+        categories: ['Flood', 'Fire'],
+        series: [
+          { name: 'Yes', values: [3, 1] },
+          { name: 'No', values: [2, 4] },
+        ],
+      },
+    ];
+
+    const plain = await buildPdf('Project Overview', 'Flood 2026', tables);
+    const drawn = await buildPdf('Project Overview', 'Flood 2026', [
+      { ...tables[0], charts },
+    ]);
+
+    expect(Buffer.isBuffer(drawn)).toBe(true);
+    // Every chart adds ink; a broken renderer would draw nothing at all.
+    expect(drawn.length).toBeGreaterThan(plain.length);
   });
 });

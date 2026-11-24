@@ -21,6 +21,14 @@ export type ReportLayout =
   | 'activitiesOverview'
   | 'flood26';
 
+/**
+ * Chart shapes the PDF can draw (Excel never renders charts).
+ * - `donut`     parts of one whole — every single-list split, whatever the slice count
+ * - `donutGrid` one small donut per row, for tables that carry two dimensions
+ *               (status by phase, age by gender): a single pie cannot show them
+ */
+export type ReportChartKind = 'donut' | 'donutGrid';
+
 export type ReportDefinition = {
   id: string;
   /** Matching DASHBOARD_TAB_CONFIG value; '' means always available. */
@@ -248,6 +256,14 @@ export const FLOOD_CHART_LABELS: Record<string, string> = {
   FLOOD26_EVACUATION_THRESHOLD: 'When the family evacuates',
   FLOOD26_RESPONSE_SKILLS: 'Swimming and response training',
 };
+
+/**
+ * Flood 2026 stats with no chart: `FLOOD26_HOUSEHOLD_KPIS` is the lone `kpi`
+ * entry in the UI's `FLOOD_REPORT_TABS` — it renders as number cards there and
+ * is a table here. Every other stat charts itself: buckets become one donut,
+ * series (age × gender, yes/no per category) become a donut grid.
+ */
+export const FLOOD_CHARTLESS_STATS = new Set<string>(['FLOOD26_HOUSEHOLD_KPIS']);
 
 /** Labels for bucket/series ids, mirroring the dashboard translations. */
 export const VALUE_LABELS: Record<string, string> = {

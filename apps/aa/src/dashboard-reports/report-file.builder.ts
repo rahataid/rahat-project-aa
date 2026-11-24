@@ -2,7 +2,11 @@
 // No NestJS or database dependencies here so the output logic stays testable.
 
 import * as XLSX from 'xlsx-js-style';
-import { ReportDefinition, STAT_LABELS } from './report.config';
+import {
+  ReportChartKind,
+  ReportDefinition,
+  STAT_LABELS,
+} from './report.config';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PDFDocument = require('pdfkit') as typeof import('pdfkit');
@@ -15,11 +19,29 @@ export type ReportRow = {
 
 export type ReportCell = string | number;
 
+export type ReportChartSeries = {
+  name: string;
+  values: number[];
+};
+
+/**
+ * A chart drawn above its table in the PDF only — `buildExcel` ignores it, so
+ * the spreadsheet keeps exactly the rows and headers it has today. Everything
+ * is drawn as donuts: `donut` for one list of slices, `donutGrid` for one ring
+ * per row when a table carries two dimensions.
+ */
+export type ReportChart = {
+  kind: ReportChartKind;
+  title?: string;
+  categories: string[];
+  series: ReportChartSeries[];
+};
+
 export type ReportTable = {
-  /** Optional block heading, used as the Excel sheet name and PDF subheading. */
   title?: string;
   columns: string[];
   rows: ReportCell[][];
+  charts?: ReportChart[];
 };
 
 export type BucketOptions = {
@@ -43,6 +65,56 @@ export type DashboardStats = {
   triggeersStats: any[];
   tokenStats: Record<string, any>;
   activities?: any[];
+};
+
+/** Chart colours shared with the dashboard so the PDF reads like the UI. */
+const CHART_PALETTE = [
+  '#4A90E2',
+  '#00796B',
+  '#F5A623',
+  '#9B59B6',
+  '#F06292',
+  '#26A69A',
+  '#8D6E63',
+  '#5C6BC0',
+  '#FFB300',
+  '#EF5350',
+  '#7CB342',
+  '#AB47BC',
+];
+
+/** Fixed colours for ids the dashboard always renders the same way. */
+const CHART_COLORS_BY_LABEL: Record<string, string> = {
+  yes: '#00796B',
+  no: '#F5A623',
+  male: '#4A90E2',
+  female: '#F06292',
+  completed: '#16A34A',
+  'in progress': '#F59E0B',
+  'not started': '#9CA3AF',
+  delayed: '#DC2626',
+  unknown: '#CFD8DC',
+  others: '#90A4AE',
+};
+
+/**
+ * `@types/pdfkit@0.17` predates `PDFDocument.arc`, which the runtime has had
+ * since pdfkit 0.9, so the wedge is drawn through a loosely typed helper.
+ * `arc` opens its own subpath, hence closing it back to the centre: that is
+ * what turns a floating arc into a pie slice.
+ */
+const drawWedge = (
+  doc: any,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  start: number,
+  end: number
+): void => {
+  doc
+    .arc(centerX, centerY, radius, start, end)
+    .lineTo(centerX, centerY)
+    .closePath();
 };
 
 const UUID_RE =
@@ -602,6 +674,256 @@ export const buildPdf = (
       return y + headerHeight;
     };
 
+    const chartGap = 20;
+
+    const chartColor = (label: string, index: number): string =>
+      CHART_COLORS_BY_LABEL[
+        String(label ?? '')
+          .trim()
+          .toLowerCase()
+      ] ?? CHART_PALETTE[index % CHART_PALETTE.length];
+
+    type DonutSlice = { label: string; value: number; color: string };
+
+    /**
+     * Slices for a single-list donut. A list of seven or more collapses any
+     * slice worth less than 2% of the total into one "Other" slice, so long
+     * lists (bank accounts, information channels) stay readable as a pie.
+     */
+    const donutSlices = (chart: ReportChart): DonutSlice[] => {
+      const slices: DonutSlice[] = chart.categories.map((category, index) => ({
+        label: String(category ?? ''),
+        value: Math.max(Number(chart.series[0].values[index]) || 0, 0),
+        color: chartColor(String(category ?? ''), index),
+      }));
+      const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+      if (slices.length <= 6 || total <= 0) return slices;
+
+      const tiny = slices.filter(
+        (slice) => slice.value > 0 && slice.value / total < 0.02
+      );
+      if (!tiny.length) return slices;
+
+      return [
+        ...slices.filter((slice) => !tiny.includes(slice)),
+        {
+          label: 'Other',
+          value: tiny.reduce((sum, slice) => sum + slice.value, 0),
+          color: '#9CA3AF',
+        },
+      ];
+    };
+
+    const drawSlices = (
+      centerX: number,
+      centerY: number,
+      radius: number,
+      total: number,
+      slices: DonutSlice[]
+    ): void => {
+      if (total <= 0) {
+        doc.circle(centerX, centerY, radius).fill('#E5E7EB');
+        return;
+      }
+
+      let start = -Math.PI / 2;
+      slices.forEach((slice) => {
+        if (slice.value <= 0) return;
+        const end = start + (slice.value / total) * Math.PI * 2;
+        drawWedge(doc, centerX, centerY, radius, start, end);
+        doc.fill(slice.color);
+        start = end;
+      });
+      // White core turns the pie into the donut the dashboard shows.
+      doc.circle(centerX, centerY, radius * 0.58).fill('#FFFFFF');
+    };
+
+    /** Row height in a donut grid: label, ring, and its own legend column. */
+    const gridCellHeight = (seriesCount: number): number =>
+      16 + Math.max(72, seriesCount * 13) + 8;
+
+    /** Single-donut height (title excluded) — mirrors `drawDonut`'s return. */
+    const measureDonut = (chart: ReportChart): number =>
+      Math.max(112, donutSlices(chart).length * 14 + 8);
+
+    const drawDonut = (y: number, chart: ReportChart): number => {
+      const slices = donutSlices(chart);
+      const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+      const radius = 50;
+      const centerX = margin + radius + 6;
+      const centerY = y + radius + 6;
+
+      drawSlices(centerX, centerY, radius, total, slices);
+
+      let legendY = y + 4;
+      const legendX = margin + radius * 2 + 22;
+      const legendWidth = pageWidth - (legendX - margin) - 14;
+      doc.font('Helvetica').fontSize(8);
+      slices.forEach((slice) => {
+        const share = total > 0 ? Math.round((slice.value / total) * 100) : 0;
+        doc.rect(legendX, legendY + 2, 8, 8).fill(slice.color);
+        doc
+          .fillColor('#374151')
+          .text(
+            `${slice.label}  ${slice.value} (${share}%)`,
+            legendX + 12,
+            legendY,
+            { width: legendWidth, height: 11, ellipsis: true }
+          );
+        legendY += 14;
+      });
+
+      return y + Math.max(radius * 2 + 12, legendY - y + 4);
+    };
+
+    /**
+     * One small donut per row — two dimensions a single pie cannot show. A
+     * category table can hold dozens of rows, so rings are drawn in chunks
+     * that fit the remaining page and continued on fresh pages.
+     */
+    const drawDonutGrid = (
+      y: number,
+      chart: ReportChart,
+      heading: string
+    ): number => {
+      const columns = 2;
+      const gap = 14;
+      const cellWidth = (pageWidth - gap * (columns - 1)) / columns;
+      const cellHeight = gridCellHeight(chart.series.length);
+      const radius = 36;
+      const bottom = doc.page.height - margin - 24;
+      let continued = false;
+
+      const writeHeading = (): void => {
+        if (!heading) return;
+        doc
+          .fillColor('#111827')
+          .font('Helvetica-Bold')
+          .fontSize(10)
+          .text(continued ? `${heading} (continued)` : heading, margin, y, {
+            width: pageWidth,
+          });
+        y += 16;
+      };
+
+      if (y + (heading ? 16 : 0) + cellHeight + 8 > bottom) {
+        doc.addPage();
+        y = margin;
+      }
+      writeHeading();
+
+      let index = 0;
+      while (index < chart.categories.length) {
+        const rows = Math.max(1, Math.floor((bottom - y - 8) / cellHeight));
+        const take = Math.min(chart.categories.length - index, rows * columns);
+        const cursorEnd = y;
+
+        for (let offset = 0; offset < take; offset += 1) {
+          const position = index + offset;
+          const cellX = margin + (offset % columns) * (cellWidth + gap);
+          const cursor = cursorEnd + Math.floor(offset / columns) * cellHeight;
+          const category = chart.categories[position];
+
+          doc
+            .fillColor('#1F2937')
+            .font('Helvetica-Bold')
+            .fontSize(8.5)
+            .text(String(category), cellX, cursor, {
+              width: cellWidth,
+              height: 12,
+              ellipsis: true,
+            });
+
+          const slices: DonutSlice[] = chart.series.map(
+            (series, seriesIndex) => ({
+              label: series.name,
+              value: Math.max(Number(series.values[position]) || 0, 0),
+              color: chartColor(series.name, seriesIndex),
+            })
+          );
+          const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+          const centerX = cellX + 8 + radius;
+          const centerY = cursor + 16 + radius;
+          drawSlices(centerX, centerY, radius, total, slices);
+
+          const legendX = centerX + radius + 12;
+          const legendWidth = cellWidth - (legendX - cellX) - 4;
+          let legendY = cursor + 16;
+          doc.font('Helvetica').fontSize(7.5);
+          slices.forEach((slice) => {
+            const share =
+              total > 0 ? Math.round((slice.value / total) * 100) : 0;
+            doc.rect(legendX, legendY + 2, 7, 7).fill(slice.color);
+            doc
+              .fillColor('#374151')
+              .text(
+                `${slice.label}  ${slice.value} (${share}%)`,
+                legendX + 11,
+                legendY,
+                { width: legendWidth - 11, height: 10, ellipsis: true }
+              );
+            legendY += 13;
+          });
+        }
+
+        y = cursorEnd + Math.ceil(take / columns) * cellHeight + 8;
+        index += take;
+        if (index < chart.categories.length) {
+          doc.addPage();
+          y = margin;
+          continued = true;
+          writeHeading();
+        }
+      }
+
+      return y;
+    };
+
+    const drawChart = (
+      y: number,
+      chart: ReportChart,
+      /** Table title; identical chart titles would only repeat it. */
+      tableTitle?: string
+    ): number => {
+      const hasValue = chart.series.some((series) =>
+        series.values.some((value) => Number(value) > 0)
+      );
+      if (!chart.categories.length || !chart.series.length || !hasValue) {
+        return y;
+      }
+
+      const heading =
+        chart.title && chart.title !== tableTitle ? chart.title : '';
+
+      if (chart.kind === 'donut') {
+        const needed = (heading ? 16 : 0) + measureDonut(chart);
+        if (y + needed > doc.page.height - margin - 24) {
+          doc.addPage();
+          y = margin;
+        }
+        if (heading) {
+          doc
+            .fillColor('#111827')
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .text(heading, margin, y, { width: pageWidth });
+          y += 16;
+        }
+        return drawDonut(y, chart) + chartGap;
+      }
+
+      // A donut grid paginates its own rows (a category breakdown can be long).
+      return drawDonutGrid(y, chart, heading) + chartGap;
+    };
+
+    const drawCharts = (y: number, table: ReportTable): number => {
+      let cursor = y;
+      (table.charts ?? []).forEach((chart) => {
+        cursor = drawChart(cursor, chart, table.title);
+      });
+      return cursor;
+    };
+
     const drawTitle = () => {
       doc
         .fillColor('#111827')
@@ -618,7 +940,19 @@ export const buildPdf = (
 
     const drawTable = (startY: number, table: ReportTable): number => {
       const widths = widthsFor(table);
+      const bottom = doc.page.height - margin - 20;
+      // A chart can consume the rest of a page; never strand its table header
+      // there with no rows underneath it.
+      if (startY + 16 > bottom) {
+        doc.addPage();
+        startY = margin;
+      }
       let y = drawTableTitle(startY, table);
+      y = drawCharts(y, table);
+      if (y + headerHeight + 20 > bottom) {
+        doc.addPage();
+        y = drawTableTitle(margin, table);
+      }
       y = drawHeader(y, table, widths);
 
       if (!table.rows.length) {
