@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { Allow, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { GrievanceStatus } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -15,4 +15,12 @@ export class UpdateGrievanceStatusDto {
   @IsOptional()
   user?: any;
 
+  @ApiProperty({
+    description: 'Project id used for the project-scoped ability check',
+    required: false,
+  })
+  @Allow()
+  @IsOptional()
+  @IsString()
+  appId?: string;
 }

@@ -1,4 +1,5 @@
 import {
+  Allow,
   IsEnum,
   IsIn,
   IsInt,
@@ -14,6 +15,11 @@ import {
 } from '@prisma/client';
 
 export class ListGrievanceDto {
+  @Allow()
+  @IsOptional()
+  @IsString()
+  appId?: string;
+
   @IsOptional()
   @IsIn(['asc', 'desc'])
   order: 'desc' | 'asc' = 'desc';

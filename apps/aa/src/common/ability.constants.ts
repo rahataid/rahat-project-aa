@@ -14,4 +14,5 @@ export const SUBJECTS = {
   PAYOUT: 'Payout',
   INKIND: 'Inkind',
   STAKEHOLDER: 'Stakeholder',
+  GRIEVANCE: 'Grievance',
 };

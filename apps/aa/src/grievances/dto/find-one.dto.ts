@@ -1,5 +1,5 @@
 // create-grievance-params.dto.ts
-import { IsOptional, IsUUID } from 'class-validator';
+import { Allow, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class FindGrievanceParamsDto {
   @IsUUID()
@@ -8,4 +8,9 @@ export class FindGrievanceParamsDto {
   // TODO: QUICK FIX: REMOVE LATER
   @IsOptional()
   user?: any;
+
+  @Allow()
+  @IsOptional()
+  @IsString()
+  appId?: string;
 }
