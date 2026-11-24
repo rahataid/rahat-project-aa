@@ -219,6 +219,7 @@ export const JOBS = {
     EXPORT_GROUP: 'aa.jobs.stakeholders.exportGroup',
   },
   ACTIVITIES: {
+    GET_ALL: 'ms.jobs.activities.getAll',
     GET_BY_STAKEHOLDER_UUID: 'ms.jobs.activities.getByStakeholderUuid',
   },
   SETTINGS: {
@@ -271,6 +272,10 @@ export const JOBS = {
     GET_MAP_LOCATION: 'aa.jobs.stats.getMapLocation',
     GET_ONE: 'aa.jobs.stats.getOne',
     MS_TRIGGERS_STATS: 'rahat.jobs.ms.trigggers.stats',
+  },
+  DASHBOARD_REPORTS: {
+    LIST_REPORTS: 'aa.jobs.dashboard.listReports',
+    EXPORT_FILE: 'aa.jobs.dashboard.exportReport',
   },
   VENDOR: {
     REIMBURSE: {

@@ -34,6 +34,7 @@ import { HealthModule } from '../health/health.module';
 import { CronModule } from '../cron/cron.module';
 import { SseModule } from '../sse/sse.module';
 import { RedisModule } from '../redis/redis.module';
+import { DashboardReportsModule } from '../dashboard-reports';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { RedisModule } from '../redis/redis.module';
     SettingsModule,
     ScheduleModule.forRoot(),
     StatsModule,
+    DashboardReportsModule,
     ListenersModule,
     CommsModule.forRoot(),
     VendorsModule,
