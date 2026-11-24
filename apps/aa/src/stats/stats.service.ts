@@ -45,17 +45,18 @@ export class StatsService {
       name: stat.name.toUpperCase(),
     }));
 
-    const group = formattedStats[0]?.group;
-    if (group) {
-      await this.prismaService.stats.deleteMany({
-        where: { group },
-      });
-    }
-
-    return this.prismaService.stats.createMany({
-      data: formattedStats,
-      skipDuplicates: true,
-    });
+    return this.prismaService.$transaction(
+      formattedStats.map((stat) =>
+        this.prismaService.stats.upsert({
+          where: { name: stat.name },
+          create: stat,
+          update: {
+            data: stat.data,
+            group: stat.group,
+          },
+        })
+      )
+    );
   }
 
   getByGroup(
