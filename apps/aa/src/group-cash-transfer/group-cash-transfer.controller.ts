@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { GroupCashTransferService } from './group-cash-transfer.service';
 import { JOBS } from '../constants';
@@ -10,8 +10,11 @@ import {
   UpdateGroupCashTransferDto,
   UpdateGroupCashTransferRecordDto,
 } from './dto/group-cash-transfer.dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class GroupCashTransferController {
   constructor(
     private readonly groupCashTransferService: GroupCashTransferService
@@ -21,6 +24,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.CREATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.GROUP_CASH_TRANSFER)
   create(@Payload() payload: CreateGroupCashTransferDto) {
     return this.groupCashTransferService.create(payload);
   }
@@ -29,6 +33,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.UPDATE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   update(@Payload() payload: UpdateGroupCashTransferDto) {
     return this.groupCashTransferService.update(payload);
   }
@@ -37,6 +42,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.DELETE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.DELETE, SUBJECTS.GROUP_CASH_TRANSFER)
   delete(@Payload() payload: { uuid: string }) {
     return this.groupCashTransferService.delete(payload.uuid);
   }
@@ -45,6 +51,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   get(@Payload() payload: ListGroupCashTransferDto) {
     return this.groupCashTransferService.get(payload);
   }
@@ -53,6 +60,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_ONE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getOne(@Payload() payload: { uuid: string }) {
     return this.groupCashTransferService.getOne(payload.uuid);
   }
@@ -61,6 +69,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.ASSIGN_FUND,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.CREATE, SUBJECTS.GROUP_CASH_TRANSFER)
   assignFund(@Payload() payload: AssignFundDto) {
     return this.groupCashTransferService.assignFund(payload);
   }
@@ -69,6 +78,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   disburse(@Payload() payload: { uuid: string; user: any; otp: string }) {
     return this.groupCashTransferService.disburse(
       payload.uuid,
@@ -81,6 +91,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.SEND_OTP,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   sendOtp(@Payload() payload: { email: string }) {
     return this.groupCashTransferService.sendOtp(payload.email);
   }
@@ -89,6 +100,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.CONFIRM_DISBURSE,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   confirmDisburse(
     @Payload() payload: { uuid: string; paymentProviderId: string }
   ) {
@@ -102,6 +114,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_TREASURY_INFO,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getTreasuryInfo() {
     return this.groupCashTransferService.getTreasuryInfo();
   }
@@ -110,6 +123,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_RECORDS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getRecords(@Payload() payload: ListGroupCashTransferRecordDto) {
     return this.groupCashTransferService.getRecords(payload);
   }
@@ -118,6 +132,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_ONE_RECORD,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getOneRecord(@Payload() payload: { uuid: string }) {
     return this.groupCashTransferService.getOneRecord(payload.uuid);
   }
@@ -126,6 +141,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.VALIDATE_BANK_ACCOUNT,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   validateBankAccount(
     @Payload()
     payload: {
@@ -143,6 +159,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_ALL_VALID,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getAllValidGroupTransfers() {
     return this.groupCashTransferService.getAllValidGroupTransfers();
   }
@@ -151,6 +168,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.UPDATE_RECORD,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.GROUP_CASH_TRANSFER)
   updateRecord(@Payload() payload: UpdateGroupCashTransferRecordDto) {
     return this.groupCashTransferService.updateRecord(payload);
   }
@@ -159,6 +177,7 @@ export class GroupCashTransferController {
     cmd: JOBS.GROUP_CASH_TRANSFER.GET_GCT_DATA,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.GROUP_CASH_TRANSFER)
   getGCTData(@Payload() payload: { startDate: Date; endDate: Date }) {
     return this.groupCashTransferService.getGCTData(payload);
   }
