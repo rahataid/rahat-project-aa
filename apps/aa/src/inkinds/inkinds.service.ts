@@ -661,7 +661,10 @@ export class InkindsService {
     });
 
     if (!group) {
-      throw new RpcException({ message: `Group not found.`, code: 'GROUP_NOT_FOUND' });
+      throw new RpcException({
+        message: `Group not found.`,
+        code: 'GROUP_NOT_FOUND',
+      });
     }
 
     const numberOfGroupBeneficiaries = group.beneficiaries.length;
@@ -680,7 +683,10 @@ export class InkindsService {
       throw new RpcException({
         message: `Not enough stock available. Requested: ${totalNeedInkindQuantity}, Available: ${availableStock}`,
         code: 'INSUFFICIENT_INKIND_STOCK',
-        params: { requested: totalNeedInkindQuantity, available: availableStock },
+        params: {
+          requested: totalNeedInkindQuantity,
+          available: availableStock,
+        },
       });
     }
     try {
@@ -1022,10 +1028,10 @@ export class InkindsService {
 
     if (!vendor) {
       throw new RpcException({
-          message: `Vendor with UUID ${vendorId} not found`,
-          code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
-          params: { uuid: vendorId },
-        });
+        message: `Vendor with UUID ${vendorId} not found`,
+        code: 'VENDOR_TOKEN_REDEMPTION_VENDOR_NOT_FOUND',
+        params: { uuid: vendorId },
+      });
     }
 
     const where: Prisma.BeneficiaryInkindRedemptionWhereInput = {
@@ -1569,7 +1575,10 @@ export class InkindsService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  private async validateVendorAndPayoutPhase(user: UserObject, skipVendorAndPhaseValidation?: boolean) {
+  private async validateVendorAndPayoutPhase(
+    user: UserObject,
+    skipVendorAndPhaseValidation?: boolean
+  ) {
     const vendor = await this.prisma.vendor.findFirst({
       where: {
         uuid: user?.uuid,
@@ -1658,9 +1667,11 @@ export class InkindsService {
     this.logger.log(`otp exemption reasons comes as: `, options);
     try {
       let vendor;
-  
+
       if (options?.skipVendorAndPhaseValidation) {
-        vendor = options.vendor ?? (await this.validateVendorAndPayoutPhase(user, true));
+        vendor =
+          options.vendor ??
+          (await this.validateVendorAndPayoutPhase(user, true));
       } else {
         vendor = await this.validateVendorAndPayoutPhase(user);
       }
@@ -1691,9 +1702,9 @@ export class InkindsService {
 
       if (!beneficiary) {
         throw new RpcException({
-        message: 'Beneficiary not found',
-        code: 'BENEFICIARY_NOT_FOUND',
-      });
+          message: 'Beneficiary not found',
+          code: 'BENEFICIARY_NOT_FOUND',
+        });
       }
 
       // ===== STEP 2: Categorize inkinds by type =====
@@ -1807,7 +1818,7 @@ export class InkindsService {
         );
         this.chainService.redeemInkind({
           beneficiaryAddress: walletAddress,
-          vendorAddress: user.wallet,
+          vendorAddress: vendor.walletAddress,
           inkindId: batchedInkinds,
           amount: totalAmount,
         });
@@ -1911,9 +1922,9 @@ export class InkindsService {
 
       if (!beneficiary) {
         throw new RpcException({
-        message: 'Beneficiary not found',
-        code: 'BENEFICIARY_NOT_FOUND',
-      });
+          message: 'Beneficiary not found',
+          code: 'BENEFICIARY_NOT_FOUND',
+        });
       }
 
       const [groupInkinds, redemptions, walkInInkinds] = await Promise.all([
@@ -2273,7 +2284,10 @@ export class InkindsService {
 
     try {
       // guard: vendor must be registered and payout phase must be open
-      const vendor = await this.validateVendorAndPayoutPhase(user, skipVendorAndPhaseValidation);
+      const vendor = await this.validateVendorAndPayoutPhase(
+        user,
+        skipVendorAndPhaseValidation
+      );
 
       // split payloads into fixed-size chunks
       const batches: BeneficiaryInkindRedeemDto[][] = [];
@@ -2661,7 +2675,11 @@ export class InkindsService {
         }
       );
 
-      return await this.beneficiaryBulkInkindRedeem(bulkPayloads, user, skipVendorAndPhaseValidation);
+      return await this.beneficiaryBulkInkindRedeem(
+        bulkPayloads,
+        user,
+        skipVendorAndPhaseValidation
+      );
     } catch (error: any) {
       this.logger.error(
         `Failed to redeem offline inkinds for vendor: ${error.message}`,
@@ -3406,7 +3424,8 @@ export class InkindsService {
 
         if (!res) {
           throw new RpcException({
-            message: 'Failed to create group and assign beneficiary for walk-in redemption',
+            message:
+              'Failed to create group and assign beneficiary for walk-in redemption',
             code: 'FAILED_TO_CREATE_WALK_IN_GROUP',
           });
         }
