@@ -466,9 +466,34 @@ export class VendorsService {
         );
       }
 
-      // Group redeems by beneficiary wallet address; already desc by createdAt
+      const isOfflineRedeem = (redeem: (typeof beneficiaryRedeems)[number]) => {
+        const info = redeem.info;
+        return (
+          info &&
+          typeof info === 'object' &&
+          !Array.isArray(info) &&
+          'mode' in info &&
+          (info as any).mode === 'OFFLINE'
+        );
+      };
+
+      // Filter redeems by mode before grouping so a ben with both modes
+      // only surfaces redeems matching the requested payout mode
+      const modeFilteredRedeems = beneficiaryRedeems.filter((r) =>
+        payload.payoutMode === 'ONLINE' ? !isOfflineRedeem(r) : isOfflineRedeem(r)
+      );
+
+      if (!modeFilteredRedeems.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      }
+
+      // Group by beneficiary wallet address; already desc by createdAt
       const redeemsByBen = new Map<string, typeof beneficiaryRedeems>();
-      for (const redeem of beneficiaryRedeems) {
+      for (const redeem of modeFilteredRedeems) {
         if (!redeem.Beneficiary) continue;
         const key = redeem.Beneficiary.walletAddress;
         if (!redeemsByBen.has(key)) redeemsByBen.set(key, []);
@@ -476,7 +501,7 @@ export class VendorsService {
       }
 
       // Pick latest redeem per beneficiary; attach older ones as redeemStatus
-      const groupedBeneficiaries = Array.from(redeemsByBen.values()).map(
+      const filteredBeneficiaries = Array.from(redeemsByBen.values()).map(
         (redeems) => {
           const [latest, ...older] = redeems; // already sorted desc
           return {
@@ -501,23 +526,6 @@ export class VendorsService {
           };
         }
       );
-
-      // Filter based on mode
-      const filteredBeneficiaries = groupedBeneficiaries.filter((ben) => {
-        const info = ben.info;
-        const hasOfflineMode =
-          info &&
-          typeof info === 'object' &&
-          !Array.isArray(info) &&
-          'mode' in info &&
-          info.mode === 'OFFLINE';
-
-        if (payload.payoutMode === 'ONLINE') {
-          return !hasOfflineMode;
-        } else {
-          return hasOfflineMode;
-        }
-      });
 
       // Get beneficiary UUIDs for enrichment (only filtered set)
       const beneficiaryUuids = filteredBeneficiaries.map((ben) => ben.uuid);
