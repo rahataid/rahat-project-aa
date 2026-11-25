@@ -55,7 +55,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     const chainType = (chainSettings?.value as Record<string, unknown>)?.type;
     if (typeof chainType !== 'string' || chainType.toLowerCase() !== 'evm') {
       this.logger.log(
-        `Chain type is "${chainType ?? 'unset'}", skipping EVM provider initialization`
+        `Chain type is "${
+          chainType ?? 'unset'
+        }", skipping EVM provider initialization`
       );
       return;
     }
@@ -65,14 +67,17 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
   private async recoverStuckDisbursements(): Promise<void> {
     try {
-      const stuckGroups = await this.prismaService.beneficiaryGroupTokens.findMany({
-        where: { status: 'STARTED', isDisbursed: false },
-        select: { uuid: true, groupId: true, info: true },
-      });
+      const stuckGroups =
+        await this.prismaService.beneficiaryGroupTokens.findMany({
+          where: { status: 'STARTED', isDisbursed: false },
+          select: { uuid: true, groupId: true, info: true },
+        });
 
       if (stuckGroups.length === 0) return;
 
-      this.logger.log(`Recovery: found ${stuckGroups.length} in-progress disbursement(s)`);
+      this.logger.log(
+        `Recovery: found ${stuckGroups.length} in-progress disbursement(s)`
+      );
 
       for (const group of stuckGroups) {
         const info = group.info as any;
@@ -83,14 +88,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
           if (batch.status === 'SUBMITTED' && batch.txHash) {
             // Tx was sent but status job may have been lost — re-queue receipt check
             this.logger.log(
-              `Recovery: re-queuing status check for group ${group.groupId} batch ${batch.batchIndex + 1}/${totalBatches} txHash ${batch.txHash}`
+              `Recovery: re-queuing status check for group ${
+                group.groupId
+              } batch ${batch.batchIndex + 1}/${totalBatches} txHash ${
+                batch.txHash
+              }`
             );
             await this.evmQueryQueue.add(
               {
                 type: JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE,
                 txHash: batch.txHash,
                 groupUuid: group.groupId,
-                beneficiaries: [],  // already stored in batch; logs use skipDuplicates
+                beneficiaries: [], // already stored in batch; logs use skipDuplicates
                 amounts: [],
                 batchNumber: batch.batchIndex + 1,
                 totalBatches,
@@ -103,16 +112,23 @@ export class EVMCentralizedProcessor implements OnModuleInit {
             );
           } else if (batch.status === 'PENDING' && !batch.txHash) {
             // Batch was initialized but never submitted — re-queue the assign job
-            const resolved = await this.getBeneficiaryTokenBalance(group.groupId);
+            const resolved = await this.getBeneficiaryTokenBalance(
+              group.groupId
+            );
             if (!resolved || resolved.length === 0) continue;
 
             const startIndex = batch.batchIndex * 30;
-            const batchBeneficiaries = resolved.slice(startIndex, Math.min(startIndex + 30, resolved.length));
+            const batchBeneficiaries = resolved.slice(
+              startIndex,
+              Math.min(startIndex + 30, resolved.length)
+            );
             if (batchBeneficiaries.length === 0) continue;
 
             const jobId = `${group.groupId}-batch-${batch.batchIndex}`;
             this.logger.log(
-              `Recovery: re-queuing assign job for group ${group.groupId} batch ${batch.batchIndex + 1}/${totalBatches}`
+              `Recovery: re-queuing assign job for group ${
+                group.groupId
+              } batch ${batch.batchIndex + 1}/${totalBatches}`
             );
             await this.evmTxQueue.add(
               {
@@ -120,12 +136,12 @@ export class EVMCentralizedProcessor implements OnModuleInit {
                 groupUuid: group.groupId,
                 batchIndex: batch.batchIndex,
                 totalBatches,
-                beneficiaries: batchBeneficiaries.map(b => b.walletAddress),
-                amounts: batchBeneficiaries.map(b => b.amount),
+                beneficiaries: batchBeneficiaries.map((b) => b.walletAddress),
+                amounts: batchBeneficiaries.map((b) => b.amount),
                 dName: info?.dName,
               },
               {
-                jobId,  // deterministic — Bull deduplicates if already queued
+                jobId, // deterministic — Bull deduplicates if already queued
                 attempts: 3,
                 delay: 5000,
                 removeOnComplete: true,
@@ -218,36 +234,59 @@ export class EVMCentralizedProcessor implements OnModuleInit {
    * needs a single transaction big enough to hit the block gas limit, and so one
    * bad batch can fail/retry independently without redoing the whole group.
    */
-  async handleAssignTokens(job: Job<{
-    groupUuid: string;
-    batchIndex: number;
-    totalBatches: number;
-    beneficiaries: string[];
-    amounts: string[];
-    dName?: string;
-  }>): Promise<any> {
-    const { groupUuid, batchIndex, totalBatches, beneficiaries, amounts, dName } = job.data;
+  async handleAssignTokens(
+    job: Job<{
+      groupUuid: string;
+      batchIndex: number;
+      totalBatches: number;
+      beneficiaries: string[];
+      amounts: string[];
+      dName?: string;
+    }>
+  ): Promise<any> {
+    const {
+      groupUuid,
+      batchIndex,
+      totalBatches,
+      beneficiaries,
+      amounts,
+      dName,
+    } = job.data;
 
     try {
       this.logger.log(
-        `Processing EVM assign tokens batch ${batchIndex + 1}/${totalBatches} for group ${groupUuid}`
+        `Processing EVM assign tokens batch ${
+          batchIndex + 1
+        }/${totalBatches} for group ${groupUuid}`
       );
 
       // Why: batchStatus lives on the group's info JSON, read once here and passed
       // as `preloaded` to every downstream call in this job (idempotency check below,
       // the SUBMITTED write after broadcast, and requeueNextBatch). Avoids each of
       // those doing its own DB round trip for the same row within a single job run.
-      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
-      const preloaded = group ? { uuid: group.uuid, info: group.info } : undefined;
+      const group =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
+      const preloaded = group
+        ? { uuid: group.uuid, info: group.info }
+        : undefined;
 
       // What: idempotency guard. Bull can redeliver a job (retry, redeploy, crash
       // recovery) — if this batch already has a txHash (SUBMITTED) or is already
       // on-chain confirmed, re-running the send below would double-disburse tokens
       // to the same beneficiaries. Bail out instead.
       const existingBatch = (group?.info as any)?.batchStatus?.[batchIndex];
-      if (existingBatch?.status === 'SUBMITTED' || existingBatch?.status === 'CONFIRMED') {
+      if (
+        existingBatch?.status === 'SUBMITTED' ||
+        existingBatch?.status === 'CONFIRMED'
+      ) {
         this.logger.log(
-          `Batch ${batchIndex + 1}/${totalBatches} for group ${groupUuid} already submitted — skipping resubmit (job attempt ${job.attemptsMade + 1})`
+          `Batch ${
+            batchIndex + 1
+          }/${totalBatches} for group ${groupUuid} already submitted — skipping resubmit (job attempt ${
+            job.attemptsMade + 1
+          })`
         );
         return;
       }
@@ -268,7 +307,13 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       if (!beneficiaries || beneficiaries.length === 0) {
         this.logger.warn(`Batch ${batchIndex} has no beneficiaries, skipping`);
         if (batchIndex < totalBatches - 1) {
-          await this.requeueNextBatch(groupUuid, batchIndex + 1, totalBatches, dName, preloaded);
+          await this.requeueNextBatch(
+            groupUuid,
+            batchIndex + 1,
+            totalBatches,
+            dName,
+            preloaded
+          );
         }
         return;
       }
@@ -291,7 +336,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       for (let i = 0; i < beneficiaries.length; i++) {
         const amount = amounts[i];
         if (amount) {
-          const formattedAmountBn = ethers.parseUnits(amount.toString(), decimal);
+          const formattedAmountBn = ethers.parseUnits(
+            amount.toString(),
+            decimal
+          );
           multicallTxnPayload.push([beneficiaries[i], formattedAmountBn]);
         }
       }
@@ -302,7 +350,13 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       if (multicallTxnPayload.length === 0) {
         this.logger.warn(`Batch ${batchIndex} has no valid amounts, skipping`);
         if (batchIndex < totalBatches - 1) {
-          await this.requeueNextBatch(groupUuid, batchIndex + 1, totalBatches, dName, preloaded);
+          await this.requeueNextBatch(
+            groupUuid,
+            batchIndex + 1,
+            totalBatches,
+            dName,
+            preloaded
+          );
         }
         return;
       }
@@ -316,18 +370,25 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       );
 
       const txHash = tx.hash;
-      this.logger.log(`Batch ${batchIndex + 1}/${totalBatches} submitted: ${txHash}`);
+      this.logger.log(
+        `Batch ${batchIndex + 1}/${totalBatches} submitted: ${txHash}`
+      );
       // Persisted right after broadcast (not after confirmation) so a later error in this same
       // job attempt (e.g. the confirmation wait timing out) can never cause a resubmit — the
       // isBatchAlreadySubmitted guard above will see this txHash on the next attempt.
 
       // Mark as SUBMITTED (has txHash, awaiting confirmation) — distinct from initial PENDING (not yet sent)
-      const infoAfterSubmit = await this.updateBatchStatus(groupUuid, batchIndex, {
-        status: 'SUBMITTED',
-        txHash,
-        beneficiaryCount: multicallTxnPayload.length,
-        submittedAt: new Date().toISOString(),
-      }, preloaded);
+      const infoAfterSubmit = await this.updateBatchStatus(
+        groupUuid,
+        batchIndex,
+        {
+          status: 'SUBMITTED',
+          txHash,
+          beneficiaryCount: multicallTxnPayload.length,
+          submittedAt: new Date().toISOString(),
+        },
+        preloaded
+      );
 
       // Why: confirmation isn't checked inline (waiting for block finality here would
       // hold this queue worker for seconds/minutes per batch). Instead hand off to a
@@ -356,9 +417,17 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       // a strictly serial (submit -> wait -> confirm -> submit next) chain, cutting
       // total disbursement wall-clock time for large groups.
       if (batchIndex < totalBatches - 1) {
-        await this.requeueNextBatch(groupUuid, batchIndex + 1, totalBatches, dName, infoAfterSubmit);
+        await this.requeueNextBatch(
+          groupUuid,
+          batchIndex + 1,
+          totalBatches,
+          dName,
+          infoAfterSubmit
+        );
       } else {
-        this.logger.log(`All ${totalBatches} batches submitted for group ${groupUuid}`);
+        this.logger.log(
+          `All ${totalBatches} batches submitted for group ${groupUuid}`
+        );
       }
     } catch (error) {
       const errorDetails = this.formatError(error);
@@ -367,25 +436,37 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const isLastAttempt = attemptsMade >= maxAttempts;
 
       this.logger.error(
-        `EVM assign tokens batch ${batchIndex + 1}/${totalBatches} for group ${groupUuid} failed ` +
-          `(attempt ${attemptsMade}/${maxAttempts}): ${JSON.stringify(errorDetails)}`,
+        `EVM assign tokens batch ${
+          batchIndex + 1
+        }/${totalBatches} for group ${groupUuid} failed ` +
+          `(attempt ${attemptsMade}/${maxAttempts}): ${JSON.stringify(
+            errorDetails
+          )}`,
         error.stack
       );
 
       // What: record the failure on this batch's entry (not the whole group) so
       // sibling batches for the same group are unaffected and can keep progressing
       // independently of this one's retry state.
-      const infoAfterFail = await this.updateBatchStatus(groupUuid, batchIndex, {
-        status: 'FAILED',
-        error: errorDetails,
-        retryCount: attemptsMade,
-        ...(isLastAttempt ? { terminal: true } : {}),
-      });
+      const infoAfterFail = await this.updateBatchStatus(
+        groupUuid,
+        batchIndex,
+        {
+          status: 'FAILED',
+          error: errorDetails,
+          retryCount: attemptsMade,
+          ...(isLastAttempt ? { terminal: true } : {}),
+        }
+      );
 
       if (isLastAttempt) {
         // Retries exhausted — stop here instead of letting Bull keep re-throwing forever.
         // Reconcile the group so it doesn't stay STARTED with no further jobs able to progress it.
-        await this.finalizeGroupIfAllBatchesSettled(groupUuid, totalBatches, infoAfterFail);
+        await this.finalizeGroupIfAllBatchesSettled(
+          groupUuid,
+          totalBatches,
+          infoAfterFail
+        );
         return;
       }
 
@@ -403,18 +484,25 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     totalBatches: number,
     preloaded?: { uuid: string; info: any }
   ): Promise<void> {
-    const group = preloaded ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid));
+    const group =
+      preloaded ??
+      (await this.beneficiaryService.getOneTokenReservationByGroupId(
+        groupUuid
+      ));
     if (!group || !group.info) return;
 
     const batchStatus = (group.info as any).batchStatus || [];
     const settled = batchStatus.filter(
-      (b: any) => b.status === 'CONFIRMED' || (b.status === 'FAILED' && b.terminal)
+      (b: any) =>
+        b.status === 'CONFIRMED' || (b.status === 'FAILED' && b.terminal)
     );
     if (settled.length < totalBatches) return;
 
     const anyConfirmed = batchStatus.some((b: any) => b.status === 'CONFIRMED');
     this.logger.warn(
-      `Group ${groupUuid}: all ${totalBatches} batches settled (${anyConfirmed ? 'partially' : 'none'} confirmed) — finalizing`
+      `Group ${groupUuid}: all ${totalBatches} batches settled (${
+        anyConfirmed ? 'partially' : 'none'
+      } confirmed) — finalizing`
     );
     await this.prismaService.beneficiaryGroupTokens.update({
       where: { uuid: group.uuid },
@@ -453,7 +541,11 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     // How: reuse the caller's already-fetched group row when given one (the hot
     // path — called right after handleAssignTokens already loaded/updated it),
     // otherwise fetch fresh. Avoids a redundant DB read per batch transition.
-    const group = preloaded ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid));
+    const group =
+      preloaded ??
+      (await this.beneficiaryService.getOneTokenReservationByGroupId(
+        groupUuid
+      ));
     if (!group || !group.info) {
       this.logger.error(`Group ${groupUuid} not found for requeue`);
       return;
@@ -474,9 +566,17 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     // Skip batches already submitted or confirmed — they have their own status job
     if (nextBatch.status === 'CONFIRMED' || nextBatch.status === 'SUBMITTED') {
       if (nextBatchIndex < totalBatches - 1) {
-        await this.requeueNextBatch(groupUuid, nextBatchIndex + 1, totalBatches, dName, group);
+        await this.requeueNextBatch(
+          groupUuid,
+          nextBatchIndex + 1,
+          totalBatches,
+          dName,
+          group
+        );
       } else {
-        this.logger.log(`No more pending batches for group ${groupUuid} (remaining already ${nextBatch.status})`);
+        this.logger.log(
+          `No more pending batches for group ${groupUuid} (remaining already ${nextBatch.status})`
+        );
       }
       return;
     }
@@ -510,8 +610,8 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         groupUuid,
         batchIndex: nextBatchIndex,
         totalBatches,
-        beneficiaries: batchBeneficiaries.map(b => b.walletAddress),
-        amounts: batchBeneficiaries.map(b => b.amount),
+        beneficiaries: batchBeneficiaries.map((b) => b.walletAddress),
+        amounts: batchBeneficiaries.map((b) => b.amount),
         dName,
       },
       {
@@ -523,7 +623,11 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       }
     );
 
-    this.logger.log(`Queued batch ${nextBatchIndex + 1}/${totalBatches} for group ${groupUuid}`);
+    this.logger.log(
+      `Queued batch ${
+        nextBatchIndex + 1
+      }/${totalBatches} for group ${groupUuid}`
+    );
   }
 
   /**
@@ -552,7 +656,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   ): Promise<{ uuid: string; info: any } | undefined> {
     // Fetch without isDisbursed filter — record may already be finalized
     const uuid =
-      preloaded?.uuid ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid))?.uuid;
+      preloaded?.uuid ??
+      (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid))
+        ?.uuid;
     if (!uuid) return undefined;
 
     // Why: the assign job (tx queue) and status job (query queue) run concurrently and both
@@ -569,7 +675,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       const info: any = { ...row.info };
       const batchStatus = [...(info.batchStatus || [])];
 
-      batchStatus[batchIndex] = { ...(batchStatus[batchIndex] || { batchIndex }), ...updates };
+      batchStatus[batchIndex] = {
+        ...(batchStatus[batchIndex] || { batchIndex }),
+        ...updates,
+      };
 
       const disbursedCount = batchStatus
         .filter((b: any) => b.status === 'CONFIRMED')
@@ -599,23 +708,42 @@ export class EVMCentralizedProcessor implements OnModuleInit {
   async handleStatusUpdate(job: Job<EVMStatusUpdateJob>): Promise<any> {
     try {
       await this.ensureInitialized();
-      const { groupUuid, txHash, beneficiaries, amounts, batchNumber, totalBatches } = job.data;
+      const {
+        groupUuid,
+        txHash,
+        beneficiaries,
+        amounts,
+        batchNumber,
+        totalBatches,
+      } = job.data;
 
-      const group = await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid);
+      const group =
+        await this.beneficiaryService.getOneTokenReservationByGroupId(
+          groupUuid
+        );
       if (!group) {
         this.logger.error(`Group ${groupUuid} not found`);
         return;
       }
 
       // Skip if already finalized
-      if (group.isDisbursed || (group.status as string) === 'DISBURSED' || (group.status as string) === 'FAILED') {
-        this.logger.log(`Group ${groupUuid} already finalized (${group.status}), skipping status update`);
+      if (
+        group.isDisbursed ||
+        (group.status as string) === 'DISBURSED' ||
+        (group.status as string) === 'FAILED'
+      ) {
+        this.logger.log(
+          `Group ${groupUuid} already finalized (${group.status}), skipping status update`
+        );
         return;
       }
 
       const preloaded = { uuid: group.uuid, info: group.info };
 
-      if (new Date(group.updatedAt).getTime() < new Date().getTime() - 60 * 60 * 1000) {
+      if (
+        new Date(group.updatedAt).getTime() <
+        new Date().getTime() - 60 * 60 * 1000
+      ) {
         this.logger.warn(`Group ${groupUuid} timed out, marking FAILED`);
         await this.prismaService.beneficiaryGroupTokens.update({
           where: { uuid: group.uuid },
@@ -638,7 +766,9 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       // already loaded above, so this is an in-memory check, not an extra query.
       const existingBatch = (group.info as any)?.batchStatus?.[batchIndex];
       if (existingBatch?.status === 'CONFIRMED') {
-        this.logger.log(`Batch ${batchNumber}/${totalBatches} for group ${groupUuid} already confirmed — skipping`);
+        this.logger.log(
+          `Batch ${batchNumber}/${totalBatches} for group ${groupUuid} already confirmed — skipping`
+        );
         return;
       }
 
@@ -646,37 +776,60 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         const txReceipt = await this.provider.getTransactionReceipt(txHash);
 
         if (!txReceipt) {
-          this.logger.log(`Transaction ${txHash} not yet mined, re-checking in 12s`);
+          this.logger.log(
+            `Transaction ${txHash} not yet mined, re-checking in 12s`
+          );
           this.evmQueryQueue.add(
             { type: JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE, ...job.data },
-            { delay: 12 * 1000, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+            {
+              delay: 12 * 1000,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 2000 },
+            }
           );
           return;
         }
 
         if (txReceipt.status === 1) {
-          this.logger.log(`Batch ${batchNumber}/${totalBatches} confirmed: ${txHash}`);
+          this.logger.log(
+            `Batch ${batchNumber}/${totalBatches} confirmed: ${txHash}`
+          );
 
           if (beneficiaries?.length > 0) {
-            await this.createDisbursementLogsForBatch(group.uuid, txHash, beneficiaries, amounts, batchNumber, totalBatches);
+            await this.createDisbursementLogsForBatch(
+              group.uuid,
+              txHash,
+              beneficiaries,
+              amounts,
+              batchNumber,
+              totalBatches
+            );
           }
 
           // Returned info reflects the write we just made — no need to re-fetch to see it.
-          const updated = await this.updateBatchStatus(groupUuid, batchIndex, {
-            status: 'CONFIRMED',
-            txHash,
-            confirmedAt: new Date().toISOString(),
-            blockNumber: txReceipt.blockNumber,
-            gasUsed: txReceipt.gasUsed?.toString(),
-          }, preloaded);
+          const updated = await this.updateBatchStatus(
+            groupUuid,
+            batchIndex,
+            {
+              status: 'CONFIRMED',
+              txHash,
+              confirmedAt: new Date().toISOString(),
+              blockNumber: txReceipt.blockNumber,
+              gasUsed: txReceipt.gasUsed?.toString(),
+            },
+            preloaded
+          );
           const batchStatus = (updated?.info as any)?.batchStatus || [];
 
           // CONFIRMED is only set from an on-chain receipt, so don't also require txHash —
           // rows written before the updateBatchStatus lock fix can have CONFIRMED without it.
-          const confirmedCount = batchStatus.filter((b: any) => b.status === 'CONFIRMED').length;
+          const confirmedCount = batchStatus.filter(
+            (b: any) => b.status === 'CONFIRMED'
+          ).length;
           const allSubmittedConfirmed = confirmedCount === totalBatches;
           const failedRetryable = batchStatus.filter(
-            (b: any) => b.status === 'FAILED' && !b.terminal && (b.retryCount || 0) < 3
+            (b: any) =>
+              b.status === 'FAILED' && !b.terminal && (b.retryCount || 0) < 3
           );
 
           if (allSubmittedConfirmed) {
@@ -695,29 +848,55 @@ export class EVMCentralizedProcessor implements OnModuleInit {
             });
             this.eventEmitter.emit(EVENTS.TOKEN_DISBURSED, { groupUuid });
           } else if (failedRetryable.length > 0) {
-            this.logger.log(`Retrying ${failedRetryable.length} failed batches for group ${groupUuid}`);
+            this.logger.log(
+              `Retrying ${failedRetryable.length} failed batches for group ${groupUuid}`
+            );
             for (const failedBatch of failedRetryable) {
-              await this.requeueFailedBatch(groupUuid, failedBatch.batchIndex, totalBatches, updated);
+              await this.requeueFailedBatch(
+                groupUuid,
+                failedBatch.batchIndex,
+                totalBatches,
+                updated
+              );
             }
           }
         } else {
-          this.logger.warn(`Batch ${batchNumber}/${totalBatches} failed on chain: ${txHash}`);
+          this.logger.warn(
+            `Batch ${batchNumber}/${totalBatches} failed on chain: ${txHash}`
+          );
 
-          const afterFail = await this.updateBatchStatus(groupUuid, batchIndex, {
-            status: 'FAILED',
-            error: 'Transaction reverted on blockchain',
-            blockNumber: txReceipt.blockNumber,
-            gasUsed: txReceipt.gasUsed?.toString(),
-          }, preloaded);
+          const afterFail = await this.updateBatchStatus(
+            groupUuid,
+            batchIndex,
+            {
+              status: 'FAILED',
+              error: 'Transaction reverted on blockchain',
+              blockNumber: txReceipt.blockNumber,
+              gasUsed: txReceipt.gasUsed?.toString(),
+            },
+            preloaded
+          );
 
           const batchStatus = (afterFail?.info as any)?.batchStatus || [];
           const failedBatch = batchStatus[batchIndex];
           const retryCount = (failedBatch?.retryCount || 0) + 1;
 
           if (retryCount < 3) {
-            this.logger.log(`Retrying batch ${batchNumber} (attempt ${retryCount}/3)`);
-            await this.updateBatchStatus(groupUuid, batchIndex, { status: 'FAILED', retryCount }, afterFail);
-            await this.requeueFailedBatch(groupUuid, batchIndex, totalBatches, afterFail);
+            this.logger.log(
+              `Retrying batch ${batchNumber} (attempt ${retryCount}/3)`
+            );
+            await this.updateBatchStatus(
+              groupUuid,
+              batchIndex,
+              { status: 'FAILED', retryCount },
+              afterFail
+            );
+            await this.requeueFailedBatch(
+              groupUuid,
+              batchIndex,
+              totalBatches,
+              afterFail
+            );
           } else {
             this.logger.error(`Batch ${batchNumber} failed after max retries`);
             const afterTerminal = await this.updateBatchStatus(
@@ -726,12 +905,18 @@ export class EVMCentralizedProcessor implements OnModuleInit {
               { status: 'FAILED', retryCount, terminal: true },
               afterFail
             );
-            const finalBatchStatus = (afterTerminal?.info as any)?.batchStatus || [];
+            const finalBatchStatus =
+              (afterTerminal?.info as any)?.batchStatus || [];
             const allDone = finalBatchStatus.every(
-              (b: any) => b.status === 'CONFIRMED' || (b.status === 'FAILED' && (b.terminal || (b.retryCount || 0) >= 3))
+              (b: any) =>
+                b.status === 'CONFIRMED' ||
+                (b.status === 'FAILED' &&
+                  (b.terminal || (b.retryCount || 0) >= 3))
             );
             if (allDone) {
-              const anyConfirmed = finalBatchStatus.some((b: any) => b.status === 'CONFIRMED');
+              const anyConfirmed = finalBatchStatus.some(
+                (b: any) => b.status === 'CONFIRMED'
+              );
               await this.prismaService.beneficiaryGroupTokens.update({
                 where: { uuid: group.uuid },
                 data: {
@@ -753,19 +938,38 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         }
       } catch (error) {
         const errorDetails = this.formatError(error);
-        this.logger.error(`Error checking tx ${txHash} for batch ${batchNumber}/${totalBatches}: ${JSON.stringify(errorDetails)}`, error.stack);
-        await this.updateBatchStatus(groupUuid, batchIndex, {
-          status: 'FAILED',
-          error: { ...errorDetails, context: 'receipt_check_failed' },
-        }, preloaded);
+        this.logger.error(
+          `Error checking tx ${txHash} for batch ${batchNumber}/${totalBatches}: ${JSON.stringify(
+            errorDetails
+          )}`,
+          error.stack
+        );
+        await this.updateBatchStatus(
+          groupUuid,
+          batchIndex,
+          {
+            status: 'FAILED',
+            error: { ...errorDetails, context: 'receipt_check_failed' },
+          },
+          preloaded
+        );
         this.evmQueryQueue.add(
           { type: JOBS.CONTRACT.DISBURSEMENT_STATUS_UPDATE, ...job.data },
-          { delay: 12 * 1000, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+          {
+            delay: 12 * 1000,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+          }
         );
       }
     } catch (error) {
       const errorDetails = this.formatError(error);
-      this.logger.error(`Error in disbursement status update for group ${job.data?.groupUuid}: ${JSON.stringify(errorDetails)}`, error.stack);
+      this.logger.error(
+        `Error in disbursement status update for group ${
+          job.data?.groupUuid
+        }: ${JSON.stringify(errorDetails)}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -779,7 +983,11 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     totalBatches: number,
     preloaded?: { uuid: string; info: any }
   ): Promise<void> {
-    const group = preloaded ?? (await this.beneficiaryService.getOneTokenReservationByGroupId(groupUuid));
+    const group =
+      preloaded ??
+      (await this.beneficiaryService.getOneTokenReservationByGroupId(
+        groupUuid
+      ));
     if (!group || !group.info) return;
 
     const resolved = await this.getBeneficiaryTokenBalance(groupUuid);
@@ -791,15 +999,15 @@ export class EVMCentralizedProcessor implements OnModuleInit {
 
     const dName = (group.info as any)?.dName;
     const jobId = `${groupUuid}-batch-${batchIndex}-retry-${Date.now()}`;
-    
+
     await this.evmTxQueue.add(
       {
         type: JOBS.EVM.ASSIGN_TOKENS,
         groupUuid,
         batchIndex,
         totalBatches,
-        beneficiaries: batchBeneficiaries.map(b => b.walletAddress),
-        amounts: batchBeneficiaries.map(b => b.amount),
+        beneficiaries: batchBeneficiaries.map((b) => b.walletAddress),
+        amounts: batchBeneficiaries.map((b) => b.amount),
         dName,
       },
       {
@@ -814,7 +1022,11 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       }
     );
 
-    this.logger.log(`Requeued failed batch ${batchIndex + 1}/${totalBatches} for group ${groupUuid}`);
+    this.logger.log(
+      `Requeued failed batch ${
+        batchIndex + 1
+      }/${totalBatches} for group ${groupUuid}`
+    );
   }
 
   private async createDisbursementLogsForBatch(
@@ -840,7 +1052,10 @@ export class EVMCentralizedProcessor implements OnModuleInit {
         });
       }
     } catch (error) {
-      this.logger.error(`Error creating disbursement logs for batch ${batchNumber}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error creating disbursement logs for batch ${batchNumber}: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -1268,10 +1483,12 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       contractABI = this.convertABI(contract.RAHATTOKEN.ABI);
     } else if (contractName === 'INKIND') {
       contractAddress = contract.INKIND.ADDRESS;
+      console.log('Inkind', contract.INKIND);
       contractABI = this.convertABI(contract.INKIND.ABI);
     } else if (contractName === 'INKINDTOKEN') {
       contractAddress = contract.INKINDTOKEN.ADDRESS;
       contractABI = this.convertABI(contract.INKINDTOKEN.ABI);
+      console.log('Inkind', contract.INKINDTOKEN);
     } else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }
@@ -1364,7 +1581,6 @@ export class EVMCentralizedProcessor implements OnModuleInit {
       string,
       { phone: string; amount: string; id: string; walletAddress: string }
     > = {};
-
 
     groups.forEach((group) => {
       const groupToken = tokens.find((t) => t.groupId === group.uuid);
