@@ -2732,7 +2732,7 @@ export class InkindsService {
       const beneficiaryRedemptionGroups =
         await this.prisma.beneficiaryInkindRedemption.groupBy({
           by: ['groupInkindId'],
-          where: { vendorUid: vendorUuid },
+          where: { vendorUid: vendorUuid, status: 'COMPLETED' },
           _sum: { quantity: true },
         });
 
