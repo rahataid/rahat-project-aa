@@ -4,7 +4,8 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { BQUEUE, EVENTS, JOBS } from '../constants';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
+import { CVA_EVENTS } from '@rahat-project/cva';
+// import { CVA_EVENTS, CvaDisbursementService } from '@rahat-project/cva';
 import { StakeholdersService } from '../stakeholders/stakeholders.service';
 import { ChainService } from '../chain/chain.service';
 import { SettingsService } from '@rumsan/settings';
@@ -19,8 +20,8 @@ export class ListernersService {
     private readonly stakeholderStats: StakeholdersService,
     @InjectQueue(BQUEUE.SCHEDULE) private readonly scheduleQueue: Queue,
     @InjectQueue(BQUEUE.NOTIFICATION) private readonly notificationQueue: Queue,
-    @Inject(forwardRef(() => CvaDisbursementService))
-    private disbService: CvaDisbursementService,
+    // @Inject(forwardRef(() => CvaDisbursementService))
+    // private disbService: CvaDisbursementService,
     private readonly settingsService: SettingsService,
     private readonly chainService: ChainService
   ) {}

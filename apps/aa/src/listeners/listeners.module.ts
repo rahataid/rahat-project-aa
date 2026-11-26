@@ -4,7 +4,7 @@ import { StatsService } from '../stats';
 import { BeneficiaryStatService } from '../beneficiary/beneficiaryStat.service';
 import { BullModule } from '@nestjs/bull';
 import { BQUEUE, TRIGGGERS_MODULE } from '../constants';
-import { CvaDisbursementService } from '@rahat-project/cva';
+// import { CvaDisbursementService } from '@rahat-project/cva';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { StakeholdersModule } from '../stakeholders/stakeholders.module';
 import { SettingsModule } from '@rumsan/settings';
