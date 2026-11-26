@@ -480,7 +480,9 @@ export class VendorsService {
       // Filter redeems by mode before grouping so a ben with both modes
       // only surfaces redeems matching the requested payout mode
       const modeFilteredRedeems = beneficiaryRedeems.filter((r) =>
-        payload.payoutMode === 'ONLINE' ? !isOfflineRedeem(r) : isOfflineRedeem(r)
+        payload.payoutMode === 'ONLINE'
+          ? !isOfflineRedeem(r)
+          : isOfflineRedeem(r)
       );
 
       if (!modeFilteredRedeems.length) {
@@ -510,11 +512,12 @@ export class VendorsService {
             phone: latest.Beneficiary.phone,
             gender: latest.Beneficiary.gender,
             isVerified: latest.Beneficiary.isVerified,
-            createdAt: latest.Beneficiary.createdAt,
             benTokens: latest.amount,
             txHash: latest.txHash,
             status: latest.status,
             info: latest.info,
+            createdAt: latest.createdAt,
+            updatedAt: latest.updatedAt ?? undefined,
             ...(older.length && {
               redeemStatus: older.map((r) => ({
                 amount: r.amount,
