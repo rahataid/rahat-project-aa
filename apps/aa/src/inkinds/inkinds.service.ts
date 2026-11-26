@@ -2384,32 +2384,42 @@ export class InkindsService {
       );
 
       // 4 parallel DB reads — single round-trip before the write phase
-      const [inkindRecords, beneficiaries, groupInkinds, existingRedemptions] =
-        await Promise.all([
-          this.prisma.inkind.findMany({
-            where: { uuid: { in: allInkindUuids }, deletedAt: null },
-            select: { uuid: true, name: true, type: true },
-          }),
-          this.prisma.beneficiary.findMany({
-            where: { walletAddress: { in: allBeneficiaryWallets } },
-            select: { uuid: true, walletAddress: true },
-          }),
-          this.prisma.groupInkind.findMany({
-            where: { uuid: { in: allGroupInkindUuids } },
-            include: {
-              group: {
-                include: { _count: { select: { beneficiaries: true } } },
-              },
+      const [
+        inkindRecords,
+        beneficiaries,
+        groupInkinds,
+        existingRedemptions,
+        vendor,
+      ] = await Promise.all([
+        this.prisma.inkind.findMany({
+          where: { uuid: { in: allInkindUuids }, deletedAt: null },
+          select: { uuid: true, name: true, type: true },
+        }),
+        this.prisma.beneficiary.findMany({
+          where: { walletAddress: { in: allBeneficiaryWallets } },
+          select: { uuid: true, walletAddress: true },
+        }),
+        this.prisma.groupInkind.findMany({
+          where: { uuid: { in: allGroupInkindUuids } },
+          include: {
+            group: {
+              include: { _count: { select: { beneficiaries: true } } },
             },
-          }),
-          this.prisma.beneficiaryInkindRedemption.findMany({
-            where: {
-              beneficiaryWallet: { in: allBeneficiaryWallets },
-              groupInkindId: { in: allGroupInkindUuids },
-            },
-            select: { beneficiaryWallet: true, groupInkindId: true },
-          }),
-        ]);
+          },
+        }),
+        this.prisma.beneficiaryInkindRedemption.findMany({
+          where: {
+            beneficiaryWallet: { in: allBeneficiaryWallets },
+            groupInkindId: { in: allGroupInkindUuids },
+          },
+          select: { beneficiaryWallet: true, groupInkindId: true },
+        }),
+        this.prisma.vendor.findUnique({
+          where: {
+            uuid: user.uuid,
+          },
+        }),
+      ]);
 
       // uuid-keyed maps replace repeated array.find() in the hot loop below
       const inkindRecordMap = new Map(inkindRecords.map((r) => [r.uuid, r]));
@@ -2602,7 +2612,7 @@ export class InkindsService {
           if (inkinds.length > 0) {
             this.chainService.redeemInkind({
               beneficiaryAddress: wallet,
-              vendorAddress: user.wallet,
+              vendorAddress: vendor?.walletAddress,
               inkindId: inkinds,
               amount: amountByWallet[wallet],
             });

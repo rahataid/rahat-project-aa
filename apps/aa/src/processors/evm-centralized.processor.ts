@@ -1488,7 +1488,7 @@ export class EVMCentralizedProcessor implements OnModuleInit {
     } else if (contractName === 'INKINDTOKEN') {
       contractAddress = contract.INKINDTOKEN.ADDRESS;
       contractABI = this.convertABI(contract.INKINDTOKEN.ABI);
-      console.log('Inkind', contract.INKINDTOKEN);
+      console.log('Inkind Token', contract.INKINDTOKEN);
     } else {
       throw new Error(`Unsupported contract name: ${contractName}`);
     }
