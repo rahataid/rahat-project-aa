@@ -493,6 +493,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nx-${{ hashFiles('**/pnpm-lock.yaml') }}-
             ${{ runner.os }}-nx-
+      # Reset Nx daemon and cache state
+      - name: Reset Nx
+        run: pnpm nx reset
 
       # Install dependencies with lockfile handling
       - name: Install dependencies
