@@ -16,4 +16,5 @@ export const SUBJECTS = {
   STAKEHOLDER: 'Stakeholder',
   GRIEVANCE: 'Grievance',
   VENDOR: 'vendor',
+  GROUP_CASH_TRANSFER: 'Group Cash Transfer',
 };
