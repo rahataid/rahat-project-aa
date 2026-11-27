@@ -265,6 +265,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.GET_VENDOR_REDEMPTIONS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   getVendorRedemptions(@Payload() payload: GetVendorInkindRedemptionDto) {
     return this.inkindsService.getVendorRedemptions(payload);
   }
@@ -281,6 +282,7 @@ export class InkindsController {
     cmd: JOBS.INKINDS.UPDATE_VENDOR_REDEMPTION_STATUS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.VENDOR)
   updateVendorRedemptionStatus(
     @Payload() payload: UpdateVendorInkindRedeemStatusDto
   ) {

@@ -15,4 +15,5 @@ export const SUBJECTS = {
   INKIND: 'Inkind',
   STAKEHOLDER: 'Stakeholder',
   GRIEVANCE: 'Grievance',
+  VENDOR: 'vendor',
 };

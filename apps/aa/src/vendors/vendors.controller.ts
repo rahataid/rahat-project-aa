@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { JOBS } from '../constants';
 import { VendorsService } from './vendors.service';
@@ -26,8 +26,11 @@ import {
 } from './dto/vendorTokenRedemption.dto';
 import { BatchTransferDto } from '../processors/types';
 import { UpdateVendorDetailsDto } from './dto/vendor-details.dto';
+import { MicroserviceAuthGuard, RequireAbility } from '@rumsan/user';
+import { ACTIONS, SUBJECTS } from '../common/ability.constants';
 
 @Controller()
+@UseGuards(MicroserviceAuthGuard)
 export class VendorsController {
   constructor(
     private readonly vendorService: VendorsService,
@@ -37,6 +40,7 @@ export class VendorsController {
     cmd: JOBS.VENDOR.LIST_WITH_PROJECT_DATA,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   listWithData(query: PaginationBaseDto): any {
     return this.vendorService.listWithProjectData(query);
   }
@@ -46,6 +50,7 @@ export class VendorsController {
     cmd: JOBS.STELLAR.GET_VENDOR_STATS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   async getVendorStats(vendorWallet: VendorStatsDto) {
     return this.vendorService.getVendorWalletStats(vendorWallet);
   }
@@ -64,6 +69,7 @@ export class VendorsController {
     cmd: JOBS.STELLAR.GET_REDEMPTION_REQUEST,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   async getTxnAndRedemptionRequestList(vendorWallet: VendorRedeemTxnListDto) {
     return this.vendorService.getTxnAndRedemptionList(vendorWallet);
   }
@@ -73,6 +79,7 @@ export class VendorsController {
     cmd: JOBS.VENDOR.GET_BENEFICIARIES,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   async getVendorBeneficiaries(payload: VendorBeneficiariesDto) {
     return this.vendorService.getVendorBeneficiaries(payload);
   }
@@ -146,6 +153,7 @@ export class VendorsController {
     cmd: JOBS.VENDOR.UPDATE_TOKEN_REDEMPTION_STATUS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.UPDATE, SUBJECTS.VENDOR)
   async updateTokenRedemptionStatus(dto: UpdateVendorTokenRedemptionDto) {
     return this.vendorTokenRedemptionService.update(dto);
   }
@@ -154,6 +162,7 @@ export class VendorsController {
     cmd: JOBS.VENDOR.LIST_TOKEN_REDEMPTIONS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   async listTokenRedemptions(query: ListVendorTokenRedemptionDto) {
     return this.vendorTokenRedemptionService.list(query);
   }
@@ -170,6 +179,7 @@ export class VendorsController {
     cmd: JOBS.VENDOR.GET_TOKEN_REDEMPTION_STATS,
     uuid: process.env.PROJECT_ID,
   })
+  @RequireAbility(ACTIONS.READ, SUBJECTS.VENDOR)
   async getVendorTokenRedemptionStats(dto: GetVendorTokenRedemptionStatsDto) {
     return this.vendorTokenRedemptionService.getVendorTokenRedemptionStats(dto);
   }
