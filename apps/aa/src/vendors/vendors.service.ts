@@ -524,6 +524,7 @@ export class VendorsService {
                 status: r.status,
                 createdAt: r.createdAt,
                 updatedAt: r.updatedAt ?? undefined,
+                txHash: r?.txHash,
               })),
             }),
           };
