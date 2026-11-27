@@ -15,6 +15,7 @@ import { VendorBeneficiariesDto } from './dto/vendorBeneficiaries.dto';
 import {
   GetVendorOfflineBeneficiariesDto,
   OfflineBeneficiaryDetail,
+  RedeemStatusEntry,
   VerifyVendorOfflineOtpDto,
   OtpVerificationResult,
   VendorOfflineSyncDto,
@@ -455,8 +456,6 @@ export class VendorsService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: payload.perPage || 20,
-        skip: ((payload.page || 1) - 1) * (payload.perPage || 20),
       });
 
       if (!beneficiaryRedeems.length) {
@@ -467,28 +466,73 @@ export class VendorsService {
         );
       }
 
-      // Extract unique beneficiaries (remove duplicates based on UUID)
-      const uniqueBeneficiaries = beneficiaryRedeems
-        .map((redeem) => ({
-          uuid: redeem.Beneficiary.uuid,
-          walletAddress: redeem.Beneficiary.walletAddress,
-          phone: redeem.Beneficiary.phone,
-          gender: redeem.Beneficiary.gender,
-          isVerified: redeem.Beneficiary.isVerified,
-          createdAt: redeem.Beneficiary.createdAt,
-          // Use the individual redeem amount instead of total benTokens
-          benTokens: redeem.amount,
-          txHash: redeem.txHash,
-          status: redeem.status,
-          info: redeem.info,
-        }))
-        .filter(
-          (beneficiary, index, self) =>
-            index === self.findIndex((b) => b.uuid === beneficiary.uuid)
+      const isOfflineRedeem = (redeem: (typeof beneficiaryRedeems)[number]) => {
+        const info = redeem.info;
+        return (
+          info &&
+          typeof info === 'object' &&
+          !Array.isArray(info) &&
+          'mode' in info &&
+          (info as any).mode === 'OFFLINE'
         );
+      };
 
-      // Get beneficiary UUIDs for enrichment
-      const beneficiaryUuids = uniqueBeneficiaries.map((ben) => ben.uuid);
+      // Filter redeems by mode before grouping so a ben with both modes
+      // only surfaces redeems matching the requested payout mode
+      const modeFilteredRedeems = beneficiaryRedeems.filter((r) =>
+        payload.payoutMode === 'ONLINE'
+          ? !isOfflineRedeem(r)
+          : isOfflineRedeem(r)
+      );
+
+      if (!modeFilteredRedeems.length) {
+        return paginate(
+          { findMany: async () => [], count: async () => 0 },
+          {},
+          { page: payload.page, perPage: payload.perPage }
+        );
+      }
+
+      // Group by beneficiary wallet address; already desc by createdAt
+      const redeemsByBen = new Map<string, typeof beneficiaryRedeems>();
+      for (const redeem of modeFilteredRedeems) {
+        if (!redeem.Beneficiary) continue;
+        const key = redeem.Beneficiary.walletAddress;
+        if (!redeemsByBen.has(key)) redeemsByBen.set(key, []);
+        redeemsByBen.get(key)!.push(redeem);
+      }
+
+      // Pick latest redeem per beneficiary; attach older ones as redeemStatus
+      const filteredBeneficiaries = Array.from(redeemsByBen.values()).map(
+        (redeems) => {
+          const [latest, ...older] = redeems; // already sorted desc
+          return {
+            uuid: latest.Beneficiary.uuid,
+            walletAddress: latest.Beneficiary.walletAddress,
+            phone: latest.Beneficiary.phone,
+            gender: latest.Beneficiary.gender,
+            isVerified: latest.Beneficiary.isVerified,
+            benTokens: latest.amount,
+            txHash: latest.txHash,
+            status: latest.status,
+            info: latest.info,
+            createdAt: latest.createdAt,
+            updatedAt: latest.updatedAt ?? undefined,
+            ...(older.length && {
+              redeemStatus: older.map((r) => ({
+                amount: r.amount,
+                status: r.status,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt ?? undefined,
+                txHash: r?.txHash,
+              })),
+            }),
+          };
+        }
+      );
+
+      // Get beneficiary UUIDs for enrichment (only filtered set)
+      const beneficiaryUuids = filteredBeneficiaries.map((ben) => ben.uuid);
       let benResponse = [];
       if (beneficiaryUuids.length) {
         benResponse = await lastValueFrom(
@@ -498,25 +542,6 @@ export class VendorsService {
           )
         );
       }
-
-      // Filter based on mode
-      const filteredBeneficiaries = uniqueBeneficiaries.filter((ben) => {
-        const info = ben.info;
-        const hasOfflineMode =
-          info &&
-          typeof info === 'object' &&
-          !Array.isArray(info) &&
-          'mode' in info &&
-          info.mode === 'OFFLINE';
-
-        if (payload.payoutMode === 'ONLINE') {
-          // Remove beneficiaries which have mode: offline in info
-          return !hasOfflineMode;
-        } else {
-          // Only return beneficiaries which have mode: offline in info
-          return hasOfflineMode;
-        }
-      });
 
       // Attach beneficiary name to each beneficiary
       const enrichedBeneficiaries = filteredBeneficiaries.map((ben) => {
@@ -552,6 +577,7 @@ export class VendorsService {
       await this.vendorCVAPayoutQueue.add(JOBS.VENDOR.ONLINE_PAYOUT, {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
+        beneficiaryGroupTokenUuid: payload.beneficiaryGroupTokenUuid,
       });
 
       this.logger.log(
@@ -580,6 +606,7 @@ export class VendorsService {
         beneficiaryGroupUuid: payload.beneficiaryGroupUuid,
         amount: payload.amount,
         disbursementStatus: payload?.disbursementStatus,
+        beneficiaryGroupTokenUuid: payload?.beneficiaryGroupTokenUuid,
       });
 
       this.logger.log(
@@ -890,11 +917,24 @@ export class VendorsService {
         );
       }
 
-      // For each redeem, get the OTP hash from the OTP table
-      const beneficiaries: OfflineBeneficiaryDetail[] = [];
+      // Group redeems by beneficiary wallet address; pick latest per beneficiary
+      const redeemsByBen = new Map<string, typeof offlineRedeems>();
       for (const redeem of offlineRedeems) {
-        const beneficiary = redeem.Beneficiary;
-        if (!beneficiary) continue;
+        if (!redeem.Beneficiary) continue;
+        const key = redeem.Beneficiary.walletAddress;
+        if (!redeemsByBen.has(key)) redeemsByBen.set(key, []);
+        redeemsByBen.get(key)!.push(redeem);
+      }
+
+      const beneficiaries: OfflineBeneficiaryDetail[] = [];
+      for (const [, redeems] of redeemsByBen) {
+        // Sort descending by createdAt — latest first
+        redeems.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const [latest, ...older] = redeems;
+        const beneficiary = latest.Beneficiary;
 
         // Find beneficiary info from API response
         const benInfo = benResponse.find(
@@ -908,15 +948,24 @@ export class VendorsService {
           where: { phoneNumber },
         });
 
+        const redeemStatus: RedeemStatusEntry[] = older.map((r) => ({
+          amount: r.amount,
+          status: r.status,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt ?? undefined,
+          txHash: r?.txHash,
+        }));
+
         beneficiaries.push({
-          uuid: redeem.uuid,
+          uuid: latest.uuid,
           beneficiaryUuid: beneficiary.uuid,
           beneficiaryName,
           phoneNumber,
           otpHash: otpData?.otpHash || '',
-          amount: redeem.amount,
-          status: redeem.status,
+          amount: latest.amount,
+          status: latest.status,
           walletAddress: beneficiary.walletAddress,
+          ...(redeemStatus.length && { redeemStatus }),
         });
       }
 

@@ -62,7 +62,7 @@ import { format } from 'date-fns';
 import { AppService } from '../app/app.service';
 import { lastValueFrom } from 'rxjs';
 import { getFormattedTimeDiff } from '../utils/date';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '@rumsan/settings';
 import { ethers } from 'ethers';
@@ -402,17 +402,16 @@ export class PayoutsService {
       });
 
       if (payout.type === 'VENDOR') {
-        if (createPayoutDto.mode === 'OFFLINE') {
-          await this.vendorsService.processVendorOfflinePayout({
-            beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
-            amount: String(beneficiaryGroupTokens.numberOfTokens),
-            disbursementStatus: createPayoutDto?.disbursementStatus,
-          });
+        if (!beneficiaryGroupTokens.isDisbursed) {
+          // Tokens aren't on beneficiary wallets yet (e.g. token + payout
+          // created together). Creating redeems now would surface the payout
+          // in the vendor app before redemption can succeed, so leave it
+          // NOT_STARTED — onTokenDisbursed starts it once disbursement completes.
+          this.logger.log(
+            `Payout ${payout.uuid}: tokens for group token ${groupId} not disbursed yet — deferring vendor redeem creation until ${EVENTS.TOKEN_DISBURSED}`
+          );
         } else {
-          await this.vendorsService.processVendorOnlinePayout({
-            beneficiaryGroupUuid: beneficiaryGroupTokens.groupId,
-            amount: String(beneficiaryGroupTokens.numberOfTokens),
-          });
+          await this.queueVendorPayoutRedeems(payout, beneficiaryGroupTokens);
         }
       } else {
         if (createPayoutDto.payoutProcessorId === 'manual-bank-transfer') {
@@ -451,6 +450,98 @@ export class PayoutsService {
       );
       if (error instanceof RpcException) throw error;
       throw new RpcException(error.message);
+    }
+  }
+
+  /**
+   * Queues the vendor job that creates the beneficiary redeems for a VENDOR
+   * payout (OFFLINE: sends OTPs + creates redeems; ONLINE: creates redeems).
+   * The job looks the reservation up by its uuid, so it works regardless of
+   * the token's disbursement status.
+   */
+  private async queueVendorPayoutRedeems(
+    payout: Pick<Payouts, 'uuid' | 'mode'>,
+    groupToken: { uuid: string; groupId: string; numberOfTokens: number }
+  ) {
+    const jobPayload = {
+      beneficiaryGroupUuid: groupToken.groupId,
+      amount: String(groupToken.numberOfTokens),
+      beneficiaryGroupTokenUuid: groupToken.uuid,
+    };
+
+    if (payout.mode === 'OFFLINE') {
+      await this.vendorsService.processVendorOfflinePayout(jobPayload);
+    } else {
+      await this.vendorsService.processVendorOnlinePayout(jobPayload);
+    }
+  }
+
+  /**
+   * Starts VENDOR payouts that were created before their tokens were
+   * disbursed (create() leaves them NOT_STARTED with no redeems). Payouts
+   * created after disbursement already got their redeems in create().
+   */
+  @OnEvent(EVENTS.TOKEN_DISBURSED)
+  async onTokenDisbursed(payload: { groupUuid: string }) {
+    const groupUuid = payload?.groupUuid;
+    if (!groupUuid) return;
+
+    try {
+      // The reservation that was just disbursed is the group's latest disbursed one.
+      const groupToken = await this.prisma.beneficiaryGroupTokens.findFirst({
+        where: { groupId: groupUuid, isDisbursed: true },
+        orderBy: { createdAt: 'desc' },
+        include: { payout: true },
+      });
+
+      const payout = groupToken?.payout;
+      if (!payout || payout.type !== 'VENDOR') return;
+
+      if ((payout.extras as { cancelledBy?: string } | null)?.cancelledBy) {
+        this.logger.log(
+          `[onTokenDisbursed] payout ${payout.uuid} is cancelled — not starting`
+        );
+        return;
+      }
+
+      // Atomic claim: only a NOT_STARTED payout with no redeems moves to
+      // PENDING, and only one caller can win it, so redeems are never created
+      // twice (duplicate events, or create() already having queued them).
+      const { count } = await this.prisma.payouts.updateMany({
+        where: {
+          uuid: payout.uuid,
+          OR: [{ status: 'NOT_STARTED' }, { status: null }],
+          beneficiaryRedeem: { none: {} },
+        },
+        data: { status: 'PENDING' },
+      });
+
+      if (count !== 1) {
+        this.logger.log(
+          `[onTokenDisbursed] payout ${payout.uuid} already started (status ${payout.status}) — skipping`
+        );
+        return;
+      }
+
+      try {
+        await this.queueVendorPayoutRedeems(payout, groupToken);
+      } catch (error) {
+        // Release the claim so the payout isn't stuck PENDING without redeems.
+        await this.prisma.payouts.update({
+          where: { uuid: payout.uuid },
+          data: { status: 'NOT_STARTED' },
+        });
+        throw error;
+      }
+
+      this.logger.log(
+        `[onTokenDisbursed] group ${groupUuid}: payout ${payout.uuid} (${payout.mode}) moved to PENDING, vendor redeem job queued`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[onTokenDisbursed] failed to start vendor payout for group ${groupUuid}: ${error.message}`,
+        error.stack
+      );
     }
   }
 
@@ -2804,7 +2895,8 @@ export class PayoutsService {
         const ward = extras?.ward || extras?.ward_number || '';
         const tole = extras?.tole || '';
         const governmentIdType = extras?.governmentIdType || '';
-        const governmentIdNumber = extras?.govtIDNumber || '';
+        const governmentIdNumber =
+          extras?.govtIDNumber || extras?.governmentId || '';
 
         const transaction = info?.cipsResponseData?.transaction;
         const offrampRequest = info?.cipsResponseData?.offrampRequest;
@@ -2841,8 +2933,9 @@ export class PayoutsService {
           'Beneficiary Wallet Address': redeemLog.beneficiaryWalletAddress,
           'Beneficiary Name': beneficiaryName,
           'Phone number': extras?.phone || '',
-          'Transaction Wallet ID': redeemLog.txHash || '',
-          'Transaction Hash': info?.transactionHash || '',
+          // txHash is the canonical value written by both the token and the
+          // fiat legs; info.transactionHash is a duplicate of it.
+          'Transaction Hash': redeemLog.txHash || '',
           'Payout Status': redeemLog.status || '',
           'Transaction Type': redeemLog.transactionType || '',
           'Updated At': redeemLog.updatedAt,
@@ -3229,6 +3322,8 @@ export class PayoutsService {
             ? (redeemLog.amount || 0) * ONE_TOKEN_VALUE
             : 0;
 
+        // Name and phone come only from the beneficiary extras synced from
+        // the project; absent values render as '-' in the PDF.
         const firstName = extras?.firstName || '';
         const lastName = extras?.lastName || '';
         const fallbackName =
@@ -3255,7 +3350,10 @@ export class PayoutsService {
           district: extras?.district || extras?.location,
           ward: extras?.ward || extras?.ward_number,
           tole: extras?.tole,
-          governmentIdNumber: extras?.govtIDNumber,
+          governmentIdNumber:
+            extras?.govtIDNumber || extras?.governmentId
+              ? String(extras.govtIDNumber || extras.governmentId)
+              : '',
           infoNote,
         };
       });

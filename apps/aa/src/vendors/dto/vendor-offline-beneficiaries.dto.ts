@@ -12,6 +12,13 @@ export class GetVendorOfflineBeneficiariesDto {
   vendorUuid: string;
 }
 
+export interface RedeemStatusEntry {
+  amount: number;
+  status: string;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
 export interface OfflineBeneficiaryDetail {
   uuid: string;
   beneficiaryUuid: string;
@@ -21,6 +28,7 @@ export interface OfflineBeneficiaryDetail {
   amount: number;
   status: string;
   walletAddress?: string;
+  redeemStatus?: RedeemStatusEntry[];
 }
 
 export class VerifyVendorOfflineOtpDto {

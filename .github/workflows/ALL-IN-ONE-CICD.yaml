@@ -345,7 +345,7 @@ jobs:
   # -----------------------------
   preview:
     name: Deployment Preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: resolve-config
     steps:
       - name: Show what will be built and pushed
@@ -518,6 +518,9 @@ jobs:
       # Generate Prisma client
       - name: Generate Prisma client
         run: pnpm prisma:generate
+
+      - name: Reset Nx Cache
+        run: pnpm exec nx reset
 
       # Build all apps (Nx will use cache)
       - name: Build applications
