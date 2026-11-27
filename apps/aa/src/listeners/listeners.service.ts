@@ -131,18 +131,29 @@ export class ListernersService {
   // StellarSponsorProcessor's concurrency: 1 serializes this against sponsor
   // and revoke batches as well, not just against other vendor-funding jobs.
   @OnEvent(CVA_EVENTS.VENDOR.CREATED)
-  async handleVendorAssignment(event: { walletAddress: string }) {
-    this.logger.log(`[VENDOR CREATION EVENT]✅ Vendor assignment event emitted with walletAddress: ${event.walletAddress}`);
-    await this.stellarSponsorQueue.add(
-      JOBS.STELLAR.SPONSOR_QUEUE_SERIAL,
-      { type: 'FUND_STELLAR_ACCOUNT', walletAddress: event.walletAddress },
-      {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: true,
-        removeOnFail: false,
-      }
-    );
-    this.logger.log(`[VENDOR CREATION EVENT] Queued XLM funding for ${event.walletAddress}`);
+  async handleVendorAssignment(event: {
+    walletAddress?: string;
+    walletAddresses?: string[];
+  }) {
+    const walletAddresses =
+      event.walletAddresses ?? (event.walletAddress ? [event.walletAddress] : []);
+    for (const walletAddress of walletAddresses) {
+      this.logger.log(
+        `[VENDOR CREATION EVENT]✅ Vendor assignment event emitted with walletAddress: ${walletAddress}`
+      );
+      await this.stellarSponsorQueue.add(
+        JOBS.STELLAR.SPONSOR_QUEUE_SERIAL,
+        { type: 'FUND_STELLAR_ACCOUNT', walletAddress },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        }
+      );
+      this.logger.log(
+        `[VENDOR CREATION EVENT] Queued XLM funding for ${walletAddress}`
+      );
+    }
   }
 }

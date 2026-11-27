@@ -1,6 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { ProjectContants } from '@rahataid/sdk';
 import { paginator, PaginatorTypes, PrismaService } from '@rumsan/prisma';
 import { CVA_EVENTS } from '../constants';
@@ -11,6 +11,7 @@ const paginate: PaginatorTypes.PaginateFunction = paginator({ perPage: 20 });
 
 @Injectable()
 export class CvaVendorService {
+  private readonly logger = new Logger(CvaVendorService.name);
   public rsprisma: typeof this.prisma.rsclient;
 
   constructor(
@@ -33,8 +34,52 @@ export class CvaVendorService {
     const row = await this.rsprisma.vendor.create({
       data: payload,
     });
-    this.eventEmitter.emit(CVA_EVENTS.VENDOR.CREATED, { walletAddress: dto.walletAddress });
+    this.eventEmitter.emit(CVA_EVENTS.VENDOR.CREATED, {
+      walletAddress: dto.walletAddress,
+    });
     return row;
+  }
+
+  async createMany(dtos: CreateVendorDto[]) {
+    if (!Array.isArray(dtos) || dtos.length === 0) {
+      throw new RpcException({
+        message: 'At least one vendor is required',
+        code: 'VENDOR_BULK_CREATE_EMPTY',
+      });
+    }
+
+    const data = dtos.map((dto) => ({
+      uuid: dto.uuid,
+      walletAddress: dto.walletAddress,
+      name: dto.vendor?.['name'],
+      phone: dto?.vendor?.['phone'] || '',
+      location: dto?.vendor?.['location'] || '',
+      extras: dto?.vendor?.['extras'] || {},
+    }));
+
+    let result: { count: number };
+    try {
+      result = await this.rsprisma.vendor.createMany({ data });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to create vendors in bulk: ${errorMessage}`,
+        error instanceof Error ? error.stack : undefined
+      );
+
+      throw new RpcException({
+        message: 'Failed to create vendors',
+        code: 'VENDOR_BULK_CREATE_FAILED',
+        params: { count: dtos.length },
+      });
+    }
+
+    this.eventEmitter.emit(CVA_EVENTS.VENDOR.CREATED, {
+      walletAddresses: dtos.map((dto) => dto.walletAddress),
+    });
+
+    return result;
   }
 
   async listWithProjectData(query: PaginationBaseDto) {
