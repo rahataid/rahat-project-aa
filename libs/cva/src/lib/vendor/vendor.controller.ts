@@ -18,6 +18,22 @@ export class CvaVendorController {
     return this.vendorService.create(dto);
   }
 
+  // @MessagePattern({
+  //   cmd: CVA_JOBS.VENDOR.CREATE_MANY,
+  //   uuid: process.env['PROJECT_ID'],
+  // })
+  // createMany(dtos: CreateVendorDto[]) {
+  //   return this.vendorService.createMany(dtos);
+  // }
+
+  @MessagePattern({
+    cmd: CVA_JOBS.VENDOR.BULK_ASSIGN_TO_PROJECTS,
+    uuid: process.env['PROJECT_ID'],
+  })
+  bulkAssignToProjects(dtos: CreateVendorDto[]) {
+    return this.vendorService.createMany(dtos);
+  }
+
   @MessagePattern({
     cmd: CVA_JOBS.VENDOR.LIST,
     uuid: process.env['PROJECT_ID'],

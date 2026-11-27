@@ -55,6 +55,7 @@ export const CVA_JOBS = {
     LIST_WITH_PROJECT_DATA: 'rahat.jobs.vendor.list_with_project_data',
     CREATE: 'rahat.jobs.vendor.create',
     ADD_TO_PROJECT: 'rahat.jobs.vendor.add_to_project',
+    BULK_ASSIGN_TO_PROJECTS: 'rahat.jobs.vendor.bulk_assign_to_projects',
   },
 
   PAYOUT: {
